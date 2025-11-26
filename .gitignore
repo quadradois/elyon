@@ -1,0 +1,58 @@
+# Dependências
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Ambientes
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Build
+dist/
+build/
+.next/
+out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Testes
+coverage/
+.nyc_output/
+
+# Prisma
+prisma/migracoes/.push
+
+# Docker
+docker-compose.override.yml
+
+# SSL
+ssl/*.pem
+ssl/*.key
+
+# Backups
+backups/
+
+# Temp
+temp/
+tmp/
+*.tmp
+
+# Uploads
+uploads/
