@@ -1,0 +1,443 @@
+// This is your Prisma schema file
+// Reconstruído com suporte a RAG - 28/11/2025
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ====================================
+// TENANTS
+// ====================================
+
+model Tenant {
+  id               String       @id @default(uuid())
+  nome             String
+  slug             String       @unique
+  status           StatusTenant @default(ATIVO)
+  plano            String       @default("SMALL_BUSINESS")
+  precoConsultaCpf Decimal      @default(2.00)
+  quotaMensal      Int          @default(100)
+  totalConsultas   Int          @default(0)
+  taxaCacheHit     Decimal      @default(0)
+
+  usuarios           Usuario[]
+  leads              Lead[]
+  campanhas          Campanha[]
+  empreendimentos    EmpreendimentoConhecimento[]
+  configuracaoAgente ConfiguracaoAgente?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([slug])
+  @@index([status])
+  @@map("tenants")
+}
+
+enum StatusTenant {
+  ATIVO
+  SUSPENSO
+  CANCELADO
+}
+
+// ====================================
+// CONFIGURAÇÃO DO AGENTE IA
+// ====================================
+
+model ConfiguracaoAgente {
+  id            String   @id @default(uuid())
+  tenantId      String   @unique
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome          String
+  avatar        String?
+  personalidade Json
+  expertise     Json
+  scripts       Json
+  regrasNegocio Json
+  estaAtivo     Boolean  @default(true)
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  @@map("configuracoes_agente")
+}
+
+// ====================================
+// USUÁRIOS
+// ====================================
+
+model Usuario {
+  id            String       @id @default(uuid())
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email         String
+  nome          String
+  senha         String
+  papel         PapelUsuario @default(CORRETOR)
+  avatar        String?
+  telefone      String?
+  estaAtivo     Boolean      @default(true)
+  criadoEm      DateTime     @default(now())
+  atualizadoEm  DateTime     @updatedAt
+  ultimoLoginEm DateTime?
+
+  @@unique([tenantId, email])
+  @@index([email])
+  @@map("usuarios")
+}
+
+enum PapelUsuario {
+  SUPER_ADMIN
+  ADMIN
+  CORRETOR
+  VISUALIZADOR
+}
+
+// ====================================
+// CACHE GLOBAL DE CPF
+// ====================================
+
+model CacheCpf {
+  id                  String        @id @default(uuid())
+  cpf                 String        @unique
+  dados               Json
+  fonte               String        @default("assertiva")
+  buscadoEm           DateTime      @default(now())
+  expiraEm            DateTime
+  contagemConsultas   Int           @default(1)
+  ultimoUsoEm         DateTime      @default(now())
+  primeiraConsultaPor String?
+  consultas           ConsultaCpf[]
+
+  @@index([cpf])
+  @@index([expiraEm])
+  @@map("cache_cpf")
+}
+
+// ====================================
+// CONSULTAS DE CPF
+// ====================================
+
+model ConsultaCpf {
+  id            String    @id @default(uuid())
+  tenantId      String
+  cpf           String
+  veioDoCache   Boolean   @default(false)
+  custoParaNos  Decimal   @default(0)
+  cobradoDe     Decimal
+  lucro         Decimal
+  consultadoEm  DateTime  @default(now())
+  consultadoPor String?
+  cacheId       String?
+  cache         CacheCpf? @relation(fields: [cacheId], references: [id])
+
+  @@index([tenantId])
+  @@index([cpf])
+  @@index([consultadoEm])
+  @@map("consultas_cpf")
+}
+
+// ====================================
+// RAG: CONHECIMENTO DE EMPREENDIMENTOS
+// ====================================
+
+model EmpreendimentoConhecimento {
+  id                        String   @id @default(uuid())
+  
+  // Contribuição (Opcional - se o tenant sair, o conhecimento fica!)
+  tenantId                  String?
+  tenant                    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  
+  // Identificação
+  nome                      String
+  localizacao               String
+  cep                       String?
+  tipo                      String
+  
+  // Conhecimento
+  briefingCompleto          String
+  briefingEstruturado       Json
+  confiabilidade            Decimal  @default(0)
+  
+  // RAG: Embedding
+  embedding                 String?
+  embeddingModelo           String   @default("text-embedding-3-small")
+  embeddingGeradoEm         DateTime?
+  
+  // Validação
+  validado                  Boolean  @default(false)
+  validadoPor               String?
+  validadoEm                DateTime?
+  
+  // Versionamento
+  versao                    Int      @default(1)
+  ultimaAtualizacao         DateTime @default(now())
+  
+  // Métricas
+  vezesReutilizado          Int      @default(0)
+  ultimoUso                 DateTime?
+  totalCampanhasVinculadas  Int      @default(0)
+  
+  // Relacionamentos
+  campanhas                 Campanha[]
+  
+  criadoEm                  DateTime @default(now())
+  atualizadoEm              DateTime @updatedAt
+  
+  // UNIQUE GLOBAL: Nome + Localização (independente do tenant)
+  @@unique([nome, localizacao])
+  @@index([nome])
+  @@index([cep])
+  @@index([validado])
+  @@map("empreendimentos_conhecimento")
+}
+
+// ====================================
+// CAMPANHAS
+// ====================================
+
+model Campanha {
+  id              String  @id @default(uuid())
+  tenantId        String
+  tenant          Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome            String
+  descricao       String?
+  tipo            String  @default("MINERACAO")
+  parametrosBusca Json?
+
+  // RELAÇÃO RAG
+  empreendimentoId String?
+  empreendimento   EmpreendimentoConhecimento? @relation(fields: [empreendimentoId], references: [id])
+
+  // Dados do Empreendimento (DEPRECADO - usar empreendimento)
+  nomeEmpreendimento     String?
+  tipoImovel             String?
+  localizacao            String?
+  perfilImovel           String?
+  briefingCompleto       String?
+  briefingEstruturado    Json?
+  briefingGeradoEm       DateTime?
+  briefingConfiabilidade Decimal?
+  briefingValidado       Boolean   @default(false)
+  validadoPor            String?
+  validadoEm             DateTime?
+  editadoPor             String?
+  editadoEm              DateTime?
+
+  // Métricas
+  totalContatos Int    @default(0)
+  totalLeads    Int    @default(0)
+  status        String @default("ATIVA")
+
+  // Relacionamentos
+  contatos Contato[]
+  leads    Lead[]    @relation("CampanhaOrigem")
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([empreendimentoId])
+  @@map("campanhas")
+}
+
+// ====================================
+// CONTATOS
+// ====================================
+
+model Contato {
+  id                  String    @id @default(uuid())
+  campanhaId          String
+  campanha            Campanha  @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
+  nome                String
+  telefone            String?
+  email               String?
+  cpf                 String?
+  inscricaoIptu       String?
+  endereco            String?
+  statusProspeccao    String    @default("AGUARDANDO")
+  tentativasContato   Int       @default(0)
+  respondeu           Boolean   @default(false)
+  primeiraResposta    DateTime?
+  manifestouInteresse Boolean   @default(false)
+  virouLead           Boolean   @default(false)
+  leadId              String?   @unique
+  lead                Lead?     @relation("ContatoOrigem", fields: [leadId], references: [id])
+  virouLeadEm         DateTime?
+  criadoEm            DateTime  @default(now())
+  atualizadoEm        DateTime  @updatedAt
+
+  @@unique([campanhaId, telefone])
+  @@index([campanhaId])
+  @@index([virouLead])
+  @@map("contatos")
+}
+
+// ====================================
+// LEADS
+// ====================================
+
+model Lead {
+  id                 String      @id @default(uuid())
+  tenantId           String
+  tenant             Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cpf                String?
+  nome               String
+  email              String?
+  telefone           String?
+  telefoneVerificado Boolean     @default(false)
+  dataNascimento     DateTime?
+  enderecoPrincipal  String?
+  origem             String      @default("manual")
+  campanhaOrigemId   String?
+  campanhaOrigem     Campanha?   @relation("CampanhaOrigem", fields: [campanhaOrigemId], references: [id])
+  contatoOrigem      Contato?    @relation("ContatoOrigem")
+  primeiroContato    DateTime    @default(now())
+  ultimaInteracao    DateTime?
+  status             StatusLead  @default(NOVO)
+  estagio            String      @default("contato_inicial")
+  temperatura        Temperatura @default(FRIO)
+  imoveis            Imovel[]
+  atividades         Atividade[]
+  conversas          Conversa[]
+  criadoEm           DateTime    @default(now())
+  atualizadoEm       DateTime    @updatedAt
+  deletadoEm         DateTime?
+
+  @@unique([tenantId, cpf])
+  @@index([tenantId])
+  @@index([cpf])
+  @@index([status])
+  @@index([telefone])
+  @@map("leads")
+}
+
+enum StatusLead {
+  NOVO
+  CONTATANDO
+  QUALIFICADO
+  EM_NEGOCIACAO
+  CONVERTIDO
+  PERDIDO
+  INATIVO
+}
+
+enum Temperatura {
+  FRIO
+  MORNO
+  QUENTE
+}
+
+// ====================================
+// IMÓVEIS
+// ====================================
+
+model Imovel {
+  id                String    @id @default(uuid())
+  inscricaoIptu     String    @unique
+  logradouro        String
+  numero            String?
+  complemento       String?
+  bairro            String
+  quadra            String?
+  lote              String?
+  codigoEdificio    String?
+  nomeEdificio      String?
+  latitude          Float?
+  longitude         Float?
+  areaTerreno       Float?
+  areaEdificada     Float?
+  certidaoCache     Json?
+  certidaoBuscadaEm DateTime?
+  leadId            String?
+  lead              Lead?     @relation(fields: [leadId], references: [id])
+  statusCaptacao    String    @default("IDENTIFICADO")
+  interesse         String?
+  criadoEm          DateTime  @default(now())
+  atualizadoEm      DateTime  @updatedAt
+
+  @@index([inscricaoIptu])
+  @@index([bairro])
+  @@index([codigoEdificio])
+  @@index([leadId])
+  @@map("imoveis")
+}
+
+// ====================================
+// ATIVIDADES
+// ====================================
+
+model Atividade {
+  id           String        @id @default(uuid())
+  leadId       String
+  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tipo         TipoAtividade
+  canal        String?
+  titulo       String
+  descricao    String?
+  duracao      Int?
+  gravacao     String?
+  mensagem     String?
+  resultado    String?
+  agendadoPara DateTime?
+  completadoEm DateTime?
+  criadoPor    String?
+  criadoEm     DateTime      @default(now())
+
+  @@index([leadId])
+  @@index([tipo])
+  @@index([agendadoPara])
+  @@map("atividades")
+}
+
+enum TipoAtividade {
+  LIGACAO
+  EMAIL
+  WHATSAPP
+  REUNIAO
+  NOTA
+  TAREFA
+}
+
+// ====================================
+// CONVERSAS
+// ====================================
+
+model Conversa {
+  id               String     @id @default(uuid())
+  leadId           String
+  lead             Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  canal            String
+  numeroOrigem     String
+  estadoConversa   String     @default("ativa")
+  contexto         Json
+  mensagens        Mensagem[]
+  iniciadaEm       DateTime   @default(now())
+  ultimaMensagemEm DateTime   @default(now())
+  finalizadaEm     DateTime?
+
+  @@index([leadId])
+  @@index([numeroOrigem])
+  @@index([estadoConversa])
+  @@map("conversas")
+}
+
+model Mensagem {
+  id         String    @id @default(uuid())
+  conversaId String
+  conversa   Conversa  @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  remetente  String
+  conteudo   String
+  tipo       String    @default("texto")
+  metadata   Json?
+  enviadaEm  DateTime  @default(now())
+  lidaEm     DateTime?
+
+  @@index([conversaId])
+  @@index([enviadaEm])
+  @@map("mensagens")
+}

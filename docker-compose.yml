@@ -1,0 +1,54 @@
+services:
+  # PostgreSQL - Banco de dados principal
+  postgres:
+    image: postgres:15-alpine
+    container_name: elyon_postgres_dev
+    environment:
+      POSTGRES_DB: elyon
+      POSTGRES_USER: elyon_user
+      POSTGRES_PASSWORD: elyon_dev_2025
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elyon_user -d elyon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis - Cache e filas
+  redis:
+    image: redis:7-alpine
+    container_name: elyon_redis_dev
+    command: redis-server --requirepass elyon_redis_2025
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Evolution Audio Converter
+  audio_converter:
+    image: atendai/evolution-audio-converter:latest
+    container_name: elyon_audio_converter
+    environment:
+      PORT: 4040
+      API_KEY: ${AUDIO_CONVERTER_API_KEY:-elyon_audio_secret}
+      ENABLE_TRANSCRIPTION: "true"
+      TRANSCRIPTION_PROVIDER: "openai"
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      TRANSCRIPTION_LANGUAGE: "pt"
+    ports:
+      - "4040:4040"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

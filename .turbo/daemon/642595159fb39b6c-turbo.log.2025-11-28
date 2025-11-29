@@ -1,0 +1,420 @@
+2025-11-28T01:19:23.723064Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T01:19:23.723097Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:19:23.927545Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon")}
+2025-11-28T01:19:23.927574Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:19:24.617523Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764292764609-623dc5e7b130e.mjs")}
+2025-11-28T01:19:24.617549Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T01:19:24.744241Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend"), AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764292764609-623dc5e7b130e.mjs")}
+2025-11-28T01:19:24.744303Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T01:19:24.744357Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T01:22:33.569504Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T01:22:33.569543Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:22:33.676929Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T01:22:33.676945Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:22:34.469903Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764292954454-68123110e346d.mjs")}
+2025-11-28T01:22:34.469924Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T01:22:34.583929Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T01:22:34.583946Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T01:22:34.583989Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T01:25:16.982811Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\webhook.ts")}
+2025-11-28T01:25:16.982847Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:25:17.265304Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\webhook.ts")}
+2025-11-28T01:25:17.265339Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:25:17.265468Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T01:25:42.171830Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\webhook.ts")}
+2025-11-28T01:25:42.171865Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:26:24.760398Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T01:26:24.760445Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:26:25.649421Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend"), AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764293185622-f6781ddefcac4.mjs")}
+2025-11-28T01:26:25.649447Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T01:43:31.154549Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("node_modules")}
+2025-11-28T01:43:31.154670Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:43:41.755780Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\package.json")}
+2025-11-28T01:43:41.755817Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:43:41.954452Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("package-lock.json")}
+2025-11-28T01:43:41.954513Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:43:42.276727Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("node_modules")}
+2025-11-28T01:43:42.276755Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:44:05.954111Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\openai.ts")}
+2025-11-28T01:44:05.954143Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:44:06.055749Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos")}
+2025-11-28T01:44:06.055765Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:44:06.055796Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T01:44:06.160003Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\openai.ts")}
+2025-11-28T01:44:06.160051Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:44:25.691167Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes"), AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\agente-mestre.ts")}
+2025-11-28T01:44:25.691192Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:44:25.978168Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\agente-mestre.ts")}
+2025-11-28T01:44:25.978206Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:44:25.978272Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T01:44:56.591752Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\webhook.ts")}
+2025-11-28T01:44:56.591838Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:45:22.451463Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\agente-mestre.ts")}
+2025-11-28T01:45:22.451485Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:45:34.551456Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\agente-mestre.ts")}
+2025-11-28T01:45:34.551551Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:45:48.463836Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\agente-mestre.ts")}
+2025-11-28T01:45:48.463879Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:51:00.627990Z  WARN daemon_server: turborepo_lib::commands::daemon: daemon already running
+2025-11-28T01:51:00.639165Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo"), AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\.turbo-cookie"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T01:51:00.639200Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:51:00.734045Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T01:51:00.734060Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:51:01.034612Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T01:51:01.034639Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:51:01.532206Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764294661496-a91a7096899b4.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T01:51:01.532239Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T01:52:15.432628Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\webhook.ts")}
+2025-11-28T01:52:15.432661Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T01:52:44.752754Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T01:52:44.752789Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:52:45.662231Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764294765594-82d1e730427d6.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T01:52:45.662267Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T01:57:32.533524Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T01:57:32.533562Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:57:32.634508Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T01:57:32.634527Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T01:57:33.438553Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend"), AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764295053403-4bf6406fd64f8.mjs")}
+2025-11-28T01:57:33.438579Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T01:59:08.445517Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\openai.ts")}
+2025-11-28T01:59:08.445561Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T02:00:25.332095Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T02:00:25.332139Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T02:00:26.231979Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764295226155-e5dcbc9fa0516.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T02:00:26.232018Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T02:03:38.217499Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servidor.ts")}
+2025-11-28T02:03:38.217543Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T02:04:40.205630Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T02:04:40.205668Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T02:04:41.208535Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764295481165-dc539dc114a3a.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T02:04:41.208568Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T02:06:19.310006Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\openai.ts")}
+2025-11-28T02:06:19.310040Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T02:06:19.776816Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\openai.ts")}
+2025-11-28T02:06:19.776841Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T02:06:19.776926Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T02:07:06.512128Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T02:07:06.512173Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T02:07:07.512046Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764295627471-6ec89ce75bca8.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T02:07:07.512061Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T02:08:55.011289Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\openai.ts")}
+2025-11-28T02:08:55.011327Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T02:57:22.298269Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T02:57:22.298327Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T03:19:59.027992Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T03:19:59.028110Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T10:00:55.057450Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T10:00:55.058456Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T10:00:55.118830Z  WARN daemon_server: turborepo_lib::commands::daemon: daemon already running
+2025-11-28T10:00:55.157898Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo"), AnchoredSystemPathBuf(".turbo\\cookies\\.turbo-cookie")}
+2025-11-28T10:00:55.157921Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T10:00:55.250493Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo"), AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T10:00:55.250508Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T10:00:55.563020Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T10:00:55.563043Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T10:00:56.157536Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend"), AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764324056094-f5378019e033f.mjs")}
+2025-11-28T10:00:56.157569Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T10:20:22.752473Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\ferramentas"), AnchoredSystemPathBuf("pacotes\\backend\\src\\ferramentas\\sdr-tools.ts")}
+2025-11-28T10:20:22.752509Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:20:22.948187Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src"), AnchoredSystemPathBuf("pacotes\\backend\\src\\ferramentas")}
+2025-11-28T10:20:22.948203Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:20:22.948264Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T10:20:23.349545Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\ferramentas\\sdr-tools.ts")}
+2025-11-28T10:20:23.349588Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:24:06.654679Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers\\sdr-worker.ts"), AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers")}
+2025-11-28T10:24:06.654714Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:24:06.839048Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers\\sdr-worker.ts"), AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers"), AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes")}
+2025-11-28T10:24:06.839066Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:24:06.839130Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T10:25:09.061393Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\elyon-core.ts")}
+2025-11-28T10:25:09.061422Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:25:09.370046Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes"), AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\elyon-core.ts")}
+2025-11-28T10:25:09.370064Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:25:09.370136Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T10:25:30.164774Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\webhook.ts")}
+2025-11-28T10:25:30.164796Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:25:30.331857Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\webhook.ts")}
+2025-11-28T10:25:30.331881Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:25:30.331975Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T10:25:43.957147Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\webhook.ts")}
+2025-11-28T10:25:43.957166Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:32:37.859053Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers\\sdr-worker.ts")}
+2025-11-28T10:32:37.859086Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:33:01.250059Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers\\sdr-worker.ts")}
+2025-11-28T10:33:01.250096Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:33:01.442638Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers\\sdr-worker.ts")}
+2025-11-28T10:33:01.442669Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:33:01.442742Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T10:48:39.662041Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers\\sdr-worker.ts")}
+2025-11-28T10:48:39.662072Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:48:54.061647Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers\\sdr-worker.ts")}
+2025-11-28T10:48:54.061669Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:49:07.049917Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers\\sdr-worker.ts")}
+2025-11-28T10:49:07.049952Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:49:17.349871Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers\\sdr-worker.ts")}
+2025-11-28T10:49:17.349894Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T10:49:48.617207Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T10:49:48.617236Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T10:49:49.507757Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764326989485-5155727075e5b.mjs")}
+2025-11-28T10:49:49.507786Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T10:49:49.618518Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T10:49:49.618564Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T10:49:49.618639Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T14:08:43.418155Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\campanha-contato-models.prisma")}
+2025-11-28T14:08:43.418291Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:08:43.760900Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\campanha-contato-models.prisma"), AnchoredSystemPathBuf("pacotes\\backend\\prisma")}
+2025-11-28T14:08:43.760917Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:08:43.760976Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T14:09:14.809795Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\schema.prisma")}
+2025-11-28T14:09:14.809831Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:09:36.517720Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\schema.prisma")}
+2025-11-28T14:09:36.517738Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:09:51.707390Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\schema.prisma")}
+2025-11-28T14:09:51.707416Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:12:18.716705Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\20251128141218_adicionar_campanha_contato"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\20251128141218_adicionar_campanha_contato\\migration.sql"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\migration_lock.toml")}
+2025-11-28T14:12:18.716732Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:21:39.019339Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\ferramentas\\sdr-tools.ts")}
+2025-11-28T14:21:39.019424Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:21:39.115588Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\ferramentas\\sdr-tools.ts")}
+2025-11-28T14:21:39.115603Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:21:39.115659Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T14:21:40.516615Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers\\sdr-worker.ts")}
+2025-11-28T14:21:40.516642Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:22:43.521255Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\ferramentas\\sdr-tools.ts")}
+2025-11-28T14:22:43.521288Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:30:47.509919Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\leads.ts")}
+2025-11-28T14:30:47.509943Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:30:49.230188Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\leads.ts")}
+2025-11-28T14:30:49.230234Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:33:42.133586Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo"), AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\.turbo-cookie"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T14:33:42.133629Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T14:33:42.137242Z  WARN daemon_server: turborepo_lib::commands::daemon: daemon already running
+2025-11-28T14:33:42.242817Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T14:33:42.242843Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T14:33:42.552440Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T14:33:42.552484Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T14:33:43.143497Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764340423091-599092a2aed1.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T14:33:43.143526Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T14:34:27.853360Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\agentes\\workers\\sdr-worker.ts")}
+2025-11-28T14:34:27.853471Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T14:35:35.006805Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\.turbo-cookie"), AnchoredSystemPathBuf(".turbo"), AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T14:35:35.006847Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T14:35:35.014505Z  WARN daemon_server: turborepo_lib::commands::daemon: daemon already running
+2025-11-28T14:35:35.102338Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T14:35:35.102359Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T14:35:35.405396Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T14:35:35.405419Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T14:35:36.011890Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764340535945-52f63986931f7.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T14:35:36.011923Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T15:04:49.790736Z  WARN daemon_server: turborepo_lib::commands::daemon: daemon already running
+2025-11-28T15:04:49.804463Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies\\.turbo-cookie"), AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T15:04:49.804497Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T15:04:49.901634Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T15:04:49.901655Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T15:04:50.206181Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T15:04:50.206208Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T15:04:50.698132Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764342290638-98719947260f7.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T15:04:50.698160Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T15:38:36.503128Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T15:38:36.503162Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:38:36.642631Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos")}
+2025-11-28T15:38:36.642651Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:38:36.642697Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T15:38:36.897938Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T15:38:36.897966Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:38:56.596762Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\schema.prisma")}
+2025-11-28T15:38:56.596790Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:39:06.601476Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\20251128153906_adicionar_briefing_empreendimento"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\migration_lock.toml"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\20251128153906_adicionar_briefing_empreendimento\\migration.sql")}
+2025-11-28T15:39:06.601509Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:39:48.903045Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\.env.example")}
+2025-11-28T15:39:48.903112Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:39:49.068345Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend")}
+2025-11-28T15:39:49.068367Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:39:49.068464Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T15:39:49.098957Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\.env.example")}
+2025-11-28T15:39:49.098981Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:39:49.218730Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\.env.example")}
+2025-11-28T15:39:49.218767Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:39:49.218918Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T15:53:34.903573Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\campanhas.ts")}
+2025-11-28T15:53:34.903618Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:53:35.057829Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas")}
+2025-11-28T15:53:35.057844Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:53:35.057876Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T15:53:35.409312Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\campanhas.ts")}
+2025-11-28T15:53:35.409345Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:54:00.299903Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servidor.ts")}
+2025-11-28T15:54:00.299974Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:54:00.409655Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servidor.ts")}
+2025-11-28T15:54:00.409681Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T15:54:00.409769Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T16:01:58.772796Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T16:01:58.772828Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T16:01:59.764031Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend"), AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764345719663-bcdb39b33f895.mjs")}
+2025-11-28T16:01:59.764055Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T16:02:07.663473Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T16:02:07.663490Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T16:13:16.775972Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T16:13:16.776011Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T16:19:12.426031Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T16:19:12.426060Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T16:19:12.538415Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T16:19:12.538444Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T16:19:13.331276Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764346753317-e3c63f30a755d.mjs")}
+2025-11-28T16:19:13.331302Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T16:19:13.473043Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend"), AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764346753317-e3c63f30a755d.mjs")}
+2025-11-28T16:19:13.473070Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T16:19:13.473143Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T16:19:19.929294Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T16:19:19.929312Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T16:23:30.229233Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T16:23:30.229269Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T16:23:32.226136Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T16:23:32.226172Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T16:27:16.666632Z  WARN daemon_server: turborepo_lib::commands::daemon: daemon already running
+2025-11-28T16:27:16.680554Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies\\.turbo-cookie"), AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo")}
+2025-11-28T16:27:16.680592Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T16:27:16.775141Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T16:27:16.775176Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T16:27:17.071871Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T16:27:17.071896Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T16:27:17.571206Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend"), AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764347237497-cce1e98efd12a.mjs")}
+2025-11-28T16:27:17.571249Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T16:38:41.578538Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T16:38:41.578577Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T16:38:43.277950Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T16:38:43.277978Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T16:42:54.978799Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T16:42:54.978849Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T16:46:14.075732Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T16:46:14.075776Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T17:00:57.770451Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T17:00:57.770489Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T17:01:46.875164Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T17:01:46.875201Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T17:07:30.580623Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas"), AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas\\Campanhas.tsx")}
+2025-11-28T17:07:30.580698Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T17:07:31.478282Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas\\Campanhas.tsx")}
+2025-11-28T17:07:31.478392Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T17:08:59.383446Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\App.tsx")}
+2025-11-28T17:08:59.383492Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T17:10:43.472639Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\layouts\\LayoutDashboard.tsx")}
+2025-11-28T17:10:43.472663Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T17:47:16.289986Z  WARN daemon_server: turborepo_lib::commands::daemon: daemon already running
+2025-11-28T17:47:16.305927Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo"), AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies\\.turbo-cookie")}
+2025-11-28T17:47:16.305993Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T17:47:16.406993Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo"), AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T17:47:16.407015Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T17:47:17.196308Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764352037152-b10e39a3317d7.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T17:47:17.196338Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T17:47:25.704162Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T17:47:25.704197Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T17:47:27.301705Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T17:47:27.301728Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T17:50:33.197301Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas\\CampanhaDetalhes.tsx"), AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas")}
+2025-11-28T17:50:33.197343Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T17:50:34.010102Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas\\CampanhaDetalhes.tsx")}
+2025-11-28T17:50:34.010146Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T17:50:35.909146Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\App.tsx")}
+2025-11-28T17:50:35.909176Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T17:50:56.315333Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas\\Campanhas.tsx")}
+2025-11-28T17:50:56.315379Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T17:51:05.109057Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas\\Campanhas.tsx")}
+2025-11-28T17:51:05.109077Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T17:56:39.520299Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T17:56:39.520331Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T17:56:40.423652Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764352600365-c1ee61de58c79.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T17:56:40.423686Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:01:26.028227Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T18:01:26.028265Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T18:01:26.928039Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend"), AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764352886911-d6c6ffae93721.mjs")}
+2025-11-28T18:01:26.928064Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:01:27.063883Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend"), AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764352886911-d6c6ffae93721.mjs")}
+2025-11-28T18:01:27.063911Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:01:27.063980Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T18:01:44.030013Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T18:01:44.030055Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T18:01:45.028312Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend"), AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764352904925-203069854f457.mjs")}
+2025-11-28T18:01:45.028349Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:02:56.341599Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas\\Campanhas.tsx")}
+2025-11-28T18:02:56.341637Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:03:11.734158Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas\\Campanhas.tsx")}
+2025-11-28T18:03:11.734187Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:05:02.649611Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T18:05:02.649657Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T18:05:02.718098Z  WARN daemon_server: turborepo_lib::commands::daemon: daemon already running
+2025-11-28T18:05:02.740573Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo"), AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\.turbo-cookie")}
+2025-11-28T18:05:02.740601Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T18:05:02.853676Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T18:05:02.853695Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T18:05:03.148054Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T18:05:03.148076Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T18:05:03.646560Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764353103630-90636624c0316.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T18:05:03.646590Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:05:03.823186Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764353103630-90636624c0316.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T18:05:03.823214Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:05:03.823291Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T18:08:46.143756Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\schema.prisma")}
+2025-11-28T18:08:46.143790Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:11:34.950406Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\20251128181134_adicionar_validacao_briefing"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\20251128181134_adicionar_validacao_briefing\\migration.sql"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\migration_lock.toml"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations")}
+2025-11-28T18:11:34.950441Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:12:31.109819Z  WARN daemon_server: turborepo_lib::commands::daemon: daemon already running
+2025-11-28T18:12:31.121382Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\.turbo-cookie"), AnchoredSystemPathBuf(".turbo"), AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T18:12:31.121447Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T18:12:31.215154Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies")}
+2025-11-28T18:12:31.215184Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T18:12:31.509198Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\642595159fb39b6c-turbo.log.2025-11-28")}
+2025-11-28T18:12:31.509225Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T18:12:32.114077Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764353552068-84d458df3323.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T18:12:32.114112Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:15:05.111777Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\scripts\\limpar-campanhas.ts")}
+2025-11-28T18:15:05.111880Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:15:05.432585Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\scripts\\limpar-campanhas.ts"), AnchoredSystemPathBuf("pacotes\\backend\\scripts")}
+2025-11-28T18:15:05.432602Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:15:05.432690Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T18:22:32.619302Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T18:22:32.619372Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:22:34.918852Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\pesquisador-empreendimento.ts")}
+2025-11-28T18:22:34.918891Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:23:33.211642Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\campanhas.ts")}
+2025-11-28T18:23:33.211666Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:24:18.169808Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T18:24:18.169879Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T18:24:19.064365Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend"), AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764354259043-486ef040a84bc.mjs")}
+2025-11-28T18:24:19.064403Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:24:19.201753Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T18:24:19.201769Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:24:19.201809Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T18:26:28.477242Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\campanhas.ts")}
+2025-11-28T18:26:28.477266Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:28:04.114948Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2025-11-28T18:28:04.114985Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2025-11-28T18:28:05.009031Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764354484994-c0089ec1bae4f.mjs")}
+2025-11-28T18:28:05.009059Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:28:05.137067Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\vite.config.ts.timestamp-1764354484994-c0089ec1bae4f.mjs"), AnchoredSystemPathBuf("pacotes\\frontend")}
+2025-11-28T18:28:05.137088Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:28:05.137141Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T18:32:13.615814Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\rotas\\campanhas.ts")}
+2025-11-28T18:32:13.615857Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:32:29.216139Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas\\CampanhaDetalhes.tsx")}
+2025-11-28T18:32:29.216165Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:32:31.513755Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\frontend\\src\\paginas\\CampanhaDetalhes.tsx")}
+2025-11-28T18:32:31.513797Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/frontend"), path: AnchoredSystemPathBuf("pacotes\\frontend") }}))
+2025-11-28T18:47:42.007847Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\schema.prisma")}
+2025-11-28T18:47:42.007925Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:56:52.705966Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\schema.prisma.backup")}
+2025-11-28T18:56:52.706004Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:56:52.857478Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma")}
+2025-11-28T18:56:52.857494Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T18:56:52.857527Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2025-11-28T19:02:46.331062Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\schema.prisma")}
+2025-11-28T19:02:46.331144Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T19:03:02.009508Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\schema.prisma")}
+2025-11-28T19:03:02.009545Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T19:15:55.504675Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\20251128191555_adicionar_rag_embeddings"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\migration_lock.toml"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations"), AnchoredSystemPathBuf("pacotes\\backend\\prisma\\migrations\\20251128191555_adicionar_rag_embeddings\\migration.sql")}
+2025-11-28T19:15:55.504733Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T19:16:30.013743Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\embeddings.ts")}
+2025-11-28T19:16:30.013765Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T19:16:30.185436Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos\\embeddings.ts"), AnchoredSystemPathBuf("pacotes\\backend\\src\\servicos")}
+2025-11-28T19:16:30.185456Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@elyon/backend"), path: AnchoredSystemPathBuf("pacotes\\backend") }}))
+2025-11-28T19:16:30.185525Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun

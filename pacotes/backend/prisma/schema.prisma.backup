@@ -1,0 +1,462 @@
+// Gerador Prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Data source
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ====================================
+// TENANTS (Imobiliárias Clientes)
+// ====================================
+
+model Tenant {
+  id        String   @id @default(uuid())
+  nome      String
+  slug      String   @unique
+  
+  // Configurações
+  status    StatusTenant @default(ATIVO)
+  plano     String       @default("SMALL_BUSINESS")
+  
+  // Billing
+  precoConsultaCpf Decimal @default(2.00)
+  quotaMensal      Int     @default(100)
+  
+  // Analytics
+  totalConsultas   Int     @default(0)
+  taxaCacheHit     Decimal @default(0)
+  
+  // Relacionamentos
+  usuarios          Usuario[]
+  leads             Lead[]
+  campanhas         Campanha[]
+  configuracaoAgente ConfiguracaoAgente?
+  
+  criadoEm  DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  
+  @@index([slug])
+  @@index([status])
+  @@map("tenants")
+}
+
+enum StatusTenant {
+  ATIVO
+  SUSPENSO
+  CANCELADO
+}
+
+// ====================================
+// CONFIGURAÇÃO DO AGENTE IA
+// ====================================
+
+model ConfiguracaoAgente {
+  id        String @id @default(uuid())
+  tenantId  String @unique
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Identidade
+  nome      String
+  avatar    String?
+  
+  // Personalidade (JSON)
+  personalidade Json  // { tom: 'formal', tracos: ['atenciosa', 'eficiente'] }
+  
+  // Expertise (JSON)
+  expertise Json     // { bairros: [], faixaPreco: {}, especialidades: [] }
+  
+  // Scripts (JSON)
+  scripts Json       // { saudacao: '', qualificacao: [], fechamento: '' }
+  
+  // Regras de Negócio (JSON)
+  regrasNegocio Json // { valorMinimo: 0, criteriosQualificacao: {} }
+  
+  // Status
+  estaAtivo Boolean @default(true)
+  
+  criadoEm  DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  
+  @@map("configuracoes_agente")
+}
+
+// ====================================
+// USUÁRIOS DO SISTEMA
+// ====================================
+
+model Usuario {
+  id        String @id @default(uuid())
+  tenantId  String
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Credenciais
+  email     String
+  nome      String
+  senha     String  // bcrypt hash
+  
+  // Perfil
+  papel     PapelUsuario @default(CORRETOR)
+  avatar    String?
+  telefone  String?
+  
+  // Status
+  estaAtivo Boolean @default(true)
+  
+  // Timestamps
+  criadoEm  DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  ultimoLoginEm DateTime?
+  
+  @@unique([tenantId, email])
+  @@index([email])
+  @@map("usuarios")
+}
+
+enum PapelUsuario {
+  SUPER_ADMIN
+  ADMIN
+  CORRETOR
+  VISUALIZADOR
+}
+
+// ====================================
+// CACHE GLOBAL DE CPF (Compartilhado)
+// ====================================
+
+model CacheCpf {
+  id        String   @id @default(uuid())
+  cpf       String   @unique
+  
+  // Dados enriquecidos (JSON)
+  dados     Json     // Dados da API de CPF
+  fonte     String   @default("assertiva")
+  
+  // TTL
+  buscadoEm DateTime @default(now())
+  expiraEm  DateTime
+  
+  // Analytics
+  contagemConsultas Int      @default(1)
+  ultimoUsoEm       DateTime @default(now())
+  
+  // Audit
+  primeiraConsultaPor String? // tenant_id
+  
+  // Relacionamentos
+  consultas ConsultaCpf[]
+  
+  @@index([cpf])
+  @@index([expiraEm])
+  @@map("cache_cpf")
+}
+
+// ====================================
+// CONSULTAS DE CPF (Billing)
+// ====================================
+
+model ConsultaCpf {
+  id        String   @id @default(uuid())
+  
+  // Identificação
+  tenantId  String
+  cpf       String
+  
+  // Billing
+  veioDoCache Boolean @default(false)
+  custoParaNos Decimal @default(0)
+  cobradoDe   Decimal
+  lucro       Decimal
+  
+  // Audit
+  consultadoEm DateTime @default(now())
+  consultadoPor String? // user_id
+  
+  // Relacionamento com cache
+  cacheId   String?
+  cache     CacheCpf? @relation(fields: [cacheId], references: [id])
+  
+  @@index([tenantId])
+// ====================================
+
+model Contato {
+  id String @id @default(uuid())
+  campanhaId String
+  campanha Campanha @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
+  
+  // Dados básicos
+  nome String
+  telefone String?
+  email String?
+  cpf String?
+  
+  // Dados do imóvel (da mineração)
+  inscricaoIptu String?
+  endereco String?
+  
+  // Status da prospecção
+  statusProspeccao String @default("AGUARDANDO") // AGUARDANDO, TENTATIVA_1, TENTATIVA_2, etc
+  tentativasContato Int @default(0)
+  
+  // Se respondeu
+  respondeu Boolean @default(false)
+  primeiraResposta DateTime?
+  
+  // Se manifestou interesse → vira LEAD
+  manifestouInteresse Boolean @default(false)
+  virouLead Boolean @default(false)
+  leadId String? @unique
+  lead Lead? @relation("ContatoOrigem", fields: [leadId], references: [id])
+  virouLeadEm DateTime?
+  
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  
+  @@unique([campanhaId, telefone])
+  @@index([campanhaId])
+  @@index([virouLead])
+  @@map("contatos")
+}
+
+// ====================================
+// LEADS (Proprietários)
+// ====================================
+
+model Lead {
+  id        String @id @default(uuid())
+  tenantId  String
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Dados básicos
+  cpf       String?
+  nome      String
+  email     String?
+  telefone  String?
+  telefoneVerificado Boolean @default(false)
+  
+  // Dados enriquecidos
+  dataNascimento    DateTime?
+  enderecoPrincipal String?
+  
+  // Origem
+  origem           String   @default("manual")
+  campanhaOrigemId String?
+  campanhaOrigem   Campanha? @relation("CampanhaOrigem", fields: [campanhaOrigemId], references: [id])
+  contatoOrigem    Contato? @relation("ContatoOrigem")
+  primeiroContato  DateTime @default(now())
+  ultimaInteracao  DateTime?
+  
+  // Pipeline
+  status           StatusLead @default(NOVO)
+  estagio          String     @default("contato_inicial")
+  temperatura      Temperatura @default(FRIO)
+  
+  // Relacionamentos
+  imoveis       Imovel[]
+  atividades    Atividade[]
+  conversas     Conversa[]
+  
+  // Metadata
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  deletadoEm   DateTime?
+  
+  @@unique([tenantId, cpf])
+  @@index([tenantId])
+  @@index([cpf])
+  @@index([status])
+  @@index([telefone])
+  @@map("leads")
+}
+
+enum StatusLead {
+  NOVO
+  CONTATANDO
+  QUALIFICADO
+  EM_NEGOCIACAO
+  CONVERTIDO
+  PERDIDO
+  INATIVO
+}
+
+enum Temperatura {
+  FRIO
+  MORNO
+  QUENTE
+}
+
+// ====================================
+// IMÓVEIS
+// ====================================
+
+model Imovel {
+  id        String @id @default(uuid())
+  
+  // Dados do IPTU
+  inscricaoIptu String  @unique
+  logradouro    String
+  numero        String?
+  complemento   String?
+  bairro        String
+  quadra        String?
+  lote          String?
+  codigoEdificio String?
+  nomeEdificio   String?
+  
+  // Coordenadas
+  latitude  Float?
+  longitude Float?
+  
+  // Áreas
+  areaTerreno    Float?
+  areaEdificada  Float?
+  
+  // Cache certidão
+  certidaoCache     Json?
+  certidaoBuscadaEm DateTime?
+  
+  // Relacionamento com lead
+  leadId       String?
+  lead         Lead?    @relation(fields: [leadId], references: [id])
+  
+  // Status
+  statusCaptacao String @default("IDENTIFICADO")
+  interesse      String?
+  
+  // Metadata
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  
+  @@index([inscricaoIptu])
+  @@index([bairro])
+  @@index([codigoEdificio])
+  @@index([leadId])
+  @@map("imoveis")
+}
+
+// ====================================
+// ATIVIDADES
+// ====================================
+
+model Atividade {
+  id        String @id @default(uuid())
+  leadId    String
+  lead      Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  // Tipo e canal
+  tipo      TipoAtividade
+  canal     String?
+  
+  // Conteúdo
+  titulo    String
+  descricao String?
+  
+  // Para chamadas
+  duracao   Int?     // segundos
+  gravacao  String?  // URL
+  
+  // Para mensagens
+  mensagem  String?
+  
+  // Resultado
+  resultado String?
+  
+  // Agendamento
+  agendadoPara  DateTime?
+  completadoEm  DateTime?
+  
+  // Audit
+  criadoPor String? // user_id ou 'ai_agent'
+  criadoEm  DateTime @default(now())
+  
+  @@index([leadId])
+  @@index([tipo])
+  @@index([agendadoPara])
+  @@map("atividades")
+}
+
+enum TipoAtividade {
+  LIGACAO
+  WHATSAPP
+  EMAIL
+  NOTA
+  REUNIAO
+  TAREFA
+}
+
+// ====================================
+// CONVERSAS COM AGENTE IA
+// ====================================
+
+model Conversa {
+  id        String @id @default(uuid())
+  leadId    String
+  lead      Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  // Identificação
+  canal     CanalConversa
+  sessaoId  String   @unique
+  
+  // Estado
+  status    StatusConversa @default(ATIVA)
+  
+  // Contexto (JSON)
+  contexto  Json?
+  
+  // Relacionamentos
+  mensagens MensagemConversa[]
+  
+  // Metadata
+  iniciadaEm    DateTime @default(now())
+  finalizadaEm  DateTime?
+  
+  @@index([leadId])
+  @@index([sessaoId])
+  @@map("conversas")
+}
+
+enum CanalConversa {
+  WHATSAPP
+  VOZ
+  CHAT
+}
+
+enum StatusConversa {
+  ATIVA
+  CONCLUIDA
+  ABANDONADA
+}
+
+model MensagemConversa {
+  id          String   @id @default(uuid())
+  conversaId  String
+  conversa    Conversa @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  
+  // Conteúdo
+  papel       PapelMensagem
+  tipo        TipoMensagem @default(TEXTO)
+  conteudo    String       // Texto ou transcrição
+  urlMidia    String?      // URL do áudio/imagem
+  
+  // Metadata
+  enviadaEm   DateTime @default(now())
+  
+  @@index([conversaId])
+  @@map("mensagens_conversa")
+}
+
+enum PapelMensagem {
+  USUARIO
+  ASSISTENTE
+  SISTEMA
+}
+
+enum TipoMensagem {
+  TEXTO
+  AUDIO
+  IMAGEM
+  DOCUMENTO
+}

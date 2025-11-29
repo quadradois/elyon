@@ -1,0 +1,79 @@
+// Adicionar ANTES do model Lead (linha 187)
+
+// ====================================
+// CAMPANHAS (Agrupamento de Contatos)
+// ====================================
+
+model Campanha {
+  id String @id @default(uuid())
+  tenantId String
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Identificação
+  nome String
+  descricao String?
+  
+  // Origem
+  tipo String @default("MINERACAO") // MINERACAO, MANUAL, IMPORTACAO
+  parametrosBusca Json? // { edificio: "X", bairro: "Y" }
+  
+  // Métricas
+  totalContatos Int @default(0)
+  totalLeads Int @default(0)
+  
+  // Status
+  status String @default("ATIVA") // ATIVA, PAUSADA, FINALIZADA
+  
+  // Relacionamentos
+  contatos Contato[]
+  leads Lead[] @relation("CampanhaOrigem")
+  
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  
+  @@index([tenantId, status])
+  @@map("campanhas")
+}
+
+// ====================================
+// CONTATOS (Pessoas da Mineração - NÃO são leads ainda!)
+// ====================================
+
+model Contato {
+  id String @id @default(uuid())
+  campanhaId String
+  campanha Campanha @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
+  
+  // Dados básicos
+  nome String
+  telefone String?
+  email String?
+  cpf String?
+  
+  // Dados do imóvel (da mineração)
+  inscricaoIptu String?
+  endereco String?
+  
+  // Status da prospecção
+  statusProspeccao String @default("AGUARDANDO") // AGUARDANDO, TENTATIVA_1, TENTATIVA_2, etc
+  tentativasContato Int @default(0)
+  
+  // Se respondeu
+  respondeu Boolean @default(false)
+  primeiraResposta DateTime?
+  
+  // Se manifestou interesse → vira LEAD
+  manifestouInteresse Boolean @default(false)
+  virouLead Boolean @default(false)
+  leadId String? @unique
+  lead Lead? @relation("ContatoOrigem", fields: [leadId], references: [id])
+  virouLeadEm DateTime?
+  
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  
+  @@unique([campanhaId, telefone])
+  @@index([campanhaId])
+  @@index([virouLead])
+  @@map("contatos")
+}
