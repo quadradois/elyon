@@ -1,12 +1,15 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "sonner";
 import { Login } from "./paginas/Login";
 import { LayoutDashboard } from "./layouts/LayoutDashboard";
 import { DashboardHome } from "./paginas/DashboardHome";
 import { ConfiguracaoAgente } from "./paginas/ConfiguracaoAgente";
 import { Leads } from "./paginas/Leads";
 import { Mineracao } from "./paginas/Mineracao";
+import { Captacao } from "./paginas/Captacao";
 import { Campanhas } from "./paginas/Campanhas";
 import { CampanhaDetalhes } from "./paginas/CampanhaDetalhes";
+import { Relatorios } from "./paginas/Relatorios";
 import { Configuracao } from "./paginas/Configuracao";
 import { WhatsAppProvider } from "./contextos/WhatsAppContext";
 
@@ -23,6 +26,20 @@ function RotaPrivada({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <BrowserRouter>
+      {/* Sistema de Notificações Toast */}
+      <Toaster 
+        position="top-right"
+        richColors
+        closeButton
+        duration={5000}
+        toastOptions={{
+          style: {
+            background: 'white',
+            border: '1px solid #e2e8f0',
+          },
+        }}
+      />
+      
       <Routes>
         <Route path="/login" element={<Login />} />
 
@@ -88,6 +105,28 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <Mineracao />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/captacao"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <Captacao />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/relatorios"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <Relatorios />
               </LayoutDashboard>
             </RotaPrivada>
           }

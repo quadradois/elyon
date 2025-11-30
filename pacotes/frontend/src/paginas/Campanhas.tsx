@@ -29,8 +29,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Building2,
-  MapPin,
-  DollarSign,
   Info,
 } from "lucide-react";
 import { api } from "../servicos/api";
@@ -45,22 +43,6 @@ interface Campanha {
   temBriefing: boolean;
   confiabilidade: number | null;
   criadoEm: string;
-}
-
-interface BriefingDetalhado {
-  faixa_preco?: {
-    min: number;
-    max: number;
-    moeda: string;
-    observacao?: string;
-  };
-  caracteristicas: string[];
-  diferenciais: string[];
-  pontos_interesse: string[];
-  resumo_sdr: string;
-  fontes: string[];
-  alertas?: string[];
-  confiabilidade: number;
 }
 
 export function Campanhas() {
@@ -154,26 +136,25 @@ export function Campanhas() {
   const getConfiabilidadeIcon = (confiabilidade: number | null) => {
     if (!confiabilidade) return null;
 
+    const titulo = `${Math.round(confiabilidade * 100)}% confiável`;
+
     if (confiabilidade >= 0.8) {
       return (
-        <CheckCircle2
-          className="w-4 h-4 text-green-600"
-          title={`${Math.round(confiabilidade * 100)}% confiável`}
-        />
+        <span title={titulo}>
+          <CheckCircle2 className="w-4 h-4 text-green-600" />
+        </span>
       );
     } else if (confiabilidade >= 0.5) {
       return (
-        <AlertTriangle
-          className="w-4 h-4 text-yellow-600"
-          title={`${Math.round(confiabilidade * 100)}% confiável`}
-        />
+        <span title={titulo}>
+          <AlertTriangle className="w-4 h-4 text-yellow-600" />
+        </span>
       );
     } else {
       return (
-        <AlertCircle
-          className="w-4 h-4 text-red-600"
-          title={`${Math.round(confiabilidade * 100)}% confiável`}
-        />
+        <span title={titulo}>
+          <AlertCircle className="w-4 h-4 text-red-600" />
+        </span>
       );
     }
   };
@@ -274,8 +255,9 @@ export function Campanhas() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium">Tipo de Imóvel</label>
+                  <label className="text-sm font-medium" htmlFor="tipoImovel">Tipo de Imóvel</label>
                   <select
+                    id="tipoImovel"
                     className="w-full border border-slate-200 rounded-md p-2 text-sm"
                     value={formData.tipoImovel}
                     onChange={(e) =>
@@ -290,8 +272,9 @@ export function Campanhas() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium">Perfil</label>
+                  <label className="text-sm font-medium" htmlFor="perfilImovel">Perfil</label>
                   <select
+                    id="perfilImovel"
                     className="w-full border border-slate-200 rounded-md p-2 text-sm"
                     value={formData.perfilImovel}
                     onChange={(e) =>

@@ -8,6 +8,8 @@ import {
   Building2,
   Menu,
   Target,
+  Sparkles,
+  BarChart3,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -30,10 +32,12 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
   const menuItems = [
     { icon: LayoutDashboardIcon, label: "Visão Geral", path: "/dashboard" },
     { icon: Bot, label: "Meu Agente", path: "/dashboard/agente" },
+    { icon: Sparkles, label: "Captação", path: "/dashboard/captacao", destaque: true },
     { icon: Target, label: "Campanhas", path: "/dashboard/campanhas" },
     { icon: Building2, label: "Mineração", path: "/dashboard/mineracao" },
     { icon: Users, label: "Leads", path: "/dashboard/leads" },
     { icon: MessageSquare, label: "Conversas", path: "/dashboard/conversas" },
+    { icon: BarChart3, label: "Relatórios", path: "/dashboard/relatorios" },
     {
       icon: Settings,
       label: "Configurações",
@@ -74,6 +78,7 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           {menuItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
+            const isDestaque = 'destaque' in item && item.destaque;
 
             return (
               <Link
@@ -82,17 +87,32 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium",
                   isActive
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    ? isDestaque 
+                      ? "bg-yellow-100 text-yellow-800" 
+                      : "bg-blue-50 text-blue-700"
+                    : isDestaque
+                      ? "text-yellow-700 hover:bg-yellow-50 hover:text-yellow-800"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 )}
               >
                 <Icon
                   className={cn(
                     "w-5 h-5",
-                    isActive ? "text-blue-600" : "text-slate-400"
+                    isActive 
+                      ? isDestaque ? "text-yellow-600" : "text-blue-600" 
+                      : isDestaque ? "text-yellow-500" : "text-slate-400"
                   )}
                 />
-                {sidebarOpen && <span>{item.label}</span>}
+                {sidebarOpen && (
+                  <span className="flex items-center gap-1">
+                    {item.label}
+                    {isDestaque && !isActive && (
+                      <span className="text-[10px] bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded font-semibold">
+                        NOVO
+                      </span>
+                    )}
+                  </span>
+                )}
               </Link>
             );
           })}

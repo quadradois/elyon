@@ -9,7 +9,7 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
-import { Send, Loader2, User, Bot, MessageSquare } from "lucide-react";
+import { Send, Loader2, MessageSquare } from "lucide-react";
 import { api } from "../servicos/api";
 
 interface Mensagem {
@@ -34,7 +34,6 @@ interface ChatProps {
 export function ChatModal({ lead, open, onOpenChange }: ChatProps) {
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [novoTexto, setNovoTexto] = useState("");
-  const [loading, setLoading] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 

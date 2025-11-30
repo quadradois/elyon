@@ -38,7 +38,6 @@ import {
   Edit,
   Save,
   X,
-  FileText,
 } from "lucide-react";
 import { api } from "../servicos/api";
 

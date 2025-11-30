@@ -185,9 +185,7 @@ export function Configuracao() {
                 </div>
               )}
 
-              {status === "DESCONECTADO" &&
-                !qrCode &&
-                status !== "CONECTANDO" && (
+              {status === "DESCONECTADO" && !qrCode && (
                   <div className="text-center space-y-4">
                     <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto">
                       <QrCode className="w-8 h-8 text-slate-400" />

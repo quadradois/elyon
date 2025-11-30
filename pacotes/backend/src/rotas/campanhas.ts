@@ -16,6 +16,7 @@ const criarCampanhaSchema = z.object({
   cep: z.string().optional(),
   tipoImovel: z.string().optional().default('Apartamento'),
   perfilImovel: z.string().optional(),
+  leadIds: z.array(z.string()).optional(), // IDs de leads para vincular à campanha
 });
 
 import { ragEmpreendimentos } from '../servicos/rag-empreendimentos';
@@ -119,14 +120,60 @@ router.post('/criar-com-pesquisa', async (req, res) => {
 
     console.log(`[Campanhas] Campanha criada: ${campanha.id}`);
 
-    // 6. Retornar resultado
+    // 6. Vincular leads à campanha (se fornecidos)
+    let leadsVinculados = 0;
+    if (dados.leadIds && dados.leadIds.length > 0) {
+      console.log(`[Campanhas] Vinculando ${dados.leadIds.length} leads à campanha...`);
+      
+      try {
+        // Buscar leads existentes
+        const leadsExistentes = await prisma.lead.findMany({
+          where: {
+            id: { in: dados.leadIds },
+            tenantId: tenant.id
+          },
+          select: { id: true, nome: true, cpf: true, telefone: true, email: true }
+        });
+
+        // Criar contatos da campanha para cada lead
+        for (const lead of leadsExistentes) {
+          await prisma.contato.create({
+            data: {
+              campanhaId: campanha.id,
+              nome: lead.nome,
+              cpf: lead.cpf,
+              telefone: lead.telefone,
+              email: lead.email,
+              statusProspeccao: 'AGUARDANDO',
+              leadId: lead.id, // Vínculo com lead original
+            }
+          });
+          leadsVinculados++;
+        }
+
+        // Atualizar contagem na campanha
+        await prisma.campanha.update({
+          where: { id: campanha.id },
+          data: { totalContatos: leadsVinculados }
+        });
+
+        console.log(`[Campanhas] ${leadsVinculados} leads vinculados com sucesso`);
+      } catch (vincularError) {
+        console.error('[Campanhas] Erro ao vincular leads:', vincularError);
+        // Não bloqueia - campanha já foi criada
+      }
+    }
+
+    // 7. Retornar resultado
     return res.json({
       sucesso: true,
+      id: campanha.id, // Para compatibilidade
       campanha: {
         id: campanha.id,
         nome: campanha.nome,
         empreendimento: campanha.nomeEmpreendimento,
         status: campanha.status,
+        leadsVinculados,
       },
       briefing: {
         resumo: briefing.resumo_sdr,
