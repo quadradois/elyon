@@ -11,6 +11,8 @@ import rotaWhatsapp from './rotas/whatsapp';
 import rotaChat from './rotas/chat';
 import rotaCampanhas from './rotas/campanhas';
 import rotaMetricas from './rotas/metricas';
+import rotaAgentes from './rotas/agentes';
+import rotaMetricasAgentes from './rotas/metricas-agentes';
 
 // Carregar variáveis de ambiente (Forçar override para ignorar variáveis de sistema antigas)
 dotenv.config({ override: true });
@@ -45,6 +47,8 @@ app.use('/api/leads', rotaChat); // Monta rota de chat também em /api/leads
 app.use('/api/whatsapp', rotaWhatsapp);
 app.use('/api/campanhas', rotaCampanhas); // Gestão de campanhas
 app.use('/api/metricas', rotaMetricas);   // Dashboard de métricas
+app.use('/api/agentes', rotaAgentes);     // Configuração de agentes IA
+app.use('/api/metricas-agentes', rotaMetricasAgentes); // Métricas dos agentes IA
 app.use('/webhooks', rotaWebhook);
 
 // Iniciar servidor

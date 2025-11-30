@@ -1070,8 +1070,144 @@ A QuadraDois pode transformar uma arquitetura promissora em um **produto líder 
 
 ---
 
+## 📊 LOG DE IMPLEMENTAÇÃO
+
+### Atualização: 29/11/2025 - Sprint 1 Iniciada
+
+#### ✅ R1. API de Agentes - COMPLETA
+
+Criado `/rotas/agentes.ts` com:
+- `GET /` - Lista todas as configurações
+- `GET /:id` - Busca configuração específica
+- `POST /` - Cria nova configuração
+- `PUT /:id` - Atualiza configuração existente
+- `PATCH /:id/ativar` - Ativa/desativa agente
+- `DELETE /:id` - Remove configuração
+
+Schemas de validação com Zod:
+- `PersonalidadeSchema`
+- `ExpertiseSchema`
+- `ScriptsSchema`
+- `RegrasNegocioSchema`
+- `ConfiguracaoAgenteCreateSchema`
+
+#### ✅ R2. Frontend Conectado à API - COMPLETA
+
+Reescrito `ConfiguracaoAgente.tsx` com:
+- Estado de loading com spinner
+- Chamadas reais à API (`api.get`, `api.post`, `api.put`, `api.patch`)
+- Tratamento de erros com try/catch
+- Toast notifications com sonner
+- Toggle ativar/desativar funcional
+- Botão de salvar que persiste no banco
+
+#### ✅ R3. SDR Worker Personalizado - COMPLETA
+
+Atualizado `sdr-worker.ts` com:
+- Nova interface `ConfiguracaoAgente` exportada
+- Constante `configPadrao` exportada
+- Método `gerarSystemPrompt(config, contextoRAG)` que gera prompt dinâmico baseado em:
+  - `config.nome` - Nome do agente
+  - `config.tenantNome` - Nome da imobiliária  
+  - `config.personalidade.tom` - formal | amigavel | entusiasta
+  - `config.personalidade.usarEmojis` - boolean
+  - `config.expertise.bairros` - Array de bairros
+  - `config.expertise.tiposImovel` - Array de tipos
+  - `config.scripts.saudacao` e `scripts.despedida`
+- Método `processar()` agora aceita `config` e `contextoRAG` opcionais
+
+#### ✅ R4. Toast Notifications - COMPLETA
+
+Sonner já estava instalado e configurado em `App.tsx`:
+```tsx
+<Toaster position="top-right" richColors />
+```
+
+#### ✅ Elyon Core Atualizado - COMPLETA
+
+Atualizado `elyon-core.ts` v0.2.0-alpha com:
+- Método `converterConfiguracao()` que mapeia dados do Prisma para interface do Worker
+- Método `buscarContextoRAG()` que carrega `briefingCompleto` do empreendimento vinculado à campanha
+- Pipeline completo: Lead → Tenant → ConfiguracaoAgente → SDR Worker com contexto
+
+### Próximos Passos
+
+- [ ] R6. Worker de Documentos (PRIORIDADE MÉDIA)
+- [ ] R7. Dashboard de Performance (PRIORIDADE MÉDIA)
+- [ ] R8. Supervisor de Agentes (PRIORIDADE BAIXA)
+
+---
+
+### Atualização: 30/11/2025 - Wizard Implementado
+
+#### ✅ R5. Wizard de Criação de Agentes - COMPLETA
+
+Criado componente `WizardCriacaoAgente.tsx` com:
+
+**4 Etapas:**
+1. **Identidade** - Nome e avatar do agente
+2. **Personalidade** - Tom de voz (formal/amigável/entusiasta) e uso de emojis
+3. **Expertise** - Bairros de atuação e tipos de imóvel
+4. **Revisar** - Preview final antes de criar
+
+**Recursos:**
+- Progress bar visual com checkmarks
+- 6 avatares pré-definidos (Sofia, Pedro, Ana, Carlos, Bot, Corporativo)
+- Toggle animado para emojis
+- Chips clicáveis para seleção de tipos de imóvel
+- Preview da saudação gerada automaticamente
+- Card de resumo na etapa final
+- Navegação Voltar/Próximo/Criar
+
+**Integração:**
+- `ConfiguracaoAgente.tsx` agora mostra o Wizard automaticamente quando não existe agente
+- Após criar via Wizard, transição suave para o formulário de edição
+- Toast de sucesso com emoji 🎉
+
+**Arquivos:**
+- `componentes/agentes/WizardCriacaoAgente.tsx` (NOVO - 570 linhas)
+- `paginas/ConfiguracaoAgente.tsx` (MODIFICADO - integrado com Wizard)
+
+#### ✅ R6. Worker de Documentos - COMPLETA
+
+Criado `documentos-worker.ts` com:
+
+**Responsabilidades:**
+- Solicitar documentos necessários para captação/venda
+- Validar documentos recebidos (fotos)
+- Orientar sobre documentação pendente
+- Notificar corretor quando documentação completa
+
+**Ferramentas implementadas:**
+- `solicitar_documento` - Solicita documento específico ao cliente
+- `registrar_documento` - Registra documento recebido com status
+- `verificar_pendencias` - Lista documentos pendentes
+- `notificar_corretor` - Notifica corretor sobre status
+
+**Tipos de documentos:**
+- RG, CPF, CNH
+- Comprovante de Residência
+- Matrícula do Imóvel
+- IPTU
+- Certidões Negativas
+- Procuração
+- Contrato Social
+
+**Seleção inteligente de Worker:**
+- Elyon Core agora seleciona automaticamente entre SDR e DOCUMENTOS
+- Baseado no estágio do lead e palavras-chave na mensagem
+- Lead QUENTE + menção a documentos → DOCUMENTOS Worker
+- Default → SDR Worker
+
+**Arquivos:**
+- `agentes/workers/documentos-worker.ts` (NOVO - 330 linhas)
+- `agentes/elyon-core.ts` (MODIFICADO - v0.3.0-alpha, método selecionarWorker)
+
+---
+
 **Documento gerado em 29 de novembro de 2025**  
-**Próxima revisão:** Após implementação da Sprint 1
+**Última atualização:** 29 de novembro de 2025  
+**Próxima revisão:** Após implementação da Sprint 2
 
 ---
 

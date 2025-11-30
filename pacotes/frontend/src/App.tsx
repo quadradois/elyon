@@ -4,6 +4,7 @@ import { Login } from "./paginas/Login";
 import { LayoutDashboard } from "./layouts/LayoutDashboard";
 import { DashboardHome } from "./paginas/DashboardHome";
 import { ConfiguracaoAgente } from "./paginas/ConfiguracaoAgente";
+import { DashboardAgentes } from "./paginas/DashboardAgentes";
 import { Leads } from "./paginas/Leads";
 import { Mineracao } from "./paginas/Mineracao";
 import { Captacao } from "./paginas/Captacao";
@@ -61,6 +62,17 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <ConfiguracaoAgente />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/agente/performance"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <DashboardAgentes />
               </LayoutDashboard>
             </RotaPrivada>
           }

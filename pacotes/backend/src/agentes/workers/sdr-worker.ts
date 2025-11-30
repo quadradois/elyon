@@ -14,18 +14,116 @@ import { todasFerramentasSDR, qualificarLeadTool, solicitarHumanoTool, buscarImo
  * - Transferir para corretor quando apropriado
  */
 
+// Interface para configuração do agente do tenant
+export interface ConfiguracaoAgente {
+  nome: string;
+  personalidade: {
+    tom: 'formal' | 'amigavel' | 'entusiasta';
+    usarEmojis: boolean;
+    nivelFormalidade?: number;
+  };
+  expertise: {
+    bairros: string[];
+    tiposImovel: string[];
+  };
+  scripts: {
+    saudacao: string;
+    despedida: string;
+  };
+  tenantNome?: string;
+}
+
+// Configuração padrão caso o tenant não tenha configurado
+export const configPadrao: ConfiguracaoAgente = {
+  nome: 'Sofia',
+  personalidade: {
+    tom: 'amigavel',
+    usarEmojis: true,
+    nivelFormalidade: 3
+  },
+  expertise: {
+    bairros: [],
+    tiposImovel: []
+  },
+  scripts: {
+    saudacao: 'Olá! Como posso ajudar você hoje?',
+    despedida: 'Foi um prazer ajudar! Até logo!'
+  }
+};
+
 export class SDRWorker {
   private openai: OpenAI | null = null;
-  private systemPrompt: string;
   
   constructor() {
     // Lazy initialization - será criado no primeiro uso
     // Isso garante que o dotenv já carregou as variáveis de ambiente
+  }
+  
+  /**
+   * Gera o system prompt personalizado baseado na configuração do tenant
+   */
+  private gerarSystemPrompt(config: ConfiguracaoAgente, contextoRAG?: string): string {
+    const { nome, personalidade, expertise, scripts, tenantNome } = config;
     
-    this.systemPrompt = `Você é um SDR (Sales Development Representative) da Quadra Dois Imóveis.
+    // Definir instruções de tom
+    let instrucoesTom = '';
+    switch (personalidade.tom) {
+      case 'formal':
+        instrucoesTom = `
+- Use linguagem formal e profissional
+- Evite gírias e expressões informais
+- Trate o cliente por "senhor(a)"
+- Seja direto e objetivo`;
+        break;
+      case 'entusiasta':
+        instrucoesTom = `
+- Seja animado e positivo
+- Use expressões de entusiasmo
+- Transmita energia e empolgação
+- Celebre cada avanço na conversa`;
+        break;
+      default: // amigavel
+        instrucoesTom = `
+- Seja amigável e acolhedor
+- Use linguagem natural e próxima
+- Demonstre interesse genuíno
+- Crie conexão com o cliente`;
+    }
+    
+    // Instruções sobre emojis
+    const instrucoesEmoji = personalidade.usarEmojis 
+      ? '- Use emojis COM MODERAÇÃO (1 por mensagem, quando apropriado)'
+      : '- NÃO use emojis nas mensagens';
+    
+    // Expertise em bairros e tipos
+    const expertiseBairros = expertise.bairros.length > 0
+      ? `Você é especialista nos bairros: ${expertise.bairros.join(', ')}.`
+      : 'Você conhece todos os bairros da cidade.';
+    
+    const expertiseTipos = expertise.tiposImovel.length > 0
+      ? `Seu foco é em: ${expertise.tiposImovel.join(', ')}.`
+      : 'Você trabalha com todos os tipos de imóveis.';
+
+    return `Você é ${nome}, SDR (Sales Development Representative) da ${tenantNome || 'imobiliária'}.
 
 🎯 OBJETIVO
 Qualificar leads imobiliários via WhatsApp de forma natural, conversacional e amigável.
+
+👤 SUA IDENTIDADE
+${expertiseBairros}
+${expertiseTipos}
+
+🗣️ TOM DE VOZ
+${instrucoesTom}
+${instrucoesEmoji}
+
+📋 SCRIPTS
+- Saudação: "${scripts.saudacao}"
+- Despedida: "${scripts.despedida}"
+
+${contextoRAG ? `📚 CONHECIMENTO DO EMPREENDIMENTO
+${contextoRAG}
+` : ''}
 
 📋 PROCESSO DE QUALIFICAÇÃO
 
@@ -58,19 +156,6 @@ Qualificar leads imobiliários via WhatsApp de forma natural, conversacional e a
    
    **SÓ DEPOIS de coletar as informações**, use as ferramentas:
    
-   Exemplo CORRETO - Colete TODOS os dados primeiro:
-   User: "Quero vender"
-   Você: "Ótimo! Para quando você está pensando em vender?"
-   User: "Daqui 2 meses"
-   Você: "Perfeito! Tem uma faixa de valor em mente?"
-   User: "Entre 450 e 480 mil"
-   
-   → AGORA SIM você pode chamar qualificar_lead() com todos os dados!
-   
-   Exemplo ERRADO - NUNCA faça:
-   User: "Quero vender"
-   → qualificar_lead com parametros vazios ❌ NUNCA!
-   
    - Se timeline ≤ 3 meses + motivação urgente:
      → USE "qualificar_lead" com temperatura="QUENTE" + todos dados coletados
      → USE "solicitar_humano" com urgencia="ALTA"
@@ -80,24 +165,6 @@ Qualificar leads imobiliários via WhatsApp de forma natural, conversacional e a
    
    - Se sem interesse ou timeline muito longo:
      → USE "qualificar_lead" com temperatura="FRIO"
-
-🗣️ TOM DE VOZ
-
-- **Amigável** mas profissional
-- **Conversacional** (como um humano, não um robô)
-- **Mensagens CURTAS** (máximo 2-3 linhas por vez)
-- **Emojis COM MODERAÇÃO** (1 por mensagem, quando apropriado)
-- **Perguntas naturais** (uma de cada vez, não em lista)
-
-EXEMPLOS BONS:
-✅ "Olá! Tudo bem? Aqui é a Sofia da Quadra Dois 😊"
-✅ "Entendi! E para quando você está pensando em vender?"
-✅ "Perfeito! Você tem uma faixa de valor em mente?"
-
-EXEMPLOS RUINS:
-❌ "Olá, sou um assistente virtual de IA..."
-❌ "Para prosseguir, preciso que você responda as seguintes perguntas: 1) ..."
-❌ "Sua resposta foi registrada no sistema..."
 
 ⚠️ REGRAS IMPORTANTES
 
@@ -153,20 +220,28 @@ Boa qualificação! 🚀`;
    * 
    * @param mensagens - Histórico de mensagens (formato OpenAI)
    * @param leadId - ID do lead no banco de dados
+   * @param config - Configuração do agente (opcional, usa padrão se não fornecido)
+   * @param contextoRAG - Contexto do empreendimento/campanha (opcional)
    * @returns Resposta do SDR para enviar ao lead
    */
   async processar(
     mensagens: Array<{role: string, content: string}>,
-    leadId: string
+    leadId: string,
+    config: ConfiguracaoAgente = configPadrao,
+    contextoRAG?: string
   ): Promise<string> {
     try {
       console.log(`[SDR Worker] Processando mensagens para lead ${leadId}`);
+      console.log(`[SDR Worker] Usando config: ${config.nome} (${config.personalidade.tom})`);
+      
+      // Gerar system prompt personalizado
+      const systemPrompt = this.gerarSystemPrompt(config, contextoRAG);
       
       // Preparar mensagens com system prompt
       const mensagensCompletas: OpenAI.Chat.ChatCompletionMessageParam[] = [
         { 
           role: 'system', 
-          content: this.systemPrompt + `\n\nLead ID atual: ${leadId}`
+          content: systemPrompt + `\n\nLead ID atual: ${leadId}`
         },
         ...mensagens as any[]
       ];

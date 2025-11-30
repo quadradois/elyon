@@ -50,20 +50,68 @@ enum StatusTenant {
 // ====================================
 
 model ConfiguracaoAgente {
-  id            String   @id @default(uuid())
-  tenantId      String   @unique
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id            String        @id @default(uuid())
+  tenantId      String        @unique
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Tipo e Modo de Criação
+  tipoAgente    TipoAgente    @default(SDR_CAPTACAO)
+  modoCreacao   ModoCriacao   @default(PRE_TREINADO)
+  templateBase  String?       // Referência ao template usado
+  
+  // Identidade
   nome          String
   avatar        String?
-  personalidade Json
-  expertise     Json
-  scripts       Json
-  regrasNegocio Json
-  estaAtivo     Boolean  @default(true)
-  criadoEm      DateTime @default(now())
-  atualizadoEm  DateTime @updatedAt
+  genero        String        @default("feminino")
+  
+  // Personalização (JSON)
+  personalidade Json          // { tom, usarEmojis, usarGirias }
+  expertise     Json          // { bairros, tiposImovel, faixaPreco }
+  scripts       Json          // { saudacao, despedida }
+  regrasNegocio Json          // { horaEscalacao, corretorResponsavel }
+  
+  // Perfil da Imobiliária (Quiz)
+  perfilImobiliaria Json?     // { dadosGerais, locacao, venda, ragSintetizado }
+  ragPerfilTexto    String?   @db.Text  // Texto RAG sintetizado para injeção no prompt
+  
+  // Modo Avançado (100% customizado)
+  promptCustomizado String?   @db.Text
+  toolsCustomizadas Json?
+  
+  // Status do Agente
+  status        StatusAgente  @default(RASCUNHO)
+  estaAtivo     Boolean       @default(false)
+  
+  // Termos de Uso
+  termosAceitos     Boolean   @default(false)
+  termosAceitosEm   DateTime?
+  termosVersao      String?
+  
+  // Timestamps
+  criadoEm      DateTime      @default(now())
+  atualizadoEm  DateTime      @updatedAt
 
   @@map("configuracoes_agente")
+}
+
+enum TipoAgente {
+  SDR_CAPTACAO
+  PERSONALIZADO
+  // DEPRECATED - mantidos para compatibilidade
+  SDR_VENDAS
+  SDR_LOCACAO
+  DOCUMENTOS
+}
+
+enum ModoCriacao {
+  PRE_TREINADO
+  PERSONALIZADO
+}
+
+enum StatusAgente {
+  RASCUNHO
+  ATIVO
+  PAUSADO
 }
 
 // ====================================
@@ -440,4 +488,42 @@ model Mensagem {
   @@index([conversaId])
   @@index([enviadaEm])
   @@map("mensagens")
+}
+
+// ====================================
+// RAG: EMBEDDINGS DE CONVERSAS
+// ====================================
+
+model ConversaEmbedding {
+  id                String   @id @default(uuid())
+  
+  // Referência à conversa ou chunk
+  conversaId        String?
+  leadId            String?
+  tenantId          String
+  
+  // Conteúdo e contexto
+  textoOriginal     String   // O chunk de texto que foi embedado
+  tipoConteudo      String   // "resumo_conversa", "intencao_lead", "objecao_superada", "pergunta_frequente"
+  metadados         Json?    // Dados adicionais (temperatura, resultado, etc)
+  
+  // Embedding
+  embedding         String   // Vetor serializado
+  embeddingModelo   String   @default("text-embedding-3-small")
+  
+  // Qualidade e relevância
+  scoreQualidade    Decimal  @default(0) // Score de qualidade do chunk (0-100)
+  vezesUtilizado    Int      @default(0) // Quantas vezes foi retornado em buscas
+  feedbackPositivo  Int      @default(0) // Feedback de utilidade
+  feedbackNegativo  Int      @default(0)
+  
+  // Timestamps
+  criadoEm          DateTime @default(now())
+  atualizadoEm      DateTime @updatedAt
+  
+  @@index([tenantId])
+  @@index([tipoConteudo])
+  @@index([conversaId])
+  @@index([leadId])
+  @@map("conversas_embeddings")
 }

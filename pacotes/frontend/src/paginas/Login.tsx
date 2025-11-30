@@ -10,10 +10,11 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
 
+  // Valores padrão para desenvolvimento
   const [form, setForm] = useState({
-    email: "",
-    senha: "",
-    tenantSlug: "",
+    email: "admin@quadradois.com.br",
+    senha: "admin123",
+    tenantSlug: "quadradois",
   });
 
   const handleLogin = async (e: React.FormEvent) => {
