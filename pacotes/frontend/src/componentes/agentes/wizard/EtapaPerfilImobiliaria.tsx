@@ -12,12 +12,14 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  BookOpen
 } from "lucide-react";
 import { Input } from "../../ui/input";
 import { Switch } from "../../ui/switch";
 import { Slider } from "../../ui/slider";
 import { cn } from "../../../lib/utils";
+import { UploadDocumentos, DocumentoUpload } from "../UploadDocumentos";
 import { 
   WizardEtapaProps, 
   PerfilImobiliaria,
@@ -32,13 +34,14 @@ interface EtapaPerfilImobiliariaProps extends WizardEtapaProps {
   // Props removidas - em Goiânia trabalham a cidade toda
 }
 
-type SecaoAtiva = 'geral' | 'locacao' | 'venda' | null;
+type SecaoAtiva = 'geral' | 'locacao' | 'venda' | 'conhecimento' | null;
 
 export function EtapaPerfilImobiliaria({ 
   dados, 
   setDados
 }: EtapaPerfilImobiliariaProps) {
   const [secaoExpandida, setSecaoExpandida] = useState<SecaoAtiva>('geral');
+  const [documentosPendentes, setDocumentosPendentes] = useState<DocumentoUpload[]>([]);
 
   // Inicializar perfil se não existir
   const perfil: PerfilImobiliaria = dados.perfilImobiliaria || PERFIL_PADRAO;
@@ -743,6 +746,57 @@ export function EtapaPerfilImobiliaria({
           )}
         </div>
         )}
+
+        {/* ===== SEÇÃO: CONHECIMENTO PERSONALIZADO ===== */}
+        <div>
+          <SecaoHeader 
+            titulo="Conhecimento Personalizado" 
+            icone={BookOpen} 
+            secao="conhecimento"
+            cor="orange"
+          />
+          
+          {secaoExpandida === 'conhecimento' && (
+            <div className="mt-3 p-4 bg-white border rounded-lg space-y-5">
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <div className="flex gap-3">
+                  <BookOpen className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-semibold text-orange-900">Treine seu agente com conhecimento exclusivo!</p>
+                    <p className="text-orange-800 mt-1">
+                      Suba documentos como estratégias de vendas, manuais de atendimento, 
+                      scripts ou qualquer material que você queira que o agente aprenda.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <UploadDocumentos
+                documentos={documentosPendentes}
+                onDocumentosChange={(docs) => {
+                  setDocumentosPendentes(docs);
+                  // Salvar arquivos pendentes nos dados do wizard para envio posterior
+                  const arquivos = docs
+                    .filter(d => d.status === 'pendente' && d.arquivo)
+                    .map(d => d.arquivo as File);
+                  setDados(prev => ({
+                    ...prev,
+                    documentosPendentes: arquivos,
+                  }));
+                }}
+                modo="wizard"
+                maxArquivos={5}
+                maxTamanhoMB={10}
+              />
+              
+              <p className="text-xs text-slate-500 text-center">
+                📌 Os documentos serão processados após a criação do agente.
+                <br />
+                Você também poderá adicionar mais documentos depois.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

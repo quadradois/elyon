@@ -14,12 +14,28 @@ import {
   Play,
   Pause,
   MessageSquare,
-  RefreshCw
+  RefreshCw,
+  BookOpen,
+  FileText,
+  Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import { WizardCriacaoAgente, DadosAgente } from "../componentes/agentes/WizardCriacaoAgente";
 import { StatusBadge } from "../componentes/agentes/StatusBadge";
 import { StatusAgente } from "../componentes/agentes/wizard/types";
+import { UploadDocumentos, DocumentoUpload } from "../componentes/agentes/UploadDocumentos";
+
+// Interface para documentos salvos no backend
+interface DocumentoSalvo {
+  id: string;
+  nomeOriginal: string;
+  mimeType: string;
+  tamanhoBytes: number;
+  totalCaracteres?: number;
+  status: 'PENDENTE' | 'PROCESSANDO' | 'SUCESSO' | 'ERRO';
+  erroProcessamento?: string;
+  criadoEm: string;
+}
 
 interface ConfiguracaoAgenteData {
   id: string;
@@ -66,6 +82,11 @@ export function ConfiguracaoAgente() {
   const [agenteId, setAgenteId] = useState<string | null>(null);
   const [mostrarWizard, setMostrarWizard] = useState(false);
   const [termosAceitos, setTermosAceitos] = useState(false);
+  
+  // Estado para documentos (edição)
+  const [documentosSalvos, setDocumentosSalvos] = useState<DocumentoSalvo[]>([]);
+  const [documentosNovos, setDocumentosNovos] = useState<DocumentoUpload[]>([]);
+  const [carregandoDocs, setCarregandoDocs] = useState(false);
   
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -255,6 +276,74 @@ export function ConfiguracaoAgente() {
     }
   };
 
+  // ===== FUNÇÕES DE DOCUMENTOS =====
+  
+  // Carregar documentos do agente
+  const carregarDocumentos = async () => {
+    if (!agenteId) return;
+    
+    try {
+      setCarregandoDocs(true);
+      const response = await api.get(`/documentos/${agenteId}`);
+      setDocumentosSalvos(response.data.documentos || []);
+    } catch (error: any) {
+      console.error('[Documentos] Erro ao carregar:', error);
+    } finally {
+      setCarregandoDocs(false);
+    }
+  };
+
+  // Carregar documentos quando o agente for carregado
+  useEffect(() => {
+    if (agenteId && agenteExiste) {
+      carregarDocumentos();
+    }
+  }, [agenteId, agenteExiste]);
+
+  // Enviar novo documento
+  const enviarDocumento = async (arquivo: File): Promise<{ id: string; textoExtraido: string }> => {
+    if (!agenteId) throw new Error('Agente não encontrado');
+    
+    const formDataUpload = new FormData();
+    formDataUpload.append('arquivo', arquivo);
+    
+    const response = await api.post(`/documentos/${agenteId}/upload`, formDataUpload, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    
+    // Recarregar lista de documentos
+    carregarDocumentos();
+    
+    return {
+      id: response.data.documento.id,
+      textoExtraido: response.data.textoExtraido || '',
+    };
+  };
+
+  // Excluir documento
+  const excluirDocumento = async (documentoId: string) => {
+    if (!agenteId) return;
+    
+    if (!confirm('Tem certeza que deseja excluir este documento?')) return;
+    
+    try {
+      await api.delete(`/documentos/${agenteId}/${documentoId}`);
+      setDocumentosSalvos(prev => prev.filter(d => d.id !== documentoId));
+      toast.success('Documento excluído');
+    } catch (error: any) {
+      toast.error('Erro ao excluir documento', {
+        description: error.response?.data?.erro || 'Tente novamente'
+      });
+    }
+  };
+
+  // Formatar tamanho de arquivo
+  const formatarTamanho = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   // Handler para criar agente via Wizard
   const criarAgenteViaWizard = async (dados: DadosAgente) => {
     try {
@@ -286,6 +375,8 @@ export function ConfiguracaoAgente() {
           tempoMaximoResposta: 30,
           transferirApos: 3,
         },
+        // Incluir perfil da imobiliária se preenchido
+        perfilImobiliaria: dados.perfilImobiliaria || null,
         termosAceitos: dados.termosAceitos || false,
         estaAtivo: false, // Começa como rascunho
       };
@@ -293,11 +384,37 @@ export function ConfiguracaoAgente() {
       console.log('[ConfigAgente] Enviando payload:', payload);
       
       const response = await api.post('/agentes', payload);
+      const novoAgenteId = response.data.agente.id;
       
       setAgenteExiste(true);
-      setAgenteId(response.data.agente.id);
+      setAgenteId(novoAgenteId);
       setMostrarWizard(false);
       setTermosAceitos(dados.termosAceitos || false);
+      
+      // Enviar documentos se houver
+      if (dados.documentosPendentes && dados.documentosPendentes.length > 0) {
+        console.log(`[ConfigAgente] Enviando ${dados.documentosPendentes.length} documentos...`);
+        
+        for (const arquivo of dados.documentosPendentes) {
+          try {
+            const formData = new FormData();
+            formData.append('arquivo', arquivo);
+            
+            await api.post(`/documentos/${novoAgenteId}/upload`, formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            
+            console.log(`[ConfigAgente] Documento "${arquivo.name}" enviado com sucesso`);
+          } catch (docError: any) {
+            console.error(`[ConfigAgente] Erro ao enviar documento "${arquivo.name}":`, docError);
+            // Continua com os próximos documentos mesmo se um falhar
+          }
+        }
+        
+        toast.success('Documentos processados! 📄', {
+          description: 'O agente foi treinado com seu conhecimento personalizado.',
+        });
+      }
       
       // Atualizar form com os dados criados
       setFormData({
@@ -627,6 +744,100 @@ export function ConfiguracaoAgente() {
               </div>
             </div>
           </div>
+
+          {/* Conhecimento Personalizado - Documentos */}
+          {agenteExiste && (
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-orange-600" />
+                  Conhecimento Personalizado
+                </h3>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={carregarDocumentos}
+                  disabled={carregandoDocs}
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${carregandoDocs ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </Button>
+              </div>
+              
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <div className="flex gap-3">
+                  <BookOpen className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-semibold text-orange-900">Treine seu agente com conhecimento exclusivo!</p>
+                    <p className="text-orange-800 mt-1">
+                      Suba documentos como estratégias de vendas, manuais de atendimento, 
+                      scripts ou qualquer material que você queira que o agente aprenda.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lista de documentos salvos */}
+              {documentosSalvos.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-700">
+                    Documentos ativos ({documentosSalvos.length})
+                  </p>
+                  <div className="space-y-2">
+                    {documentosSalvos.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border ${
+                          doc.status === 'ERRO' 
+                            ? 'bg-red-50 border-red-200' 
+                            : doc.status === 'SUCESSO'
+                              ? 'bg-green-50 border-green-200'
+                              : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        <FileText className={`w-4 h-4 ${
+                          doc.status === 'ERRO' ? 'text-red-500' : 
+                          doc.status === 'SUCESSO' ? 'text-green-500' : 
+                          'text-slate-400'
+                        }`} />
+                        
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-slate-700 truncate">
+                            {doc.nomeOriginal}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {doc.status === 'ERRO' 
+                              ? doc.erroProcessamento 
+                              : `${formatarTamanho(doc.tamanhoBytes)}${doc.totalCaracteres ? ` • ${doc.totalCaracteres.toLocaleString()} caracteres` : ''}`
+                            }
+                          </p>
+                        </div>
+                        
+                        <button
+                          type="button"
+                          onClick={() => excluirDocumento(doc.id)}
+                          className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                          title="Remover documento"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Upload de novos documentos */}
+              <UploadDocumentos
+                documentos={documentosNovos}
+                onDocumentosChange={setDocumentosNovos}
+                onUpload={enviarDocumento}
+                modo="edicao"
+                maxArquivos={10}
+                maxTamanhoMB={10}
+              />
+            </div>
+          )}
 
           {/* Preview (Futuro) */}
           {agenteExiste && (

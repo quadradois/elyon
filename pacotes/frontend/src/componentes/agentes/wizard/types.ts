@@ -103,6 +103,8 @@ export interface DadosAgente {
   };
   // Perfil da Imobiliária (Quiz)
   perfilImobiliaria?: PerfilImobiliaria;
+  // Documentos para RAG (arquivos pendentes de envio)
+  documentosPendentes?: File[];
   // Campos do Modo Avançado
   objetivo?: string;
   contexto?: string;

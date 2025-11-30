@@ -78,6 +78,9 @@ model ConfiguracaoAgente {
   promptCustomizado String?   @db.Text
   toolsCustomizadas Json?
   
+  // Documentos de conhecimento (RAG)
+  documentos    DocumentoAgente[]
+  
   // Status do Agente
   status        StatusAgente  @default(RASCUNHO)
   estaAtivo     Boolean       @default(false)
@@ -92,6 +95,41 @@ model ConfiguracaoAgente {
   atualizadoEm  DateTime      @updatedAt
 
   @@map("configuracoes_agente")
+}
+
+// Documentos de conhecimento para RAG do Agente
+model DocumentoAgente {
+  id            String   @id @default(uuid())
+  agenteId      String
+  agente        ConfiguracaoAgente @relation(fields: [agenteId], references: [id], onDelete: Cascade)
+  
+  // Metadados do arquivo
+  nomeOriginal  String              // Nome do arquivo original
+  nomeStorage   String              // Nome no storage (UUID)
+  mimeType      String              // application/pdf, text/plain, etc
+  tamanhoBytes  Int                 // Tamanho em bytes
+  
+  // Conteúdo extraído
+  textoExtraido String?  @db.Text   // Texto extraído do documento
+  totalCaracteres Int?              // Total de caracteres extraídos
+  
+  // Status de processamento
+  status        StatusDocumento @default(PENDENTE)
+  erroProcessamento String?
+  
+  // Timestamps
+  criadoEm      DateTime @default(now())
+  processadoEm  DateTime?
+
+  @@index([agenteId])
+  @@map("documentos_agente")
+}
+
+enum StatusDocumento {
+  PENDENTE
+  PROCESSANDO
+  SUCESSO
+  ERRO
 }
 
 enum TipoAgente {
