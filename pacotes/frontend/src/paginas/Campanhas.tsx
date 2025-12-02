@@ -29,7 +29,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Building2,
-  Info,
+  MapPin,
+  FileEdit,
 } from "lucide-react";
 import { api } from "../servicos/api";
 
@@ -53,13 +54,19 @@ export function Campanhas() {
   const [criandoCampanha, setCriandoCampanha] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [termoBusca, setTermoBusca] = useState("");
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
-  // Form state
+  // Form state com campos separados de endereço
   const [formData, setFormData] = useState({
     nome: "",
     nomeEmpreendimento: "",
-    localizacao: "",
     cep: "",
+    logradouro: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
+    cidade: "",
+    estado: "GO",
     tipoImovel: "Apartamento",
     perfilImovel: "Economico",
   });
@@ -81,37 +88,67 @@ export function Campanhas() {
     }
   };
 
+  // Consulta CEP via ViaCEP
+  const consultarCep = async (cep: string) => {
+    const cepLimpo = cep.replace(/\D/g, '');
+    if (cepLimpo.length !== 8) return;
+    
+    try {
+      setBuscandoCep(true);
+      const response = await api.get(`/campanhas/cep/${cepLimpo}`);
+      
+      if (response.data.sucesso && response.data.dados) {
+        const dados = response.data.dados;
+        setFormData(prev => ({
+          ...prev,
+          logradouro: dados.logradouro || prev.logradouro,
+          bairro: dados.bairro || prev.bairro,
+          cidade: dados.cidade || prev.cidade,
+          estado: dados.estado || prev.estado,
+        }));
+      }
+    } catch (error) {
+      console.error("Erro ao consultar CEP:", error);
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
+
   const criarCampanha = async () => {
     if (
       !formData.nome ||
       !formData.nomeEmpreendimento ||
-      !formData.localizacao
+      !formData.bairro ||
+      !formData.cidade
     ) {
-      alert("Preencha todos os campos obrigatórios!");
+      alert("Preencha todos os campos obrigatórios (Nome, Empreendimento, Bairro e Cidade)!");
       return;
     }
 
     try {
       setCriandoCampanha(true);
-      const response = await api.post(
-        "/campanhas/criar-com-pesquisa",
-        formData
-      );
+      const response = await api.post("/campanhas", formData);
 
       console.log("Campanha criada:", response.data);
-      alert("✅ Campanha criada e empreendimento pesquisado com sucesso!");
-
+      
+      // Redirecionar para a página de detalhes para preencher o briefing
       setDialogOpen(false);
       setFormData({
         nome: "",
         nomeEmpreendimento: "",
-        localizacao: "",
         cep: "",
+        logradouro: "",
+        numero: "",
+        complemento: "",
+        bairro: "",
+        cidade: "",
+        estado: "GO",
         tipoImovel: "Apartamento",
         perfilImovel: "Economico",
       });
-
-      carregarCampanhas();
+      
+      // Navegar para a campanha criada para preencher o briefing
+      navigate(`/dashboard/campanhas/${response.data.campanha.id}?aba=empreendimento`);
     } catch (error: any) {
       console.error("Erro ao criar campanha:", error);
       alert(`Erro: ${error.response?.data?.erro || error.message}`);
@@ -183,12 +220,11 @@ export function Campanhas() {
               Nova Campanha
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Criar Nova Campanha</DialogTitle>
               <DialogDescription>
-                O sistema pesquisará automaticamente informações sobre o
-                empreendimento.
+                Preencha os dados básicos. Você poderá adicionar o briefing do empreendimento na próxima etapa.
               </DialogDescription>
             </DialogHeader>
 
@@ -206,51 +242,132 @@ export function Campanhas() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">
-                    Nome do Empreendimento *
-                  </label>
-                  <Input
-                    placeholder="Ex: Reserva Buriti"
-                    value={formData.nomeEmpreendimento}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        nomeEmpreendimento: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">
-                    CEP (Recomendado)
-                  </label>
-                  <Input
-                    placeholder="Ex: 74425-050"
-                    value={formData.cep}
-                    onChange={(e) =>
-                      setFormData({ ...formData, cep: e.target.value })
-                    }
-                  />
-                  <p className="text-xs text-slate-500 mt-1">
-                    CEP garante maior precisão na pesquisa
-                  </p>
-                </div>
-              </div>
-
               <div>
                 <label className="text-sm font-medium">
-                  Localização Completa *
+                  Nome do Empreendimento *
                 </label>
                 <Input
-                  placeholder="Ex: Avenida Vitória, 51, Vila Rosa, Goiânia"
-                  value={formData.localizacao}
+                  placeholder="Ex: Reserva Buriti"
+                  value={formData.nomeEmpreendimento}
                   onChange={(e) =>
-                    setFormData({ ...formData, localizacao: e.target.value })
+                    setFormData({
+                      ...formData,
+                      nomeEmpreendimento: e.target.value,
+                    })
                   }
                 />
+              </div>
+
+              {/* Seção de Endereço com CEP */}
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <MapPin className="w-4 h-4 text-slate-600" />
+                  <span className="text-sm font-medium text-slate-700">Endereço do Empreendimento</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">CEP</label>
+                    <div className="relative">
+                      <Input
+                        placeholder="00000-000"
+                        value={formData.cep}
+                        onChange={(e) => {
+                          const valor = e.target.value;
+                          setFormData({ ...formData, cep: valor });
+                          // Auto-consulta ao digitar 8 dígitos
+                          if (valor.replace(/\D/g, '').length === 8) {
+                            consultarCep(valor);
+                          }
+                        }}
+                      />
+                      {buscandoCep && (
+                        <Loader2 className="w-4 h-4 absolute right-2 top-2.5 animate-spin text-slate-400" />
+                      )}
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs font-medium text-slate-600">Logradouro</label>
+                    <Input
+                      placeholder="Rua/Avenida"
+                      value={formData.logradouro}
+                      onChange={(e) =>
+                        setFormData({ ...formData, logradouro: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-3 mt-3">
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">Número</label>
+                    <Input
+                      placeholder="123"
+                      value={formData.numero}
+                      onChange={(e) =>
+                        setFormData({ ...formData, numero: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">Complemento</label>
+                    <Input
+                      placeholder="Bloco A"
+                      value={formData.complemento}
+                      onChange={(e) =>
+                        setFormData({ ...formData, complemento: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs font-medium text-slate-600">Bairro *</label>
+                    <Input
+                      placeholder="Vila Rosa"
+                      value={formData.bairro}
+                      onChange={(e) =>
+                        setFormData({ ...formData, bairro: e.target.value })
+                      }
+                      className={!formData.bairro ? "border-orange-300" : ""}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 mt-3">
+                  <div className="col-span-2">
+                    <label className="text-xs font-medium text-slate-600">Cidade *</label>
+                    <Input
+                      placeholder="Goiânia"
+                      value={formData.cidade}
+                      onChange={(e) =>
+                        setFormData({ ...formData, cidade: e.target.value })
+                      }
+                      className={!formData.cidade ? "border-orange-300" : ""}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-600" htmlFor="estado">Estado</label>
+                    <select
+                      id="estado"
+                      className="w-full border border-slate-200 rounded-md p-2 text-sm h-10"
+                      value={formData.estado}
+                      onChange={(e) =>
+                        setFormData({ ...formData, estado: e.target.value })
+                      }
+                    >
+                      <option value="GO">GO</option>
+                      <option value="DF">DF</option>
+                      <option value="TO">TO</option>
+                      <option value="MT">MT</option>
+                      <option value="MS">MS</option>
+                      <option value="MG">MG</option>
+                      <option value="SP">SP</option>
+                    </select>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-500 mt-2">
+                  💡 Digite o CEP para preencher automaticamente
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -289,13 +406,13 @@ export function Campanhas() {
                 </div>
               </div>
 
-              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
                 <div className="flex gap-2">
-                  <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-blue-900">
-                    <strong>Pesquisa Automática:</strong> Ao criar a campanha, o
-                    sistema usará Google + GPT-4 para coletar dados reais sobre
-                    preços, características e diferenciais do empreendimento.
+                  <FileEdit className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-amber-900">
+                    <strong>Próximo passo:</strong> Após criar a campanha, você
+                    será direcionado para preencher o briefing do empreendimento
+                    manualmente com todas as informações que o agente de IA usará.
                   </div>
                 </div>
               </div>
@@ -316,12 +433,12 @@ export function Campanhas() {
                   {criandoCampanha ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Pesquisando...
+                      Criando...
                     </>
                   ) : (
                     <>
-                      <Target className="w-4 h-4" />
-                      Criar e Pesquisar
+                      <Plus className="w-4 h-4" />
+                      Criar Campanha
                     </>
                   )}
                 </Button>

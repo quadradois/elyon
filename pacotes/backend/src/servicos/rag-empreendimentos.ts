@@ -119,6 +119,47 @@ export class RAGEmpreendimentos {
       }
     });
   }
+
+  /**
+   * Deleta conhecimento por ID
+   */
+  async deletar(id: string) {
+    return await prisma.empreendimentoConhecimento.delete({
+      where: { id }
+    });
+  }
+
+  /**
+   * Deleta conhecimento por nome e localização
+   */
+  async deletarPorNome(nome: string, localizacao: string) {
+    const existente = await this.buscarPorNome(nome, localizacao);
+    if (existente) {
+      await this.deletar(existente.id);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Lista todos os conhecimentos (para debug/admin)
+   */
+  async listarTodos() {
+    return await prisma.empreendimentoConhecimento.findMany({
+      orderBy: { criadoEm: 'desc' },
+      select: {
+        id: true,
+        nome: true,
+        localizacao: true,
+        tipo: true,
+        confiabilidade: true,
+        validado: true,
+        criadoEm: true,
+        ultimaAtualizacao: true,
+        versao: true
+      }
+    });
+  }
 }
 
 export const ragEmpreendimentos = new RAGEmpreendimentos();

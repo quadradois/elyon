@@ -132,7 +132,7 @@ router.post('/enviar', async (req, res) => {
 
       if (lead) {
         let conversa = await prisma.conversa.findFirst({
-          where: { leadId: lead.id, canal: 'WHATSAPP', status: 'ATIVA' }
+          where: { leadId: lead.id, canal: 'WHATSAPP', estadoConversa: 'ativa' }
         });
 
         if (!conversa) {
@@ -140,16 +140,17 @@ router.post('/enviar', async (req, res) => {
             data: {
               leadId: lead.id,
               canal: 'WHATSAPP',
-              sessaoId: `wa_${lead.id}_${Date.now()}`,
-              status: 'ATIVA'
+              numeroOrigem: telefone,
+              estadoConversa: 'ativa',
+              contexto: {}
             }
           });
         }
 
-        await prisma.mensagemConversa.create({
+        await prisma.mensagem.create({
           data: {
             conversaId: conversa.id,
-            papel: 'ASSISTENTE', // Enviado pelo sistema/usuário
+            remetente: 'assistente',
             conteudo: mensagem,
             enviadaEm: new Date()
           }

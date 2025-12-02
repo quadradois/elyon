@@ -8,10 +8,20 @@ import {
   Zap, 
   Clock,
   DollarSign,
-  Users
+  Users,
+  FolderPlus,
+  ChevronDown,
+  Check
 } from "lucide-react";
 import { api } from "../servicos/api";
 import { toast } from "sonner";
+
+interface Campanha {
+  id: string;
+  nome: string;
+  status: string;
+  totalContatos: number;
+}
 
 interface ImovelResultado {
   nrinscr: string;
@@ -46,6 +56,46 @@ interface EstatisticasProcessamento {
   tempoTotal: number;
 }
 
+interface LeadMinerado {
+  nome: string;
+  cpf?: string;
+  telefones?: { numero: string; tipo: 'CELULAR' | 'FIXO'; whatsapp?: boolean }[];
+  emails?: string[];
+  inscricaoIptu?: string;
+  enderecoImovel?: string;
+  bairroImovel?: string;
+  areaTerreno?: number;
+  areaConstruida?: number;
+  tipoImovel?: string;
+  valorVenal?: number;
+  score?: number;
+  dataNascimento?: string;
+  idade?: number;
+  sexo?: string;
+  signo?: string;
+  situacaoCadastral?: string;
+  obitoProvavel?: boolean;
+  nomeMae?: string;
+  ppe?: boolean;
+  rendaEstimada?: number;
+  faixaSalarial?: string;
+  profissao?: string;
+  setor?: string;
+  empresaAtual?: string;
+  cnpjEmpresa?: string;
+  endereco?: {
+    logradouro?: string;
+    numero?: string;
+    complemento?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+    cep?: string;
+  };
+  participacoesEmpresas?: { cnpj: string; razaoSocial: string; participacao: string }[];
+  redesSociais?: { rede: string; url: string }[];
+}
+
 export function ModalProcessamento({
   isOpen,
   onClose,
@@ -58,6 +108,7 @@ export function ModalProcessamento({
   const [logs, setLogs] = useState<string[]>([]);
   const [erro, setErro] = useState("");
   const [proprietariosEncontrados, setProprietariosEncontrados] = useState<any[]>([]);
+  const [leadsFinais, setLeadsFinais] = useState<LeadMinerado[]>([]);
   const [estatisticas, setEstatisticas] = useState<EstatisticasProcessamento>({
     proprietariosEncontrados: 0,
     leadsQualificados: 0,
@@ -66,6 +117,12 @@ export function ModalProcessamento({
     tempoTotal: 0,
   });
   const [tempoInicio, setTempoInicio] = useState<number>(0);
+  
+  // Estados para seleção de campanha
+  const [campanhas, setCampanhas] = useState<Campanha[]>([]);
+  const [campanhaSelecionada, setCampanhaSelecionada] = useState<string>("");
+  const [dropdownAberto, setDropdownAberto] = useState(false);
+  const [vinculandoCampanha, setVinculandoCampanha] = useState(false);
 
   const addLog = (msg: string) => setLogs((prev) => [...prev, msg]);
 
@@ -82,7 +139,7 @@ export function ModalProcessamento({
     setLogs([]);
     setErro("");
     addLog("🚀 Iniciando mineração...");
-    addLog(`🔍 Consultando Prefeitura para ${imoveis.length} imóveis...`);
+    addLog(`🔍 Identificando proprietários de ${imoveis.length} imóveis...`);
 
     try {
       setProgresso(30);
@@ -111,10 +168,10 @@ export function ModalProcessamento({
     } catch (error: any) {
       console.error(error);
       setEtapa("ERRO");
-      setErro(error.response?.data?.erro || "Erro na etapa de Scraper.");
-      addLog("❌ Falha ao consultar Prefeitura.");
+      setErro(error.response?.data?.erro || "Erro na etapa de identificação.");
+      addLog("❌ Falha ao identificar proprietários.");
       toast.error("Erro na mineração", {
-        description: error.response?.data?.erro || "Falha ao consultar dados da Prefeitura",
+        description: error.response?.data?.erro || "Falha ao identificar proprietários",
       });
     }
   };
@@ -123,23 +180,67 @@ export function ModalProcessamento({
     const dadosProprietarios = proprietariosParam || proprietariosEncontrados;
     
     setEtapa("ENRIQUECIMENTO");
-    addLog("🕵️ Verificando cache de CPFs...");
+    addLog("🕵️ Analisando dados dos proprietários...");
     setProgresso(60);
 
     try {
       // Primeiro, verificar cache (deduplição)
       const cpfList = dadosProprietarios.map((p: any) => p.cpf).filter(Boolean);
       
-      addLog(`📊 Verificando ${cpfList.length} CPFs...`);
+      addLog(`📊 Processando ${cpfList.length} proprietários...`);
       setProgresso(70);
       
-      addLog("🔗 Buscando contatos na Assertiva...");
+      addLog("🔗 Buscando informações de contato...");
       
       const responseConfirmacao = await api.post("/mineracao/confirmar-leads", {
         proprietarios: dadosProprietarios,
       });
       
-      const { total, sucesso, doCache, economia } = responseConfirmacao.data;
+      const { total, sucesso, doCache, economia, dados } = responseConfirmacao.data;
+      
+      // Salvar leads para vinculação posterior
+      if (dados && Array.isArray(dados)) {
+        setLeadsFinais(dados.map((d: any) => ({
+          nome: d.nome,
+          cpf: d.cpf,
+          telefones: d.telefones,
+          emails: d.emails,
+          inscricaoIptu: d.nrinscr,
+          enderecoImovel: d.endereco_correspondencia,
+          bairroImovel: d.nmbairro,
+          score: d.score,
+          // Dados extras da Assertiva
+          dataNascimento: d.dataNascimento,
+          idade: d.idade,
+          sexo: d.sexo,
+          signo: d.signo,
+          situacaoCadastral: d.situacaoCadastral,
+          obitoProvavel: d.obitoProvavel,
+          nomeMae: d.nomeMae,
+          ppe: d.ppe,
+          rendaEstimada: d.rendaEstimada,
+          faixaSalarial: d.faixaSalarial,
+          profissao: d.profissao,
+          setor: d.setor,
+          empresaAtual: d.empresaAtual,
+          cnpjEmpresa: d.cnpjEmpresa,
+          endereco: d.endereco,
+          participacoesEmpresas: d.participacoesEmpresas,
+          redesSociais: d.redesSociais,
+        })));
+      } else {
+        // Se a API não retornar dados, usar os proprietários enriquecidos
+        setLeadsFinais(dadosProprietarios.map((p: any) => ({
+          nome: p.nome,
+          cpf: p.cpf,
+          telefones: p.telefones,
+          emails: p.emails,
+          inscricaoIptu: p.nrinscr,
+          enderecoImovel: p.endereco_correspondencia,
+          bairroImovel: p.bairro,
+          score: p.score,
+        })));
+      }
       
       const tempoTotal = Math.round((Date.now() - tempoInicio) / 1000);
       
@@ -159,18 +260,17 @@ export function ModalProcessamento({
         addLog(`💰 ${doCache} CPFs recuperados do cache (economia: R$ ${(economia || doCache * 2).toFixed(2)})`);
       }
 
+      // Carregar campanhas disponíveis para vinculação
+      await carregarCampanhas();
+
       setProgresso(100);
       setEtapa("CONCLUIDO");
       addLog(`🎉 Processo finalizado! ${sucesso || total} leads qualificados em ${tempoTotal}s.`);
       
       // Toast de sucesso
       toast.success(`🎉 ${sucesso || total} leads minerados com sucesso!`, {
-        description: `Tempo total: ${tempoTotal} segundos`,
+        description: `Tempo total: ${tempoTotal} segundos. Selecione uma campanha para vincular os leads.`,
         duration: 8000,
-        action: {
-          label: "Ver Leads",
-          onClick: () => onConcluido(),
-        },
       });
 
     } catch (error: any) {
@@ -181,6 +281,52 @@ export function ModalProcessamento({
       toast.error("Erro no enriquecimento", {
         description: error.response?.data?.erro || "Falha ao buscar contatos na Assertiva",
       });
+    }
+  };
+
+  // Carregar campanhas disponíveis
+  const carregarCampanhas = async () => {
+    try {
+      const response = await api.get("/campanhas");
+      const campanhasAtivas = (response.data || []).filter(
+        (c: Campanha) => c.status === 'ativa' || c.status === 'pausada'
+      );
+      setCampanhas(campanhasAtivas);
+    } catch (error) {
+      console.error("Erro ao carregar campanhas:", error);
+    }
+  };
+
+  // Vincular leads à campanha selecionada
+  const vincularLeadsACampanha = async () => {
+    if (!campanhaSelecionada || leadsFinais.length === 0) return;
+    
+    setVinculandoCampanha(true);
+    
+    try {
+      const response = await api.post(`/campanhas/${campanhaSelecionada}/vincular-leads-minerados`, {
+        leads: leadsFinais
+      });
+      
+      const { vinculados } = response.data;
+      
+      toast.success(`🎯 ${vinculados} leads vinculados à campanha!`, {
+        description: "Os contatos foram adicionados com sucesso.",
+        duration: 5000,
+      });
+      
+      addLog(`📎 ${vinculados} leads vinculados à campanha com sucesso!`);
+      
+      // Fechar e navegar
+      onConcluido();
+      
+    } catch (error: any) {
+      console.error("Erro ao vincular leads:", error);
+      toast.error("Erro ao vincular leads", {
+        description: error.response?.data?.erro || "Falha ao vincular leads à campanha",
+      });
+    } finally {
+      setVinculandoCampanha(false);
     }
   };
 
@@ -380,12 +526,95 @@ export function ModalProcessamento({
                 Mineração Concluída com Sucesso!
               </div>
 
-              <button
-                onClick={onConcluido}
-                className="w-full bg-slate-800 hover:bg-slate-900 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                Ver Leads Gerados
-              </button>
+              {/* Seletor de Campanha */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <FolderPlus className="w-4 h-4" />
+                  Vincular a uma Campanha
+                </label>
+                
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setDropdownAberto(!dropdownAberto)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-white border-2 border-slate-200 rounded-lg hover:border-blue-400 focus:border-blue-500 focus:outline-none transition-colors"
+                  >
+                    <span className={campanhaSelecionada ? "text-slate-900" : "text-slate-400"}>
+                      {campanhaSelecionada 
+                        ? campanhas.find(c => c.id === campanhaSelecionada)?.nome || "Campanha selecionada"
+                        : "Selecione uma campanha..."
+                      }
+                    </span>
+                    <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${dropdownAberto ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {dropdownAberto && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {campanhas.length === 0 ? (
+                        <div className="p-4 text-center text-slate-500 text-sm">
+                          Nenhuma campanha disponível
+                        </div>
+                      ) : (
+                        campanhas.map((campanha) => (
+                          <button
+                            key={campanha.id}
+                            type="button"
+                            onClick={() => {
+                              setCampanhaSelecionada(campanha.id);
+                              setDropdownAberto(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-blue-50 transition-colors ${
+                              campanhaSelecionada === campanha.id ? 'bg-blue-50' : ''
+                            }`}
+                          >
+                            <div>
+                              <div className="font-medium text-slate-900">{campanha.nome}</div>
+                              <div className="text-xs text-slate-500">
+                                {campanha.totalContatos} contatos • {campanha.status}
+                              </div>
+                            </div>
+                            {campanhaSelecionada === campanha.id && (
+                              <Check className="w-5 h-5 text-blue-600" />
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex gap-3">
+                <button
+                  onClick={onConcluido}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-3 px-4 rounded-lg transition-colors"
+                >
+                  Apenas Ver Leads
+                </button>
+                
+                <button
+                  onClick={vincularLeadsACampanha}
+                  disabled={!campanhaSelecionada || vinculandoCampanha}
+                  className={`flex-1 font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                    campanhaSelecionada && !vinculandoCampanha
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  }`}
+                >
+                  {vinculandoCampanha ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Vinculando...
+                    </>
+                  ) : (
+                    <>
+                      <FolderPlus className="w-4 h-4" />
+                      Vincular à Campanha
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
         </div>

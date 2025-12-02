@@ -59,21 +59,23 @@ router.get('/edificios/:cdbairro', async (req, res) => {
 });
 
 /**
- * GET /api/mineracao/unidades/:cdedificio?offset=0&limit=500
+ * GET /api/mineracao/unidades/:cdedificio?offset=0&limit=500&nome=NOME_EDIFICIO
  * Lista todas as unidades de um edifício específico (com paginação)
+ * Aceita 'nome' como parâmetro para buscar no cache quando a API falhar
  */
 router.get('/unidades/:cdedificio', async (req, res) => {
   try {
     const cdedificio = parseInt(req.params.cdedificio);
     const offset = parseInt(req.query.offset as string) || 0;
     const limit = Math.min(parseInt(req.query.limit as string) || 500, 1000); // Max 1000
+    const nomeEdificio = req.query.nome as string | undefined; // Nome para fallback de cache
     
     if (isNaN(cdedificio)) {
       return res.status(400).json({ erro: 'Código do edifício inválido' });
     }
 
-    console.log(`[Mineracao] Buscando unidades do edifício ${cdedificio} (offset: ${offset}, limit: ${limit})...`);
-    const resultado = await mapaService.buscarUnidadesPorEdificio(cdedificio, offset, limit);
+    console.log(`[Mineracao] Buscando unidades do edifício ${cdedificio} (nome: ${nomeEdificio || 'N/A'}, offset: ${offset}, limit: ${limit})...`);
+    const resultado = await mapaService.buscarUnidadesPorEdificio(cdedificio, offset, limit, nomeEdificio);
     
     return res.json({
       total: resultado.total,
@@ -81,7 +83,7 @@ router.get('/unidades/:cdedificio', async (req, res) => {
       limit,
       hasMore: resultado.hasMore,
       cdedificio,
-      nomeEdificio: resultado.unidades[0]?.nmedificio || '',
+      nomeEdificio: resultado.unidades[0]?.nmedificio || nomeEdificio || '',
       bairro: resultado.unidades[0]?.nmbairro || '',
       unidades: resultado.unidades
     });
@@ -317,7 +319,7 @@ const identificarSchema = z.object({
   }))
 });
 
-// Rota 1: Identificar Proprietários (Scraper)
+// Rota 1: Identificar Proprietários (Scraper) - OTIMIZADO COM BATCHES
 router.post('/identificar-proprietarios', async (req, res) => {
   try {
     const { imoveis } = identificarSchema.parse(req.body);
@@ -326,7 +328,8 @@ router.post('/identificar-proprietarios', async (req, res) => {
       return res.status(400).json({ erro: 'Lista de imóveis vazia' });
     }
 
-    console.log(`[Mineracao] Identificando proprietários de ${imoveis.length} imóveis...`);
+    const inicio = Date.now();
+    console.log(`[Mineracao] 🚀 Identificando proprietários de ${imoveis.length} imóveis (modo otimizado)...`);
 
     // Garantir que existe um tenant para associar os leads
     let tenant = await prisma.tenant.findFirst();
@@ -336,64 +339,79 @@ router.post('/identificar-proprietarios', async (req, res) => {
       });
     }
 
-    const dadosProprietarios = [];
+    // Configuração de paralelismo
+    const BATCH_SIZE = 10;  // Processar 10 imóveis por vez
+    const DELAY_ENTRE_BATCHES = 500; // 500ms entre batches (evita sobrecarga)
     
-    // Processamento Sequencial (Um por um) para evitar bloqueios e sobrecarga
-    for (const imovel of imoveis) {
-      // Delay aleatório entre 1s e 2s para parecer humano
-      const delay = Math.floor(Math.random() * 1000) + 1000;
-      await new Promise(resolve => setTimeout(resolve, delay));
+    const dadosProprietarios: any[] = [];
+    const batches = [];
+    
+    // Dividir em batches
+    for (let i = 0; i < imoveis.length; i += BATCH_SIZE) {
+      batches.push(imoveis.slice(i, i + BATCH_SIZE));
+    }
+    
+    console.log(`[Mineracao] Dividido em ${batches.length} batches de até ${BATCH_SIZE} imóveis`);
 
-      try {
-        const dadosScraper = await scraperIPTU.consultarProprietario(imovel.nrinscr);
-        
-        // Persistência Incremental: Cria um Lead preliminar com os dados do Scraper
-        if (dadosScraper.nome && dadosScraper.cpf) {
+    // Processar cada batch em paralelo
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      
+      // Processar todos os imóveis do batch em paralelo
+      const resultadosBatch = await Promise.all(
+        batch.map(async (imovel) => {
           try {
-            const lead = await prisma.lead.upsert({
-              where: {
-                tenantId_cpf: {
+            const dadosScraper = await scraperIPTU.consultarProprietario(imovel.nrinscr);
+            
+            // Persistência do lead (não bloqueia)
+            if (dadosScraper.nome && dadosScraper.cpf) {
+              prisma.lead.upsert({
+                where: {
+                  tenantId_cpf: {
+                    tenantId: tenant!.id,
+                    cpf: dadosScraper.cpf
+                  }
+                },
+                update: {
+                  nome: dadosScraper.nome,
+                  enderecoPrincipal: dadosScraper.endereco_correspondencia
+                },
+                create: {
                   tenantId: tenant!.id,
-                  cpf: dadosScraper.cpf
+                  cpf: dadosScraper.cpf,
+                  nome: dadosScraper.nome,
+                  enderecoPrincipal: dadosScraper.endereco_correspondencia,
+                  origem: 'api_iptu_scraper',
+                  status: 'NOVO'
                 }
-              },
-              update: {
-                nome: dadosScraper.nome,
-                enderecoPrincipal: dadosScraper.endereco_correspondencia
-              },
-              create: {
-                tenantId: tenant!.id,
-                cpf: dadosScraper.cpf,
-                nome: dadosScraper.nome,
-                enderecoPrincipal: dadosScraper.endereco_correspondencia,
-                origem: 'api_iptu_scraper',
-                status: 'NOVO'
-              }
-            });
+              }).catch(e => console.error(`Erro ao persistir lead ${imovel.nrinscr}:`, e));
+            }
 
-            await prisma.imovel.update({
-              where: { inscricaoIptu: imovel.nrinscr },
-              data: {
-                leadId: lead.id,
-                statusCaptacao: 'IDENTIFICADO'
-              }
-            });
-          } catch (e) {
-            console.error(`Erro ao persistir lead parcial para ${imovel.nrinscr}:`, e);
+            return {
+              ...imovel,
+              ...dadosScraper
+            };
+          } catch (error) {
+            console.error(`Erro ao processar imóvel ${imovel.nrinscr}:`, error);
+            return imovel; // Retorna sem dados do scraper
           }
-        }
-
-        dadosProprietarios.push({
-          ...imovel,
-          ...dadosScraper
-        });
-
-      } catch (error) {
-        console.error(`Erro ao processar imóvel ${imovel.nrinscr}:`, error);
-        // Em caso de erro, retorna o imóvel sem dados do scraper para não quebrar o fluxo
-        dadosProprietarios.push(imovel);
+        })
+      );
+      
+      dadosProprietarios.push(...resultadosBatch);
+      
+      // Log de progresso
+      const processados = Math.min((batchIndex + 1) * BATCH_SIZE, imoveis.length);
+      console.log(`[Mineracao] ✓ Batch ${batchIndex + 1}/${batches.length} concluído (${processados}/${imoveis.length})`);
+      
+      // Delay entre batches (exceto no último)
+      if (batchIndex < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, DELAY_ENTRE_BATCHES));
       }
     }
+
+    const tempoTotal = ((Date.now() - inicio) / 1000).toFixed(1);
+    console.log(`[Mineracao] ✅ Concluído em ${tempoTotal}s (${(imoveis.length / parseFloat(tempoTotal)).toFixed(1)} imóveis/s)`);
 
     return res.json(dadosProprietarios);
   } catch (error) {
@@ -434,12 +452,13 @@ const confirmarSchema = z.object({
   }))
 });
 
-// Rota 2: Confirmar Leads (Enriquecimento + Persistência com DEDUPLIÇÃO)
+// Rota 2: Confirmar Leads (Enriquecimento + Persistência com DEDUPLIÇÃO) - OTIMIZADO
 router.post('/confirmar-leads', async (req, res) => {
   try {
     const { proprietarios } = confirmarSchema.parse(req.body);
     
-    console.log(`[Mineracao] Processando ${proprietarios.length} leads com deduplição...`);
+    const inicio = Date.now();
+    console.log(`[Mineracao] 🚀 Processando ${proprietarios.length} leads (modo otimizado)...`);
 
     // Encontrar ou criar tenant
     let tenant = await prisma.tenant.findFirst();
@@ -454,13 +473,16 @@ router.post('/confirmar-leads', async (req, res) => {
       });
     }
 
-    // Estatísticas de cache
+    // Estatísticas de cache e custos
     let cpfsDoCache = 0;
     let cpfsDaApi = 0;
     let economiaTotal = 0;
-    const custoConsultaAssertiva = Number(tenant.precoConsultaCpf) || 2.00;
+    
+    // Preços de venda e custo
+    const CUSTO_ASSERTIVA = 0.15;
+    const precoVendaContato = Number(tenant.precoConsultaCpf) || 2.00;
 
-    // 1. Separar CPFs conhecidos (cache) vs novos
+    // 1. Separar CPFs únicos
     const cpfsUnicos = new Set<string>();
     const proprietariosComCpf: typeof proprietarios = [];
     const proprietariosSemCpf: typeof proprietarios = [];
@@ -491,27 +513,44 @@ router.post('/confirmar-leads', async (req, res) => {
     const cpfsEmCache = new Map(cacheExistente.map(c => [c.cpf, c]));
     console.log(`[Mineracao] ${cpfsEmCache.size} CPFs encontrados no cache`);
 
-    // 3. Enriquecer proprietários
+    // 3. Enriquecer proprietários - OTIMIZADO COM PROCESSAMENTO PARALELO
     const leadsEnriquecidos: LeadEnriquecido[] = [];
+    const BATCH_SIZE_ASSERTIVA = 5; // Lotes menores para API Assertiva (evitar rate limit)
+    const DELAY_ENTRE_LOTES_ASSERTIVA = 300; // 300ms entre lotes
+
+    // Separar proprietários em cache e novos
+    const proprietariosDoCache: typeof proprietariosComCpf = [];
+    const proprietariosNovos: typeof proprietariosComCpf = [];
 
     for (const p of proprietariosComCpf) {
       const cpfLimpo = p.cpf!.replace(/\D/g, '');
-      const cached = cpfsEmCache.get(cpfLimpo);
+      if (cpfsEmCache.has(cpfLimpo)) {
+        proprietariosDoCache.push(p);
+      } else {
+        proprietariosNovos.push(p);
+      }
+    }
 
-      if (cached) {
-        // 🎯 CPF do Cache - Economiza consulta!
+    console.log(`[Mineracao] ${proprietariosDoCache.length} do cache, ${proprietariosNovos.length} novos para API`);
+
+    // Processar cache em paralelo (não tem rate limit)
+    const resultadosCache = await Promise.all(
+      proprietariosDoCache.map(async (p) => {
+        const cpfLimpo = p.cpf!.replace(/\D/g, '');
+        const cached = cpfsEmCache.get(cpfLimpo)!;
+        
         cpfsDoCache++;
-        economiaTotal += custoConsultaAssertiva;
+        economiaTotal += CUSTO_ASSERTIVA;
 
         const dadosCache = cached.dados as any;
-        leadsEnriquecidos.push({
+        const leadEnriquecido = {
           ...p,
           cpf: cpfLimpo,
           nome: dadosCache.nome || p.nome,
           telefones: dadosCache.telefones || [],
           emails: dadosCache.emails || [],
           score: dadosCache.score || 80,
-        } as LeadEnriquecido);
+        } as LeadEnriquecido;
 
         // Atualizar métricas do cache
         await prisma.cacheCpf.update({
@@ -529,54 +568,92 @@ router.post('/confirmar-leads', async (req, res) => {
             cpf: cpfLimpo,
             veioDoCache: true,
             custoParaNos: 0,
-            cobradoDe: custoConsultaAssertiva,
-            lucro: custoConsultaAssertiva,
+            cobradoDe: precoVendaContato,
+            lucro: precoVendaContato,
             cacheId: cached.id
           }
         });
 
-      } else {
-        // 📡 CPF não está no cache - consultar Assertiva
-        cpfsDaApi++;
-        
-        const enriquecido = await assertivaService.enriquecerCPF(cpfLimpo, p.nome || '');
-        
-        leadsEnriquecidos.push({
-          ...p,
-          ...enriquecido,
-        } as LeadEnriquecido);
+        return leadEnriquecido;
+      })
+    );
 
-        // Salvar no cache (expira em 90 dias)
-        const expiraEm = new Date();
-        expiraEm.setDate(expiraEm.getDate() + 90);
+    leadsEnriquecidos.push(...resultadosCache);
 
-        const novoCache = await prisma.cacheCpf.create({
-          data: {
-            cpf: cpfLimpo,
-            dados: {
-              nome: enriquecido.nome,
-              telefones: enriquecido.telefones,
-              emails: enriquecido.emails,
-              score: enriquecido.score
-            },
-            fonte: 'assertiva',
-            expiraEm,
-            primeiraConsultaPor: tenant.id
-          }
-        });
+    // Processar novos CPFs em lotes paralelos (com rate limiting)
+    for (let i = 0; i < proprietariosNovos.length; i += BATCH_SIZE_ASSERTIVA) {
+      const lote = proprietariosNovos.slice(i, i + BATCH_SIZE_ASSERTIVA);
+      
+      const resultadosLote = await Promise.all(
+        lote.map(async (p) => {
+          const cpfLimpo = p.cpf!.replace(/\D/g, '');
+          cpfsDaApi++;
+          
+          const enriquecido = await assertivaService.enriquecerCPF(cpfLimpo, p.nome || '');
+          
+          const leadEnriquecido = {
+            ...p,
+            ...enriquecido,
+          } as LeadEnriquecido;
 
-        // Registrar consulta da API
-        await prisma.consultaCpf.create({
-          data: {
-            tenantId: tenant.id,
-            cpf: cpfLimpo,
-            veioDoCache: false,
-            custoParaNos: custoConsultaAssertiva,
-            cobradoDe: custoConsultaAssertiva,
-            lucro: 0,
-            cacheId: novoCache.id
-          }
-        });
+          // Salvar no cache (expira em 90 dias) - TODOS OS DADOS
+          const expiraEm = new Date();
+          expiraEm.setDate(expiraEm.getDate() + 90);
+
+          const novoCache = await prisma.cacheCpf.create({
+            data: {
+              cpf: cpfLimpo,
+              dados: {
+                nome: enriquecido.nome,
+                telefones: enriquecido.telefones,
+                emails: enriquecido.emails,
+                score: enriquecido.score,
+                dataNascimento: enriquecido.dataNascimento,
+                idade: enriquecido.idade,
+                sexo: enriquecido.sexo,
+                signo: enriquecido.signo,
+                situacaoCadastral: enriquecido.situacaoCadastral,
+                obitoProvavel: enriquecido.obitoProvavel,
+                nomeMae: enriquecido.nomeMae,
+                ppe: enriquecido.ppe,
+                rendaEstimada: enriquecido.rendaEstimada,
+                faixaSalarial: enriquecido.faixaSalarial,
+                profissao: enriquecido.profissao,
+                setor: enriquecido.setor,
+                empresaAtual: enriquecido.empresaAtual,
+                cnpjEmpresa: enriquecido.cnpjEmpresa,
+                endereco: enriquecido.endereco,
+                participacoesEmpresas: enriquecido.participacoesEmpresas,
+                redesSociais: enriquecido.redesSociais,
+              },
+              fonte: 'assertiva',
+              expiraEm,
+              primeiraConsultaPor: tenant.id
+            }
+          });
+
+          // Registrar consulta da API
+          await prisma.consultaCpf.create({
+            data: {
+              tenantId: tenant.id,
+              cpf: cpfLimpo,
+              veioDoCache: false,
+              custoParaNos: CUSTO_ASSERTIVA,
+              cobradoDe: precoVendaContato,
+              lucro: precoVendaContato - CUSTO_ASSERTIVA,
+              cacheId: novoCache.id
+            }
+          });
+
+          return leadEnriquecido;
+        })
+      );
+
+      leadsEnriquecidos.push(...resultadosLote);
+
+      // Delay entre lotes para evitar rate limit da Assertiva
+      if (i + BATCH_SIZE_ASSERTIVA < proprietariosNovos.length) {
+        await new Promise(resolve => setTimeout(resolve, DELAY_ENTRE_LOTES_ASSERTIVA));
       }
     }
 
@@ -594,7 +671,7 @@ router.post('/confirmar-leads', async (req, res) => {
       }
     });
 
-    console.log(`[Mineracao] Cache: ${cpfsDoCache} hits, API: ${cpfsDaApi} consultas, Economia: R$ ${economiaTotal.toFixed(2)}`);
+    console.log(`[Mineracao] Cache: ${cpfsDoCache} hits, API: ${cpfsDaApi} novas consultas`);
 
     // 4. Persistência (Salvar no Banco)
     const resultadosPersistidos = await Promise.all(

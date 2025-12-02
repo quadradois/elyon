@@ -28,6 +28,7 @@ model Tenant {
   usuarios           Usuario[]
   leads              Lead[]
   campanhas          Campanha[]
+  listas             Lista[]
   empreendimentos    EmpreendimentoConhecimento[]
   configuracaoAgente ConfiguracaoAgente?
 
@@ -302,8 +303,19 @@ model Campanha {
   // Dados do Empreendimento (DEPRECADO - usar empreendimento)
   nomeEmpreendimento     String?
   tipoImovel             String?
-  localizacao            String?
+  localizacao            String?  // Campo legado - usar campos separados abaixo
   perfilImovel           String?
+  
+  // Endereço do Empreendimento (campos separados)
+  cep                    String?
+  logradouro             String?  // Rua/Avenida
+  numero                 String?
+  complemento            String?
+  bairro                 String?
+  cidade                 String?
+  estado                 String?  // UF (2 letras)
+  
+  // Briefing
   briefingCompleto       String?
   briefingEstruturado    Json?
   briefingGeradoEm       DateTime?
@@ -339,27 +351,108 @@ model Contato {
   id                  String    @id @default(uuid())
   campanhaId          String
   campanha            Campanha  @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
+  
+  // Dados básicos
   nome                String
-  telefone            String?
-  email               String?
   cpf                 String?
+  
+  // Telefones (da Assertiva) - até 5 telefones
+  telefone            String?                // Telefone principal (celular com WhatsApp preferido)
+  telefone2           String?                // Telefone secundário
+  telefone3           String?                // Telefone terciário
+  telefone4           String?                // Telefone 4
+  telefone5           String?                // Telefone 5
+  telefonesJson       Json?                  // Array completo de telefones [{numero, tipo, whatsapp}]
+  temWhatsapp         Boolean   @default(false)
+  quantidadeWhatsapp  Int       @default(0)  // Quantos telefones têm WhatsApp
+  
+  // Emails (da Assertiva) - até 5 emails
+  email               String?                // Email principal
+  email2              String?                // Email secundário
+  email3              String?                // Email terciário
+  email4              String?                // Email 4
+  email5              String?                // Email 5
+  emailsJson          Json?                  // Array completo de emails
+  
+  // Dados do Imóvel (da Mineração/IPTU)
   inscricaoIptu       String?
-  endereco            String?
-  statusProspeccao    String    @default("AGUARDANDO")
+  enderecoImovel      String?                // Endereço do imóvel minerado
+  bairroImovel        String?
+  nomeEdificio        String?                // Nome do edifício/condomínio
+  apartamento         String?                // Número do apartamento (ex: 806)
+  bloco               String?                // Bloco do apartamento (ex: B)
+  unidade             String?                // Unidade completa (ex: APTO806BL.B)
+  box                 String?                // Número do box/garagem (ex: 108)
+  quadra              String?                // Quadra do imóvel
+  lote                String?                // Lote do imóvel
+  areaTerreno         Decimal?               // m² do terreno
+  areaConstruida      Decimal?               // m² construído
+  tipoImovel          String?                // Casa, Apartamento, Lote, etc.
+  valorVenal          Decimal?               // Valor venal do IPTU
+  anoConstituicao     Int?                   // Ano do imóvel
+  
+  // Dados pessoais adicionais (da Assertiva)
+  dataNascimento      DateTime?
+  idade               Int?
+  sexo                String?                // Masculino, Feminino
+  estadoCivil         String?
+  profissao           String?                // cboDescricao
+  rendaEstimada       Decimal?               // Valor numérico da renda
+  faixaSalarial       String?                // "De 3 a 5 Salários Mínimos"
+  setor               String?                // Setor de atuação
+  empresaAtual        String?                // Nome da empresa onde trabalha
+  cnpjEmpresa         String?                // CNPJ da empresa
+  nomeMae             String?                // Nome da mãe (validação)
+  situacaoCadastral   String?                // REGULAR, etc
+  obitoProvavel       Boolean   @default(false)
+  ppe                 Boolean   @default(false) // Pessoa Politicamente Exposta
+  signo               String?
+  
+  // Participações em empresas (JSON)
+  participacoesEmpresas Json?              // [{cnpj, razaoSocial, participacao}]
+  
+  // Redes sociais (JSON)
+  redesSociais        Json?                  // [{rede, url}]
+  
+  // Score e qualificação
+  scoreAssertiva      Int?                   // Score de 0-100 da Assertiva
+  scoreQualificacao   Int?                   // Score interno de qualificação
+  perfilInvestidor    Boolean   @default(false) // Se possui múltiplos imóveis
+  
+  // Endereço de correspondência
+  endereco            String?                // Endereço pessoal (diferente do imóvel)
+  cidade              String?
+  estado              String?
+  cep                 String?
+  
+  // Status de prospecção
+  statusProspeccao    String    @default("AGUARDANDO") // AGUARDANDO, CONTATANDO, RESPONDEU, SEM_INTERESSE, INTERESSADO, LEAD
   tentativasContato   Int       @default(0)
+  ultimaTentativa     DateTime?
   respondeu           Boolean   @default(false)
   primeiraResposta    DateTime?
   manifestouInteresse Boolean   @default(false)
+  motivoDesinteresse  String?                // Se não tem interesse, por quê?
+  observacoes         String?                // Notas do corretor
+  
+  // Conversão
   virouLead           Boolean   @default(false)
   leadId              String?   @unique
   lead                Lead?     @relation("ContatoOrigem", fields: [leadId], references: [id])
   virouLeadEm         DateTime?
+  
+  // Origem dos dados
+  fonteEnriquecimento String?                // "ASSERTIVA", "CACHE", "MANUAL"
+  enriquecidoEm       DateTime?
+  
   criadoEm            DateTime  @default(now())
   atualizadoEm        DateTime  @updatedAt
 
   @@unique([campanhaId, telefone])
   @@index([campanhaId])
+  @@index([campanhaId, cpf])
   @@index([virouLead])
+  @@index([statusProspeccao])
   @@map("contatos")
 }
 
@@ -564,4 +657,81 @@ model ConversaEmbedding {
   @@index([conversaId])
   @@index([leadId])
   @@map("conversas_embeddings")
+}
+
+// ====================================
+// LISTAS DE CONTATOS (Mineração)
+// ====================================
+
+model Lista {
+  id              String   @id @default(uuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  nome            String   // "Reserva Buriti - 01/12/2025"
+  nomeEdificio    String   // Nome exato do edifício pesquisado
+  localizacao     String?  // Cidade/Bairro
+  cep             String?
+  
+  // Estatísticas
+  totalContatos       Int  @default(0)
+  totalEnriquecidos   Int  @default(0)  // Quantos têm telefone
+  totalComWhatsapp    Int  @default(0)  // Quantos têm WhatsApp
+  totalUsados         Int  @default(0)  // Quantos já foram para campanhas
+  
+  // Dados da pesquisa
+  dadosPesquisa   Json?    // Dados brutos do RAG/pesquisa
+  
+  contatos        ContatoLista[]
+  
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+  
+  @@index([tenantId])
+  @@index([nomeEdificio])
+  @@map("listas")
+}
+
+model ContatoLista {
+  id              String   @id @default(uuid())
+  listaId         String
+  lista           Lista    @relation(fields: [listaId], references: [id], onDelete: Cascade)
+  
+  // Dados da Prefeitura
+  nome            String
+  cpf             String?
+  inscricaoIptu   String?
+  unidade         String?  // Apartamento
+  box             String?  // Vaga/Box
+  enderecoImovel  String?
+  bairroImovel    String?
+  
+  // Dados Assertiva (enriquecimento)
+  telefone        String?
+  telefone2       String?
+  telefone3       String?
+  telefone4       String?
+  telefone5       String?
+  telefonesJson   Json?    // Array completo com flags WhatsApp
+  
+  email           String?
+  email2          String?
+  email3          String?
+  email4          String?
+  email5          String?
+  emailsJson      Json?
+  
+  temWhatsapp         Boolean  @default(false)
+  quantidadeWhatsapp  Int      @default(0)
+  
+  // Controle de uso
+  usadoEmCampanha     Boolean  @default(false)  // Se já foi adicionado a alguma campanha
+  campanhaId          String?  // ID da campanha onde foi usado (última)
+  
+  criadoEm        DateTime @default(now())
+  
+  @@unique([listaId, cpf])
+  @@index([listaId])
+  @@index([usadoEmCampanha])
+  @@map("contatos_lista")
 }

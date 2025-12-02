@@ -45,7 +45,6 @@ interface MetricasDashboard {
     assertiva: {
       consultasMes: number;
       doCache: number;
-      gastoMes: string;
       economiaEstimada: string;
       taxaCache: string;
     };

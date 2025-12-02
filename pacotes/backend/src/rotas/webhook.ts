@@ -121,7 +121,7 @@ router.post('/', async (req, res) => {
                   where: {
                     leadId: leadId,
                     canal: 'WHATSAPP',
-                    status: 'ATIVA'
+                    estadoConversa: 'ativa'
                   }
                 });
 
@@ -130,8 +130,9 @@ router.post('/', async (req, res) => {
                     data: {
                       leadId: leadId,
                       canal: 'WHATSAPP',
-                      sessaoId: `wa_${leadId}_${Date.now()}`,
-                      status: 'ATIVA'
+                      numeroOrigem: remoteJid.replace('@s.whatsapp.net', ''),
+                      estadoConversa: 'ativa',
+                      contexto: {}
                     }
                   });
                 }
@@ -174,13 +175,13 @@ router.post('/', async (req, res) => {
                 }
 
                 // 4. Salvar Mensagem
-                await prisma.mensagemConversa.create({
+                await prisma.mensagem.create({
                   data: {
                     conversaId: conversa.id,
-                    papel: 'USUARIO',
+                    remetente: 'usuario',
                     conteudo: conteudoMensagem,
-                    urlMidia: urlMidia,
-                    tipo: tipoMensagem as any,
+                    tipo: tipoMensagem.toLowerCase(),
+                    metadata: urlMidia ? { urlMidia } : undefined,
                     enviadaEm: new Date((message.messageTimestamp || Date.now() / 1000) * 1000)
                   }
                 });

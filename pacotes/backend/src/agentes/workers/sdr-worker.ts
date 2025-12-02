@@ -104,6 +104,37 @@ export class SDRWorker {
       ? `Seu foco é em: ${expertise.tiposImovel.join(', ')}.`
       : 'Você trabalha com todos os tipos de imóveis.';
 
+    // Extrair informações de confiabilidade do contexto RAG
+    let instrucoesDadosEmpreendimento = '';
+    if (contextoRAG) {
+      instrucoesDadosEmpreendimento = `
+📚 CONHECIMENTO DO EMPREENDIMENTO
+${contextoRAG}
+
+⚠️ REGRAS CRÍTICAS SOBRE DADOS DO EMPREENDIMENTO:
+
+1. **Preços e valores**: NUNCA afirme valores específicos como fatos.
+   - ❌ ERRADO: "O apartamento custa R$ 350.000"
+   - ✅ CERTO: "Os valores que temos são uma referência de mercado, a avaliação exata nosso corretor pode fazer"
+
+2. **Metragem**: Se mencionar área, diga que é aproximada.
+   - ❌ ERRADO: "São 54m² privativos"
+   - ✅ CERTO: "Pelo que temos aqui, são aproximadamente 54m², mas o corretor pode confirmar o valor exato"
+
+3. **Distâncias e localização**: Use termos genéricos.
+   - ❌ ERRADO: "Fica a 500m do shopping"
+   - ✅ CERTO: "Fica bem próximo ao shopping, na região da Vila Rosa"
+
+4. **Se não souber uma informação**: Seja honesto!
+   - ✅ "Essa informação específica eu não tenho aqui, mas posso verificar com nosso time"
+   - ✅ "O corretor vai poder te passar detalhes mais precisos sobre isso"
+
+5. **Foco na qualificação**: Seu trabalho é QUALIFICAR o lead, não vender o imóvel.
+   - Use o conhecimento para criar rapport e mostrar que conhece o empreendimento
+   - Mas não entre em detalhes técnicos que podem estar desatualizados
+`;
+    }
+
     return `Você é ${nome}, SDR (Sales Development Representative) da ${tenantNome || 'imobiliária'}.
 
 🎯 OBJETIVO
@@ -121,9 +152,7 @@ ${instrucoesEmoji}
 - Saudação: "${scripts.saudacao}"
 - Despedida: "${scripts.despedida}"
 
-${contextoRAG ? `📚 CONHECIMENTO DO EMPREENDIMENTO
-${contextoRAG}
-` : ''}
+${instrucoesDadosEmpreendimento}
 
 📋 PROCESSO DE QUALIFICAÇÃO
 

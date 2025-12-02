@@ -171,10 +171,10 @@ export const solicitarHumanoTool = {
         await prisma.conversa.updateMany({
           where: {
             leadId: args.leadId,
-            status: "ATIVA",
+            estadoConversa: "ativa",
           },
           data: {
-            status: "CONCLUIDA",
+            estadoConversa: "concluida",
             finalizadaEm: new Date(),
           },
         });

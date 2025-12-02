@@ -5,7 +5,64 @@ interface DadosProprietario {
   nome?: string;
   cpf?: string;
   endereco_correspondencia?: string;
+  // Campos parseados do endereço
+  logradouro?: string;
+  numero?: string;
+  apartamento?: string;
+  bloco?: string;
+  unidade?: string;        // Unidade completa (ex: APTO806BL.B)
+  quadra?: string;
+  lote?: string;
+  nomeEdificio?: string;
+  box?: string;
+  tipoImovel?: string;     // PREDIAL, TERRITORIAL, etc
   origem: 'CACHE' | 'SCRAPER_LOCAL' | 'SCRAPER_WEB' | 'MOCK';
+}
+
+// Função para parsear o endereço da Prefeitura
+function parsearEnderecoPrefeitura(endereco: string): Partial<DadosProprietario> {
+  const resultado: Partial<DadosProprietario> = {};
+  
+  if (!endereco) return resultado;
+  
+  // Exemplo: "AV VITORIA S/N APTO806BL.B QD: 04 LT: 01E ED RES RESERVA BURITI BOX: 108"
+  
+  // Extrair BOX
+  const boxMatch = endereco.match(/BOX[:\s]*(\d+[A-Z]?)/i);
+  if (boxMatch) resultado.box = boxMatch[1].trim();
+  
+  // Extrair Quadra
+  const quadraMatch = endereco.match(/QD[:\s]*([^\s]+)/i);
+  if (quadraMatch) resultado.quadra = quadraMatch[1].trim();
+  
+  // Extrair Lote
+  const loteMatch = endereco.match(/LT[:\s]*([^\s]+)/i);
+  if (loteMatch) resultado.lote = loteMatch[1].trim();
+  
+  // Extrair Edifício
+  const edificioMatch = endereco.match(/ED\s+(.+?)(?:\s+BOX|\s*$)/i);
+  if (edificioMatch) resultado.nomeEdificio = edificioMatch[1].trim();
+  
+  // Extrair Apartamento e Bloco (formato: APTO806BL.B ou APT 806 BL B)
+  const aptoMatch = endereco.match(/APT[O]?\s*(\d+)\s*(?:BL[.\s]*([A-Z0-9]+))?/i);
+  if (aptoMatch) {
+    resultado.apartamento = aptoMatch[1];
+    if (aptoMatch[2]) resultado.bloco = aptoMatch[2];
+    resultado.unidade = `APTO ${aptoMatch[1]}${aptoMatch[2] ? ' BL.' + aptoMatch[2] : ''}`;
+  }
+  
+  // Extrair Logradouro (antes de APTO ou QD)
+  const logradouroMatch = endereco.match(/^([A-Z\s]+(?:S\/N)?)\s*(?:APTO|APT|QD)/i);
+  if (logradouroMatch) resultado.logradouro = logradouroMatch[1].trim();
+  
+  // Extrair Número do logradouro (se não for S/N)
+  const numeroMatch = endereco.match(/([A-Z\s]+)\s+(\d+)\s+(?:APTO|APT|QD)/i);
+  if (numeroMatch) {
+    resultado.logradouro = numeroMatch[1].trim();
+    resultado.numero = numeroMatch[2];
+  }
+  
+  return resultado;
 }
 
 export class ScraperIPTUService {
@@ -45,11 +102,25 @@ export class ScraperIPTUService {
         const enderecoRaw = enderecoMatch ? enderecoMatch[1] : '';
         const endereco = enderecoRaw.replace(/<br\s*\/?>/gi, ' ').replace(/\s+/g, ' ').trim();
 
+        // Extrair tipo de imóvel (PREDIAL, TERRITORIAL)
+        const tipoMatch = html.match(/TIPO<\/td>\s*<td>:<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>/i);
+        const tipoImovel = tipoMatch ? tipoMatch[1].trim() : undefined;
+
+        // Parsear endereço para extrair campos separados
+        const dadosParsed = parsearEnderecoPrefeitura(endereco);
+
+        console.log(`[Scraper] ✅ Dados extraídos para IPTU ${nrinscr}:`);
+        console.log(`  → Nome: ${nome}`);
+        console.log(`  → CPF: ${cpf}`);
+        console.log(`  → Apto: ${dadosParsed.apartamento || 'N/A'} | Bloco: ${dadosParsed.bloco || 'N/A'} | Box: ${dadosParsed.box || 'N/A'}`);
+
         return {
           nrinscr,
           nome,
           cpf,
           endereco_correspondencia: endereco,
+          tipoImovel,
+          ...dadosParsed,
           origem: 'SCRAPER_WEB'
         };
       }

@@ -14,6 +14,7 @@ import rotaMetricas from './rotas/metricas';
 import rotaAgentes from './rotas/agentes';
 import rotaMetricasAgentes from './rotas/metricas-agentes';
 import rotaDocumentos from './rotas/documentos';
+import rotaListas from './rotas/listas';
 
 // Carregar variáveis de ambiente (Forçar override para ignorar variáveis de sistema antigas)
 dotenv.config({ override: true });
@@ -30,7 +31,8 @@ app.use(cors({
   origin: 'http://localhost:5173',
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Rota de Health Check
 app.get('/api/saude', (req, res) => {
@@ -51,6 +53,7 @@ app.use('/api/metricas', rotaMetricas);   // Dashboard de métricas
 app.use('/api/agentes', rotaAgentes);     // Configuração de agentes IA
 app.use('/api/metricas-agentes', rotaMetricasAgentes); // Métricas dos agentes IA
 app.use('/api/documentos', rotaDocumentos); // Upload de documentos para RAG
+app.use('/api/listas', rotaListas);         // Listas de contatos minerados
 app.use('/webhooks', rotaWebhook);
 
 // Iniciar servidor

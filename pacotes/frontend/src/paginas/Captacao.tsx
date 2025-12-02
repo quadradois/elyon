@@ -69,7 +69,7 @@ const ETAPAS_WIZARD: StepperEtapa[] = [
   { id: "local", titulo: "Local" },
   { id: "selecionar", titulo: "Selecionar" },
   { id: "processar", titulo: "Processar" },
-  { id: "campanha", titulo: "Campanha" },
+  { id: "salvar", titulo: "Salvar" },
   { id: "concluir", titulo: "Concluir" },
 ];
 
@@ -112,10 +112,10 @@ export function Captacao() {
     tempoTotal: 0,
   });
 
-  // Etapa 4: Campanha
-  const [nomeCampanha, setNomeCampanha] = useState("");
-  const [criandoCampanha, setCriandoCampanha] = useState(false);
-  const [campanhaId, setCampanhaId] = useState<string | null>(null);
+  // Etapa 4: Salvar Lista
+  const [nomeLista, setNomeLista] = useState("");
+  const [salvandoLista, setSalvandoLista] = useState(false);
+  const [listaId, setListaId] = useState<string | null>(null);
 
   // ============================================
   // FUNÇÕES: Etapa 1 - Local
@@ -163,7 +163,7 @@ export function Captacao() {
 
   const selecionarLocal = async (local: ResultadoBusca) => {
     setLocalSelecionado(local);
-    setNomeCampanha(`Captação ${local.nome}`);
+    setNomeLista(`Mineração ${local.nome}`);
     
     // Limpar filtros anteriores
     setFiltroUnidade("");
@@ -177,7 +177,9 @@ export function Captacao() {
       
       if (local.tipo === 'edificio') {
         // Buscar unidades do edifício vertical
-        const response = await api.get(`/mineracao/unidades/${local.codigo}`);
+        // Incluir nome do edifício para fallback de cache quando API falhar
+        const nomeEncoded = encodeURIComponent(local.nome);
+        const response = await api.get(`/mineracao/unidades/${local.codigo}?nome=${nomeEncoded}`);
         unidadesCarregadas = response.data.unidades || [];
       } else {
         // Buscar casas do condomínio horizontal
@@ -272,7 +274,7 @@ export function Captacao() {
     try {
       // Etapa 3.1: Identificar Proprietários
       setProgresso(20);
-      addLog("🔍 Consultando Prefeitura de Goiânia...");
+      addLog("🔍 Identificando proprietários dos imóveis...");
 
       const responseProprietarios = await api.post("/mineracao/identificar-proprietarios", {
         imoveis: imoveisSelecionados,
@@ -283,8 +285,7 @@ export function Captacao() {
       addLog(`✅ ${proprietarios.length} proprietários identificados`);
 
       // Etapa 3.2: Enriquecer com Assertiva (com deduplição!)
-      addLog("📞 Buscando contatos na Assertiva...");
-      addLog("💾 Verificando cache de CPFs conhecidos...");
+      addLog("📞 Buscando informações de contato...");
 
       const responseEnriquecimento = await api.post("/mineracao/confirmar-leads", {
         proprietarios,
@@ -295,7 +296,7 @@ export function Captacao() {
       const { total, sucesso, doCache, dados } = responseEnriquecimento.data;
       
       if (doCache > 0) {
-        addLog(`✨ ${doCache} CPFs já conhecidos no sistema`);
+        addLog(`✨ ${doCache} contatos localizados rapidamente`);
       }
       
       addLog(`✅ ${sucesso} leads qualificados salvos no banco`);
@@ -337,48 +338,97 @@ export function Captacao() {
   };
 
   // ============================================
-  // FUNÇÕES: Etapa 4 - Campanha
+  // FUNÇÕES: Etapa 4 - Salvar Lista
   // ============================================
 
-  const criarCampanhaComLeads = async () => {
-    if (!nomeCampanha.trim()) {
-      toast.error("Digite um nome para a campanha");
+  const salvarLista = async () => {
+    if (!nomeLista.trim()) {
+      toast.error("Digite um nome para a lista");
       return;
     }
 
     try {
-      setCriandoCampanha(true);
+      setSalvandoLista(true);
 
-      // Extrair IDs dos leads minerados
-      const leadIds = leadsGerados
-        .filter((lead) => lead.leadId)
-        .map((lead) => lead.leadId);
-
-      // Criar campanha com pesquisa automática + vincular leads
-      const response = await api.post("/campanhas/criar-com-pesquisa", {
-        nome: nomeCampanha,
-        nomeEmpreendimento: localSelecionado?.nome || nomeCampanha,
-        localizacao: localSelecionado?.bairro || "Goiânia, GO",
-        tipoImovel: localSelecionado?.tipo === 'condominio' ? "Casa" : "Apartamento",
-        perfilImovel: "Medio",
-        leadIds, // IDs dos leads para vincular à campanha
+      // Preparar contatos para salvar na lista
+      const contatosParaSalvar = leadsGerados.map((lead) => {
+        // Garantir que nome nunca é vazio
+        let nome = lead.nome || lead.nmproprietario || lead.proprietario || 'Proprietário';
+        if (!nome || nome.trim() === '') {
+          nome = 'Proprietário';
+        }
+        
+        // Extrair números de telefone (podem vir como objetos ou strings)
+        const extrairTelefone = (tel: any): string | null => {
+          if (!tel) return null;
+          if (typeof tel === 'string') return tel;
+          if (typeof tel === 'object' && tel.numero) return tel.numero;
+          return null;
+        };
+        
+        // Telefones podem estar em lead.telefones (array) ou lead.telefone (string/objeto)
+        const telefones = lead.telefones || [];
+        const tel1 = extrairTelefone(lead.telefone) || extrairTelefone(telefones[0]);
+        const tel2 = extrairTelefone(telefones[1]);
+        const tel3 = extrairTelefone(telefones[2]);
+        const tel4 = extrairTelefone(telefones[3]);
+        const tel5 = extrairTelefone(telefones[4]);
+        
+        // Contar quantos têm WhatsApp
+        const qtdWhatsapp = telefones.filter((t: any) => t?.whatsapp === true).length;
+        
+        return {
+          nome: nome.trim(),
+          cpf: lead.cpf || lead.nrcpf || null,
+          inscricaoIptu: lead.inscricaoIptu || lead.nrinscr || null,
+          unidade: lead.unidade || lead.incompl || null,
+          box: lead.box || null,
+          enderecoImovel: lead.enderecoImovel || lead.endereco || null,
+          bairroImovel: lead.bairroImovel || lead.bairro || localSelecionado?.bairro || null,
+          telefone: tel1,
+          telefone2: tel2,
+          telefone3: tel3,
+          telefone4: tel4,
+          telefone5: tel5,
+          telefonesJson: telefones.length > 0 ? JSON.stringify(telefones) : null,
+          email: lead.email || lead.emails?.[0] || null,
+          email2: lead.emails?.[1] || null,
+          email3: lead.emails?.[2] || null,
+          email4: lead.emails?.[3] || null,
+          email5: lead.emails?.[4] || null,
+          emailsJson: lead.emails ? JSON.stringify(lead.emails) : null,
+          temWhatsapp: qtdWhatsapp > 0 || lead.temWhatsapp || false,
+          quantidadeWhatsapp: qtdWhatsapp || lead.quantidadeWhatsapp || 0,
+        };
       });
 
-      const campanha = response.data;
-      setCampanhaId(campanha.id);
+      console.log('[Wizard] Salvando lista com', contatosParaSalvar.length, 'contatos');
+      console.log('[Wizard] Primeiro contato exemplo:', contatosParaSalvar[0]);
 
-      const vinculados = campanha.campanha?.leadsVinculados || leadIds.length;
-      toast.success("Campanha criada com sucesso!", {
-        description: `${vinculados} leads vinculados • Briefing gerado com IA`,
+      // Criar lista com contatos
+      const response = await api.post("/listas", {
+        nome: nomeLista,
+        nomeEdificio: localSelecionado?.nome || nomeLista,
+        localizacao: localSelecionado?.bairro || "Goiânia, GO",
+        contatos: contatosParaSalvar,
+      });
+
+      const lista = response.data;
+      setListaId(lista.id);
+
+      toast.success("Lista salva com sucesso!", {
+        description: `${lista.totalContatos} contatos salvos`,
       });
 
       // Avançar para conclusão
       setEtapa(5);
 
-    } catch (error) {
-      toast.error("Erro ao criar campanha");
+    } catch (error: any) {
+      console.error('Erro ao salvar lista:', error);
+      console.error('Resposta do servidor:', error.response?.data);
+      toast.error("Erro ao salvar lista");
     } finally {
-      setCriandoCampanha(false);
+      setSalvandoLista(false);
     }
   };
 
@@ -788,7 +838,7 @@ export function Captacao() {
                 <div className="flex justify-center pt-4">
                   <Button onClick={() => setEtapa(4)} size="lg" className="gap-2">
                     <Target className="w-4 h-4" />
-                    Criar Campanha com esses Leads
+                    Salvar Lista de Contatos
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </div>
@@ -797,36 +847,44 @@ export function Captacao() {
           </div>
         )}
 
-        {/* ETAPA 4: CAMPANHA */}
+        {/* ETAPA 4: SALVAR LISTA */}
         {etapa === 4 && (
           <div className="space-y-6 animate-in fade-in-50 duration-300">
             <div className="text-center">
               <h2 className="text-xl font-semibold text-slate-900">
-                Criar Campanha de Captação
+                Salvar Lista de Contatos
               </h2>
               <p className="text-slate-500 text-sm">
-                O briefing será gerado automaticamente com IA
+                Salve os contatos minerados para usar em campanhas futuras
               </p>
             </div>
 
             <div className="max-w-md mx-auto space-y-4">
               <div>
-                <label className="text-sm font-medium text-slate-700">Nome da Campanha</label>
+                <label className="text-sm font-medium text-slate-700">Nome da Lista</label>
                 <Input
-                  value={nomeCampanha}
-                  onChange={(e) => setNomeCampanha(e.target.value)}
-                  placeholder="Ex: Captação Reserva do Parque"
+                  value={nomeLista}
+                  onChange={(e) => setNomeLista(e.target.value)}
+                  placeholder="Ex: Mineração Reserva do Parque"
                   className="mt-1"
                 />
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800">
-                <p className="font-medium">📊 Esta campanha terá:</p>
+                <p className="font-medium">📊 Esta lista terá:</p>
                 <ul className="mt-2 space-y-1">
-                  <li>• {estatisticas.sucesso} leads já vinculados</li>
-                  <li>• Briefing automático gerado com GPT-4</li>
-                  <li>• Dados de mercado pesquisados via Google</li>
+                  <li>• {estatisticas.sucesso} contatos minerados</li>
+                  <li>• Dados de telefone e email enriquecidos</li>
+                  <li>• Pronta para adicionar a campanhas</li>
                 </ul>
+              </div>
+
+              <div className="bg-amber-50 p-4 rounded-lg text-sm text-amber-800">
+                <p className="font-medium">💡 Próximo passo:</p>
+                <p className="mt-1">
+                  Após salvar, vá em <strong>Campanhas</strong> para criar uma campanha 
+                  e adicionar contatos desta lista.
+                </p>
               </div>
             </div>
 
@@ -836,16 +894,16 @@ export function Captacao() {
                 Voltar
               </Button>
 
-              <Button onClick={criarCampanhaComLeads} disabled={criandoCampanha}>
-                {criandoCampanha ? (
+              <Button onClick={salvarLista} disabled={salvandoLista}>
+                {salvandoLista ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Criando...
+                    Salvando...
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4 mr-2" />
-                    Criar Campanha
+                    Salvar Lista
                   </>
                 )}
               </Button>
@@ -862,10 +920,10 @@ export function Captacao() {
 
             <div className="animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
               <h2 className="text-2xl font-bold text-slate-900">
-                Captação Concluída! 🎉
+                Mineração Concluída! 🎉
               </h2>
               <p className="text-slate-500 mt-2">
-                Seus leads foram minerados e a campanha foi criada com sucesso.
+                Seus contatos foram minerados e salvos com sucesso.
               </p>
             </div>
 
@@ -875,27 +933,27 @@ export function Captacao() {
               <ul className="space-y-2 text-sm text-slate-600">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  {leadsGerados.length > 0 ? leadsGerados.length : estatisticas.sucesso} leads minerados
+                  {leadsGerados.length > 0 ? leadsGerados.length : estatisticas.sucesso} contatos minerados
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  Campanha "{nomeCampanha}" criada
+                  Lista "{nomeLista}" salva
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  Briefing gerado com IA
+                  Pronto para usar em campanhas
                 </li>
               </ul>
             </div>
 
             {/* Ações */}
             <div className="flex items-center justify-center gap-4 pt-4 animate-in fade-in-50 slide-in-from-bottom-8 duration-900">
-              <Button variant="outline" onClick={() => navigate("/dashboard/leads")}>
-                Ver Leads
+              <Button variant="outline" onClick={() => navigate("/dashboard/campanhas")}>
+                Ir para Campanhas
               </Button>
-              {campanhaId && (
-                <Button onClick={() => navigate(`/dashboard/campanhas/${campanhaId}`)} className="gap-2">
-                  Ver Campanha
+              {listaId && (
+                <Button onClick={() => navigate(`/dashboard/listas/${listaId}`)} className="gap-2">
+                  Ver Lista
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               )}
@@ -911,11 +969,11 @@ export function Captacao() {
                   setSelecionados([]);
                   setTermoBusca("");
                   setLeadsGerados([]);
-                  setCampanhaId(null);
+                  setListaId(null);
                 }}
                 className="text-blue-600 hover:underline text-sm transition-colors"
               >
-                Iniciar Nova Captação
+                Iniciar Nova Mineração
               </button>
             </div>
           </div>

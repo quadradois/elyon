@@ -234,7 +234,7 @@ router.get('/dashboard', async (req, res) => {
         assertiva: {
           consultasMes,
           doCache: consultasDoCache,
-          gastoMes: Number(gastoMes._sum?.custoParaNos || 0).toFixed(2),
+          // Nota: gastoMes removido - informação confidencial da Quadra Dois
           economiaEstimada: economiaEstimada.toFixed(2),
           taxaCache: `${taxaCache}%`
         }

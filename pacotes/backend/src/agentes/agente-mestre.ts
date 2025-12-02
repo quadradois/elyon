@@ -9,11 +9,11 @@ export class AgenteMestre {
 
     try {
       // 1. Recuperar Histórico Recente (últimas 10 mensagens)
-      const historicoDb = await prisma.mensagemConversa.findMany({
+      const historicoDb = await prisma.mensagem.findMany({
         where: {
           conversa: {
             leadId: leadId,
-            status: 'ATIVA'
+            estadoConversa: 'ativa'
           }
         },
         orderBy: { enviadaEm: 'desc' },
@@ -22,7 +22,7 @@ export class AgenteMestre {
 
       // Formatar para OpenAI (inverter ordem para ficar cronológico)
       const mensagensOpenAI = historicoDb.reverse().map(msg => ({
-        role: msg.papel === 'USUARIO' ? 'user' : 'assistant',
+        role: msg.remetente === 'usuario' ? 'user' : 'assistant',
         content: msg.conteudo
       }));
 
@@ -59,14 +59,14 @@ export class AgenteMestre {
       const conversaId = historicoDb[0]?.conversaId;
       
       if (conversaId) {
-        await prisma.mensagemConversa.create({
+        await prisma.mensagem.create({
           data: {
             conversaId: conversaId,
-            papel: 'ASSISTENTE',
+            remetente: 'assistente',
             conteudo: respostaTexto,
-            tipo: 'TEXTO',
+            tipo: 'texto',
             enviadaEm: new Date()
-          } as any
+          }
         });
       }
 

@@ -30,14 +30,18 @@ router.get('/:id/chat', async (req, res) => {
       return res.json({ mensagens: [] });
     }
 
-    const mensagensFormatadas = conversa.mensagens.map(msg => ({
-      id: msg.id,
-      papel: msg.papel,
-      conteudo: msg.urlMidia || msg.conteudo, // Se tiver mídia, usa a URL/Base64
-      enviadaEm: msg.enviadaEm,
-      tipo: msg.tipo.toLowerCase(), // AUDIO -> audio, IMAGEM -> image
-      legenda: msg.urlMidia ? msg.conteudo : undefined // Se tem mídia, o conteudo vira legenda (se for texto)
-    }));
+    const mensagensFormatadas = conversa.mensagens.map(msg => {
+      const metadata = msg.metadata as any;
+      const urlMidia = metadata?.urlMidia;
+      return {
+        id: msg.id,
+        papel: msg.remetente,
+        conteudo: urlMidia || msg.conteudo,
+        enviadaEm: msg.enviadaEm,
+        tipo: msg.tipo.toLowerCase(),
+        legenda: urlMidia ? msg.conteudo : undefined
+      };
+    });
 
     res.json({ mensagens: mensagensFormatadas });
   } catch (error) {

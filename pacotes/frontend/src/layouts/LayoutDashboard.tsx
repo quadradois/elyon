@@ -10,6 +10,7 @@ import {
   Target,
   Sparkles,
   BarChart3,
+  List,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -33,6 +34,7 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
     { icon: LayoutDashboardIcon, label: "Visão Geral", path: "/dashboard" },
     { icon: Bot, label: "Meu Agente", path: "/dashboard/agente" },
     { icon: Sparkles, label: "Captação", path: "/dashboard/captacao", destaque: true },
+    { icon: List, label: "Listas", path: "/dashboard/listas" },
     { icon: Target, label: "Campanhas", path: "/dashboard/campanhas" },
     { icon: Building2, label: "Mineração", path: "/dashboard/mineracao" },
     { icon: Users, label: "Leads", path: "/dashboard/leads" },

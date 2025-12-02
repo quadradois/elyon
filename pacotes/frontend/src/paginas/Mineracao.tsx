@@ -159,7 +159,7 @@ export function Mineracao() {
     }
   };
 
-  const carregarUnidadesPorEdificio = async (cdedificio: number, append = false) => {
+  const carregarUnidadesPorEdificio = async (cdedificio: number, append = false, nomeEdificio?: string) => {
     try {
       if (append) {
         setPaginacao(prev => ({ ...prev, loading: true }));
@@ -171,7 +171,9 @@ export function Mineracao() {
       setErro("");
       
       const currentOffset = append ? paginacao.offset + 500 : 0;
-      const response = await api.get(`/mineracao/unidades/${cdedificio}?offset=${currentOffset}&limit=500`);
+      // Incluir nome do edifício para fallback de cache quando API falhar
+      const nomeParam = nomeEdificio ? `&nome=${encodeURIComponent(nomeEdificio)}` : '';
+      const response = await api.get(`/mineracao/unidades/${cdedificio}?offset=${currentOffset}&limit=500${nomeParam}`);
       
       const novasUnidades = response.data.unidades || [];
       
@@ -387,12 +389,12 @@ export function Mineracao() {
 
   const handleSelecionarEdificio = (edificio: Edificio) => {
     setEdificioSelecionado(edificio);
-    carregarUnidadesPorEdificio(edificio.codigo);
+    carregarUnidadesPorEdificio(edificio.codigo, false, edificio.nome);
   };
 
   const carregarMaisUnidades = () => {
     if (edificioSelecionado) {
-      carregarUnidadesPorEdificio(edificioSelecionado.codigo, true);
+      carregarUnidadesPorEdificio(edificioSelecionado.codigo, true, edificioSelecionado.nome);
     } else if (condominioSelecionado) {
       carregarCasasPorCondominio(condominioSelecionado, true);
     }

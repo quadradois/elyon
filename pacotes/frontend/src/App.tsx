@@ -10,6 +10,8 @@ import { Mineracao } from "./paginas/Mineracao";
 import { Captacao } from "./paginas/Captacao";
 import { Campanhas } from "./paginas/Campanhas";
 import { CampanhaDetalhes } from "./paginas/CampanhaDetalhes";
+import Listas from "./paginas/Listas";
+import ListaDetalhes from "./paginas/ListaDetalhes";
 import { Relatorios } from "./paginas/Relatorios";
 import { Configuracao } from "./paginas/Configuracao";
 import { WhatsAppProvider } from "./contextos/WhatsAppContext";
@@ -106,6 +108,28 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <CampanhaDetalhes />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/listas"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <Listas />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/listas/:id"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <ListaDetalhes />
               </LayoutDashboard>
             </RotaPrivada>
           }
