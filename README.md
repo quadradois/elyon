@@ -137,6 +137,7 @@ elyon/
 
 ```
 quadradois.com.br           → Landing page
+admin.quadradois.com.br     → Billing
 elyon.quadradois.com.br     → Dashboard
 api.elyon.quadradois.com.br → Backend API
 evo.quadradois.com.br       → Evolution API (WhatsApp)

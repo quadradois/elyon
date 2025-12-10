@@ -19,7 +19,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-elyon_user} -d ${DB_NAME:-elyon}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-elyon_user} -d ${DB_NAME:-elyon}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -37,7 +37,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -101,6 +101,24 @@ services:
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
 
   # ==========================================
+  # ADMIN BILLING DASHBOARD
+  # ==========================================
+  admin:
+    build:
+      context: ./site-quadradois/admin
+      dockerfile: Dockerfile
+    container_name: elyon_admin
+    restart: unless-stopped
+    networks:
+      - elyon_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.admin.rule=Host(`admin.quadradois.com.br`)"
+      - "traefik.http.routers.admin.entrypoints=websecure"
+      - "traefik.http.routers.admin.tls.certresolver=letsencrypt"
+      - "traefik.http.services.admin.loadbalancer.server.port=80"
+
+  # ==========================================
   # REVERSE PROXY (Traefik)
   # ==========================================
   traefik:
@@ -129,11 +147,12 @@ services:
       - elyon_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`admin.quadradois.com.br`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
-      - "traefik.http.routers.dashboard.entrypoints=websecure"
-      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.middlewares=auth"
+      # Traefik dashboard interno em traefik.quadradois.com.br (opcional)
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.quadradois.com.br`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.middlewares=auth"
       - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
 
   # ==========================================
@@ -161,9 +180,9 @@ volumes:
   redis_data:
   traefik_letsencrypt:
 
-# ==========================================
-# NETWORKS
-# ==========================================
+    # ==========================================
+    # NETWORKS
+    # ==========================================
 networks:
   elyon_network:
     driver: bridge
