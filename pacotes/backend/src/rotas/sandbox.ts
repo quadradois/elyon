@@ -7,7 +7,7 @@
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { prisma } from '../servidor';
+import { prisma } from '../lib/db';
 import { 
   CATALOGO_AGENTES, 
   gerarSystemPrompt, 

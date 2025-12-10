@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '../servidor';
+import { prisma } from '../lib/db';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { sintetizarPerfilRAG } from '../utilitarios/sintetizarPerfil';
@@ -168,6 +168,7 @@ const CriarAgenteSchema = z.object({
   estaAtivo: z.boolean().default(false), // Começa desativado (RASCUNHO)
   termosAceitos: z.boolean().default(false),
   termosVersao: z.string().optional(),
+  sessaoWhatsappId: z.string().optional().nullable(),
 });
 
 // Schema para Modo Avançado (100% customizado)
@@ -199,19 +200,124 @@ const MudarStatusSchema = z.object({
 // Por enquanto, simula extração do tenant do header
 // TODO: Integrar com middleware de autenticação real
 const extrairTenantId = (req: Request): string | null => {
-  // Tenta pegar do header (para testes)
-  const tenantHeader = req.headers['x-tenant-id'] as string;
-  if (tenantHeader) return tenantHeader;
-  
-  // Tenta pegar do body (fallback)
-  if (req.body?.tenantId) return req.body.tenantId;
-  
+  if ((req as any).tenantId) return (req as any).tenantId;
+  if (req.headers['x-tenant-id']) return req.headers['x-tenant-id'] as string;
+  if (req.query.tenantId) return req.query.tenantId as string;
   return null;
 };
 
-// ====================================
+// ============================================
+// HELPERS
+// ============================================
+
+const sintetizarPerfilRAG = (perfil: z.infer<typeof PerfilImobiliariaSchema>): string => {
+  if (!perfil) return '';
+  
+  const partes = [];
+  
+  if (perfil.dadosGerais?.nomeImobiliaria) {
+    partes.push(`IMOBILIÁRIA: ${perfil.dadosGerais.nomeImobiliaria}`);
+  }
+  
+  if (perfil.dadosGerais?.diferenciais?.length) {
+    partes.push(`DIFERENCIAIS: ${perfil.dadosGerais.diferenciais.join(', ')}`);
+  }
+  
+  if (perfil.locacao) {
+    partes.push(`LOCAÇÃO: Prazo ${perfil.locacao.prazoMinimoContrato} meses, Aceita Pet: ${perfil.locacao.aceitaPet ? 'Sim' : 'Não'}`);
+  }
+  
+  if (perfil.venda) {
+    partes.push(`VENDA: Comissão ${perfil.venda.comissaoPadrao}%, Exclusividade: ${perfil.venda.aceitaExclusividade ? 'Sim' : 'Não'}`);
+  }
+  
+  return partes.join('\n');
+};
+
+// ============================================
 // ROTAS
-// ====================================
+// ============================================
+
+/**
+ * POST /api/agentes/configurar-rapido
+ * Endpoint simplificado para o Wizard (cria ou atualiza)
+ */
+router.post('/configurar-rapido', async (req: Request, res: Response) => {
+  try {
+    const tenantId = extrairTenantId(req);
+    
+    if (!tenantId) {
+      return res.status(400).json({ erro: 'Tenant não identificado' });
+    }
+
+    // Validar dados parciais (o wizard envia passo a passo, mas aqui assumimos o final)
+    // Na prática, o frontend envia tudo no final.
+    const { 
+      nome, 
+      perfilImobiliaria, 
+      ragPerfilTexto 
+    } = req.body;
+
+    // Verificar se já existe agente
+    let agente = await prisma.configuracaoAgente.findFirst({
+      where: { tenantId }
+    });
+
+    if (!agente) {
+      // Criar agente com dados básicos se não existir
+      agente = await prisma.configuracaoAgente.create({
+        data: {
+          tenantId,
+          nome: nome || 'Sofia',
+          tipoAgente: 'SDR_CAPTACAO',
+          modoCreacao: 'PRE_TREINADO',
+          genero: 'feminino',
+          perfilImobiliaria: perfilImobiliaria as any,
+          ragPerfilTexto,
+          personalidade: {
+            tom: 'amigavel',
+            usarEmojis: true,
+            nivelFormalidade: 3
+          },
+          expertise: {
+            bairros: [],
+            tiposImovel: []
+          },
+          scripts: {
+            saudacao: 'Olá! Como posso ajudar você hoje?',
+            despedida: 'Foi um prazer ajudar! Até logo!'
+          },
+          regrasNegocio: {},
+          status: 'RASCUNHO',
+          estaAtivo: false,
+          termosAceitos: false,
+        } as any
+      });
+      console.log(`[Agentes] ✅ Agente "${nome || 'Sofia'}" criado automaticamente para tenant ${tenantId}`);
+    } else {
+      // Atualizar agente existente
+      agente = await prisma.configuracaoAgente.update({
+        where: { id: agente.id },
+        data: {
+          ...(nome && { nome }),
+          ...(perfilImobiliaria && { perfilImobiliaria: perfilImobiliaria as any }),
+          ...(ragPerfilTexto && { ragPerfilTexto }),
+        } as any
+      });
+      console.log(`[Agentes] ✅ Perfil atualizado para agente "${agente.nome}"`);
+    }
+
+    res.json({
+      mensagem: 'Perfil salvo com sucesso!',
+      id: agente.id,
+      nome: agente.nome,
+      ragGerado: !!ragPerfilTexto
+    });
+  } catch (error) {
+    console.error('[Agentes] Erro ao salvar perfil:', error);
+    res.status(500).json({ erro: 'Erro interno ao salvar perfil' });
+  }
+});
 
 /**
  * GET /api/agentes
@@ -228,11 +334,14 @@ router.get('/', async (req: Request, res: Response) => {
       });
     }
 
-    const agente = await prisma.configuracaoAgente.findUnique({
+    const agente = await prisma.configuracaoAgente.findFirst({
       where: { tenantId },
       include: {
         tenant: {
           select: { nome: true, slug: true }
+        },
+        sessaoWhatsapp: {
+          select: { id: true, nome: true, numeroWhatsapp: true }
         }
       }
     });
@@ -266,6 +375,9 @@ router.get('/:id', async (req: Request, res: Response) => {
       include: {
         tenant: {
           select: { nome: true, slug: true }
+        },
+        sessaoWhatsapp: {
+          select: { id: true, nome: true, numeroWhatsapp: true }
         }
       }
     });
@@ -307,16 +419,20 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(404).json({ erro: 'Tenant não encontrado' });
     }
 
-    // Verificar se já existe agente para este tenant
-    const agenteExistente = await prisma.configuracaoAgente.findUnique({
+    // Verificar limite de agentes (1 base + extras)
+    const totalAgentes = await prisma.configuracaoAgente.count({
       where: { tenantId }
     });
 
-    if (agenteExistente) {
-      return res.status(409).json({ 
-        erro: 'Agente já existe',
-        mensagem: 'Este tenant já possui um agente configurado. Use PUT para atualizar.',
-        agenteId: agenteExistente.id
+    const limiteAgentes = 1 + (tenant.agentesExtras || 0);
+
+    if (totalAgentes >= limiteAgentes) {
+      return res.status(403).json({ 
+        erro: 'Limite de agentes atingido',
+        codigo: 'LIMITE_ATINGIDO',
+        mensagem: `Seu plano permite ${limiteAgentes} agente(s). Contrate um agente extra para continuar.`,
+        limite: limiteAgentes,
+        atual: totalAgentes
       });
     }
 
@@ -366,6 +482,7 @@ router.post('/', async (req: Request, res: Response) => {
         termosAceitosEm: dados.termosAceitos ? new Date() : null,
         termosVersao: dados.termosAceitos ? (dados.termosVersao || '1.0') : null,
         status: dados.termosAceitos ? 'RASCUNHO' : 'RASCUNHO', // Sempre começa como rascunho
+        sessaoWhatsappId: dados.sessaoWhatsappId,
       } as any,
       include: {
         tenant: {
@@ -426,6 +543,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     if (dados.nome !== undefined) dadosAtualizacao.nome = dados.nome;
     if (dados.avatar !== undefined) dadosAtualizacao.avatar = dados.avatar;
     if (dados.estaAtivo !== undefined) dadosAtualizacao.estaAtivo = dados.estaAtivo;
+    if (dados.sessaoWhatsappId !== undefined) dadosAtualizacao.sessaoWhatsappId = dados.sessaoWhatsappId;
     
     // Para campos JSON, fazer merge com valores existentes
     if (dados.personalidade !== undefined) {
@@ -869,7 +987,7 @@ router.post('/modo-avancado', async (req: Request, res: Response) => {
     }
 
     // Verificar se já existe agente para este tenant
-    const agenteExistente = await prisma.configuracaoAgente.findUnique({
+    const agenteExistente = await prisma.configuracaoAgente.findFirst({
       where: { tenantId }
     });
 

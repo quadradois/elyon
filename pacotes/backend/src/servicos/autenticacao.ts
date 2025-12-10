@@ -1,4 +1,4 @@
-import { prisma } from '../servidor';
+import { prisma } from '../lib/db';
 import { hashSenha, compararSenha } from '../utilitarios/senha';
 import { gerarToken } from '../utilitarios/token';
 import { z } from 'zod';

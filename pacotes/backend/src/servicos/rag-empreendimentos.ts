@@ -1,4 +1,4 @@
-import { prisma } from '../servidor';
+import { prisma } from '../lib/db';
 import { embeddingService } from './embeddings';
 
 export class RAGEmpreendimentos {

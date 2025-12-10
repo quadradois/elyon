@@ -1,0 +1,18 @@
+-- AlterTable
+ALTER TABLE "tenants" ADD COLUMN     "atendeFinalDeSemana" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "cidade" TEXT DEFAULT 'Goiânia - GO',
+ADD COLUMN     "cnpj" TEXT,
+ADD COLUMN     "diferenciais" JSONB,
+ADD COLUMN     "email" TEXT,
+ADD COLUMN     "endereco" TEXT,
+ADD COLUMN     "facebook" TEXT,
+ADD COLUMN     "horarioAtendimento" TEXT DEFAULT '08:00 às 18:00',
+ADD COLUMN     "instagram" TEXT,
+ADD COLUMN     "logoUrl" TEXT,
+ADD COLUMN     "perfilLocacao" JSONB,
+ADD COLUMN     "perfilVenda" JSONB,
+ADD COLUMN     "ragPerfilTexto" TEXT,
+ADD COLUMN     "site" TEXT,
+ADD COLUMN     "telefone" TEXT,
+ADD COLUMN     "tempoMercado" INTEGER,
+ADD COLUMN     "whatsapp" TEXT;

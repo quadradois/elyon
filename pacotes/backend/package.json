@@ -14,6 +14,7 @@
     "verificar": "tsc --noEmit && eslint src/**/*.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0",
     "@aws-sdk/client-s3": "^3.940.0",
     "@openai/agents": "^0.3.3",
     "@prisma/client": "^5.7.0",
@@ -32,6 +33,7 @@
     "papaparse": "^5.5.3",
     "pdf-parse": "^2.4.5",
     "redis": "^4.6.11",
+    "socket.io": "^4.8.1",
     "uuid": "^13.0.0",
     "zod": "^3.22.4"
   },

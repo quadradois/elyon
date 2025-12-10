@@ -1,4 +1,4 @@
-import { prisma } from '../src/servidor';
+import { prisma } from '../src/lib/db';
 import { ragEmpreendimentos } from '../src/servicos/rag-empreendimentos';
 
 async function testeRAGGlobal() {

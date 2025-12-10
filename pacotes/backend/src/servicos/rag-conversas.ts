@@ -11,11 +11,13 @@
  * - Perguntas frequentes e respostas eficazes
  * - Padrões de qualificação de leads
  * - Intenções e necessidades dos clientes
+ * 
+ * NOTA: Usa Claude Haiku 4.5 para extração de conhecimento (mais econômico)
  */
 
-import { prisma } from '../servidor';
+import { prisma } from '../lib/db';
 import { embeddingService } from './embeddings';
-import { openaiService } from './openai';
+import { anthropicService } from './anthropic';
 
 export interface ChunkConversa {
   texto: string;
@@ -91,7 +93,7 @@ class RAGConversasService {
   }
 
   /**
-   * Extrai chunks de conhecimento de uma conversa usando IA
+   * Extrai chunks de conhecimento de uma conversa usando IA (Claude Haiku 4.5)
    */
   private async extrairChunks(historicoTexto: string, lead: any): Promise<ChunkConversa[]> {
     const prompt = `Analise esta conversa de um agente imobiliário com um cliente e extraia conhecimento reutilizável.
@@ -120,13 +122,15 @@ Se não houver conhecimento útil para extrair, retorne array vazio: []
 IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qualidade.`;
 
     try {
-      const resposta = await openaiService.gerarResposta([
-        { role: 'system', content: 'Você é um especialista em análise de conversas. Responda apenas JSON.' },
-        { role: 'user', content: prompt }
-      ]);
+      const resposta = await anthropicService.enviarMensagem(
+        'Você é um especialista em análise de conversas. Responda apenas JSON.',
+        [{ role: 'user', content: prompt }],
+        undefined,
+        { maxTokens: 1000, temperature: 0.3 }
+      );
 
       // Extrair JSON da resposta
-      const jsonMatch = resposta.match(/\[[\s\S]*\]/);
+      const jsonMatch = resposta.texto.match(/\[[\s\S]*\]/);
       if (!jsonMatch) {
         return [];
       }
@@ -387,6 +391,179 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
       mediaQualidade: chunks.length > 0 ? somaQualidade / chunks.length : 0,
       maisUtilizados
     };
+  }
+
+  // ============================================
+  // RAG PARA PROSPECÇÃO ATIVA (MVP)
+  // ============================================
+
+  /**
+   * Processa uma conversa de prospecção que CONVERTEU
+   * Chamado quando: agendar_avaliacao ou converter_para_lead
+   * 
+   * MVP: Apenas conversões para aprender com sucesso
+   * Futuro: Expandir para engajamentos longos
+   */
+  async processarConversaoProspeccao(params: {
+    contatoId: string;
+    tenantId: string;
+    tipoConversao: 'AGENDAMENTO' | 'LEAD' | 'INTERESSE';
+    empreendimento?: string;
+  }): Promise<void> {
+    const { contatoId, tenantId, tipoConversao, empreendimento } = params;
+    
+    console.log(`[RAG-Prospecção] 📚 Processando conversão: ${tipoConversao} (contato: ${contatoId})`);
+
+    try {
+      // 1. Buscar mensagens da conversa de prospecção
+      const mensagens = await prisma.mensagemProspeccao.findMany({
+        where: { contatoId },
+        orderBy: { dataHora: 'asc' }
+      });
+
+      if (mensagens.length < 4) {
+        console.log(`[RAG-Prospecção] ⏭️ Conversa muito curta (${mensagens.length} msgs), pulando`);
+        return;
+      }
+
+      // 2. Buscar dados do contato
+      const contato = await prisma.contato.findUnique({
+        where: { id: contatoId },
+        include: {
+          campanha: {
+            include: { empreendimento: true }
+          }
+        }
+      });
+
+      // 3. Formatar histórico para análise
+      const historicoTexto = mensagens
+        .map((m: any) => `${m.direcao === 'ENTRADA' ? 'Cliente' : 'Agente'}: ${m.conteudo}`)
+        .join('\n');
+
+      // 4. Extrair chunks com contexto de prospecção
+      const chunks = await this.extrairChunksProspeccao(
+        historicoTexto, 
+        tipoConversao,
+        empreendimento || (contato?.campanha?.empreendimento as any)?.nome || 'Empreendimento'
+      );
+
+      console.log(`[RAG-Prospecção] 📝 Extraídos ${chunks.length} chunks da conversão`);
+
+      // 5. Salvar chunks com embedding
+      for (const chunk of chunks) {
+        await this.salvarChunkProspeccao(chunk, tenantId, contatoId);
+      }
+
+      console.log(`[RAG-Prospecção] ✅ Conversão processada e indexada com sucesso`);
+
+    } catch (error) {
+      console.error('[RAG-Prospecção] ❌ Erro ao processar conversão:', error);
+    }
+  }
+
+  /**
+   * Extrai chunks específicos de conversas de prospecção
+   */
+  private async extrairChunksProspeccao(
+    historicoTexto: string,
+    tipoConversao: string,
+    empreendimento: string
+  ): Promise<ChunkConversa[]> {
+    const prompt = `Analise esta conversa de PROSPECÇÃO ATIVA imobiliária que resultou em ${tipoConversao}.
+O agente estava captando imóveis no empreendimento: ${empreendimento}
+
+CONVERSA:
+${historicoTexto}
+
+INSTRUÇÕES:
+Esta foi uma conversa de SUCESSO (converteu). Extraia conhecimento para replicar:
+
+1. **Scripts que funcionaram**: Frases do agente que geraram resposta positiva
+2. **Objeções superadas**: Como o agente contornou resistências
+3. **Gatilhos de interesse**: O que fez o cliente demonstrar interesse
+4. **Técnicas de fechamento**: Como o agente chegou ao agendamento/conversão
+
+Retorne JSON array:
+[
+  {
+    "tipo": "script_eficaz" | "objecao_superada" | "gatilho_interesse" | "tecnica_fechamento",
+    "texto": "descrição clara e reutilizável do aprendizado",
+    "contexto": "situação em que usar",
+    "scoreQualidade": 0-100
+  }
+]
+
+IMPORTANTE: 
+- Extraia APENAS insights de ALTA qualidade e reutilizáveis
+- Foque em técnicas que podem ser replicadas
+- Se não houver insights úteis, retorne array vazio: []`;
+
+    try {
+      const resposta = await anthropicService.enviarMensagem(
+        'Você é um especialista em vendas imobiliárias. Responda apenas JSON.',
+        [{ role: 'user', content: prompt }],
+        undefined,
+        { maxTokens: 1000, temperature: 0.3 }
+      );
+
+      // Extrair JSON da resposta
+      const jsonMatch = resposta.texto.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        return [];
+      }
+
+      const chunksRaw = JSON.parse(jsonMatch[0]);
+      
+      return chunksRaw
+        .filter((c: any) => c.scoreQualidade >= 70) // Filtro mais alto para prospecção
+        .map((c: any) => ({
+          texto: `[${c.tipo.toUpperCase()}] ${c.texto}${c.contexto ? ` (Usar quando: ${c.contexto})` : ''}`,
+          tipo: c.tipo as any,
+          metadados: {
+            resultado: tipoConversao,
+            empreendimento,
+            scoreQualidade: c.scoreQualidade,
+            fonte: 'prospeccao_ativa'
+          }
+        }));
+
+    } catch (error) {
+      console.error('[RAG-Prospecção] Erro ao extrair chunks:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Salva chunk de prospecção com embedding
+   */
+  private async salvarChunkProspeccao(
+    chunk: ChunkConversa,
+    tenantId: string,
+    contatoId: string
+  ): Promise<void> {
+    try {
+      // Gerar embedding
+      const textoPreparado = embeddingService.prepararTexto(chunk.texto);
+      const vetorEmbedding = await embeddingService.gerar(textoPreparado);
+      const embeddingString = embeddingService.serializar(vetorEmbedding);
+
+      // Salvar no banco (usando conversaId para guardar contatoId)
+      await prisma.conversaEmbedding.create({
+        data: {
+          tenantId,
+          conversaId: contatoId, // Reutilizando campo para contatoId
+          textoOriginal: chunk.texto,
+          tipoConteudo: chunk.tipo,
+          metadados: chunk.metadados,
+          embedding: embeddingString,
+          scoreQualidade: chunk.metadados.scoreQualidade || 0
+        }
+      });
+
+    } catch (error) {
+      console.error('[RAG-Prospecção] Erro ao salvar chunk:', error);
+    }
   }
 }
 

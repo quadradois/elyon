@@ -6,9 +6,9 @@ export type ModoCreacao = 'PRE_TREINADO' | 'PERSONALIZADO';
 export type StatusAgente = 'RASCUNHO' | 'ATIVO' | 'PAUSADO';
 
 // Etapas do wizard - Modo Rápido e Avançado
-export type EtapaRapida = 'modo' | 'identidade' | 'personalidade' | 'perfil' | 'termos' | 'revisar';
+export type EtapaRapida = 'modo' | 'identidade' | 'personalidade' | 'termos' | 'revisar';
 export type EtapaAvancada = 'modo' | 'identidade' | 'objetivo' | 'prompt' | 'ferramentas' | 'personalidade' | 'termos' | 'revisar';
-export type Etapa = 'modo' | 'identidade' | 'objetivo' | 'prompt' | 'ferramentas' | 'personalidade' | 'perfil' | 'termos' | 'revisar';
+export type Etapa = 'modo' | 'identidade' | 'objetivo' | 'prompt' | 'ferramentas' | 'personalidade' | 'termos' | 'revisar';
 
 // ====================================
 // QUIZ: PERFIL DA IMOBILIÁRIA

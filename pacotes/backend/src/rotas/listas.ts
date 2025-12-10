@@ -1,8 +1,40 @@
-import { Router } from 'express';
-import { prisma } from '../servidor';
+import { Router, Request } from 'express';
+import { prisma } from '../lib/db';
 import { z } from 'zod';
 
 const router = Router();
+
+// ====================================
+// HELPER PARA TENANT
+// ====================================
+
+/**
+ * Extrai o tenantId do request
+ * Ordem de prioridade: header > query > body > fallback para último tenant
+ */
+const getTenantId = async (req: Request): Promise<string> => {
+  // 1. Header x-tenant-id
+  if (req.headers['x-tenant-id']) {
+    return req.headers['x-tenant-id'] as string;
+  }
+  
+  // 2. Query param
+  if (req.query.tenantId) {
+    return req.query.tenantId as string;
+  }
+  
+  // 3. Body
+  if (req.body?.tenantId) {
+    return req.body.tenantId;
+  }
+  
+  // 4. Fallback: buscar o último tenant criado (mais provável ser o ativo)
+  const tenant = await prisma.tenant.findFirst({
+    orderBy: { criadoEm: 'desc' }
+  });
+  
+  return tenant?.id || '';
+};
 
 // ====================================
 // SCHEMAS DE VALIDAÇÃO
@@ -15,28 +47,28 @@ const criarListaSchema = z.object({
   cep: z.string().optional().nullable(),
   dadosPesquisa: z.any().optional().nullable(),
   contatos: z.array(z.object({
-    nome: z.string().min(1).default('Proprietário'),
-    cpf: z.string().optional().nullable(),
-    inscricaoIptu: z.string().optional().nullable(),
-    unidade: z.string().optional().nullable(),
-    box: z.string().optional().nullable(),
-    enderecoImovel: z.string().optional().nullable(),
-    bairroImovel: z.string().optional().nullable(),
-    telefone: z.string().optional().nullable(),
-    telefone2: z.string().optional().nullable(),
-    telefone3: z.string().optional().nullable(),
-    telefone4: z.string().optional().nullable(),
-    telefone5: z.string().optional().nullable(),
+    nome: z.any().optional().nullable(),
+    cpf: z.any().optional().nullable(),
+    inscricaoIptu: z.any().optional().nullable(),
+    unidade: z.any().optional().nullable(),
+    box: z.any().optional().nullable(),
+    enderecoImovel: z.any().optional().nullable(),
+    bairroImovel: z.any().optional().nullable(),
+    telefone: z.any().optional().nullable(),
+    telefone2: z.any().optional().nullable(),
+    telefone3: z.any().optional().nullable(),
+    telefone4: z.any().optional().nullable(),
+    telefone5: z.any().optional().nullable(),
     telefonesJson: z.any().optional().nullable(),
-    email: z.string().optional().nullable(),
-    email2: z.string().optional().nullable(),
-    email3: z.string().optional().nullable(),
-    email4: z.string().optional().nullable(),
-    email5: z.string().optional().nullable(),
+    email: z.any().optional().nullable(),
+    email2: z.any().optional().nullable(),
+    email3: z.any().optional().nullable(),
+    email4: z.any().optional().nullable(),
+    email5: z.any().optional().nullable(),
     emailsJson: z.any().optional().nullable(),
-    temWhatsapp: z.boolean().optional().default(false),
-    quantidadeWhatsapp: z.number().optional().default(0),
-  })).optional().default([]),
+    temWhatsapp: z.any().optional().nullable(),
+    quantidadeWhatsapp: z.any().optional().nullable(),
+  }).passthrough()).optional().default([]),
 });
 
 // ====================================
@@ -49,15 +81,14 @@ const criarListaSchema = z.object({
  */
 router.get('/', async (req, res) => {
   try {
-    // Buscar tenant (simplificado - usar o primeiro disponível)
-    const tenant = await prisma.tenant.findFirst();
+    const tenantId = await getTenantId(req);
     
-    if (!tenant) {
+    if (!tenantId) {
       return res.status(400).json({ erro: 'Nenhum tenant configurado' });
     }
 
     const listas = await prisma.lista.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId },
       orderBy: { criadoEm: 'desc' },
       include: {
         _count: {
@@ -157,8 +188,8 @@ router.post('/', async (req, res) => {
     const dados = criarListaSchema.parse(req.body);
 
     // Buscar tenant
-    const tenant = await prisma.tenant.findFirst();
-    if (!tenant) {
+    const tenantId = await getTenantId(req);
+    if (!tenantId) {
       return res.status(400).json({ erro: 'Nenhum tenant configurado' });
     }
 
@@ -170,7 +201,7 @@ router.post('/', async (req, res) => {
     // Criar lista
     const lista = await prisma.lista.create({
       data: {
-        tenantId: tenant.id,
+        tenantId,
         nome: dados.nome,
         nomeEdificio: dados.nomeEdificio,
         localizacao: dados.localizacao,
@@ -185,30 +216,42 @@ router.post('/', async (req, res) => {
     // Criar contatos
     if (contatos.length > 0) {
       await prisma.contatoLista.createMany({
-        data: contatos.map(c => ({
-          listaId: lista.id,
-          nome: c.nome,
-          cpf: c.cpf?.replace(/\D/g, ''),
-          inscricaoIptu: c.inscricaoIptu,
-          unidade: c.unidade,
-          box: c.box,
-          enderecoImovel: c.enderecoImovel,
-          bairroImovel: c.bairroImovel,
-          telefone: c.telefone,
-          telefone2: c.telefone2,
-          telefone3: c.telefone3,
-          telefone4: c.telefone4,
-          telefone5: c.telefone5,
-          telefonesJson: c.telefonesJson,
-          email: c.email,
-          email2: c.email2,
-          email3: c.email3,
-          email4: c.email4,
-          email5: c.email5,
-          emailsJson: c.emailsJson,
-          temWhatsapp: c.temWhatsapp || false,
-          quantidadeWhatsapp: c.quantidadeWhatsapp || 0,
-        })),
+        data: contatos.map(c => {
+          // Garantir que strings são strings
+          const str = (v: any): string | undefined => {
+            if (v === null || v === undefined) return undefined;
+            if (typeof v === 'string') return v || undefined;
+            return String(v);
+          };
+          
+          // Garantir que CPF é só números
+          const cpfLimpo = str(c.cpf)?.replace(/\D/g, '') || undefined;
+          
+          return {
+            listaId: lista.id,
+            nome: str(c.nome) || 'Proprietário',
+            cpf: cpfLimpo,
+            inscricaoIptu: str(c.inscricaoIptu),
+            unidade: str(c.unidade),
+            box: str(c.box),
+            enderecoImovel: str(c.enderecoImovel),
+            bairroImovel: str(c.bairroImovel),
+            telefone: str(c.telefone),
+            telefone2: str(c.telefone2),
+            telefone3: str(c.telefone3),
+            telefone4: str(c.telefone4),
+            telefone5: str(c.telefone5),
+            telefonesJson: c.telefonesJson || undefined,
+            email: str(c.email),
+            email2: str(c.email2),
+            email3: str(c.email3),
+            email4: str(c.email4),
+            email5: str(c.email5),
+            emailsJson: c.emailsJson || undefined,
+            temWhatsapp: Boolean(c.temWhatsapp),
+            quantidadeWhatsapp: Number(c.quantidadeWhatsapp) || 0,
+          };
+        }),
         skipDuplicates: true,
       });
     }
@@ -228,12 +271,31 @@ router.post('/', async (req, res) => {
     });
   } catch (error: any) {
     console.error('[Listas] Erro ao criar lista:', error);
+    console.error('[Listas] Error name:', error.name);
+    console.error('[Listas] Error message:', error.message);
     
     if (error.name === 'ZodError') {
       return res.status(400).json({ erro: 'Dados inválidos', detalhes: error.errors });
     }
     
-    return res.status(500).json({ erro: 'Erro ao criar lista' });
+    // Erro de unique constraint (CPF duplicado na lista)
+    if (error.code === 'P2002') {
+      return res.status(400).json({ 
+        erro: 'Contato duplicado na lista',
+        detalhes: 'Já existe um contato com o mesmo CPF nesta lista'
+      });
+    }
+    
+    // Erro de foreign key (tenant não existe)
+    if (error.code === 'P2003' || error.message?.includes('Foreign key constraint')) {
+      console.error('[Listas] Tenant não encontrado:', error.message);
+      return res.status(401).json({ 
+        erro: 'Sessão expirada',
+        detalhes: 'Faça login novamente para atualizar sua sessão'
+      });
+    }
+    
+    return res.status(500).json({ erro: 'Erro ao criar lista', detalhes: error.message });
   }
 });
 
@@ -337,13 +399,13 @@ router.post('/:id/adicionar-campanha', async (req, res) => {
           telefone3: contato.telefone3,
           telefone4: contato.telefone4,
           telefone5: contato.telefone5,
-          telefonesJson: contato.telefonesJson,
+          telefonesJson: contato.telefonesJson || undefined,
           email: contato.email,
           email2: contato.email2,
           email3: contato.email3,
           email4: contato.email4,
           email5: contato.email5,
-          emailsJson: contato.emailsJson,
+          emailsJson: contato.emailsJson || undefined,
           temWhatsapp: contato.temWhatsapp,
           quantidadeWhatsapp: contato.quantidadeWhatsapp,
           statusProspeccao: 'AGUARDANDO',

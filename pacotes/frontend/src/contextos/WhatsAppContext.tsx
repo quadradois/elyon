@@ -27,8 +27,25 @@ export function WhatsAppProvider({ children }: { children: ReactNode }) {
 
   const verificarStatus = async () => {
     try {
-      const response = await api.get("/whatsapp/status");
-      setStatus(response.data.status);
+      // Usa o novo endpoint de sessões
+      const response = await api.get("/sessoes-whatsapp");
+      const sessoes = response.data.sessoes || [];
+
+      // Se tiver pelo menos uma sessão conectada, considera o sistema conectado
+      const algumaConectada = sessoes.some(
+        (s: any) => s.status === "CONECTADO"
+      );
+      const algumaConectando = sessoes.some(
+        (s: any) => s.status === "CONECTANDO"
+      );
+
+      if (algumaConectada) {
+        setStatus("CONECTADO");
+      } else if (algumaConectando) {
+        setStatus("CONECTANDO");
+      } else {
+        setStatus("DESCONECTADO");
+      }
     } catch (error) {
       console.error("Erro ao verificar status do WhatsApp:", error);
       setStatus("DESCONECTADO");

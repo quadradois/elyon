@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { prisma } from '../../servidor';
+import { prisma } from '../../lib/db';
 import { ConfiguracaoAgente, configPadrao } from './sdr-worker';
 
 /**

@@ -11,16 +11,11 @@ const prisma = new PrismaClient();
 
 router.get('/dashboard', async (req, res) => {
   try {
-    // Tentar pegar tenantId do header ou usar o primeiro tenant disponível
-    let tenantId = req.headers['x-tenant-id'] as string;
+    // ✅ Exigir tenantId - sem fallback inseguro
+    const tenantId = req.headers['x-tenant-id'] as string;
     
     if (!tenantId) {
-      // Para desenvolvimento: usar o primeiro tenant disponível
-      const tenant = await prisma.tenant.findFirst();
-      if (!tenant) {
-        return res.status(400).json({ erro: 'Nenhum tenant configurado' });
-      }
-      tenantId = tenant.id;
+      return res.status(401).json({ erro: 'Não autorizado - tenant não identificado' });
     }
 
     // Datas para filtros
@@ -274,16 +269,11 @@ router.get('/dashboard', async (req, res) => {
 
 router.get('/mineracao', async (req, res) => {
   try {
-    // Tentar pegar tenantId do header ou usar o primeiro tenant disponível
-    let tenantId = req.headers['x-tenant-id'] as string;
+    // ✅ Exigir tenantId - sem fallback inseguro
+    const tenantId = req.headers['x-tenant-id'] as string;
     
     if (!tenantId) {
-      // Para desenvolvimento: usar o primeiro tenant disponível
-      const tenant = await prisma.tenant.findFirst();
-      if (!tenant) {
-        return res.status(400).json({ erro: 'Nenhum tenant configurado' });
-      }
-      tenantId = tenant.id;
+      return res.status(401).json({ erro: 'Não autorizado - tenant não identificado' });
     }
 
     const inicioMes = new Date();

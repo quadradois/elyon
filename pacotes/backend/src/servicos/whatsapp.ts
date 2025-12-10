@@ -6,17 +6,35 @@ interface EvolutionInstance {
   state: string;
 }
 
+/**
+ * WhatsAppService - Gerencia conexão com Evolution API
+ * 
+ * Suporta múltiplas instâncias (multi-tenant):
+ * - Cada SessaoWhatsapp tem seu próprio instanceName
+ * - Use getWhatsAppService(instanceName) para obter instância do serviço
+ */
 export class WhatsAppService {
-  private apiUrl: string;
-  private apiKey: string;
-  private instanceName: string;
-  private instanceToken: string | undefined;
-
-  constructor() {
-    this.apiUrl = process.env.EVOLUTION_API_URL || '';
-    this.apiKey = process.env.EVOLUTION_API_KEY || '';
-    this.instanceName = process.env.EVOLUTION_INSTANCE_NAME || 'elyon_main';
-    this.instanceToken = process.env.EVOLUTION_INSTANCE_TOKEN;
+  private _instanceName: string;
+  
+  constructor(instanceName: string) {
+    this._instanceName = instanceName;
+  }
+  
+  // Usar getters para ler variáveis de ambiente em tempo real
+  private get apiUrl(): string {
+    return process.env.EVOLUTION_API_URL || '';
+  }
+  
+  private get apiKey(): string {
+    return process.env.EVOLUTION_API_KEY || '';
+  }
+  
+  get instanceName(): string {
+    return this._instanceName;
+  }
+  
+  private get instanceToken(): string | undefined {
+    return process.env.EVOLUTION_INSTANCE_TOKEN;
   }
 
   private getHeaders() {
@@ -84,20 +102,19 @@ export class WhatsAppService {
 
   async enviarMensagemTexto(numero: string, texto: string): Promise<any> {
     try {
-      // Formata número para 55DDXXXXXXXXX
+      // Formata número para 55DDXXXXXXXXX (apenas dígitos)
       let numeroFormatado = numero.replace(/\D/g, '');
       
       // Se tiver 10 ou 11 dígitos, assume que é BR e adiciona 55
       if (numeroFormatado.length === 10 || numeroFormatado.length === 11) {
         numeroFormatado = `55${numeroFormatado}`;
       }
-      
-      const remoteJid = `${numeroFormatado}@s.whatsapp.net`;
 
+      // Evolution API v2.x espera apenas o número, sem @s.whatsapp.net
       const response = await axios.post(
         `${this.apiUrl}/message/sendText/${this.instanceName}`,
         {
-          number: remoteJid,
+          number: numeroFormatado,
           text: texto,
           delay: 1200,
           linkPreview: false
@@ -178,6 +195,56 @@ export class WhatsAppService {
       throw error;
     }
   }
+
+  async buscarDetalhesInstancia(): Promise<any> {
+    try {
+      const response = await axios.get(
+        `${this.apiUrl}/instance/fetchInstances`,
+        { headers: this.getHeaders() }
+      );
+      // Evolution v2 returns an array of instances
+      const instances = Array.isArray(response.data) ? response.data : [];
+      // A resposta da API v2 retorna o objeto direto, não aninhado em 'instance'
+      return instances.find((i: any) => i.name === this.instanceName);
+    } catch (error: any) {
+      console.error('Erro ao buscar detalhes da instância:', error.message);
+      return null;
+    }
+  }
 }
 
-export const whatsappService = new WhatsAppService();
+// ============================================
+// FACTORY E CACHE DE INSTÂNCIAS
+// ============================================
+
+/**
+ * Cache de instâncias do WhatsAppService
+ * Evita criar múltiplas instâncias para o mesmo instanceName
+ */
+const instanceCache = new Map<string, WhatsAppService>();
+
+/**
+ * Obtém ou cria instância do WhatsAppService para um instanceName específico
+ * @param instanceName Nome da instância na Evolution API (ex: "elyon_tenant123_vendas")
+ */
+export function getWhatsAppService(instanceName: string): WhatsAppService {
+  if (!instanceCache.has(instanceName)) {
+    instanceCache.set(instanceName, new WhatsAppService(instanceName));
+  }
+  return instanceCache.get(instanceName)!;
+}
+
+/**
+ * Limpa uma instância do cache (útil após desconexão)
+ */
+export function limparCacheWhatsApp(instanceName: string): void {
+  instanceCache.delete(instanceName);
+}
+
+/**
+ * @deprecated Use getWhatsAppService(instanceName) para multi-tenant
+ * Mantido para compatibilidade - usa instância padrão do .env
+ */
+export const whatsappService = new WhatsAppService(
+  process.env.EVOLUTION_INSTANCE_NAME || 'elyon_main'
+);

@@ -1,4 +1,4 @@
-import { prisma } from './src/servidor';
+import { prisma } from './src/lib/db';
 import { scraperIPTU } from './src/servicos/scraper-iptu';
 import { assertivaService } from './src/servicos/assertiva';
 

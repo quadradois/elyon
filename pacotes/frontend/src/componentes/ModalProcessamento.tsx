@@ -208,6 +208,15 @@ export function ModalProcessamento({
           inscricaoIptu: d.nrinscr,
           enderecoImovel: d.endereco_correspondencia,
           bairroImovel: d.nmbairro,
+          // Dados do Imóvel (do scraper IPTU)
+          nomeEdificio: d.nomeEdificio || d.nmedificio,
+          apartamento: d.apartamento,
+          bloco: d.bloco,
+          unidade: d.unidade,
+          box: d.box,
+          quadra: d.quadra,
+          lote: d.lote,
+          tipoImovel: d.tipoImovel,
           score: d.score,
           // Dados extras da Assertiva
           dataNascimento: d.dataNascimento,
@@ -238,6 +247,15 @@ export function ModalProcessamento({
           inscricaoIptu: p.nrinscr,
           enderecoImovel: p.endereco_correspondencia,
           bairroImovel: p.bairro,
+          // Dados do Imóvel (do scraper IPTU)
+          nomeEdificio: p.nomeEdificio || p.nmedificio,
+          apartamento: p.apartamento,
+          bloco: p.bloco,
+          unidade: p.unidade,
+          box: p.box,
+          quadra: p.quadra,
+          lote: p.lote,
+          tipoImovel: p.tipoImovel,
           score: p.score,
         })));
       }

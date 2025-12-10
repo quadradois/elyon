@@ -11,7 +11,6 @@ import {
   Eye,
   Zap,
   Settings2,
-  Building2,
   Shield,
   Code2,
   Wrench
@@ -25,7 +24,6 @@ import { DadosAgente, Etapa, PERFIL_PADRAO } from "./types";
 import { EtapaModo } from "./EtapaModo";
 import { EtapaIdentidade } from "./EtapaIdentidade";
 import { EtapaPersonalidade } from "./EtapaPersonalidade";
-import { EtapaPerfilImobiliaria } from "./EtapaPerfilImobiliaria";
 import { EtapaTermos } from "./EtapaTermos";
 import { EtapaRevisar } from "./EtapaRevisar";
 import { EtapaObjetivo } from "./EtapaObjetivo";
@@ -105,7 +103,6 @@ export function WizardCriacaoAgente({
     ? [
         { id: 'modo', titulo: 'Modo', icone: <Zap className="w-5 h-5" /> },
         { id: 'identidade', titulo: 'Identidade', icone: <User className="w-5 h-5" /> },
-        { id: 'perfil', titulo: 'Imobiliária', icone: <Building2 className="w-5 h-5" /> },
         { id: 'termos', titulo: 'Termos', icone: <Shield className="w-5 h-5" /> },
         { id: 'revisar', titulo: 'Revisar', icone: <Eye className="w-5 h-5" /> },
       ]
@@ -117,7 +114,6 @@ export function WizardCriacaoAgente({
         { id: 'prompt', titulo: 'Prompt', icone: <Code2 className="w-5 h-5" /> },
         { id: 'ferramentas', titulo: 'Tools', icone: <Wrench className="w-5 h-5" /> },
         { id: 'personalidade', titulo: 'Tom', icone: <Palette className="w-5 h-5" /> },
-        { id: 'perfil', titulo: 'Imobiliária', icone: <Building2 className="w-5 h-5" /> },
         { id: 'termos', titulo: 'Termos', icone: <Shield className="w-5 h-5" /> },
         { id: 'revisar', titulo: 'Revisar', icone: <Eye className="w-5 h-5" /> },
       ];
@@ -180,8 +176,6 @@ export function WizardCriacaoAgente({
         return <EtapaFerramentas dados={dados} setDados={setDados} />;
       case 'personalidade':
         return <EtapaPersonalidade dados={dados} setDados={setDados} />;
-      case 'perfil':
-        return <EtapaPerfilImobiliaria dados={dados} setDados={setDados} />;
       case 'termos':
         return <EtapaTermos dados={dados} setDados={setDados} />;
       case 'revisar':

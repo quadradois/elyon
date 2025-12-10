@@ -16,6 +16,33 @@ import path from 'path';
 const prisma = new PrismaClient() as any;
 const router = Router();
 
+// ============================================
+// HELPER PARA TENANT
+// ============================================
+
+/**
+ * Extrai o tenantId do request
+ */
+const getTenantId = (req: Request): string | null => {
+  if ((req as any).tenantId) return (req as any).tenantId;
+  if (req.headers['x-tenant-id']) return req.headers['x-tenant-id'] as string;
+  if (req.query.tenantId) return req.query.tenantId as string;
+  return null;
+};
+
+/**
+ * Verifica se o agente pertence ao tenant
+ */
+const verificarAgenteTenant = async (agenteId: string, tenantId: string | null): Promise<any | 'forbidden' | null> => {
+  if (!tenantId) return 'forbidden';
+  
+  const agente = await prisma.configuracaoAgente.findUnique({ where: { id: agenteId } });
+  if (!agente) return null;
+  if (agente.tenantId !== tenantId) return 'forbidden';
+  
+  return agente;
+};
+
 // ===== CONFIGURAÇÃO AWS S3 =====
 const s3Client = new S3Client({
   region: process.env.AWS_S3_REGION || 'us-east-2',
@@ -165,6 +192,16 @@ async function extrairTexto(buffer: Buffer, mimeType: string, nomeArquivo: strin
 router.get('/:agenteId', async (req: Request, res: Response) => {
   try {
     const { agenteId } = req.params;
+    const tenantId = getTenantId(req);
+    
+    // ✅ Verificar ownership do agente
+    const agente = await verificarAgenteTenant(agenteId, tenantId);
+    if (agente === null) {
+      return res.status(404).json({ erro: 'Agente não encontrado' });
+    }
+    if (agente === 'forbidden') {
+      return res.status(403).json({ erro: 'Acesso negado' });
+    }
     
     const documentos = await prisma.documentoAgente.findMany({
       where: { agenteId },

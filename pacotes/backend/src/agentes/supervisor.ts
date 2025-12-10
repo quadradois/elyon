@@ -1,4 +1,4 @@
-import { prisma } from '../servidor';
+import { prisma } from '../lib/db';
 import { whatsappService } from '../servicos/whatsapp';
 import { openaiService } from '../servicos/openai';
 
@@ -315,30 +315,16 @@ Enquanto isso, posso ajudar com mais alguma informação?`;
 
   /**
    * Determina qual worker seria ideal para o contexto atual
+   * REGRA: NUNCA mude de worker baseado apenas em palavras-chave da mensagem
+   * A mudança de worker deve ser baseada no ESTÁGIO do lead, não no conteúdo
    */
   private determinarWorkerIdeal(contexto: ContextoSupervisao): 'SDR' | 'DOCUMENTOS' | 'FINANCEIRO' {
-    const mensagemLower = contexto.mensagemUsuario.toLowerCase();
-
-    // Palavras que indicam documentação
-    const palavrasDocumentos = [
-      'documento', 'cpf', 'rg', 'comprovante', 'certidão', 'matrícula',
-      'enviar foto', 'enviar arquivo', 'documentação'
-    ];
-    if (palavrasDocumentos.some(p => mensagemLower.includes(p))) {
-      return 'DOCUMENTOS';
-    }
-
-    // Palavras que indicam questões financeiras
-    const palavrasFinanceiro = [
-      'financiamento', 'parcela', 'entrada', 'prestação', 'crédito',
-      'banco', 'aprovação', 'renda', 'score', 'simulação'
-    ];
-    if (palavrasFinanceiro.some(p => mensagemLower.includes(p))) {
-      return 'FINANCEIRO'; // Futuro worker
-    }
-
-    // Default: SDR para qualificação
-    return 'SDR';
+    // REGRA CRÍTICA: Se veio de prospecção ativa, manter SDR até qualificação
+    // A troca de worker é responsabilidade do ELYON baseado no estágio do lead
+    // O supervisor NÃO deve sugerir mudança baseada em palavras-chave
+    
+    // Manter o worker atual - a decisão de mudar é do orquestrador
+    return contexto.workerOrigem;
   }
 
   /**

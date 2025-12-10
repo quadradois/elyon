@@ -1,4 +1,4 @@
-import { prisma } from '../servidor';
+import { prisma } from '../lib/db';
 import { openaiService } from '../servicos/openai';
 import { whatsappService } from '../servicos/whatsapp';
 

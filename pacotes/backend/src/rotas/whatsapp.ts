@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { whatsappService } from '../servicos/whatsapp';
 import axios from 'axios';
-import { prisma } from '../servidor';
+import { prisma } from '../lib/db';
 
 const router = Router();
 

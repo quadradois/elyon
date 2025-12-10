@@ -2,19 +2,27 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { Login } from "./paginas/Login";
 import { LayoutDashboard } from "./layouts/LayoutDashboard";
-import { DashboardHome } from "./paginas/DashboardHome";
 import { ConfiguracaoAgente } from "./paginas/ConfiguracaoAgente";
 import { DashboardAgentes } from "./paginas/DashboardAgentes";
 import { Leads } from "./paginas/Leads";
+import LeadDetalhes from "./paginas/LeadDetalhes";
+import ConfirmarAgendamento from "./paginas/ConfirmarAgendamento";
 import { Mineracao } from "./paginas/Mineracao";
 import { Captacao } from "./paginas/Captacao";
 import { Campanhas } from "./paginas/Campanhas";
-import { CampanhaDetalhes } from "./paginas/CampanhaDetalhes";
+import { CampanhaDetalhes } from "./paginas/detalhes-campanha";
+import ContatoDetalhes from "./paginas/ContatoDetalhes";
 import Listas from "./paginas/Listas";
 import ListaDetalhes from "./paginas/ListaDetalhes";
 import { Relatorios } from "./paginas/Relatorios";
 import { Configuracao } from "./paginas/Configuracao";
+import { PerfilImobiliaria } from "./paginas/PerfilImobiliaria";
+import DashboardProspeccao from "./paginas/DashboardProspeccao";
+import { Blacklist } from "./paginas/Blacklist";
+import { Creditos } from "./paginas/Creditos";
 import { WhatsAppProvider } from "./contextos/WhatsAppContext";
+import { SessoesWhatsapp } from "./paginas/SessoesWhatsapp";
+import { MeusAgentes } from "./paginas/MeusAgentes";
 
 // Rota Protegida
 function RotaPrivada({ children }: { children: React.ReactNode }) {
@@ -30,32 +38,32 @@ function App() {
   return (
     <BrowserRouter>
       {/* Sistema de Notificações Toast */}
-      <Toaster 
+      <Toaster
         position="top-right"
         richColors
         closeButton
         duration={5000}
         toastOptions={{
           style: {
-            background: 'white',
-            border: '1px solid #e2e8f0',
+            background: "white",
+            border: "1px solid #e2e8f0",
           },
         }}
       />
-      
+
       <Routes>
         <Route path="/login" element={<Login />} />
 
-        {/* Rotas do Dashboard */}
+        {/* Rota Pública - Confirmação de Agendamento */}
+        <Route
+          path="/confirmar/:atividadeId/:token"
+          element={<ConfirmarAgendamento />}
+        />
+
+        {/* Redireciona /dashboard para /dashboard/prospeccao */}
         <Route
           path="/dashboard"
-          element={
-            <RotaPrivada>
-              <LayoutDashboard>
-                <DashboardHome />
-              </LayoutDashboard>
-            </RotaPrivada>
-          }
+          element={<Navigate to="/dashboard/prospeccao" replace />}
         />
 
         <Route
@@ -64,6 +72,39 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <ConfiguracaoAgente />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/agente/:id"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <ConfiguracaoAgente />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/agentes"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <MeusAgentes />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/whatsapp"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <SessoesWhatsapp />
               </LayoutDashboard>
             </RotaPrivada>
           }
@@ -92,6 +133,17 @@ function App() {
         />
 
         <Route
+          path="/dashboard/leads/:id"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <LeadDetalhes />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
           path="/dashboard/campanhas"
           element={
             <RotaPrivada>
@@ -108,6 +160,28 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <CampanhaDetalhes />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/campanhas/:campanhaId/contatos/:contatoId"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <ContatoDetalhes />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/prospeccao"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <DashboardProspeccao />
               </LayoutDashboard>
             </RotaPrivada>
           }
@@ -179,6 +253,39 @@ function App() {
           }
         />
 
+        <Route
+          path="/dashboard/blacklist"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <Blacklist />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/perfil"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <PerfilImobiliaria />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/creditos"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <Creditos />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
         {/* Placeholder para outras rotas */}
         <Route
           path="/dashboard/*"
@@ -193,7 +300,7 @@ function App() {
           }
         />
 
-        <Route path="/" element={<Navigate to="/dashboard" />} />
+        <Route path="/" element={<Navigate to="/dashboard/prospeccao" />} />
       </Routes>
     </BrowserRouter>
   );

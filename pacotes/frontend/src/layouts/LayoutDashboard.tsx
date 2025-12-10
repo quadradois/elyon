@@ -1,5 +1,4 @@
 import {
-  LayoutDashboard as LayoutDashboardIcon,
   Bot,
   Users,
   MessageSquare,
@@ -11,12 +10,18 @@ import {
   Sparkles,
   BarChart3,
   List,
+  Zap,
+  Ban,
+  Store,
+  Coins,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "../componentes/ui/button";
 import { cn } from "../lib/utils";
 import { WhatsAppStatusBadge } from "../componentes/WhatsAppStatusBadge";
+import { NotificacoesDropdown } from "../componentes/NotificacoesDropdown";
+import { CreditosIndicador } from "../componentes/CreditosIndicador";
 
 interface LayoutDashboardProps {
   children: React.ReactNode;
@@ -31,19 +36,93 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
   const tenant = JSON.parse(localStorage.getItem("elyon_tenant") || "{}");
 
   const menuItems = [
-    { icon: LayoutDashboardIcon, label: "Visão Geral", path: "/dashboard" },
-    { icon: Bot, label: "Meu Agente", path: "/dashboard/agente" },
-    { icon: Sparkles, label: "Captação", path: "/dashboard/captacao", destaque: true },
-    { icon: List, label: "Listas", path: "/dashboard/listas" },
-    { icon: Target, label: "Campanhas", path: "/dashboard/campanhas" },
-    { icon: Building2, label: "Mineração", path: "/dashboard/mineracao" },
-    { icon: Users, label: "Leads", path: "/dashboard/leads" },
-    { icon: MessageSquare, label: "Conversas", path: "/dashboard/conversas" },
-    { icon: BarChart3, label: "Relatórios", path: "/dashboard/relatorios" },
+    // === DASHBOARD PRINCIPAL ===
+    {
+      icon: Zap,
+      label: "Dashboard",
+      path: "/dashboard/prospeccao",
+      grupo: "dashboard",
+    },
+
+    // === ATALHO INTELIGENTE ===
+    {
+      icon: Sparkles,
+      label: "Nova Captação",
+      path: "/dashboard/captacao",
+      destaque: true,
+      grupo: "atalho",
+    },
+
+    // === FLUXO DE PROSPECÇÃO (MANUAL) ===
+    {
+      icon: Building2,
+      label: "Mineração",
+      path: "/dashboard/mineracao",
+      grupo: "prospeccao",
+    },
+    {
+      icon: List,
+      label: "Listas",
+      path: "/dashboard/listas",
+      grupo: "prospeccao",
+    },
+    {
+      icon: Target,
+      label: "Campanhas",
+      path: "/dashboard/campanhas",
+      grupo: "prospeccao",
+    },
+
+    // === ATENDIMENTO ===
+    {
+      icon: Users,
+      label: "Leads",
+      path: "/dashboard/leads",
+      grupo: "atendimento",
+    },
+    {
+      icon: MessageSquare,
+      label: "Conversas",
+      path: "/dashboard/conversas",
+      grupo: "atendimento",
+    },
+
+    // === CONFIGURAÇÃO & ANÁLISE ===
+    {
+      icon: Store,
+      label: "Perfil Imobiliária",
+      path: "/dashboard/perfil",
+      grupo: "config",
+    },
+    {
+      icon: Bot,
+      label: "Meus Agentes",
+      path: "/dashboard/agentes",
+      grupo: "config",
+    },
+    {
+      icon: Ban,
+      label: "Blacklist",
+      path: "/dashboard/blacklist",
+      grupo: "config",
+    },
+    {
+      icon: Coins,
+      label: "Créditos",
+      path: "/dashboard/creditos",
+      grupo: "config",
+    },
+    {
+      icon: BarChart3,
+      label: "Relatórios",
+      path: "/dashboard/relatorios",
+      grupo: "config",
+    },
     {
       icon: Settings,
       label: "Configurações",
       path: "/dashboard/configuracoes",
+      grupo: "config",
     },
   ];
 
@@ -76,48 +155,196 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
         </div>
 
         {/* Menu */}
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {menuItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            const Icon = item.icon;
-            const isDestaque = 'destaque' in item && item.destaque;
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {/* Dashboard Principal */}
+          {menuItems
+            .filter((i) => i.grupo === "dashboard")
+            .map((item) => {
+              const isActive = location.pathname === item.path;
+              const Icon = item.icon;
 
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium",
-                  isActive
-                    ? isDestaque 
-                      ? "bg-yellow-100 text-yellow-800" 
-                      : "bg-blue-50 text-blue-700"
-                    : isDestaque
-                      ? "text-yellow-700 hover:bg-yellow-50 hover:text-yellow-800"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                )}
-              >
-                <Icon
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
                   className={cn(
-                    "w-5 h-5",
-                    isActive 
-                      ? isDestaque ? "text-yellow-600" : "text-blue-600" 
-                      : isDestaque ? "text-yellow-500" : "text-slate-400"
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium",
+                    isActive
+                      ? "bg-blue-600 text-white"
+                      : "bg-blue-50 text-blue-700 hover:bg-blue-100"
                   )}
-                />
-                {sidebarOpen && (
-                  <span className="flex items-center gap-1">
-                    {item.label}
-                    {isDestaque && !isActive && (
-                      <span className="text-[10px] bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded font-semibold">
-                        NOVO
-                      </span>
+                >
+                  <Icon
+                    className={cn(
+                      "w-5 h-5",
+                      isActive ? "text-white" : "text-blue-600"
                     )}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+                  />
+                  {sidebarOpen && item.label}
+                </Link>
+              );
+            })}
+
+          {/* Atalho: Nova Captação (Wizard) */}
+          {menuItems
+            .filter((i) => i.grupo === "atalho")
+            .map((item) => {
+              const isActive = location.pathname === item.path;
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-semibold mt-2",
+                    isActive
+                      ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-md"
+                      : "bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 hover:from-yellow-200 hover:to-orange-200 border border-orange-200"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "w-5 h-5",
+                      isActive ? "text-white" : "text-orange-500"
+                    )}
+                  />
+                  {sidebarOpen && (
+                    <span className="flex items-center gap-2">
+                      {item.label}
+                      <span className="text-[9px] bg-white/30 px-1.5 py-0.5 rounded font-bold">
+                        WIZARD
+                      </span>
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+
+          {/* Grupo: Prospecção Ativa */}
+          {sidebarOpen && (
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 pt-4 pb-1">
+              Prospecção Manual
+            </p>
+          )}
+          {!sidebarOpen && <div className="border-t border-slate-200 my-2" />}
+          {menuItems
+            .filter((i) => i.grupo === "prospeccao")
+            .map((item) => {
+              const isActive = location.pathname === item.path;
+              const Icon = item.icon;
+              const isDestaque = "destaque" in item && item.destaque;
+
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium",
+                    isActive
+                      ? isDestaque
+                        ? "bg-yellow-100 text-yellow-800"
+                        : "bg-blue-50 text-blue-700"
+                      : isDestaque
+                        ? "text-yellow-700 hover:bg-yellow-50 hover:text-yellow-800"
+                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "w-5 h-5",
+                      isActive
+                        ? isDestaque
+                          ? "text-yellow-600"
+                          : "text-blue-600"
+                        : isDestaque
+                          ? "text-yellow-500"
+                          : "text-slate-400"
+                    )}
+                  />
+                  {sidebarOpen && (
+                    <span className="flex items-center gap-1">
+                      {item.label}
+                      {isDestaque && !isActive && (
+                        <span className="text-[10px] bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded font-semibold">
+                          IA
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+
+          {/* Grupo: Atendimento */}
+          {sidebarOpen && (
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 pt-4 pb-1">
+              Atendimento
+            </p>
+          )}
+          {!sidebarOpen && <div className="border-t border-slate-200 my-2" />}
+          {menuItems
+            .filter((i) => i.grupo === "atendimento")
+            .map((item) => {
+              const isActive = location.pathname === item.path;
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium",
+                    isActive
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "w-5 h-5",
+                      isActive ? "text-blue-600" : "text-slate-400"
+                    )}
+                  />
+                  {sidebarOpen && item.label}
+                </Link>
+              );
+            })}
+
+          {/* Grupo: Configuração */}
+          {sidebarOpen && (
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 pt-4 pb-1">
+              Sistema
+            </p>
+          )}
+          {!sidebarOpen && <div className="border-t border-slate-200 my-2" />}
+          {menuItems
+            .filter((i) => i.grupo === "config")
+            .map((item) => {
+              const isActive = location.pathname === item.path;
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium",
+                    isActive
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "w-5 h-5",
+                      isActive ? "text-blue-600" : "text-slate-400"
+                    )}
+                  />
+                  {sidebarOpen && item.label}
+                </Link>
+              );
+            })}
         </nav>
 
         {/* WhatsApp Status */}
@@ -192,7 +419,11 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           </Button>
 
           <div className="flex items-center gap-4">
-            {/* Breadcrumbs ou Ações aqui */}
+            {/* Indicador de Créditos */}
+            <CreditosIndicador />
+
+            {/* Notificações em tempo real */}
+            <NotificacoesDropdown />
           </div>
         </header>
 

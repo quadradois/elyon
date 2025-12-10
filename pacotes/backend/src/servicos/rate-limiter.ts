@@ -11,7 +11,7 @@
  * - Proteção contra spam e bots
  */
 
-import { prisma } from '../servidor';
+import { prisma } from '../lib/db';
 
 // ============================================
 // TIPOS E INTERFACES

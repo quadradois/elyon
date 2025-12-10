@@ -13,12 +13,12 @@
 
 ## 🎯 Visão do Produto
 
-Sistema multi-tenant que permite cada imobiliária ter seu próprio agente de IA personalizado para captação e qualificação de leads imobiliários via WhatsApp.
+Sistema multi-tenant que permite cada imobiliária ter seu próprio agente de IA personalizado para captação de imóveis!
 
 ### Diferencial Competitivo
 
 - 🤖 **ELYON**: Orquestrador mestre que coordena agentes
-- 🎭 **Agentes Personalizados**: Cada imobiliária nomeia, treina e customiza seu agente
+- 🎭 **Agentes Personalizados**: Cada imobiliária pode nomear, treinar e customizar seu agente, ou usar um padrão definido pela Quadra Dois
 - 💰 **Cache Compartilhado**: Economia de 25% → 85% margem em consultas CPF
 - 🇧🇷 **100% Brasileiro**: Todo sistema em pt-BR
 

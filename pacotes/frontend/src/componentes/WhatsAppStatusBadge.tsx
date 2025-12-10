@@ -8,7 +8,7 @@ export function WhatsAppStatusBadge() {
 
   return (
     <Link
-      to="/dashboard/configuracoes"
+      to="/dashboard/whatsapp"
       className={cn(
         "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors border",
         status === "CONECTADO" &&

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { prisma } from '../servidor';
+import { prisma } from '../lib/db';
 
 const MAPA_API_URL = 'https://portalmapa.goiania.go.gov.br/servicogyn/rest/services/MapaServer/Feature_BaseTeste/FeatureServer/3/query';
 
