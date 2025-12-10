@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin | Quadra Dois - Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --background: #0f0f1a;
+      --surface: #1a1a2e;
+      --surface-hover: #252540;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --border: #2d2d4a;
+      --success: #10b981;
+      --error: #ef4444;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--background);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+    }
+    
+    .login-container {
+      width: 100%;
+      max-width: 400px;
+      padding: 2rem;
+    }
+    
+    .logo {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    
+    .logo h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .logo p {
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+    }
+    
+    .login-card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 2rem;
+      border: 1px solid var(--border);
+    }
+    
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 1rem;
+      transition: all 0.2s;
+    }
+    
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+    
+    .btn-login {
+      width: 100%;
+      padding: 1rem;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+    }
+    
+    .btn-login:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .error-message {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--error);
+      color: var(--error);
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      display: none;
+    }
+    
+    .footer-text {
+      text-align: center;
+      margin-top: 2rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="logo">
+      <h1>🛡️ Admin</h1>
+      <p>Painel de Gestão - Quadra Dois</p>
+    </div>
+    
+    <div class="login-card">
+      <div id="errorMessage" class="error-message"></div>
+      
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="email">E-mail</label>
+          <input type="email" id="email" placeholder="seu@email.com" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="senha">Senha</label>
+          <input type="password" id="senha" placeholder="••••••••" required>
+        </div>
+        
+        <button type="submit" class="btn-login" id="btnLogin">
+          Entrar
+        </button>
+      </form>
+    </div>
+    
+    <p class="footer-text">
+      © 2025 Quadra Dois. Acesso restrito.
+    </p>
+  </div>
+
+  <script>
+    // Configuração da API
+    const API_URL = 'http://localhost:3000/api';
+    
+    // Verificar se já está logado
+    const token = localStorage.getItem('admin_token');
+    if (token) {
+      window.location.href = 'dashboard.html';
+    }
+    
+    // Form de login
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const email = document.getElementById('email').value;
+      const senha = document.getElementById('senha').value;
+      const btnLogin = document.getElementById('btnLogin');
+      const errorMessage = document.getElementById('errorMessage');
+      
+      btnLogin.disabled = true;
+      btnLogin.textContent = 'Entrando...';
+      errorMessage.style.display = 'none';
+      
+      try {
+        const response = await fetch(`${API_URL}/auth/admin-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, senha })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.erro || 'Credenciais inválidas');
+        }
+        
+        // Verificar se é SUPER_ADMIN
+        if (data.usuario.papel !== 'SUPER_ADMIN') {
+          throw new Error('Acesso restrito a administradores do sistema');
+        }
+        
+        // Salvar token e dados
+        localStorage.setItem('admin_token', data.token);
+        localStorage.setItem('admin_user', JSON.stringify(data.usuario));
+        
+        // Redirecionar
+        window.location.href = 'dashboard.html';
+        
+      } catch (error) {
+        errorMessage.textContent = error.message;
+        errorMessage.style.display = 'block';
+      } finally {
+        btnLogin.disabled = false;
+        btnLogin.textContent = 'Entrar';
+      }
+    });
+  </script>
+</body>
+</html>
