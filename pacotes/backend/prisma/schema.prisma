@@ -2,7 +2,8 @@
 // Reconstruído com suporte a RAG - 28/11/2025
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -788,7 +789,11 @@ model Imovel {
   bairro            String
   quadra            String?
   lote              String?
-  codigoEdificio    String?
+  
+  // Novos campos para base local
+  codigoEdificio    Int?      // cdedificio da API
+  codigoBairro      Int?      // cdbairro da API
+  
   nomeEdificio      String?
   apartamento       String?   // Número do apartamento (ex: 806)
   bloco             String?   // Bloco (ex: B)
@@ -805,14 +810,57 @@ model Imovel {
   lead              Lead?     @relation(fields: [leadId], references: [id])
   statusCaptacao    String    @default("IDENTIFICADO")
   interesse         String?
+  
+  // Relacionamentos Base Local
+  dadosEdificio     Edificio? @relation(fields: [codigoEdificio], references: [codigo])
+  dadosBairro       Bairro?   @relation(fields: [codigoBairro], references: [codigo])
+  
   criadoEm          DateTime  @default(now())
   atualizadoEm      DateTime  @updatedAt
 
   @@index([inscricaoIptu])
   @@index([bairro])
   @@index([codigoEdificio])
+  @@index([codigoBairro])
   @@index([leadId])
   @@map("imoveis")
+}
+
+model Bairro {
+  id              String      @id @default(uuid())
+  codigo          Int         @unique // cdbairro
+  nome            String
+  ehCondominio    Boolean     @default(false)
+  
+  edificios       Edificio[]
+  imoveis         Imovel[]
+  
+  criadoEm        DateTime    @default(now())
+  atualizadoEm    DateTime    @updatedAt
+  
+  @@index([nome])
+  @@map("bairros_geo")
+}
+
+model Edificio {
+  id              String      @id @default(uuid())
+  codigo          Int         @unique // cdedificio
+  nome            String
+  logradouro      String?
+  
+  codigoBairro    Int?
+  bairro          Bairro?     @relation(fields: [codigoBairro], references: [codigo])
+  
+  imoveis         Imovel[]
+  
+  totalUnidades   Int         @default(0)
+  
+  criadoEm        DateTime    @default(now())
+  atualizadoEm    DateTime    @updatedAt
+  
+  @@index([nome])
+  @@index([codigoBairro])
+  @@map("edificios_geo")
 }
 
 // ====================================
@@ -1185,6 +1233,7 @@ model AlertaCorretor {
   titulo          String
   descricao       String   @db.Text
   contexto        Json?    // Dados adicionais (última mensagem, métricas, etc)
+  riscoEscalacao  Int      @default(0) // 0-100
   
   // Status
   status          String   @default("PENDENTE") // PENDENTE, VISUALIZADO, ATENDIDO, IGNORADO

@@ -180,7 +180,7 @@ const CriarAgenteAvancadoSchema = CriarAgenteSchema.extend({
   objetivo: z.string().min(10, 'Descreva o objetivo do agente'),
   contexto: z.string().optional(),
   restricoes: z.array(z.string()).optional(),
-  termosAceitos: z.literal(true, { 
+  termosAceitos: z.literal(true, {
     errorMap: () => ({ message: 'Você deve aceitar os termos para usar o Modo Avançado' })
   }),
 });
@@ -210,29 +210,7 @@ const extrairTenantId = (req: Request): string | null => {
 // HELPERS
 // ============================================
 
-const sintetizarPerfilRAG = (perfil: z.infer<typeof PerfilImobiliariaSchema>): string => {
-  if (!perfil) return '';
-  
-  const partes = [];
-  
-  if (perfil.dadosGerais?.nomeImobiliaria) {
-    partes.push(`IMOBILIÁRIA: ${perfil.dadosGerais.nomeImobiliaria}`);
-  }
-  
-  if (perfil.dadosGerais?.diferenciais?.length) {
-    partes.push(`DIFERENCIAIS: ${perfil.dadosGerais.diferenciais.join(', ')}`);
-  }
-  
-  if (perfil.locacao) {
-    partes.push(`LOCAÇÃO: Prazo ${perfil.locacao.prazoMinimoContrato} meses, Aceita Pet: ${perfil.locacao.aceitaPet ? 'Sim' : 'Não'}`);
-  }
-  
-  if (perfil.venda) {
-    partes.push(`VENDA: Comissão ${perfil.venda.comissaoPadrao}%, Exclusividade: ${perfil.venda.aceitaExclusividade ? 'Sim' : 'Não'}`);
-  }
-  
-  return partes.join('\n');
-};
+
 
 // ============================================
 // ROTAS
@@ -245,17 +223,17 @@ const sintetizarPerfilRAG = (perfil: z.infer<typeof PerfilImobiliariaSchema>): s
 router.post('/configurar-rapido', async (req: Request, res: Response) => {
   try {
     const tenantId = extrairTenantId(req);
-    
+
     if (!tenantId) {
       return res.status(400).json({ erro: 'Tenant não identificado' });
     }
 
     // Validar dados parciais (o wizard envia passo a passo, mas aqui assumimos o final)
     // Na prática, o frontend envia tudo no final.
-    const { 
-      nome, 
-      perfilImobiliaria, 
-      ragPerfilTexto 
+    const {
+      nome,
+      perfilImobiliaria,
+      ragPerfilTexto
     } = req.body;
 
     // Verificar se já existe agente
@@ -326,11 +304,11 @@ router.post('/configurar-rapido', async (req: Request, res: Response) => {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const tenantId = extrairTenantId(req);
-    
+
     if (!tenantId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Tenant não identificado',
-        mensagem: 'Envie o header X-Tenant-Id ou faça login' 
+        mensagem: 'Envie o header X-Tenant-Id ou faça login'
       });
     }
 
@@ -347,7 +325,7 @@ router.get('/', async (req: Request, res: Response) => {
     });
 
     if (!agente) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         erro: 'Agente não encontrado',
         mensagem: 'Configure seu agente para começar',
         sugestao: 'POST /api/agentes para criar'
@@ -405,11 +383,11 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const tenantId = extrairTenantId(req);
-    
+
     if (!tenantId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Tenant não identificado',
-        mensagem: 'Envie o header X-Tenant-Id ou faça login' 
+        mensagem: 'Envie o header X-Tenant-Id ou faça login'
       });
     }
 
@@ -427,7 +405,7 @@ router.post('/', async (req: Request, res: Response) => {
     const limiteAgentes = 1 + (tenant.agentesExtras || 0);
 
     if (totalAgentes >= limiteAgentes) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         erro: 'Limite de agentes atingido',
         codigo: 'LIMITE_ATINGIDO',
         mensagem: `Seu plano permite ${limiteAgentes} agente(s). Contrate um agente extra para continuar.`,
@@ -438,13 +416,13 @@ router.post('/', async (req: Request, res: Response) => {
 
     // Validar dados de entrada
     console.log('[Agentes] Dados recebidos:', JSON.stringify(req.body, null, 2));
-    
+
     const validacao = CriarAgenteSchema.safeParse(req.body);
     if (!validacao.success) {
       console.log('[Agentes] Erro de validação:', validacao.error.flatten());
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Dados inválidos',
-        detalhes: validacao.error.flatten() 
+        detalhes: validacao.error.flatten()
       });
     }
 
@@ -493,9 +471,9 @@ router.post('/', async (req: Request, res: Response) => {
 
     console.log(`[Agentes] ✅ Agente "${novoAgente.nome}" criado para tenant ${tenant.nome} (termosAceitos: ${novoAgente.termosAceitos})`);
 
-    res.status(201).json({ 
+    res.status(201).json({
       mensagem: 'Agente criado com sucesso!',
-      agente: novoAgente 
+      agente: novoAgente
     });
   } catch (error) {
     console.error('[Agentes] Erro ao criar:', error);
@@ -529,9 +507,9 @@ router.put('/:id', async (req: Request, res: Response) => {
     // Validar dados de entrada
     const validacao = AtualizarAgenteSchema.safeParse(req.body);
     if (!validacao.success) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Dados inválidos',
-        detalhes: validacao.error.flatten() 
+        detalhes: validacao.error.flatten()
       });
     }
 
@@ -539,12 +517,12 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     // Preparar dados para atualização (merge com existente para campos JSON)
     const dadosAtualizacao: any = {};
-    
+
     if (dados.nome !== undefined) dadosAtualizacao.nome = dados.nome;
     if (dados.avatar !== undefined) dadosAtualizacao.avatar = dados.avatar;
     if (dados.estaAtivo !== undefined) dadosAtualizacao.estaAtivo = dados.estaAtivo;
     if (dados.sessaoWhatsappId !== undefined) dadosAtualizacao.sessaoWhatsappId = dados.sessaoWhatsappId;
-    
+
     // Para campos JSON, fazer merge com valores existentes
     if (dados.personalidade !== undefined) {
       dadosAtualizacao.personalidade = {
@@ -552,21 +530,21 @@ router.put('/:id', async (req: Request, res: Response) => {
         ...dados.personalidade
       };
     }
-    
+
     if (dados.expertise !== undefined) {
       dadosAtualizacao.expertise = {
         ...(agenteExistente.expertise as object || {}),
         ...dados.expertise
       };
     }
-    
+
     if (dados.scripts !== undefined) {
       dadosAtualizacao.scripts = {
         ...(agenteExistente.scripts as object || {}),
         ...dados.scripts
       };
     }
-    
+
     if (dados.regrasNegocio !== undefined) {
       dadosAtualizacao.regrasNegocio = {
         ...(agenteExistente.regrasNegocio as object || {}),
@@ -587,9 +565,9 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     console.log(`[Agentes] ✅ Agente "${agenteAtualizado.nome}" atualizado`);
 
-    res.json({ 
+    res.json({
       mensagem: 'Agente atualizado com sucesso!',
-      agente: agenteAtualizado 
+      agente: agenteAtualizado
     });
   } catch (error) {
     console.error('[Agentes] Erro ao atualizar:', error);
@@ -604,7 +582,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.patch('/:id/ativar', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
+
     const agenteExistente = await prisma.configuracaoAgente.findUnique({
       where: { id }
     }) as ConfiguracaoAgenteCompleto | null;
@@ -615,11 +593,11 @@ router.patch('/:id/ativar', async (req: Request, res: Response) => {
 
     // Validações antes de ativar
     const errosValidacao: string[] = [];
-    
+
     if (!agenteExistente.nome || agenteExistente.nome.length < 2) {
       errosValidacao.push('Nome do agente é obrigatório');
     }
-    
+
     if (!agenteExistente.termosAceitos) {
       errosValidacao.push('Termos de uso devem ser aceitos para ativar o agente');
     }
@@ -635,18 +613,18 @@ router.patch('/:id/ativar', async (req: Request, res: Response) => {
         validacoes: errosValidacao
       });
     }
-    
+
     const agente = await prisma.configuracaoAgente.update({
       where: { id },
-      data: { 
+      data: {
         estaAtivo: true,
         status: 'ATIVO'
       } as any
     });
 
     console.log(`[Agentes] ✅ Agente "${agente.nome}" ativado (status: ATIVO)`);
-    res.json({ 
-      mensagem: 'Agente ativado!', 
+    res.json({
+      mensagem: 'Agente ativado!',
       estaAtivo: true,
       status: 'ATIVO'
     });
@@ -664,7 +642,7 @@ router.patch('/:id/pausar', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { motivo } = req.body;
-    
+
     const agenteExistente = await prisma.configuracaoAgente.findUnique({
       where: { id }
     }) as ConfiguracaoAgenteCompleto | null;
@@ -680,18 +658,18 @@ router.patch('/:id/pausar', async (req: Request, res: Response) => {
         statusAtual: agenteExistente.status
       });
     }
-    
+
     const agente = await prisma.configuracaoAgente.update({
       where: { id },
-      data: { 
+      data: {
         estaAtivo: false,
         status: 'PAUSADO'
       } as any
     });
 
     console.log(`[Agentes] ⏸️ Agente "${agente.nome}" pausado. Motivo: ${motivo || 'Não informado'}`);
-    res.json({ 
-      mensagem: 'Agente pausado. Novas conversas irão para fila humana.', 
+    res.json({
+      mensagem: 'Agente pausado. Novas conversas irão para fila humana.',
       estaAtivo: false,
       status: 'PAUSADO'
     });
@@ -708,18 +686,18 @@ router.patch('/:id/pausar', async (req: Request, res: Response) => {
 router.patch('/:id/desativar', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
+
     const agente = await prisma.configuracaoAgente.update({
       where: { id },
-      data: { 
+      data: {
         estaAtivo: false,
         status: 'RASCUNHO'
       } as any
     });
 
     console.log(`[Agentes] 🔄 Agente "${agente.nome}" voltou para rascunho`);
-    res.json({ 
-      mensagem: 'Agente desativado e voltou para rascunho.', 
+    res.json({
+      mensagem: 'Agente desativado e voltou para rascunho.',
       estaAtivo: false,
       status: 'RASCUNHO'
     });
@@ -737,10 +715,10 @@ router.patch('/:id/aceitar-termos', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { versao } = req.body;
-    
+
     const agente = await prisma.configuracaoAgente.update({
       where: { id },
-      data: { 
+      data: {
         termosAceitos: true,
         termosAceitosEm: new Date(),
         termosVersao: versao || '1.0'
@@ -748,8 +726,8 @@ router.patch('/:id/aceitar-termos', async (req: Request, res: Response) => {
     });
 
     console.log(`[Agentes] ✅ Termos aceitos para agente "${agente.nome}"`);
-    res.json({ 
-      mensagem: 'Termos de uso aceitos com sucesso!', 
+    res.json({
+      mensagem: 'Termos de uso aceitos com sucesso!',
       termosAceitos: true,
       termosAceitosEm: new Date()
     });
@@ -785,9 +763,9 @@ router.patch('/:id/perfil-imobiliaria', async (req: Request, res: Response) => {
     // Validar perfil
     const validacao = PerfilImobiliariaSchema.safeParse(req.body);
     if (!validacao.success) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Dados do perfil inválidos',
-        detalhes: validacao.error.flatten() 
+        detalhes: validacao.error.flatten()
       });
     }
 
@@ -807,7 +785,7 @@ router.patch('/:id/perfil-imobiliaria', async (req: Request, res: Response) => {
     // Atualizar agente
     const agenteAtualizado = await prisma.configuracaoAgente.update({
       where: { id },
-      data: { 
+      data: {
         perfilImobiliaria: perfilImobiliaria as any,
         ragPerfilTexto
       } as any
@@ -815,7 +793,7 @@ router.patch('/:id/perfil-imobiliaria', async (req: Request, res: Response) => {
 
     console.log(`[Agentes] ✅ Perfil da imobiliária atualizado para "${agenteAtualizado.nome}"`);
 
-    res.json({ 
+    res.json({
       mensagem: 'Perfil da imobiliária atualizado!',
       perfilImobiliaria,
       ragGerado: !!ragPerfilTexto,
@@ -851,7 +829,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     // Não permitir excluir agente ativo
     if (agenteExistente.estaAtivo) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Não é possível excluir um agente ativo',
         mensagem: 'Pause ou desative o agente antes de excluir'
       });
@@ -862,7 +840,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     });
 
     console.log(`[Agentes] 🗑️ Agente "${agenteExistente.nome}" excluído permanentemente`);
-    res.json({ 
+    res.json({
       mensagem: 'Agente excluído com sucesso',
       id: agenteExistente.id,
       nome: agenteExistente.nome
@@ -880,13 +858,13 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.patch('/:id/status', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
+
     // Validar entrada
     const validacao = MudarStatusSchema.safeParse(req.body);
     if (!validacao.success) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Dados inválidos',
-        detalhes: validacao.error.flatten() 
+        detalhes: validacao.error.flatten()
       });
     }
 
@@ -919,11 +897,11 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
     // Validações específicas para ativar
     if (novoStatus === 'ATIVO') {
       const errosValidacao: string[] = [];
-      
+
       if (!agenteExistente.termosAceitos) {
         errosValidacao.push('Termos de uso devem ser aceitos');
       }
-      
+
       if (agenteExistente.modoCreacao === 'PERSONALIZADO' && !agenteExistente.promptCustomizado) {
         errosValidacao.push('Prompt customizado é obrigatório para modo avançado');
       }
@@ -939,7 +917,7 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
     // Atualizar status
     const agente = await prisma.configuracaoAgente.update({
       where: { id },
-      data: { 
+      data: {
         status: novoStatus,
         estaAtivo: novoStatus === 'ATIVO'
       } as any
@@ -952,8 +930,8 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
     };
 
     console.log(`[Agentes] ${emojis[novoStatus]} Agente "${agente.nome}" status: ${statusAtual} → ${novoStatus}${motivo ? ` (${motivo})` : ''}`);
-    
-    res.json({ 
+
+    res.json({
       mensagem: `Status alterado para ${novoStatus}`,
       statusAnterior: statusAtual,
       statusAtual: novoStatus,
@@ -972,11 +950,11 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
 router.post('/modo-avancado', async (req: Request, res: Response) => {
   try {
     const tenantId = extrairTenantId(req);
-    
+
     if (!tenantId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Tenant não identificado',
-        mensagem: 'Envie o header X-Tenant-Id ou faça login' 
+        mensagem: 'Envie o header X-Tenant-Id ou faça login'
       });
     }
 
@@ -992,7 +970,7 @@ router.post('/modo-avancado', async (req: Request, res: Response) => {
     });
 
     if (agenteExistente) {
-      return res.status(409).json({ 
+      return res.status(409).json({
         erro: 'Agente já existe',
         mensagem: 'Este tenant já possui um agente configurado. Use PUT para atualizar.',
         agenteId: agenteExistente.id
@@ -1002,9 +980,9 @@ router.post('/modo-avancado', async (req: Request, res: Response) => {
     // Validar dados de entrada (schema mais rigoroso)
     const validacao = CriarAgenteAvancadoSchema.safeParse(req.body);
     if (!validacao.success) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Dados inválidos para modo avançado',
-        detalhes: validacao.error.flatten() 
+        detalhes: validacao.error.flatten()
       });
     }
 
@@ -1046,10 +1024,10 @@ router.post('/modo-avancado', async (req: Request, res: Response) => {
     console.log(`[Agentes] ✅ Agente AVANÇADO "${novoAgente.nome}" criado para tenant ${tenant.nome}`);
     console.log(`[Agentes] ⚠️ Modo avançado - responsabilidade do cliente`);
 
-    res.status(201).json({ 
+    res.status(201).json({
       mensagem: 'Agente avançado criado com sucesso!',
       aviso: 'Por ser um agente personalizado, você tem total responsabilidade sobre seu comportamento.',
-      agente: novoAgente 
+      agente: novoAgente
     });
   } catch (error) {
     console.error('[Agentes] Erro ao criar agente avançado:', error);

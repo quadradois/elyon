@@ -8,6 +8,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rotaAutenticacao from './rotas/autenticacao';
 import rotaMineracao from './rotas/mineracao';
+import rotaSincronizacao from './rotas/sincronizacao';
 import rotaLeads from './rotas/leads';
 import rotaWebhook from './rotas/webhook';
 import rotaWebhookManus from './rotas/webhook-manus';
@@ -27,6 +28,8 @@ import rotaTenant from './rotas/tenant';
 import rotaJobs from './rotas/jobs';
 import rotasBilling from './rotas/rotas-billing';
 import rotaLeadsVip from './rotas/rotas-leads-vip';
+import rotaJobsMineracao from './rotas/mineracao/jobs.rotas';
+import rotaJobsUnidades from './rotas/mineracao/unidades-jobs.rotas';
 
 // Importar Prisma do módulo central (evita dependência circular)
 import { prisma } from './lib/db';
@@ -47,18 +50,22 @@ const allowedOrigins = [
   'http://localhost:5173',  // Frontend Elyon (Vite)
   'http://localhost:3001',  // Admin Dashboard (serve)
   'http://127.0.0.1:3001',  // Admin alternativo
+  'http://elyon.quadradois.com.br',     // Produção Elyon
+  'https://elyon.quadradois.com.br',    // Produção Elyon HTTPS
+  'http://admin.quadradois.com.br',     // Produção Admin
+  'https://admin.quadradois.com.br',    // Produção Admin HTTPS
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
     // Permitir requests sem origin (ex: Postman, curl)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log(`[CORS] Bloqueado: ${origin}`);
-      callback(null, true); // Temporariamente liberar para debug
+      console.warn(`[CORS] Origem bloqueada: ${origin}`);
+      callback(new Error('Origem não permitida pelo CORS'));
     }
   },
   credentials: true
@@ -71,9 +78,9 @@ app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // Rota de Health Check
 app.get('/api/saude', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString() 
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -86,6 +93,9 @@ app.get('/health', (req, res) => {
 // Registrar Rotas
 app.use('/api/auth', rotaAutenticacao);
 app.use('/api/mineracao', rotaMineracao);
+app.use('/api/mineracao/jobs', rotaJobsMineracao);  // Jobs assíncronos de mineração
+app.use('/api/mineracao/unidades/jobs', rotaJobsUnidades); // Jobs de busca de unidades
+app.use('/api/sincronizacao', rotaSincronizacao); // Sincronização Base Local
 app.use('/api/leads', rotaLeads);
 app.use('/api/leads', rotaChat); // Monta rota de chat também em /api/leads
 app.use('/api/whatsapp', rotaWhatsapp);
@@ -110,7 +120,7 @@ app.use('/webhooks', rotaWebhookManus);     // Webhooks do Manus (pesquisa IA)
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (err.type === 'entity.too.large') {
     console.warn(`[WARN] PayloadTooLargeError em ${req.path} - Tamanho: ${req.headers['content-length']} bytes`);
-    return res.status(413).json({ 
+    return res.status(413).json({
       error: 'Payload muito grande',
       maxSize: '100mb',
       received: req.headers['content-length']
@@ -123,7 +133,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 if (require.main === module) {
   // Inicializar WebSocket no servidor HTTP
   websocketService.inicializar(server);
-  
+
   server.listen(PORT, async () => {
     console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
     console.log(`🔌 WebSocket ativo para alertas em tempo real`);

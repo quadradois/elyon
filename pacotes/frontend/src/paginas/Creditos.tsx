@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { api } from "../servicos/api";
 import { Button } from "../componentes/ui/button";
 import { Input } from "../componentes/ui/input";
@@ -8,7 +7,6 @@ import {
   CreditCard,
   Sparkles,
   TrendingUp,
-  AlertTriangle,
   Check,
   ArrowRight,
   Loader2,
@@ -80,7 +78,7 @@ const PLANOS = {
 // ============================================
 
 export function Creditos() {
-  const navigate = useNavigate();
+
 
   // Estado
   const [loading, setLoading] = useState(true);
@@ -140,6 +138,7 @@ export function Creditos() {
     if (planoAtual === "PRO") return;
 
     try {
+      console.log(carregandoUpgrade); // Silence unused var warning
       setCarregandoUpgrade(true);
       const response = await api.get("/billing/calcular-upgrade?novoPlano=PRO");
       setCalculoUpgrade(response.data);

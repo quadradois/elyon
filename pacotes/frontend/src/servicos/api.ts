@@ -1,7 +1,11 @@
 import axios from 'axios';
 
+// Use environment variable or fallback to relative path for production
+// Force relative path to use Nginx proxy
+const API_BASE_URL = '/api';
+
 export const api = axios.create({
-  baseURL: 'http://localhost:3000/api',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -13,7 +17,7 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  
+
   // Adicionar tenant ID do objeto salvo no login
   const tenantData = localStorage.getItem('elyon_tenant');
   if (tenantData) {
@@ -26,6 +30,6 @@ api.interceptors.request.use((config) => {
       console.error('[API] Erro ao parsear tenant:', e);
     }
   }
-  
+
   return config;
 });

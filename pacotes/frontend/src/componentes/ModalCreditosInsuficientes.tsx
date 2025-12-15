@@ -66,6 +66,7 @@ export function ModalCreditosInsuficientes({
   // Carregar dados do usuário
   useEffect(() => {
     if (isOpen) {
+      console.log('[DEBUG] ModalCreditosInsuficientes ABERTO. Necessários:', creditosNecessarios);
       carregarDados();
       // Mínimo de 10 créditos (exigência da API)
       setQuantidade(Math.max(10, creditosNecessarios));

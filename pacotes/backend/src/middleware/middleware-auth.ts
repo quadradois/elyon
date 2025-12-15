@@ -32,8 +32,10 @@ export const verificarSuperAdmin = async (
   try {
     // Verificar token
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.warn('[Auth] Token não fornecido no header Authorization');
+      // console.log('Headers recebidos:', req.headers); // Debug
       res.status(401).json({
         erro: 'Não autorizado',
         mensagem: 'Token não fornecido'
@@ -45,6 +47,7 @@ export const verificarSuperAdmin = async (
     const payload = verificarToken(token);
 
     if (!payload) {
+      console.warn('[Auth] Token inválido ou expirado');
       res.status(401).json({
         erro: 'Token inválido',
         mensagem: 'Faça login novamente'
@@ -58,6 +61,7 @@ export const verificarSuperAdmin = async (
     });
 
     if (!usuario) {
+      console.warn(`[Auth] Usuário não encontrado para ID: ${payload.id || payload.usuarioId}`);
       res.status(401).json({
         erro: 'Usuário não encontrado',
         mensagem: 'Usuário foi removido ou não existe'
@@ -86,7 +90,7 @@ export const verificarSuperAdmin = async (
 
     // Para rotas de SUPER_ADMIN, não precisa de tenantId específico
     // pois ele pode ver todos os tenants
-    
+
     next();
   } catch (erro) {
     console.error('Erro ao verificar SUPER_ADMIN:', erro);
@@ -108,7 +112,7 @@ export const verificarAdmin = async (
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json({ erro: 'Token não fornecido' });
       return;
@@ -147,7 +151,7 @@ export const verificarAdmin = async (
       tenantId: usuario.tenantId
     };
     req.tenantId = usuario.tenantId;
-    
+
     next();
   } catch (erro) {
     console.error('Erro ao verificar admin:', erro);
@@ -166,8 +170,9 @@ export const verificarAutenticacao = async (
 ): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.warn('[Auth] Token não fornecido (verificarAutenticacao). Headers:', req.headers);
       res.status(401).json({ erro: 'Token não fornecido' });
       return;
     }
@@ -176,6 +181,7 @@ export const verificarAutenticacao = async (
     const payload = verificarToken(token);
 
     if (!payload) {
+      console.warn('[Auth] Token inválido ou expirado (verificarAutenticacao)');
       res.status(401).json({ erro: 'Token inválido' });
       return;
     }
@@ -185,6 +191,7 @@ export const verificarAutenticacao = async (
     });
 
     if (!usuario) {
+      console.warn(`[Auth] Usuário não encontrado (verificarAutenticacao) para ID: ${payload.id || payload.usuarioId}`);
       res.status(401).json({ erro: 'Usuário não encontrado' });
       return;
     }
@@ -196,7 +203,19 @@ export const verificarAutenticacao = async (
       tenantId: usuario.tenantId
     };
     req.tenantId = usuario.tenantId;
-    
+
+    // Se usuário não tem tenantId (ex: admin da plataforma) mas enviou header X-Tenant-Id
+    // permitimos usar o contexto desse tenant se for ADMIN/SUPER_ADMIN
+    if (!req.tenantId && req.headers['x-tenant-id'] && ['ADMIN', 'SUPER_ADMIN'].includes(usuario.papel)) {
+      // Log para audit
+      console.log(`[Auth] Usuário ADMIN ${usuario.email} assumindo contexto do tenant ${req.headers['x-tenant-id']}`);
+      req.tenantId = req.headers['x-tenant-id'] as string;
+    }
+
+    if (!req.tenantId) {
+      console.warn(`[Auth] Usuário ${usuario.email} autenticado mas sem Tenant ID vinculado.`);
+    }
+
     next();
   } catch (erro) {
     console.error('Erro ao verificar autenticação:', erro);

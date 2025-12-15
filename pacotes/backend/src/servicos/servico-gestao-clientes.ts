@@ -20,15 +20,15 @@ interface CriarClienteDTO {
   email: string;
   telefone?: string;
   cidade?: string;
-  
+
   // Plano
   planoTipo: 'STARTER' | 'GROWTH' | 'PRO';
-  
+
   // Dados do Usuário Admin
   nomeAdmin: string;
   emailAdmin: string;
   senhaAdmin?: string;
-  
+
   // Opções
   integrarAsaas?: boolean;
 }
@@ -124,30 +124,30 @@ function gerarSenhaAleatoria(tamanho: number = 12): string {
  */
 export async function criarCliente(dados: CriarClienteDTO) {
   console.log('[GestaoClientes] Criando novo cliente:', dados.nomeEmpresa);
-  
+
   // Gerar slug único
   let slug = dados.slug || gerarSlug(dados.nomeEmpresa);
   let slugOriginal = slug;
   let tentativa = 0;
-  
+
   while (true) {
     const existente = await prisma.tenant.findUnique({ where: { slug } });
     if (!existente) break;
     tentativa++;
     slug = `${slugOriginal}-${tentativa}`;
   }
-  
+
   // Gerar senha se não fornecida
   const senhaAdmin = dados.senhaAdmin || gerarSenhaAleatoria();
   const senhaHash = await hashSenha(senhaAdmin);
-  
+
   // Configurações do plano
   const configPlano = CONFIGURACOES_PLANOS[dados.planoTipo];
-  
+
   // Data de renovação (30 dias)
   const dataRenovacao = new Date();
   dataRenovacao.setDate(dataRenovacao.getDate() + 30);
-  
+
   // Criar tenant
   const tenant = await prisma.tenant.create({
     data: {
@@ -168,9 +168,9 @@ export async function criarCliente(dados: CriarClienteDTO) {
       statusPagamento: 'PENDENTE'
     }
   });
-  
+
   console.log('[GestaoClientes] ✅ Tenant criado:', tenant.id);
-  
+
   // Criar usuário admin
   const usuario = await prisma.usuario.create({
     data: {
@@ -182,9 +182,9 @@ export async function criarCliente(dados: CriarClienteDTO) {
       estaAtivo: true
     }
   });
-  
+
   console.log('[GestaoClientes] ✅ Usuário admin criado:', usuario.id);
-  
+
   // Integrar com Asaas (opcional)
   let asaasClienteId = null;
   if (dados.integrarAsaas) {
@@ -195,21 +195,21 @@ export async function criarCliente(dados: CriarClienteDTO) {
         telefone: dados.telefone,
         cpfCnpj: dados.cnpj
       });
-      
+
       asaasClienteId = clienteAsaas.id;
-      
+
       await prisma.tenant.update({
         where: { id: tenant.id },
         data: { asaasClienteId }
       });
-      
+
       console.log('[GestaoClientes] ✅ Cliente Asaas criado:', asaasClienteId);
     } catch (erro) {
       console.error('[GestaoClientes] ⚠️ Erro ao criar no Asaas:', erro);
       // Não interrompe o fluxo
     }
   }
-  
+
   return {
     tenant: {
       id: tenant.id,
@@ -237,16 +237,16 @@ export async function criarCliente(dados: CriarClienteDTO) {
  */
 export async function editarCliente(tenantId: string, dados: EditarClienteDTO) {
   console.log('[GestaoClientes] Editando cliente:', tenantId);
-  
+
   const updateData: any = {};
-  
+
   if (dados.nome) updateData.nome = dados.nome;
   if (dados.email) updateData.email = dados.email;
   if (dados.telefone) updateData.telefone = dados.telefone;
   if (dados.cidade) updateData.cidade = dados.cidade;
   if (dados.cnpj) updateData.cnpj = dados.cnpj;
   if (dados.status) updateData.status = dados.status;
-  
+
   // Atualizar plano
   if (dados.planoTipo) {
     const configPlano = CONFIGURACOES_PLANOS[dados.planoTipo];
@@ -255,14 +255,14 @@ export async function editarCliente(tenantId: string, dados: EditarClienteDTO) {
     updateData.valorPlano = configPlano.valorMensal;
     // Não altera créditos mensais imediatamente (só na renovação)
   }
-  
+
   const tenant = await prisma.tenant.update({
     where: { id: tenantId },
     data: updateData
   });
-  
+
   console.log('[GestaoClientes] ✅ Cliente atualizado');
-  
+
   return tenant;
 }
 
@@ -271,18 +271,18 @@ export async function editarCliente(tenantId: string, dados: EditarClienteDTO) {
  */
 export async function desativarCliente(tenantId: string, motivo?: string) {
   console.log('[GestaoClientes] Desativando cliente:', tenantId);
-  
+
   const tenant = await prisma.tenant.update({
     where: { id: tenantId },
-    data: { 
+    data: {
       status: 'SUSPENSO'
     }
   });
-  
+
   // TODO: Cancelar assinatura no Asaas se existir
-  
+
   console.log('[GestaoClientes] ✅ Cliente suspenso');
-  
+
   return tenant;
 }
 
@@ -291,14 +291,14 @@ export async function desativarCliente(tenantId: string, motivo?: string) {
  */
 export async function reativarCliente(tenantId: string) {
   console.log('[GestaoClientes] Reativando cliente:', tenantId);
-  
+
   const tenant = await prisma.tenant.update({
     where: { id: tenantId },
     data: { status: 'ATIVO' }
   });
-  
+
   console.log('[GestaoClientes] ✅ Cliente reativado');
-  
+
   return tenant;
 }
 
@@ -307,7 +307,7 @@ export async function reativarCliente(tenantId: string) {
  */
 export async function resetarSenha(tenantId: string, novaSenha?: string) {
   console.log('[GestaoClientes] Resetando senha do admin:', tenantId);
-  
+
   // Buscar usuário admin do tenant
   const usuario = await prisma.usuario.findFirst({
     where: {
@@ -315,22 +315,22 @@ export async function resetarSenha(tenantId: string, novaSenha?: string) {
       papel: 'ADMIN'
     }
   });
-  
+
   if (!usuario) {
     throw new Error('Usuário admin não encontrado para este tenant');
   }
-  
+
   // Gerar nova senha se não fornecida
   const senha = novaSenha || gerarSenhaAleatoria();
   const senhaHash = await hashSenha(senha);
-  
+
   await prisma.usuario.update({
     where: { id: usuario.id },
     data: { senha: senhaHash }
   });
-  
+
   console.log('[GestaoClientes] ✅ Senha resetada para:', usuario.email);
-  
+
   return {
     usuarioId: usuario.id,
     email: usuario.email,
@@ -343,40 +343,40 @@ export async function resetarSenha(tenantId: string, novaSenha?: string) {
  */
 export async function buscarConsumo(tenantId: string): Promise<ConsumoCliente> {
   console.log('[GestaoClientes] Buscando consumo:', tenantId);
-  
+
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId }
   });
-  
+
   if (!tenant) {
     throw new Error('Tenant não encontrado');
   }
-  
+
   // Buscar transações do mês atual
   const inicioMes = new Date();
   inicioMes.setDate(1);
   inicioMes.setHours(0, 0, 0, 0);
-  
+
   const transacoesMes = await (prisma as any).transacao.findMany({
     where: {
       tenantId,
       criadoEm: { gte: inicioMes }
     }
   });
-  
+
   // Buscar histórico recente
   const historicoRecente = await (prisma as any).transacao.findMany({
     where: { tenantId },
     orderBy: { criadoEm: 'desc' },
     take: 20
   });
-  
+
   // Calcular consumo do mês
   const creditosUsados = transacoesMes.reduce((acc: number, t: any) => {
     if (t.tipo === 'ESTORNO') return acc;
     return acc + (t.creditos || 0);
   }, 0);
-  
+
   return {
     tenantId,
     nomeEmpresa: tenant.nome,
@@ -424,8 +424,8 @@ export async function listarClientes() {
       criadoEm: true
     }
   });
-  
-  return clientes.map(c => ({
+
+  return clientes.map((c: any) => ({
     ...c,
     creditosTotal: c.creditosMensais + c.creditosPrepagos + c.creditosBonus,
     valorPlano: Number(c.valorPlano)

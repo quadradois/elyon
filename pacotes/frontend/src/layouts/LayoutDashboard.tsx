@@ -2,7 +2,6 @@ import {
   Bot,
   Users,
   MessageSquare,
-  Settings,
   LogOut,
   Building2,
   Menu,
@@ -11,425 +10,642 @@ import {
   BarChart3,
   List,
   Zap,
-  Ban,
-  Store,
+  Shield,
+  Receipt,
+  UserPlus,
+  Package,
   Coins,
+  Settings,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Phone,
+  Store,
+  Search,
+  Circle,
+  Crown,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "../componentes/ui/button";
 import { cn } from "../lib/utils";
 import { WhatsAppStatusBadge } from "../componentes/WhatsAppStatusBadge";
 import { NotificacoesDropdown } from "../componentes/NotificacoesDropdown";
 import { CreditosIndicador } from "../componentes/CreditosIndicador";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../componentes/ui/tooltip";
+import { ModalUpgrade } from "../componentes/ModalUpgrade";
 
 interface LayoutDashboardProps {
   children: React.ReactNode;
+}
+
+interface MenuItem {
+  icon: React.ElementType;
+  label: string;
+  path: string;
+  destaque?: boolean;
+  badge?: number;
+}
+
+interface MenuSection {
+  id: string;
+  label: string;
+  items: MenuItem[];
+  defaultExpanded?: boolean;
 }
 
 export function LayoutDashboard({ children }: LayoutDashboardProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Estado de seções colapsadas (salva no localStorage)
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem("elyon_sidebar_collapsed");
+    return saved ? JSON.parse(saved) : {};
+  });
 
   const usuario = JSON.parse(localStorage.getItem("elyon_usuario") || "{}");
   const tenant = JSON.parse(localStorage.getItem("elyon_tenant") || "{}");
 
-  const menuItems = [
-    // === DASHBOARD PRINCIPAL ===
-    {
-      icon: Zap,
-      label: "Dashboard",
-      path: "/dashboard/prospeccao",
-      grupo: "dashboard",
-    },
+  // Salvar estado das seções colapsadas
+  useEffect(() => {
+    localStorage.setItem("elyon_sidebar_collapsed", JSON.stringify(collapsedSections));
+  }, [collapsedSections]);
 
-    // === ATALHO INTELIGENTE ===
-    {
-      icon: Sparkles,
-      label: "Nova Captação",
-      path: "/dashboard/captacao",
-      destaque: true,
-      grupo: "atalho",
-    },
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        if (collapsedSections["userMenu"]) {
+          setCollapsedSections(prev => ({ ...prev, userMenu: false }));
+        }
+      }
+    };
 
-    // === FLUXO DE PROSPECÇÃO (MANUAL) ===
-    {
-      icon: Building2,
-      label: "Mineração",
-      path: "/dashboard/mineracao",
-      grupo: "prospeccao",
-    },
-    {
-      icon: List,
-      label: "Listas",
-      path: "/dashboard/listas",
-      grupo: "prospeccao",
-    },
-    {
-      icon: Target,
-      label: "Campanhas",
-      path: "/dashboard/campanhas",
-      grupo: "prospeccao",
-    },
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [collapsedSections]);
 
-    // === ATENDIMENTO ===
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionId]: !prev[sectionId]
+    }));
+  };
+
+  // === DEFINIÇÃO DAS SEÇÕES DO MENU ===
+  const menuSections: MenuSection[] = [
+    // === PROSPECÇÃO (Coleta de dados) ===
+    {
+      id: "prospeccao",
+      label: "Prospecção",
+      defaultExpanded: true,
+      items: [
+        {
+          icon: Sparkles,
+          label: "Prospecção com IA",
+          path: "/dashboard/captacao",
+          destaque: true,
+        },
+        {
+          icon: Search,
+          label: "Prospecção Manual",
+          path: "/dashboard/mineracao",
+        },
+        {
+          icon: List,
+          label: "Listas",
+          path: "/dashboard/listas",
+        },
+      ],
+    },
+    // === ATENDIMENTO (Interação com contatos) ===
+    {
+      id: "atendimento",
+      label: "Atendimento",
+      defaultExpanded: true,
+      items: [
+        {
+          icon: Target,
+          label: "Campanhas",
+          path: "/dashboard/campanhas",
+        },
+        {
+          icon: Users,
+          label: "Leads",
+          path: "/dashboard/leads",
+        },
+        {
+          icon: MessageSquare,
+          label: "Conversas",
+          path: "/dashboard/conversas",
+        },
+        {
+          icon: Bot,
+          label: "Meus Agentes",
+          path: "/dashboard/agentes",
+        },
+        {
+          icon: Phone,
+          label: "Sessões WhatsApp",
+          path: "/dashboard/sessoes-whatsapp",
+        },
+      ],
+    },
+    // === GESTÃO ===
+    {
+      id: "gestao",
+      label: "Gestão",
+      defaultExpanded: true,
+      items: [
+        {
+          icon: BarChart3,
+          label: "Relatórios",
+          path: "/dashboard/relatorios",
+        },
+        {
+          icon: Coins,
+          label: "Créditos",
+          path: "/dashboard/creditos",
+        },
+        {
+          icon: Crown,
+          label: "Meu Plano",
+          path: "/dashboard/upgrade",
+          destaque: true,
+        },
+      ],
+    },
+  ];
+
+  // Menu Admin (só aparece para SUPER_ADMIN)
+  const menuAdmin: MenuItem[] = [
     {
       icon: Users,
-      label: "Leads",
-      path: "/dashboard/leads",
-      grupo: "atendimento",
+      label: "Clientes",
+      path: "/admin/clientes",
     },
     {
-      icon: MessageSquare,
-      label: "Conversas",
-      path: "/dashboard/conversas",
-      grupo: "atendimento",
-    },
-
-    // === CONFIGURAÇÃO & ANÁLISE ===
-    {
-      icon: Store,
-      label: "Perfil Imobiliária",
-      path: "/dashboard/perfil",
-      grupo: "config",
+      icon: Receipt,
+      label: "Transações",
+      path: "/admin/transacoes",
     },
     {
-      icon: Bot,
-      label: "Meus Agentes",
-      path: "/dashboard/agentes",
-      grupo: "config",
+      icon: UserPlus,
+      label: "Contatos Site",
+      path: "/admin/leads-vip",
     },
     {
-      icon: Ban,
-      label: "Blacklist",
-      path: "/dashboard/blacklist",
-      grupo: "config",
+      icon: Package,
+      label: "Pacotes",
+      path: "/admin/pacotes",
     },
     {
       icon: Coins,
-      label: "Créditos",
-      path: "/dashboard/creditos",
-      grupo: "config",
-    },
-    {
-      icon: BarChart3,
-      label: "Relatórios",
-      path: "/dashboard/relatorios",
-      grupo: "config",
-    },
-    {
-      icon: Settings,
-      label: "Configurações",
-      path: "/dashboard/configuracoes",
-      grupo: "config",
+      label: "Planos",
+      path: "/admin/planos",
     },
   ];
+
+  const isSuperAdmin = usuario.papel === "SUPER_ADMIN";
 
   const handleLogout = () => {
     localStorage.clear();
     navigate("/login");
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
-      <aside
+  // Verifica se algum item da seção está ativo
+  const isSectionActive = (section: MenuSection) => {
+    return section.items.some(item => location.pathname === item.path);
+  };
+
+  // Componente wrapper para tooltip condicional
+  const ConditionalTooltip = ({
+    children,
+    content,
+    enabled
+  }: {
+    children: React.ReactNode;
+    content: string;
+    enabled: boolean;
+  }) => {
+    if (!enabled) return <>{children}</>;
+
+    return (
+      <Tooltip delayDuration={100}>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent side="right" className="font-medium">
+          {content}
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
+  // Renderiza um item de menu
+  const renderMenuItem = (item: MenuItem, isActive: boolean) => {
+    const Icon = item.icon;
+    const isDestaque = item.destaque;
+
+    const menuItem = (
+      <Link
+        key={item.path}
+        to={item.path}
         className={cn(
-          "bg-white border-r border-slate-200 fixed inset-y-0 left-0 z-50 transition-all duration-300 flex flex-col",
-          sidebarOpen ? "w-64" : "w-20"
+          "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium relative group",
+          isActive
+            ? isDestaque
+              ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-md"
+              : "bg-blue-50 text-blue-700"
+            : isDestaque
+              ? "bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 hover:from-yellow-200 hover:to-orange-200 border border-orange-200"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
         )}
       >
-        {/* Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-              <Building2 className="w-5 h-5 text-white" />
-            </div>
-            {sidebarOpen && (
-              <span className="font-bold text-lg text-slate-900 tracking-tight">
-                ELYON
-              </span>
-            )}
-          </div>
-        </div>
+        {/* Indicador lateral de item ativo */}
+        {isActive && !isDestaque && (
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full" />
+        )}
 
-        {/* Menu */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {/* Dashboard Principal */}
-          {menuItems
-            .filter((i) => i.grupo === "dashboard")
-            .map((item) => {
-              const isActive = location.pathname === item.path;
-              const Icon = item.icon;
-
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium",
-                    isActive
-                      ? "bg-blue-600 text-white"
-                      : "bg-blue-50 text-blue-700 hover:bg-blue-100"
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "w-5 h-5",
-                      isActive ? "text-white" : "text-blue-600"
-                    )}
-                  />
-                  {sidebarOpen && item.label}
-                </Link>
-              );
-            })}
-
-          {/* Atalho: Nova Captação (Wizard) */}
-          {menuItems
-            .filter((i) => i.grupo === "atalho")
-            .map((item) => {
-              const isActive = location.pathname === item.path;
-              const Icon = item.icon;
-
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-semibold mt-2",
-                    isActive
-                      ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-md"
-                      : "bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 hover:from-yellow-200 hover:to-orange-200 border border-orange-200"
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "w-5 h-5",
-                      isActive ? "text-white" : "text-orange-500"
-                    )}
-                  />
-                  {sidebarOpen && (
-                    <span className="flex items-center gap-2">
-                      {item.label}
-                      <span className="text-[9px] bg-white/30 px-1.5 py-0.5 rounded font-bold">
-                        WIZARD
-                      </span>
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-
-          {/* Grupo: Prospecção Ativa */}
-          {sidebarOpen && (
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 pt-4 pb-1">
-              Prospecção Manual
-            </p>
+        <Icon
+          className={cn(
+            "w-4 h-4 shrink-0",
+            isActive
+              ? isDestaque
+                ? "text-white"
+                : "text-blue-600"
+              : isDestaque
+                ? "text-orange-500"
+                : "text-slate-400 group-hover:text-slate-600"
           )}
-          {!sidebarOpen && <div className="border-t border-slate-200 my-2" />}
-          {menuItems
-            .filter((i) => i.grupo === "prospeccao")
-            .map((item) => {
-              const isActive = location.pathname === item.path;
-              const Icon = item.icon;
-              const isDestaque = "destaque" in item && item.destaque;
+        />
+        {sidebarOpen && (
+          <span className="truncate flex-1">{item.label}</span>
+        )}
 
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium",
-                    isActive
-                      ? isDestaque
-                        ? "bg-yellow-100 text-yellow-800"
-                        : "bg-blue-50 text-blue-700"
-                      : isDestaque
-                        ? "text-yellow-700 hover:bg-yellow-50 hover:text-yellow-800"
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "w-5 h-5",
-                      isActive
-                        ? isDestaque
-                          ? "text-yellow-600"
-                          : "text-blue-600"
-                        : isDestaque
-                          ? "text-yellow-500"
-                          : "text-slate-400"
-                    )}
-                  />
-                  {sidebarOpen && (
-                    <span className="flex items-center gap-1">
-                      {item.label}
-                      {isDestaque && !isActive && (
-                        <span className="text-[10px] bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded font-semibold">
-                          IA
-                        </span>
-                      )}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+        {/* Badge de contagem */}
+        {item.badge && item.badge > 0 && sidebarOpen && (
+          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+            {item.badge > 99 ? "99+" : item.badge}
+          </span>
+        )}
+      </Link>
+    );
 
-          {/* Grupo: Atendimento */}
-          {sidebarOpen && (
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 pt-4 pb-1">
-              Atendimento
-            </p>
-          )}
-          {!sidebarOpen && <div className="border-t border-slate-200 my-2" />}
-          {menuItems
-            .filter((i) => i.grupo === "atendimento")
-            .map((item) => {
-              const isActive = location.pathname === item.path;
-              const Icon = item.icon;
+    // Adiciona tooltip quando sidebar está fechada
+    if (!sidebarOpen) {
+      return (
+        <ConditionalTooltip key={item.path} content={item.label} enabled={true}>
+          {menuItem}
+        </ConditionalTooltip>
+      );
+    }
 
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium",
-                    isActive
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "w-5 h-5",
-                      isActive ? "text-blue-600" : "text-slate-400"
-                    )}
-                  />
-                  {sidebarOpen && item.label}
-                </Link>
-              );
-            })}
+    return menuItem;
+  };
 
-          {/* Grupo: Configuração */}
-          {sidebarOpen && (
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 pt-4 pb-1">
-              Sistema
-            </p>
-          )}
-          {!sidebarOpen && <div className="border-t border-slate-200 my-2" />}
-          {menuItems
-            .filter((i) => i.grupo === "config")
-            .map((item) => {
-              const isActive = location.pathname === item.path;
-              const Icon = item.icon;
+  // Renderiza uma seção do menu
+  const renderSection = (section: MenuSection) => {
+    const isCollapsed = collapsedSections[section.id] ?? !section.defaultExpanded;
+    const hasActiveItem = isSectionActive(section);
 
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium",
-                    isActive
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "w-5 h-5",
-                      isActive ? "text-blue-600" : "text-slate-400"
-                    )}
-                  />
-                  {sidebarOpen && item.label}
-                </Link>
-              );
-            })}
-        </nav>
-
-        {/* WhatsApp Status */}
-        <div className="px-4 pb-2">
-          {sidebarOpen ? (
-            <WhatsAppStatusBadge />
-          ) : (
-            <div className="flex justify-center">
-              {/* Versão compacta ou apenas ícone se necessário, mas o badge já trata responsividade interna se quisermos, 
-                   aqui vamos ocultar ou mostrar simplificado. O badge atual tem texto, então melhor mostrar só se aberto 
-                   ou criar uma versão 'icon-only' no badge. Por simplicidade, mostramos só quando aberto por enquanto 
-                   ou deixamos o badge se virar com css. Vamos simplificar: só mostra se sidebarOpen. */}
-              {/* Se quiser mostrar icone fechado, precisaria ajustar o componente badge. 
-                   Vamos assumir que o usuário quer ver o texto. */}
-            </div>
-          )}
-        </div>
-
-        {/* User Footer */}
-        <div className="p-4 border-t border-slate-100">
-          <div
+    return (
+      <div key={section.id} className="space-y-1">
+        {/* Header da Seção (clicável para colapsar) */}
+        {sidebarOpen ? (
+          <button
+            onClick={() => toggleSection(section.id)}
             className={cn(
-              "flex items-center gap-3",
-              !sidebarOpen && "justify-center"
+              "w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200",
+              "hover:bg-slate-100 group",
+              hasActiveItem && !isCollapsed && "bg-slate-50"
             )}
           >
-            <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-              <span className="font-medium text-sm text-slate-600">
-                {usuario.nome?.charAt(0) || "U"}
-              </span>
+            <span className={cn(
+              "text-xs font-semibold uppercase tracking-wider transition-colors",
+              hasActiveItem ? "text-blue-600" : "text-slate-500 group-hover:text-slate-700"
+            )}>
+              {section.label}
+            </span>
+            <span className={cn(
+              "transition-transform duration-200",
+              hasActiveItem ? "text-blue-500" : "text-slate-400 group-hover:text-slate-600",
+              !isCollapsed && "rotate-0"
+            )}>
+              {isCollapsed ? (
+                <ChevronRight className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </span>
+          </button>
+        ) : (
+          <div className="flex justify-center py-2">
+            <div className="w-8 border-t border-slate-200" />
+          </div>
+        )}
+
+        {/* Itens da Seção com animação */}
+        {(!isCollapsed || !sidebarOpen) && (
+          <div className={cn(
+            "space-y-0.5 transition-all duration-200",
+            sidebarOpen && "pl-2"
+          )}>
+            {section.items.map((item) => {
+              const isActive = location.pathname === item.path;
+              return renderMenuItem(item, isActive);
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <TooltipProvider>
+      {/* Modal de Upgrade (aparece após login para não-PRO) */}
+      <ModalUpgrade />
+
+      <div className="min-h-screen bg-slate-50 flex">
+        {/* Sidebar */}
+        <aside
+          className={cn(
+            "bg-white border-r border-slate-200 fixed inset-y-0 left-0 z-50 transition-all duration-300 flex flex-col shadow-sm",
+            sidebarOpen ? "w-64" : "w-[72px]"
+          )}
+        >
+          {/* Logo */}
+          <div className="h-16 flex items-center px-5 border-b border-slate-100">
+            <Link to="/dashboard/prospeccao" className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shrink-0 shadow-md">
+                <Building2 className="w-5 h-5 text-white" />
+              </div>
+              {sidebarOpen && (
+                <span className="font-bold text-xl text-slate-900 tracking-tight">
+                  ELYON
+                </span>
+              )}
+            </Link>
+          </div>
+
+          {/* Menu */}
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+            {/* Dashboard Principal */}
+            <ConditionalTooltip content="Dashboard" enabled={!sidebarOpen}>
+              <Link
+                to="/dashboard/prospeccao"
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium relative",
+                  location.pathname === "/dashboard/prospeccao"
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                    : "bg-blue-50 text-blue-700 hover:bg-blue-100"
+                )}
+              >
+                <Zap
+                  className={cn(
+                    "w-5 h-5 shrink-0",
+                    location.pathname === "/dashboard/prospeccao"
+                      ? "text-white"
+                      : "text-blue-600"
+                  )}
+                />
+                {sidebarOpen && "Dashboard"}
+              </Link>
+            </ConditionalTooltip>
+
+            {/* Separador visual */}
+            <div className="py-2">
+              <div className={cn(
+                "border-t border-slate-100",
+                !sidebarOpen && "mx-2"
+              )} />
             </div>
 
-            {sidebarOpen && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900 truncate">
-                  {usuario.nome}
-                </p>
-                <p className="text-xs text-slate-500 truncate">{tenant.nome}</p>
+            {/* Seções colapsáveis */}
+            {menuSections.map(renderSection)}
+
+            {/* Grupo: Admin (apenas SUPER_ADMIN) */}
+            {isSuperAdmin && (
+              <div className="space-y-1 pt-2">
+                {sidebarOpen ? (
+                  <button
+                    onClick={() => toggleSection("admin")}
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200 hover:bg-purple-50 group"
+                  >
+                    <span className="text-xs font-semibold text-purple-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5" />
+                      Admin
+                    </span>
+                    <span className="text-purple-400 group-hover:text-purple-600 transition-colors">
+                      {collapsedSections["admin"] ? (
+                        <ChevronRight className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex justify-center py-2">
+                    <div className="w-8 border-t border-purple-200" />
+                  </div>
+                )}
+
+                {(!collapsedSections["admin"] || !sidebarOpen) && (
+                  <div className={cn("space-y-0.5", sidebarOpen && "pl-2")}>
+                    {menuAdmin.map((item) => {
+                      const isActive = location.pathname === item.path;
+                      const Icon = item.icon;
+
+                      const adminItem = (
+                        <Link
+                          key={item.path}
+                          to={item.path}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium relative group",
+                            isActive
+                              ? "bg-purple-100 text-purple-700"
+                              : "text-purple-600 hover:bg-purple-50 hover:text-purple-800"
+                          )}
+                        >
+                          {isActive && (
+                            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-purple-500 rounded-r-full" />
+                          )}
+                          <Icon
+                            className={cn(
+                              "w-4 h-4 shrink-0",
+                              isActive ? "text-purple-600" : "text-purple-400 group-hover:text-purple-600"
+                            )}
+                          />
+                          {sidebarOpen && item.label}
+                        </Link>
+                      );
+
+                      if (!sidebarOpen) {
+                        return (
+                          <ConditionalTooltip key={item.path} content={item.label} enabled={true}>
+                            {adminItem}
+                          </ConditionalTooltip>
+                        );
+                      }
+
+                      return adminItem;
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </nav>
+
+          {/* WhatsApp Status - Sempre visível */}
+          <div className="px-3 pb-2">
+            {sidebarOpen ? (
+              <WhatsAppStatusBadge />
+            ) : (
+              <ConditionalTooltip content="Status WhatsApp" enabled={true}>
+                <Link
+                  to="/dashboard/sessoes-whatsapp"
+                  className="flex justify-center p-2 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  <div className="relative">
+                    <Phone className="w-5 h-5 text-slate-400" />
+                    <Circle className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5 fill-green-500 text-green-500" />
+                  </div>
+                </Link>
+              </ConditionalTooltip>
+            )}
+          </div>
+
+          {/* User Footer com Dropdown */}
+          <div ref={dropdownRef} className="p-3 border-t border-slate-100 relative">
+            {/* Dropdown Menu (aparece acima do footer quando aberto) */}
+            {sidebarOpen && collapsedSections["userMenu"] && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 mx-3 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-200">
+                <div className="p-2">
+                  <Link
+                    to="/dashboard/perfil"
+                    onClick={() => toggleSection("userMenu")}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors text-sm text-slate-700"
+                  >
+                    <Store className="w-4 h-4 text-blue-500" />
+                    Perfil da Imobiliária
+                  </Link>
+                  <Link
+                    to="/dashboard/configuracoes"
+                    onClick={() => toggleSection("userMenu")}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors text-sm text-slate-700"
+                  >
+                    <Settings className="w-4 h-4 text-slate-400" />
+                    Configurações
+                  </Link>
+                </div>
+                <div className="border-t border-slate-100 p-2">
+                  <button
+                    onClick={() => {
+                      toggleSection("userMenu");
+                      handleLogout();
+                    }}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 transition-colors text-sm text-red-600 w-full"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sair da conta
+                  </button>
+                </div>
               </div>
             )}
 
-            {sidebarOpen && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-slate-400 hover:text-red-600"
-                onClick={handleLogout}
+            {/* Footer clicável */}
+            <ConditionalTooltip content={usuario.nome || "Menu do usuário"} enabled={!sidebarOpen}>
+              <button
+                onClick={() => sidebarOpen && toggleSection("userMenu")}
+                className={cn(
+                  "flex items-center gap-3 w-full rounded-xl transition-all duration-200",
+                  sidebarOpen
+                    ? "p-2 hover:bg-slate-50 cursor-pointer"
+                    : "justify-center p-2",
+                  collapsedSections["userMenu"] && "bg-slate-50"
+                )}
               >
-                <LogOut className="w-4 h-4" />
-              </Button>
+                <div className={cn(
+                  "w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shrink-0 shadow-md",
+                  !sidebarOpen && "w-9 h-9"
+                )}>
+                  <span className="font-semibold text-sm text-white">
+                    {usuario.nome?.charAt(0)?.toUpperCase() || "U"}
+                  </span>
+                </div>
+
+                {sidebarOpen && (
+                  <>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-sm font-semibold text-slate-900 truncate">
+                        {usuario.nome}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate">{tenant.nome}</p>
+                    </div>
+                    <span className={cn(
+                      "text-slate-400 transition-transform duration-200",
+                      collapsedSections["userMenu"] && "rotate-180"
+                    )}>
+                      <ChevronUp className="w-4 h-4" />
+                    </span>
+                  </>
+                )}
+              </button>
+            </ConditionalTooltip>
+
+            {/* Logout direto quando sidebar fechada */}
+            {!sidebarOpen && (
+              <ConditionalTooltip content="Sair" enabled={true}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50 mt-2 mx-auto"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </ConditionalTooltip>
             )}
           </div>
-        </div>
-      </aside>
+        </aside>
 
-      {/* Main Content */}
-      <main
-        className={cn(
-          "flex-1 transition-all duration-300 min-h-screen flex flex-col",
-          sidebarOpen ? "ml-64" : "ml-20"
-        )}
-      >
-        {/* Header Mobile / Toggle */}
-        <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-40">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="text-slate-500"
-          >
-            <Menu className="w-5 h-5" />
-          </Button>
+        {/* Main Content */}
+        <main
+          className={cn(
+            "flex-1 transition-all duration-300 min-h-screen flex flex-col",
+            sidebarOpen ? "ml-64" : "ml-[72px]"
+          )}
+        >
+          {/* Header Mobile / Toggle */}
+          <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-40">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
 
-          <div className="flex items-center gap-4">
-            {/* Indicador de Créditos */}
-            <CreditosIndicador />
+            <div className="flex items-center gap-4">
+              {/* Indicador de Créditos */}
+              <CreditosIndicador />
 
-            {/* Notificações em tempo real */}
-            <NotificacoesDropdown />
-          </div>
-        </header>
+              {/* Notificações em tempo real */}
+              <NotificacoesDropdown />
+            </div>
+          </header>
 
-        {/* Page Content */}
-        <div className="p-8 flex-1">{children}</div>
-      </main>
-    </div>
+          {/* Page Content */}
+          <div className="p-8 flex-1">{children}</div>
+        </main>
+      </div>
+    </TooltipProvider>
   );
 }

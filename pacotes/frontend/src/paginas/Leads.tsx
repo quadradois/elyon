@@ -126,7 +126,7 @@ function getTemperaturaBadge(temp: string | null): { label: string; className: s
 
 export function Leads() {
   const navigate = useNavigate();
-  
+
   // States
   const [leads, setLeads] = useState<Lead[]>([]);
   const [estatisticas, setEstatisticas] = useState<Estatisticas>({
@@ -137,13 +137,13 @@ export function Leads() {
   });
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
-  
+
   // Filtros
   const [termoBusca, setTermoBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("");
   const [filtroTemperatura, setFiltroTemperatura] = useState("");
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
-  
+
   // Modal
   const [chatOpen, setChatOpen] = useState(false);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
@@ -156,14 +156,14 @@ export function Leads() {
     try {
       setLoading(true);
       setErro("");
-      
+
       const [resLeads, resStats] = await Promise.all([
         api.get("/leads"),
         api.get("/leads/estatisticas").catch(() => ({ data: null })),
       ]);
-      
+
       setLeads(resLeads.data);
-      
+
       if (resStats.data) {
         setEstatisticas(resStats.data);
       } else {
@@ -195,15 +195,15 @@ export function Leads() {
     const nome = lead.nome || lead.contato?.nome || "";
     const telefone = lead.telefone || lead.contato?.telefone || "";
     const email = lead.email || lead.contato?.email || "";
-    
-    const matchBusca = termoBusca === "" || 
+
+    const matchBusca = termoBusca === "" ||
       nome.toLowerCase().includes(termoBusca.toLowerCase()) ||
       telefone.includes(termoBusca) ||
       email.toLowerCase().includes(termoBusca.toLowerCase());
-    
+
     const matchStatus = filtroStatus === "" || lead.status === filtroStatus;
     const matchTemp = filtroTemperatura === "" || lead.temperatura === filtroTemperatura;
-    
+
     return matchBusca && matchStatus && matchTemp;
   });
 
@@ -227,12 +227,12 @@ export function Leads() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Meus Leads</h1>
           <p className="text-slate-500">
-            Gerencie os contatos captados e qualificados pelo seu agente.
+            Proprietários de imóveis interessados em vender ou alugar — qualificados pelo agente.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={carregarDados}
             disabled={loading}
@@ -318,7 +318,7 @@ export function Leads() {
                   className="pl-10"
                 />
               </div>
-              
+
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -331,7 +331,7 @@ export function Leads() {
                     <span className="ml-2 h-2 w-2 rounded-full bg-blue-500" />
                   )}
                 </Button>
-                
+
                 {temFiltrosAtivos && (
                   <Button variant="ghost" size="sm" onClick={limparFiltros}>
                     <X className="h-4 w-4 mr-1" />
@@ -408,7 +408,7 @@ export function Leads() {
               {temFiltrosAtivos ? "Nenhum lead encontrado" : "Nenhum lead cadastrado"}
             </h3>
             <p className="text-gray-500 mb-4">
-              {temFiltrosAtivos 
+              {temFiltrosAtivos
                 ? "Tente ajustar os filtros de busca"
                 : "Comece adicionando seu primeiro lead"
               }
@@ -444,7 +444,7 @@ export function Leads() {
                   const tempBadge = getTemperaturaBadge(lead.temperatura);
 
                   return (
-                    <TableRow 
+                    <TableRow
                       key={lead.id}
                       className="cursor-pointer hover:bg-gray-50"
                       onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
@@ -521,7 +521,7 @@ export function Leads() {
                                   <Send className="h-4 w-4 mr-2" />
                                   WhatsApp
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => window.open(`tel:${telefone.replace(/\D/g, "")}`, "_self")}
                                 >
                                   <Phone className="h-4 w-4 mr-2" />
@@ -537,7 +537,7 @@ export function Leads() {
                 })}
               </TableBody>
             </Table>
-            
+
             {/* Footer da tabela */}
             <div className="px-4 py-3 border-t bg-gray-50 flex items-center justify-between">
               <p className="text-sm text-gray-500">
@@ -548,14 +548,14 @@ export function Leads() {
         )}
       </Card>
 
-      <ChatModal 
-        lead={activeLead ? { 
-          id: activeLead.id, 
+      <ChatModal
+        lead={activeLead ? {
+          id: activeLead.id,
           nome: activeLead.nome || activeLead.contato?.nome || "Lead",
           telefone: activeLead.telefone || activeLead.contato?.telefone || null
-        } : null} 
-        open={chatOpen} 
-        onOpenChange={setChatOpen} 
+        } : null}
+        open={chatOpen}
+        onOpenChange={setChatOpen}
       />
     </div>
   );

@@ -22,35 +22,35 @@ const getTenantId = (req: Request): string | null => {
   if ((req as any).tenantId) {
     return (req as any).tenantId;
   }
-  
+
   // 2. Header x-tenant-id
   if (req.headers['x-tenant-id']) {
     return req.headers['x-tenant-id'] as string;
   }
-  
+
   // 3. Query param (fallback)
   if (req.query.tenantId) {
     return req.query.tenantId as string;
   }
-  
+
   return null;
 };
 
-// GET /api/leads - Retorna apenas leads QUALIFICADOS do tenant
+// GET /api/leads - Retorna leads ativos (não arquivados) do tenant
 router.get('/', async (req, res) => {
   try {
     const tenantId = getTenantId(req);
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado - tenant não identificado' });
     }
-    
+
     const { busca } = req.query;
 
-    // Base: apenas leads qualificados DO TENANT
+    // Base: leads ativos DO TENANT (excluir arquivados e perdidos)
     const baseWhere: any = {
       tenantId, // ✅ FILTRO DE SEGURANÇA
-      status: 'QUALIFICADO'
+      status: { notIn: ['ARQUIVADO', 'PERDIDO'] }
     };
 
     // Se tiver busca, adicionar filtros de busca
@@ -92,10 +92,10 @@ router.get('/', async (req, res) => {
       const ultimaConversa = lead.conversas[0]?.iniciadaEm;
 
       if (ultimaAtividade || ultimaConversa) {
-        const data = (ultimaAtividade && ultimaConversa) 
+        const data = (ultimaAtividade && ultimaConversa)
           ? (ultimaAtividade > ultimaConversa ? ultimaAtividade : ultimaConversa)
           : (ultimaAtividade || ultimaConversa);
-        
+
         ultimaInteracao = new Date(data!).toLocaleDateString('pt-BR', {
           day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
         });
@@ -124,11 +124,11 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const tenantId = getTenantId(req);
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado - tenant não identificado' });
     }
-    
+
     const { nome, telefone, email } = req.body;
 
     if (!nome) {
@@ -171,11 +171,11 @@ router.post('/', async (req, res) => {
 router.get('/estatisticas', async (req, res) => {
   try {
     const tenantId = getTenantId(req);
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado - tenant não identificado' });
     }
-    
+
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
     const amanha = new Date(hoje);
@@ -193,13 +193,13 @@ router.get('/estatisticas', async (req, res) => {
       agendamentosHoje
     ] = await Promise.all([
       // Total de leads do tenant (exceto arquivados)
-      db.lead.count({ 
-        where: { 
+      db.lead.count({
+        where: {
           tenantId, // ✅ FILTRO
-          status: { not: 'ARQUIVADO' } 
-        } 
+          status: { not: 'ARQUIVADO' }
+        }
       }),
-      
+
       // Leads quentes do tenant
       db.lead.count({
         where: {
@@ -208,32 +208,33 @@ router.get('/estatisticas', async (req, res) => {
           status: { notIn: ['PERDIDO', 'CAPTADO'] }
         }
       }),
-      
-      // Novos hoje do tenant
+
+      // Novos hoje do tenant (exceto arquivados)
       db.lead.count({
         where: {
           tenantId, // ✅ FILTRO
+          status: { not: 'ARQUIVADO' }, // ✅ Excluir arquivados
           criadoEm: { gte: hoje, lt: amanha }
         }
       }),
-      
+
       // Por status do tenant
       db.lead.groupBy({
         by: ['status'],
         _count: true,
         where: { tenantId } // ✅ FILTRO
       }),
-      
+
       // Por temperatura do tenant
       db.lead.groupBy({
         by: ['temperatura'],
         _count: true,
-        where: { 
+        where: {
           tenantId, // ✅ FILTRO
           status: { notIn: ['PERDIDO', 'CAPTADO'] }
         }
       }),
-      
+
       // Avaliações hoje (via lead do tenant)
       db.atividade.count({
         where: {
@@ -243,7 +244,7 @@ router.get('/estatisticas', async (req, res) => {
           completadoEm: null
         }
       }),
-      
+
       // Aguardando confirmação (via lead do tenant)
       db.atividade.count({
         where: {
@@ -252,7 +253,7 @@ router.get('/estatisticas', async (req, res) => {
           agendadoPara: { gte: hoje }
         }
       }),
-      
+
       // Agendamentos hoje (via lead do tenant)
       db.atividade.count({
         where: {
@@ -284,7 +285,7 @@ router.get('/estatisticas', async (req, res) => {
       quentes,
       agendamentosHoje,
       novosHoje,
-      
+
       // Campos detalhados
       porStatus: Object.fromEntries(porStatus.map((s: any) => [s.status, s._count])),
       porTemperatura: Object.fromEntries(porTemperatura.map((t: any) => [t.temperatura, t._count])),
@@ -309,11 +310,11 @@ router.get('/estatisticas', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const tenantId = getTenantId(req);
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado - tenant não identificado' });
     }
-    
+
     const { id } = req.params;
 
     const lead = await prisma.lead.findUnique({
@@ -339,7 +340,7 @@ router.get('/:id', async (req, res) => {
     if (!lead) {
       return res.status(404).json({ erro: 'Lead não encontrado' });
     }
-    
+
     // ✅ Verificar se lead pertence ao tenant
     if (lead.tenantId !== tenantId) {
       return res.status(403).json({ erro: 'Acesso negado' });
@@ -455,9 +456,9 @@ router.get('/:id', async (req, res) => {
       })),
 
       // Próxima atividade pendente (se houver)
-      proximaAtividade: l.atividades.find((a: any) => 
-        a.agendadoPara && 
-        !a.completadoEm && 
+      proximaAtividade: l.atividades.find((a: any) =>
+        a.agendadoPara &&
+        !a.completadoEm &&
         a.statusAgendamento !== 'CANCELADO' &&
         new Date(a.agendadoPara) >= new Date()
       ) || null
@@ -476,11 +477,11 @@ router.get('/:id', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const tenantId = getTenantId(req);
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado - tenant não identificado' });
     }
-    
+
     const { id } = req.params;
     const dados = req.body;
 
@@ -489,7 +490,7 @@ router.patch('/:id', async (req, res) => {
     if (!leadExiste) {
       return res.status(404).json({ erro: 'Lead não encontrado' });
     }
-    
+
     // ✅ Verificar ownership
     if (leadExiste.tenantId !== tenantId) {
       return res.status(403).json({ erro: 'Acesso negado' });
@@ -500,7 +501,7 @@ router.patch('/:id', async (req, res) => {
       // Básicos
       'nome', 'telefone', 'email', 'status', 'temperatura',
       // Imóvel
-      'enderecoImovel', 'tipoImovel', 'areaImovel', 'quartosImovel', 
+      'enderecoImovel', 'tipoImovel', 'areaImovel', 'quartosImovel',
       'vagasImovel', 'valorPretendido', 'ocupacaoImovel', 'interesseEm',
       // SPIN
       'situacaoAtual', 'tempoDecisao', 'tentativasAnteriores', 'comCorretorAtualmente',
@@ -548,18 +549,18 @@ router.patch('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const tenantId = getTenantId(req);
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado - tenant não identificado' });
     }
-    
+
     const { id } = req.params;
 
     const lead = await prisma.lead.findUnique({ where: { id } });
     if (!lead) {
       return res.status(404).json({ erro: 'Lead não encontrado' });
     }
-    
+
     // ✅ Verificar ownership
     if (lead.tenantId !== tenantId) {
       return res.status(403).json({ erro: 'Acesso negado' });
@@ -607,7 +608,7 @@ router.post('/:id/restaurar', async (req, res) => {
 
     await prisma.lead.update({
       where: { id },
-      data: { 
+      data: {
         deletadoEm: null,
         status: 'QUALIFICADO'
       }
@@ -646,7 +647,7 @@ router.post('/:id/perder', async (req, res) => {
 
     await prisma.lead.update({
       where: { id },
-      data: { 
+      data: {
         status: 'PERDIDO',
         ultimaInteracao: new Date()
       }
@@ -686,7 +687,7 @@ router.post('/:id/captar', async (req, res) => {
 
     await prisma.lead.update({
       where: { id },
-      data: { 
+      data: {
         status: 'CONVERTIDO',
         temperatura: 'QUENTE',
         ultimaInteracao: new Date()
@@ -709,8 +710,8 @@ router.post('/:id/captar', async (req, res) => {
       }
     });
 
-    res.json({ 
-      sucesso: true, 
+    res.json({
+      sucesso: true,
       mensagem: 'Parabéns! Imóvel captado com sucesso! 🎉',
       lead: { id, status: 'CONVERTIDO' }
     });
@@ -735,7 +736,7 @@ router.post('/:id/reativar', async (req, res) => {
 
     await prisma.lead.update({
       where: { id },
-      data: { 
+      data: {
         status: 'QUALIFICADO',
         temperatura: temperatura || 'MORNO',
         deletadoEm: null,
@@ -788,7 +789,7 @@ router.patch('/:id/atividades/:atividadeId', async (req, res) => {
         };
         mensagem = 'Atividade marcada como realizada';
         break;
-        
+
       case 'cancelar':
         dadosAtualizacao = {
           statusAgendamento: 'CANCELADO',
@@ -798,7 +799,7 @@ router.patch('/:id/atividades/:atividadeId', async (req, res) => {
         };
         mensagem = 'Atividade cancelada';
         break;
-        
+
       case 'reagendar':
         if (!novaData) {
           return res.status(400).json({ erro: 'Nova data é obrigatória para reagendar' });
@@ -811,7 +812,7 @@ router.patch('/:id/atividades/:atividadeId', async (req, res) => {
         };
         mensagem = 'Atividade reagendada';
         break;
-        
+
       case 'nao_compareceu':
         dadosAtualizacao = {
           statusAgendamento: 'NAO_COMPARECEU',
@@ -819,7 +820,7 @@ router.patch('/:id/atividades/:atividadeId', async (req, res) => {
         };
         mensagem = 'Marcado como não compareceu';
         break;
-        
+
       default:
         return res.status(400).json({ erro: 'Ação inválida' });
     }
@@ -877,8 +878,8 @@ router.post('/:id/atividades', async (req, res) => {
     }
 
     // Gerar token de confirmação se for agendamento
-    const tokenConfirmacao = tipo === 'AVALIACAO' || tipo === 'TAREFA' || tipo === 'REUNIAO' 
-      ? crypto.randomUUID() 
+    const tokenConfirmacao = tipo === 'AVALIACAO' || tipo === 'TAREFA' || tipo === 'REUNIAO'
+      ? crypto.randomUUID()
       : null;
 
     const atividade = await db.atividade.create({
@@ -903,7 +904,7 @@ router.post('/:id/atividades', async (req, res) => {
         agendadoPara: atividade.agendadoPara,
         statusAgendamento: atividade.statusAgendamento,
         tokenConfirmacao: atividade.tokenConfirmacao,
-        linkConfirmacao: tokenConfirmacao 
+        linkConfirmacao: tokenConfirmacao
           ? `${process.env.FRONTEND_URL || 'http://localhost:5173'}/confirmar/${atividade.id}/${tokenConfirmacao}`
           : null
       }
@@ -932,9 +933,9 @@ router.get('/confirmar/:atividadeId/:token', async (req, res) => {
     });
 
     if (!atividade) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         erro: 'Link inválido ou expirado',
-        valido: false 
+        valido: false
       });
     }
 
@@ -976,24 +977,24 @@ router.post('/confirmar/:atividadeId/:token', async (req, res) => {
     });
 
     if (!atividade) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         erro: 'Link inválido ou expirado',
-        sucesso: false 
+        sucesso: false
       });
     }
 
     // Verificar se já foi confirmado/cancelado
     if (atividade.statusAgendamento === 'CONFIRMADO') {
-      return res.json({ 
-        sucesso: true, 
+      return res.json({
+        sucesso: true,
         mensagem: 'Este agendamento já foi confirmado anteriormente.',
         statusAgendamento: 'CONFIRMADO'
       });
     }
 
     if (atividade.statusAgendamento === 'CANCELADO') {
-      return res.json({ 
-        sucesso: false, 
+      return res.json({
+        sucesso: false,
         mensagem: 'Este agendamento já foi cancelado.',
         statusAgendamento: 'CANCELADO'
       });

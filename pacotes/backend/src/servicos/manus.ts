@@ -90,7 +90,7 @@ export interface BriefingEmpreendimentoJSON {
   construtora?: string;
   fase_obra?: string;
   previsao_entrega?: string;
-  
+
   endereco?: {
     logradouro?: string;
     numero?: string;
@@ -99,7 +99,7 @@ export interface BriefingEmpreendimentoJSON {
     estado?: string;
     cep?: string;
   };
-  
+
   localizacao_detalhes?: {
     caracteristica_bairro?: string;
     regiao_cidade?: string;
@@ -113,7 +113,7 @@ export interface BriefingEmpreendimentoJSON {
       transporte?: string[];
     };
   };
-  
+
   condominio?: {
     valor_estimado?: number;
     areas_lazer?: string[];
@@ -124,25 +124,25 @@ export interface BriefingEmpreendimentoJSON {
     unidades_total?: number;
     elevador?: boolean;
   };
-  
+
   faixa_preco?: {
     min?: number;
     max?: number;
     moeda?: string;
     valor_m2?: number;
   };
-  
+
   metragens?: Array<{
     tipo?: string;
     area?: string;
     quartos?: number;
     preco_medio?: number;
   }>;
-  
+
   caracteristicas?: string[];
   diferenciais?: string[];
   programas?: string[]; // MCMV, etc
-  
+
   fontes?: string[];
   resumo?: string;
 }
@@ -162,101 +162,67 @@ export function gerarPromptPesquisaEmpreendimento(dados: {
   ].filter(Boolean).join(', ');
 
   const instrucoes = `
-Faça uma pesquisa completa sobre o empreendimento imobiliário "${dados.nomeEmpreendimento}" localizado em ${localizacao}.
+TAREFA: Pesquisar o empreendimento imobiliário "${dados.nomeEmpreendimento}" em ${localizacao}.
 ${dados.construtora ? `Construtora: ${dados.construtora}` : ''}
 ${dados.endereco ? `Endereço: ${dados.endereco}` : ''}
 
-## OBJETIVO
+INSTRUÇÕES IMPORTANTES:
+1. Pesquise informações sobre este empreendimento na internet
+2. Compile os dados em formato JSON
+3. ESCREVA O JSON DIRETAMENTE NESTA CONVERSA - NÃO CRIE ARQUIVOS
+4. NÃO use ferramentas de criação de arquivo
+5. O JSON deve aparecer AQUI no chat, não em arquivo separado
 
-Pesquise na internet e compile TODAS as informações disponíveis sobre este empreendimento imobiliário.
-Busque em sites oficiais da construtora, portais imobiliários (ZAP, VivaReal, Imovelweb), e outras fontes confiáveis.
+INFORMAÇÕES PARA BUSCAR:
+- Nome, construtora, endereço, fase da obra
+- Torres, andares, tipos de unidades
+- Áreas de lazer, segurança, vagas
+- Faixa de preços, valor m²
+- Localização e proximidades
 
-## INFORMAÇÕES NECESSÁRIAS
-
-1. **DADOS BÁSICOS**: Nome, construtora, endereço completo, fase da obra, previsão de entrega
-2. **EMPREENDIMENTO**: Torres, andares, total de unidades, tipos de plantas (studios, 1Q, 2Q, 3Q)
-3. **LAZER E CONDOMÍNIO**: Áreas de lazer, segurança, vagas de garagem, valor estimado do condomínio
-4. **PREÇOS**: Faixa de preços, valor do m², condições especiais
-5. **LOCALIZAÇÃO**: Bairro, pontos de referência, proximidades (shoppings, escolas, hospitais, transporte)
-6. **DIFERENCIAIS**: O que torna este empreendimento especial, programas (MCMV, etc)
-
-## FORMATO OBRIGATÓRIO DA RESPOSTA
-
-Você DEVE retornar a resposta como um JSON válido seguindo EXATAMENTE esta estrutura.
-Retorne APENAS o JSON, sem texto antes ou depois. Não use markdown code blocks.
+FORMATO DE RESPOSTA (copie e preencha):
 
 {
-  "nome_empreendimento": "Nome Completo do Empreendimento",
-  "tipo_imovel": "Apartamento|Casa|Lote|Comercial",
+  "nome_empreendimento": "${dados.nomeEmpreendimento}",
+  "tipo_imovel": "Apartamento",
   "construtora": "Nome da Construtora",
-  "fase_obra": "Lançamento|Em construção|Pronto para morar",
-  "previsao_entrega": "Mês/Ano ou 'Pronto'",
-  
+  "fase_obra": "Em construção ou Pronto",
+  "previsao_entrega": "Data ou Pronto",
   "endereco": {
-    "logradouro": "Rua/Avenida",
-    "numero": "Número",
-    "bairro": "Bairro",
-    "cidade": "Cidade",
-    "estado": "UF",
-    "cep": "00000-000"
+    "logradouro": "Rua",
+    "bairro": "${dados.bairro || 'Bairro'}",
+    "cidade": "${dados.cidade}",
+    "estado": "${dados.estado || 'GO'}",
+    "cep": null
   },
-  
-  "localizacao_detalhes": {
-    "caracteristica_bairro": "Descrição do bairro (nobre, residencial, em crescimento, etc)",
-    "regiao_cidade": "Região (Norte, Sul, Centro, etc)",
-    "pontos_referencia": ["Ponto 1", "Ponto 2"],
-    "vias_acesso": ["Via 1", "Via 2"],
-    "proximidades": {
-      "shoppings": ["Shopping X - 500m"],
-      "supermercados": ["Mercado Y - 300m"],
-      "escolas": ["Escola Z - 200m"],
-      "hospitais": ["Hospital W - 1km"],
-      "transporte": ["Metrô/Ônibus - distância"]
-    }
-  },
-  
   "condominio": {
-    "valor_estimado": 450,
-    "areas_lazer": ["Piscina", "Academia", "Salão de festas"],
-    "seguranca": ["Portaria 24h", "Câmeras"],
-    "vagas_garagem": "1 a 2 vagas",
-    "torres": 4,
-    "andares": 18,
-    "unidades_total": 200,
-    "elevador": true
+    "areas_lazer": [],
+    "vagas_garagem": "1-2",
+    "torres": null,
+    "andares": null
   },
-  
   "faixa_preco": {
-    "min": 280000,
-    "max": 450000,
-    "moeda": "BRL",
-    "valor_m2": 6500
+    "min": null,
+    "max": null,
+    "valor_m2": null
   },
-  
-  "metragens": [
-    {"tipo": "2 Quartos", "area": "45m²", "quartos": 2, "preco_medio": 280000},
-    {"tipo": "3 Quartos", "area": "65m²", "quartos": 3, "preco_medio": 380000}
-  ],
-  
-  "caracteristicas": ["Varanda gourmet", "Piso porcelanato", "Infraestrutura ar-condicionado"],
-  "diferenciais": ["Entrada facilitada", "Documentação inclusa"],
-  "programas": ["Minha Casa Minha Vida", "FGTS"],
-  
-  "fontes": ["https://site-construtora.com.br", "https://zapimoveis.com.br/..."],
-  "resumo": "Breve resumo de 2-3 frases sobre o empreendimento"
+  "caracteristicas": [],
+  "diferenciais": [],
+  "fontes": [],
+  "resumo": "Breve descrição do empreendimento"
 }
 
-## REGRAS IMPORTANTES
-
-1. Use null para campos que não encontrar informação (não invente dados)
-2. Preços devem ser números inteiros em reais (sem R$ ou pontos)
-3. Valor do condomínio em reais (número inteiro)
-4. Distâncias nas proximidades devem incluir a unidade (500m, 1km, etc)
-5. Retorne APENAS o JSON, nenhum texto adicional
+REGRAS:
+- Responda APENAS com o JSON acima preenchido
+- NÃO crie arquivos .json ou .txt
+- NÃO gere documentos separados
+- O JSON deve estar NESTA mensagem
+- Use null para campos sem informação
 `;
 
   return instrucoes.trim();
 }
+
 
 /**
  * Extrai texto de resposta do output do Manus
@@ -269,6 +235,11 @@ export function extrairTextoResposta(task: ManusTask): string {
       for (const content of output.content) {
         if (content.type === 'output_text' && content.text) {
           textos.push(content.text);
+        } else if (content.type === 'file' || content.fileUrl) {
+          // Se o agente gerou um arquivo, incluímos o link no texto
+          const url = content.fileUrl || (content as any).url;
+          const nome = content.fileName || (content as any).name || 'Arquivo gerado';
+          textos.push(`\n[ARQUIVO GERADO: ${nome}](${url})\n`);
         }
       }
     }
@@ -324,7 +295,7 @@ export function extrairJSONBriefing(textoResposta: string): {
   // Última tentativa: encontrar primeiro { e último }
   const primeiroAbre = textoResposta.indexOf('{');
   const ultimoFecha = textoResposta.lastIndexOf('}');
-  
+
   if (primeiroAbre !== -1 && ultimoFecha > primeiroAbre) {
     try {
       const jsonStr = textoResposta.substring(primeiroAbre, ultimoFecha + 1);
@@ -353,11 +324,11 @@ export function extrairJSONBriefing(textoResposta: string): {
 export function converterParaBriefingEstruturado(dados: BriefingEmpreendimentoJSON): Record<string, any> {
   return {
     nome_empreendimento: dados.nome_empreendimento,
-    localizacao_completa: dados.endereco 
+    localizacao_completa: dados.endereco
       ? `${dados.endereco.logradouro || ''}, ${dados.endereco.bairro || ''} - ${dados.endereco.cidade || ''}/${dados.endereco.estado || ''}`
       : null,
     tipo_imovel: dados.tipo_imovel,
-    
+
     localizacao_detalhes: {
       bairro: dados.endereco?.bairro,
       caracteristica_bairro: dados.localizacao_detalhes?.caracteristica_bairro,
@@ -366,7 +337,7 @@ export function converterParaBriefingEstruturado(dados: BriefingEmpreendimentoJS
       vias_acesso: dados.localizacao_detalhes?.vias_acesso || [],
       proximidades: dados.localizacao_detalhes?.proximidades || {},
     },
-    
+
     condominio: {
       valor_estimado: dados.condominio?.valor_estimado,
       areas_lazer: dados.condominio?.areas_lazer || [],
@@ -376,7 +347,7 @@ export function converterParaBriefingEstruturado(dados: BriefingEmpreendimentoJS
       andares: dados.condominio?.andares,
       elevador: dados.condominio?.elevador,
     },
-    
+
     faixa_preco: {
       min: dados.faixa_preco?.min,
       max: dados.faixa_preco?.max,
@@ -384,21 +355,21 @@ export function converterParaBriefingEstruturado(dados: BriefingEmpreendimentoJS
       fonte: 'Pesquisa Manus AI',
       confianca: 0.7,
     },
-    
+
     metragens: dados.metragens?.map(m => ({
       area: m.area,
       quartos: m.quartos,
       preco_medio: m.preco_medio,
     })) || [],
-    
+
     caracteristicas: dados.caracteristicas?.map(c => ({ item: c, verificado: false })) || [],
     diferenciais: dados.diferenciais || [],
-    pontos_interesse: dados.localizacao_detalhes?.proximidades 
+    pontos_interesse: dados.localizacao_detalhes?.proximidades
       ? Object.entries(dados.localizacao_detalhes.proximidades).flatMap(([tipo, items]) =>
-          (items || []).map(item => ({ nome: item, tipo }))
-        )
+        (items || []).map(item => ({ nome: item, tipo }))
+      )
       : [],
-    
+
     fontes_consultadas: dados.fontes || [],
     alertas: [],
     confiabilidade: 0.7,
@@ -410,29 +381,29 @@ export function converterParaBriefingEstruturado(dados: BriefingEmpreendimentoJS
  */
 export function gerarResumoTextual(dados: BriefingEmpreendimentoJSON): string {
   const partes: string[] = [];
-  
+
   partes.push(`# ${dados.nome_empreendimento}`);
-  
+
   if (dados.construtora) {
     partes.push(`**Construtora:** ${dados.construtora}`);
   }
-  
+
   if (dados.endereco) {
     const end = dados.endereco;
     partes.push(`**Localização:** ${end.bairro || ''}, ${end.cidade || ''} - ${end.estado || ''}`);
   }
-  
+
   if (dados.fase_obra) {
     partes.push(`**Status:** ${dados.fase_obra}${dados.previsao_entrega ? ` (Entrega: ${dados.previsao_entrega})` : ''}`);
   }
-  
+
   if (dados.faixa_preco) {
     const fp = dados.faixa_preco;
     if (fp.min && fp.max) {
       partes.push(`**Preços:** R$ ${fp.min.toLocaleString('pt-BR')} a R$ ${fp.max.toLocaleString('pt-BR')}`);
     }
   }
-  
+
   if (dados.condominio) {
     const cond = dados.condominio;
     if (cond.torres || cond.andares) {
@@ -442,19 +413,19 @@ export function gerarResumoTextual(dados: BriefingEmpreendimentoJSON): string {
       partes.push(`**Lazer:** ${cond.areas_lazer.join(', ')}`);
     }
   }
-  
+
   if (dados.metragens?.length) {
     partes.push(`**Opções:** ${dados.metragens.map(m => `${m.tipo || m.quartos + 'Q'} (${m.area})`).join(', ')}`);
   }
-  
+
   if (dados.diferenciais?.length) {
     partes.push(`**Diferenciais:** ${dados.diferenciais.join(', ')}`);
   }
-  
+
   if (dados.resumo) {
     partes.push(`\n${dados.resumo}`);
   }
-  
+
   return partes.join('\n');
 }
 
@@ -521,7 +492,7 @@ class ManusService {
 
       // Verificar se a tarefa foi realmente criada (aguardar 2s e tentar obter)
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       try {
         await this.client.get(`/tasks/${response.data.task_id}`);
         console.log('[MANUS] ✅ Tarefa verificada e acessível!');
@@ -531,7 +502,7 @@ class ManusService {
           console.error('[MANUS] A API key pode não ter permissões corretas ou pertencer a outra conta.');
           console.error('[MANUS] Acesse https://manus.im/app?show_settings=integrations&app_name=api');
           console.error('[MANUS] para verificar sua API key e gerar uma nova se necessário.');
-          
+
           throw new Error(
             'API Manus com problema: tarefas são criadas mas não ficam acessíveis. ' +
             'Verifique sua API key em manus.im/app (Configurações > Integrações > API). ' +
@@ -572,7 +543,7 @@ class ManusService {
    * Aguarda conclusão de uma tarefa (polling)
    */
   async aguardarConclusao(
-    taskId: string, 
+    taskId: string,
     options: {
       intervalo?: number;      // ms entre verificações (default: 10s)
       timeout?: number;        // timeout total em ms (default: 5min)
@@ -633,10 +604,12 @@ class ManusService {
     const prompt = gerarPromptPesquisaEmpreendimento(dados);
 
     // Criar tarefa
+    // Usar 'chat' em vez de 'agent' para evitar criação de arquivos
+    // O modo 'chat' força resposta direta no texto
     const taskResponse = await this.criarTarefa({
       prompt,
       agentProfile: 'manus-1.5',
-      taskMode: 'agent',
+      taskMode: 'chat', // Mudado de 'agent' para 'chat' - resposta direta
       createShareableLink: true,
       locale: 'pt-BR',
     });
@@ -744,7 +717,7 @@ class ManusService {
     try {
       // Tentar listar tarefas existentes
       const listResponse = await this.client.get('/tasks?limit=1');
-      
+
       if (listResponse.data?.data) {
         return {
           sucesso: true,

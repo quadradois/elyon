@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../servicos/api";
 import { Button } from "../componentes/ui/button";
 import { Input } from "../componentes/ui/input";
-import { Progress } from "../componentes/ui/progress";
 import { Stepper, StepperEtapa } from "../componentes/ui/stepper";
 import {
   SkeletonResultadoBusca,
@@ -34,11 +33,11 @@ import {
   ArrowRight,
   ArrowLeft,
   Sparkles,
-  Clock,
   Home,
   Filter,
   X,
   Brain,
+  Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -96,6 +95,7 @@ export function Captacao() {
   const [resultadosBusca, setResultadosBusca] = useState<ResultadoBusca[]>([]);
   const [localSelecionado, setLocalSelecionado] =
     useState<ResultadoBusca | null>(null);
+  const [locaisSelecionados, setLocaisSelecionados] = useState<ResultadoBusca[]>([]);
 
   // Etapa 2: Seleção
   const [unidades, setUnidades] = useState<Unidade[]>([]);
@@ -110,7 +110,7 @@ export function Captacao() {
   // Etapa 3: Processamento
   const [processando, setProcessando] = useState(false);
   const [progresso, setProgresso] = useState(0);
-  const [logsProcesso, setLogsProcesso] = useState<string[]>([]);
+  const [_logsProcesso, setLogsProcesso] = useState<string[]>([]);
   const [leadsGerados, setLeadsGerados] = useState<any[]>([]);
   const [estatisticas, setEstatisticas] = useState({
     total: 0,
@@ -176,6 +176,104 @@ export function Captacao() {
     }
   };
 
+  // Toggle seleção de local (para seleção múltipla)
+  const toggleLocalSelecionado = (local: ResultadoBusca) => {
+    setLocaisSelecionados(prev => {
+      const jaExiste = prev.some(l => l.codigo === local.codigo && l.tipo === local.tipo);
+      if (jaExiste) {
+        return prev.filter(l => !(l.codigo === local.codigo && l.tipo === local.tipo));
+      } else {
+        return [...prev, local];
+      }
+    });
+  };
+
+  // Verificar se local está selecionado
+  const isLocalSelecionado = (local: ResultadoBusca) => {
+    return locaisSelecionados.some(l => l.codigo === local.codigo && l.tipo === local.tipo);
+  };
+
+  // Processar múltiplos locais selecionados
+  const processarLocaisSelecionados = async () => {
+    if (locaisSelecionados.length === 0) {
+      toast.error("Selecione pelo menos um local");
+      return;
+    }
+
+    // Usar primeiro local como referência
+    const primeiroLocal = locaisSelecionados[0];
+    setLocalSelecionado(primeiroLocal);
+
+    // Nome da lista baseado nos locais selecionados
+    if (locaisSelecionados.length === 1) {
+      setNomeLista(`Mineração ${primeiroLocal.nome}`);
+    } else {
+      setNomeLista(`Mineração ${locaisSelecionados.length} locais`);
+    }
+
+    // Limpar filtros anteriores
+    setFiltroUnidade("");
+    setFiltroQuadra("");
+    setFiltroLote("");
+
+    try {
+      setLoading(true);
+      const toastId = toast.loading(`Carregando unidades de ${locaisSelecionados.length} local(is)...`);
+
+      let todasUnidades: Unidade[] = [];
+
+      // Processar cada local selecionado
+      for (const local of locaisSelecionados) {
+        toast.loading(`Carregando: ${local.nome}...`, { id: toastId });
+
+        // 1. Iniciar Job
+        const { data: jobData } = await api.post('/mineracao/unidades/jobs/iniciar', {
+          cdedificio: local.codigo,
+          tipo: local.tipo,
+          nomeEdificio: local.nome
+        });
+        const jobId = jobData.jobId;
+
+        // 2. Polling
+        let jobConcluido = false;
+        let tentativas = 0;
+
+        while (!jobConcluido && tentativas < 120) {
+          await new Promise(r => setTimeout(r, 2000));
+          const { data: status } = await api.get(`/mineracao/unidades/jobs/${jobId}/status`);
+
+          if (status.status === 'concluido') {
+            jobConcluido = true;
+            const { data: resultado } = await api.get(`/mineracao/unidades/jobs/${jobId}/resultado`);
+            todasUnidades = [...todasUnidades, ...resultado.unidades];
+          } else if (status.status === 'erro') {
+            throw new Error(`Erro em ${local.nome}: ${status.mensagem}`);
+          } else {
+            const progresso = status.total > 0 ? Math.round((status.processados / status.total) * 100) : 0;
+            toast.loading(`${local.nome}: ${status.processados} unidades (${progresso}%)...`, { id: toastId });
+          }
+          tentativas++;
+        }
+
+        if (!jobConcluido) throw new Error(`Timeout ao carregar ${local.nome}`);
+      }
+
+      toast.dismiss(toastId);
+
+      setUnidades(todasUnidades);
+      setSelecionados(todasUnidades.map((u: Unidade) => u.nrinscr) || []);
+      setEtapa(2);
+
+      const tipoLabel = primeiroLocal.tipo === "edificio" ? "unidades" : "imóveis";
+      toast.success(`${todasUnidades.length} ${tipoLabel} carregadas de ${locaisSelecionados.length} local(is)`);
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Erro ao carregar imóveis");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const selecionarLocal = async (local: ResultadoBusca) => {
     setLocalSelecionado(local);
     setNomeLista(`Mineração ${local.nome}`);
@@ -187,22 +285,42 @@ export function Captacao() {
 
     try {
       setLoading(true);
+      const toastId = toast.loading("Iniciando busca de unidades...");
 
+      // 1. Iniciar Job
+      const { data: jobData } = await api.post('/mineracao/unidades/jobs/iniciar', {
+        cdedificio: local.codigo,
+        tipo: local.tipo,
+        nomeEdificio: local.nome
+      });
+      const jobId = jobData.jobId;
+
+      // 2. Polling
+      let jobConcluido = false;
+      let tentativas = 0;
       let unidadesCarregadas: Unidade[] = [];
 
-      if (local.tipo === "edificio") {
-        // Buscar unidades do edifício vertical
-        // Incluir nome do edifício para fallback de cache quando API falhar
-        const nomeEncoded = encodeURIComponent(local.nome);
-        const response = await api.get(
-          `/mineracao/unidades/${local.codigo}?nome=${nomeEncoded}`
-        );
-        unidadesCarregadas = response.data.unidades || [];
-      } else {
-        // Buscar casas do condomínio horizontal
-        const response = await api.get(`/mineracao/casas/${local.codigo}`);
-        unidadesCarregadas = response.data.casas || [];
+      while (!jobConcluido && tentativas < 120) { // 4 minutos max (para condomínios grandes)
+        await new Promise(r => setTimeout(r, 2000));
+        const { data: status } = await api.get(`/mineracao/unidades/jobs/${jobId}/status`);
+
+        if (status.status === 'concluido') {
+          jobConcluido = true;
+          const { data: resultado } = await api.get(`/mineracao/unidades/jobs/${jobId}/resultado`);
+          unidadesCarregadas = resultado.unidades;
+        } else if (status.status === 'erro') {
+          throw new Error(status.mensagem);
+        } else {
+          // Atualizar mensagem de progresso
+          const progresso = status.total > 0 ? Math.round((status.processados / status.total) * 100) : 0;
+          toast.loading(`Carregando: ${status.processados} unidades (${progresso}%)...`, { id: toastId });
+        }
+        tentativas++;
       }
+
+      if (!jobConcluido) throw new Error("Timeout ao carregar unidades. Tente novamente.");
+
+      toast.dismiss(toastId);
 
       setUnidades(unidadesCarregadas);
       setSelecionados(unidadesCarregadas.map((u: Unidade) => u.nrinscr) || []);
@@ -210,8 +328,9 @@ export function Captacao() {
 
       const tipoLabel = local.tipo === "edificio" ? "unidades" : "casas";
       toast.success(`${unidadesCarregadas.length} ${tipoLabel} carregadas`);
-    } catch (error) {
-      toast.error("Erro ao carregar imóveis");
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Erro ao carregar imóveis");
     } finally {
       setLoading(false);
     }
@@ -298,27 +417,62 @@ export function Captacao() {
       selecionados.includes(u.nrinscr)
     );
     addLog(
-      `🚀 Iniciando mineração de ${imoveisSelecionados.length} unidades...`
+      `🚀 Iniciando mineração assíncrona de ${imoveisSelecionados.length} unidades...`
     );
 
     try {
-      // Etapa 3.1: Identificar Proprietários
-      setProgresso(20);
-      addLog("🔍 Identificando proprietários dos imóveis...");
+      // Etapa 3.1: Identificar Proprietários (Via Job Assíncrono)
+      setProgresso(5);
+      addLog("🔍 Iniciando job de identificação...");
 
-      const responseProprietarios = await api.post(
-        "/mineracao/identificar-proprietarios",
-        {
-          imoveis: imoveisSelecionados,
+      // 1. Iniciar job
+      const responseJob = await api.post("/mineracao/jobs/iniciar", { imoveis: imoveisSelecionados });
+      const { jobId, total } = responseJob.data;
+
+      addLog(`✅ Job criado: ${jobId}`);
+      addLog(`⏳ Processando ${total} imóveis em background...`);
+      setProgresso(10);
+
+      // 2. Polling
+      let concluido = false;
+      let ultimoProcessados = 0;
+
+      while (!concluido) {
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Espera 2s
+
+        const statusResponse = await api.get(`/mineracao/jobs/${jobId}/status`);
+        const { job } = statusResponse.data;
+
+        if (job.processados > ultimoProcessados) {
+          addLog(`📊 Progresso: ${job.processados}/${job.total} imóveis processados`);
+          ultimoProcessados = job.processados;
         }
-      );
-      const proprietarios = responseProprietarios.data;
+
+        // Calcular progresso visual (10% a 50%)
+        const progressoVisual = 10 + Math.round((job.processados / job.total) * 40);
+        setProgresso(progressoVisual);
+
+        if (job.status === 'concluido') {
+          concluido = true;
+          addLog(`✅ Processamento concluído!`);
+        } else if (job.status === 'erro') {
+          throw new Error(job.mensagem || 'Erro no processamento');
+        } else if (job.status === 'cancelado') {
+          throw new Error('Job cancelado');
+        }
+      }
+
+      // 3. Buscar resultado final
+      const resultadoResponse = await api.get(`/mineracao/jobs/${jobId}/resultado`);
+      const { proprietarios, creditos } = resultadoResponse.data;
 
       setProgresso(50);
       addLog(`✅ ${proprietarios.length} proprietários identificados`);
+      addLog(`💰 Créditos consumidos: ${creditos?.consumidos || 0}`);
 
       // Etapa 3.2: Enriquecer com Assertiva (com deduplição!)
       addLog("📞 Buscando informações de contato...");
+      setProgresso(60);
 
       const responseEnriquecimento = await api.post(
         "/mineracao/confirmar-leads",
@@ -329,7 +483,7 @@ export function Captacao() {
 
       setProgresso(90);
 
-      const { total, sucesso, doCache, dados } = responseEnriquecimento.data;
+      const { total: totalLeads, sucesso, doCache, dados } = responseEnriquecimento.data;
 
       if (doCache > 0) {
         addLog(`✨ ${doCache} contatos localizados rapidamente`);
@@ -341,7 +495,7 @@ export function Captacao() {
 
       setLeadsGerados(dados || []);
       setEstatisticas({
-        total,
+        total: totalLeads,
         sucesso,
         doCache: doCache || 0,
         tempoTotal,
@@ -364,15 +518,20 @@ export function Captacao() {
       console.error("Erro no processamento:", error);
       setProcessando(false);
 
+      const msgErro = error.response?.data?.erro || error.message || "Falha no processamento";
+
       // Tratamento específico para créditos insuficientes
-      if (error.response?.status === 402) {
+      if (error.response?.status === 402 || msgErro.toLowerCase().includes("créditos insuficientes") || msgErro.toLowerCase().includes("creditos insuficientes")) {
         addLog(`❌ Créditos insuficientes para esta operação`);
-        setCreditosNecessarios(selecionados.length);
+
+        // Tentar extrair quantidade
+        const match = msgErro.match(/(\d+) necessários/);
+        const necessarios = match ? parseInt(match[1]) : selecionados.length;
+
+        setCreditosNecessarios(necessarios);
         setMostrarModalCreditos(true);
       } else {
-        addLog(
-          `❌ Erro: ${error.response?.data?.erro || "Falha no processamento"}`
-        );
+        addLog(`❌ Erro: ${msgErro}`);
         toast.error("Erro no processamento");
       }
     }
@@ -578,51 +737,109 @@ export function Captacao() {
               )}
 
             {resultadosBusca.length > 0 && (
-              <div className="space-y-2 max-h-[400px] overflow-y-auto animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
-                {resultadosBusca.map((resultado) => (
-                  <button
-                    key={`${resultado.tipo}-${resultado.codigo}`}
-                    onClick={() => selecionarLocal(resultado)}
-                    className="w-full flex items-center gap-4 p-4 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-all text-left group"
-                  >
-                    <div
-                      className={`w-12 h-12 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105 ${
-                        resultado.tipo === "edificio"
-                          ? "bg-blue-100"
-                          : "bg-green-100"
-                      }`}
-                    >
-                      {resultado.tipo === "edificio" ? (
-                        <Building2 className="w-6 h-6 text-blue-600" />
-                      ) : (
-                        <Home className="w-6 h-6 text-green-600" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-slate-900">
-                          {resultado.nome}
-                        </p>
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full ${
-                            resultado.tipo === "edificio"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-green-100 text-green-700"
+              <div className="space-y-3">
+                {/* Header com contador de seleção */}
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-sm text-slate-500">
+                    {resultadosBusca.length} resultado(s) encontrado(s)
+                  </p>
+                  {locaisSelecionados.length > 0 && (
+                    <span className="text-sm font-medium text-blue-600">
+                      {locaisSelecionados.length} selecionado(s)
+                    </span>
+                  )}
+                </div>
+
+                {/* Lista com checkboxes */}
+                <div className="space-y-2 max-h-[350px] overflow-y-auto animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
+                  {resultadosBusca.map((resultado) => {
+                    const selecionado = isLocalSelecionado(resultado);
+                    return (
+                      <div
+                        key={`${resultado.tipo}-${resultado.codigo}`}
+                        className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${selecionado
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-slate-200 hover:border-blue-300 hover:bg-slate-50"
                           }`}
+                      >
+                        {/* Checkbox */}
+                        <button
+                          onClick={() => toggleLocalSelecionado(resultado)}
+                          className="shrink-0"
                         >
-                          {resultado.tipo === "edificio"
-                            ? "🏢 Edifício"
-                            : "🏠 Condomínio"}
-                        </span>
+                          {selecionado ? (
+                            <CheckSquare className="w-5 h-5 text-blue-600" />
+                          ) : (
+                            <Square className="w-5 h-5 text-slate-300 hover:text-slate-400" />
+                          )}
+                        </button>
+
+                        {/* Conteúdo clicável para seleção rápida (processa só este) */}
+                        <button
+                          onClick={() => selecionarLocal(resultado)}
+                          className="flex-1 flex items-center gap-4 text-left group"
+                        >
+                          <div
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105 ${resultado.tipo === "edificio"
+                              ? "bg-blue-100"
+                              : "bg-green-100"
+                              }`}
+                          >
+                            {resultado.tipo === "edificio" ? (
+                              <Building2 className="w-5 h-5 text-blue-600" />
+                            ) : (
+                              <Home className="w-5 h-5 text-green-600" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-slate-900 truncate">
+                                {resultado.nome}
+                              </p>
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${resultado.tipo === "edificio"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : "bg-green-100 text-green-700"
+                                  }`}
+                              >
+                                {resultado.tipo === "edificio"
+                                  ? "Edifício"
+                                  : "Condomínio"}
+                              </span>
+                            </div>
+                            <p className="text-sm text-slate-500 flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              {resultado.bairro}
+                            </p>
+                          </div>
+                          <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 shrink-0" />
+                        </button>
                       </div>
-                      <p className="text-sm text-slate-500 flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {resultado.bairro}
-                      </p>
-                    </div>
-                    <ArrowRight className="w-5 h-5 text-slate-400" />
-                  </button>
-                ))}
+                    );
+                  })}
+                </div>
+
+                {/* Botão de processar selecionados */}
+                {locaisSelecionados.length > 0 && (
+                  <div className="sticky bottom-0 pt-3 border-t border-slate-200 bg-white">
+                    <Button
+                      onClick={processarLocaisSelecionados}
+                      disabled={loading}
+                      className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                    >
+                      {loading ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                      )}
+                      Processar {locaisSelecionados.length} local(is) selecionado(s)
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                    <p className="text-xs text-slate-500 text-center mt-2">
+                      Ou clique na seta → para processar apenas um local
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -657,14 +874,12 @@ export function Captacao() {
                   <button
                     type="button"
                     onClick={() => setModoTurbo(!modoTurbo)}
-                    className={`relative w-9 h-5 rounded-full transition-colors ${
-                      modoTurbo ? "bg-yellow-500" : "bg-slate-300"
-                    }`}
+                    className={`relative w-9 h-5 rounded-full transition-colors ${modoTurbo ? "bg-yellow-500" : "bg-slate-300"
+                      }`}
                   >
                     <span
-                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform flex items-center justify-center ${
-                        modoTurbo ? "translate-x-4" : ""
-                      }`}
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform flex items-center justify-center ${modoTurbo ? "translate-x-4" : ""
+                        }`}
                     >
                       {modoTurbo && (
                         <Zap className="w-2.5 h-2.5 text-yellow-500" />
@@ -791,9 +1006,9 @@ export function Captacao() {
                           title={`Selecionar todas ${unidadesFiltradas.length} unidades visíveis`}
                         >
                           {unidadesFiltradas.length > 0 &&
-                          unidadesFiltradas.every((u) =>
-                            selecionados.includes(u.nrinscr)
-                          ) ? (
+                            unidadesFiltradas.every((u) =>
+                              selecionados.includes(u.nrinscr)
+                            ) ? (
                             <CheckSquare className="w-5 h-5 text-blue-600" />
                           ) : (
                             <Square className="w-5 h-5 text-slate-400" />
@@ -915,78 +1130,264 @@ export function Captacao() {
           </div>
         )}
 
-        {/* ETAPA 3: PROCESSAMENTO */}
+        {/* ETAPA 3: PROCESSAMENTO - REDESIGN PREMIUM */}
         {etapa === 3 && (
-          <div className="space-y-6 animate-in fade-in-50 duration-300">
+          <div className="space-y-8 animate-in fade-in-50 duration-500">
+
+            {/* Header com status dinâmico */}
             <div className="text-center">
-              <h2 className="text-xl font-semibold text-slate-900">
-                {processando ? "Minerando Leads..." : "Mineração Concluída!"}
-              </h2>
-            </div>
-
-            {/* Barra de Progresso */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm text-slate-500">
-                <span>Progresso</span>
-                <span>{progresso}%</span>
-              </div>
-              <Progress value={progresso} className="h-2" />
-            </div>
-
-            {/* Logs */}
-            <div className="bg-slate-950 text-slate-300 p-4 rounded-lg h-40 overflow-y-auto font-mono text-xs space-y-1">
-              {logsProcesso.map((log, i) => (
-                <div
-                  key={i}
-                  className="animate-in fade-in-50 slide-in-from-left-4 duration-200"
-                >
-                  {log}
-                </div>
-              ))}
-              {processando && (
-                <div className="flex items-center gap-2 animate-pulse text-blue-400">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Processando...
-                </div>
+              {processando ? (
+                <>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100 text-blue-700 text-sm font-medium mb-4 animate-pulse">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processando em segundo plano...
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    Minerando Leads
+                  </h2>
+                  <p className="text-slate-500 mt-1">
+                    Identificando proprietários e buscando informações de contato
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-100 text-green-700 text-sm font-medium mb-4">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Mineração concluída com sucesso!
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    🎉 {estatisticas.sucesso} Leads Encontrados!
+                  </h2>
+                </>
               )}
             </div>
 
-            {/* Estatísticas (após conclusão) */}
-            {!processando && progresso === 100 && (
-              <div className="animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-green-50 rounded-lg p-4 text-center transition-transform hover:scale-105">
-                    <Users className="w-6 h-6 text-green-600 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-green-700">
-                      {estatisticas.sucesso}
-                    </div>
-                    <div className="text-xs text-green-600">Leads Gerados</div>
+            {/* Progresso Circular Premium */}
+            <div className="flex justify-center">
+              <div className="relative w-40 h-40">
+                {/* Background circle */}
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle
+                    cx="80"
+                    cy="80"
+                    r="70"
+                    stroke="currentColor"
+                    strokeWidth="8"
+                    fill="none"
+                    className="text-slate-100"
+                  />
+                  {/* Progress circle */}
+                  <circle
+                    cx="80"
+                    cy="80"
+                    r="70"
+                    stroke="url(#progressGradient)"
+                    strokeWidth="8"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={440}
+                    strokeDashoffset={440 - (440 * progresso) / 100}
+                    className="transition-all duration-500 ease-out"
+                    style={{
+                      filter: processando ? 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.5))' : 'none'
+                    }}
+                  />
+                  <defs>
+                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#3B82F6" />
+                      <stop offset="100%" stopColor="#8B5CF6" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                {/* Center content */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-4xl font-bold text-slate-900">{progresso}%</span>
+                  {processando && (
+                    <span className="text-xs text-slate-500 mt-1">
+                      {progresso < 50 ? "Identificando..." : progresso < 80 ? "Buscando contatos..." : "Finalizando..."}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Cards de Métricas em Tempo Real */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Card: Imóveis */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 border border-blue-200/50 transition-all duration-300 hover:scale-105 hover:shadow-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 bg-blue-500/10 rounded-lg">
+                    <Building2 className="w-4 h-4 text-blue-600" />
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-4 text-center transition-transform hover:scale-105">
-                    <Clock className="w-6 h-6 text-blue-600 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-blue-700">
-                      {estatisticas.tempoTotal}s
-                    </div>
-                    <div className="text-xs text-blue-600">Tempo Total</div>
+                  <span className="text-xs font-medium text-blue-600 uppercase tracking-wide">Imóveis</span>
+                </div>
+                <p className="text-2xl font-bold text-blue-900">{selecionados.length}</p>
+                <p className="text-xs text-blue-500">analisados</p>
+              </div>
+
+              {/* Card: Proprietários */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-xl p-4 border border-purple-200/50 transition-all duration-300 hover:scale-105 hover:shadow-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 bg-purple-500/10 rounded-lg">
+                    <Users className="w-4 h-4 text-purple-600" />
                   </div>
-                  <div className="bg-purple-50 rounded-lg p-4 text-center transition-transform hover:scale-105">
-                    <CheckCircle2 className="w-6 h-6 text-purple-600 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-purple-700">
-                      {estatisticas.sucesso}
-                    </div>
-                    <div className="text-xs text-purple-600">Com Contato</div>
+                  <span className="text-xs font-medium text-purple-600 uppercase tracking-wide">Proprietários</span>
+                </div>
+                <p className="text-2xl font-bold text-purple-900">
+                  {processando ? Math.round(selecionados.length * progresso / 100) : estatisticas.total}
+                </p>
+                <p className="text-xs text-purple-500">identificados</p>
+              </div>
+
+              {/* Card: Com Contato */}
+              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 rounded-xl p-4 border border-emerald-200/50 transition-all duration-300 hover:scale-105 hover:shadow-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 bg-emerald-500/10 rounded-lg">
+                    <Phone className="w-4 h-4 text-emerald-600" />
                   </div>
+                  <span className="text-xs font-medium text-emerald-600 uppercase tracking-wide">Com Telefone</span>
+                </div>
+                <p className="text-2xl font-bold text-emerald-900">
+                  {processando ? "..." : estatisticas.sucesso}
+                </p>
+                <p className="text-xs text-emerald-500">localizados</p>
+              </div>
+
+              {/* Card: Leads Qualificados */}
+              <div className="bg-gradient-to-br from-amber-50 to-orange-100/50 rounded-xl p-4 border border-amber-200/50 transition-all duration-300 hover:scale-105 hover:shadow-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 bg-amber-500/10 rounded-lg">
+                    <Target className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <span className="text-xs font-medium text-amber-600 uppercase tracking-wide">Leads</span>
+                </div>
+                <p className="text-2xl font-bold text-amber-900">
+                  {processando ? "..." : estatisticas.sucesso}
+                </p>
+                <p className="text-xs text-amber-500">qualificados</p>
+              </div>
+            </div>
+
+            {/* Timeline Visual de Etapas */}
+            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+              <div className="space-y-4">
+                {/* Passo 1 */}
+                <div className="flex items-center gap-4">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${progresso >= 10
+                    ? "bg-green-500 text-white"
+                    : "bg-slate-200 text-slate-400"
+                    }`}>
+                    {progresso >= 10 ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-sm font-medium">1</span>}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`font-medium ${progresso >= 10 ? "text-green-700" : "text-slate-500"}`}>
+                      Iniciando mineração
+                    </p>
+                    <p className="text-xs text-slate-400">Preparando processamento das unidades</p>
+                  </div>
+                  {progresso >= 10 && progresso < 50 && (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                  )}
                 </div>
 
-                <div className="flex justify-center pt-4">
+                {/* Linha conectora */}
+                <div className="ml-4 w-0.5 h-6 bg-gradient-to-b from-green-500 to-slate-200" />
+
+                {/* Passo 2 */}
+                <div className="flex items-center gap-4">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${progresso >= 50
+                    ? "bg-green-500 text-white"
+                    : progresso >= 10
+                      ? "bg-blue-500 text-white animate-pulse"
+                      : "bg-slate-200 text-slate-400"
+                    }`}>
+                    {progresso >= 50 ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-sm font-medium">2</span>}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`font-medium ${progresso >= 50 ? "text-green-700" : progresso >= 10 ? "text-blue-700" : "text-slate-500"}`}>
+                      Identificando proprietários
+                    </p>
+                    <p className="text-xs text-slate-400">Consultando base de dados do IPTU</p>
+                  </div>
+                  {progresso >= 10 && progresso < 50 && (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                  )}
+                </div>
+
+                {/* Linha conectora */}
+                <div className={`ml-4 w-0.5 h-6 ${progresso >= 50 ? "bg-gradient-to-b from-green-500 to-slate-200" : "bg-slate-200"}`} />
+
+                {/* Passo 3 */}
+                <div className="flex items-center gap-4">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${progresso >= 90
+                    ? "bg-green-500 text-white"
+                    : progresso >= 50
+                      ? "bg-blue-500 text-white animate-pulse"
+                      : "bg-slate-200 text-slate-400"
+                    }`}>
+                    {progresso >= 90 ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-sm font-medium">3</span>}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`font-medium ${progresso >= 90 ? "text-green-700" : progresso >= 50 ? "text-blue-700" : "text-slate-500"}`}>
+                      Buscando informações de contato
+                    </p>
+                    <p className="text-xs text-slate-400">Telefones, WhatsApp e e-mails</p>
+                  </div>
+                  {progresso >= 50 && progresso < 90 && (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                  )}
+                </div>
+
+                {/* Linha conectora */}
+                <div className={`ml-4 w-0.5 h-6 ${progresso >= 90 ? "bg-gradient-to-b from-green-500 to-green-500" : "bg-slate-200"}`} />
+
+                {/* Passo 4 */}
+                <div className="flex items-center gap-4">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${progresso === 100
+                    ? "bg-green-500 text-white"
+                    : progresso >= 90
+                      ? "bg-blue-500 text-white animate-pulse"
+                      : "bg-slate-200 text-slate-400"
+                    }`}>
+                    {progresso === 100 ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-sm font-medium">4</span>}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`font-medium ${progresso === 100 ? "text-green-700" : progresso >= 90 ? "text-blue-700" : "text-slate-500"}`}>
+                      Salvando leads qualificados
+                    </p>
+                    <p className="text-xs text-slate-400">Armazenando no banco de dados</p>
+                  </div>
+                  {progresso >= 90 && progresso < 100 && (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Botão de ação (após conclusão) */}
+            {!processando && progresso === 100 && (
+              <div className="text-center animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
+                <div className="inline-flex flex-col items-center gap-4 p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-200">
+                  <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30">
+                    <CheckCircle2 className="w-8 h-8 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-green-800">
+                      {estatisticas.sucesso} leads prontos para campanha!
+                    </p>
+                    <p className="text-sm text-green-600 mt-1">
+                      Tempo de processamento: {estatisticas.tempoTotal}s
+                      {estatisticas.doCache > 0 && ` • ${estatisticas.doCache} do cache`}
+                    </p>
+                  </div>
                   <Button
                     onClick={() => setEtapa(4)}
                     size="lg"
-                    className="gap-2"
+                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25"
                   >
-                    <Target className="w-4 h-4" />
+                    <Target className="w-5 h-5 mr-2" />
                     Salvar Lista de Contatos
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
                 </div>
               </div>

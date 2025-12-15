@@ -4,6 +4,17 @@
 # Uso: docker-compose -f docker-compose.prod.yml up -d
 # ============================================
 
+# ==========================================
+# SECRETS (arquivos seguros, não em env vars)
+# ==========================================
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+
 services:
   # ==========================================
   # BANCO DE DADOS
@@ -56,29 +67,26 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${DB_USER:-elyon_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-elyon}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      DATABASE_URL: postgresql://${DB_USER:-elyon_user}:${DB_PASSWORD}@elyon_postgres:5432/${DB_NAME:-elyon}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@elyon_redis:6379
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET}
       OPENAI_API_KEY: ${OPENAI_API_KEY:?Defina OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       EVOLUTION_API_URL: ${EVOLUTION_API_URL}
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
       ASAAS_API_URL: ${ASAAS_API_URL:-https://api.asaas.com/v3}
       ASAAS_API_KEY: ${ASAAS_API_KEY}
+      ASSERTIVA_CLIENT_ID: ${ASSERTIVA_CLIENT_ID}
+      ASSERTIVA_CLIENT_SECRET: ${ASSERTIVA_CLIENT_SECRET}
+      ASSERTIVA_API_URL: ${ASSERTIVA_API_URL:-https://api.assertivasolucoes.com.br}
       FRONTEND_URL: ${FRONTEND_URL:-https://elyon.quadradois.com.br}
       BACKEND_URL: ${BACKEND_URL:-https://api.elyon.quadradois.com.br}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+
     networks:
       - elyon_network
+      - crm_quadradois_net
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`api.elyon.quadradois.com.br`)"
-      - "traefik.http.routers.backend.entrypoints=websecure"
-      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.backend.loadbalancer.server.port=3000"
+      - "traefik.enable=false"
 
   # ==========================================
   # FRONTEND DASHBOARD
@@ -94,11 +102,26 @@ services:
     networks:
       - elyon_network
     labels:
+      - "traefik.enable=false"
+
+  # ==========================================
+  # SITE INSTITUCIONAL
+  # ==========================================
+  site:
+    build:
+      context: ./site-quadradois
+      dockerfile: Dockerfile
+    container_name: elyon_site
+    restart: unless-stopped
+    networks:
+      - elyon_network
+      - crm_quadradois_net
+    labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`elyon.quadradois.com.br`)"
-      - "traefik.http.routers.frontend.entrypoints=websecure"
-      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
-      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "traefik.http.routers.site.rule=Host(`quadradois.com.br`) || Host(`www.quadradois.com.br`)"
+      - "traefik.http.routers.site.entrypoints=websecure"
+      - "traefik.http.routers.site.tls.certresolver=letsencrypt"
+      - "traefik.http.services.site.loadbalancer.server.port=80"
 
   # ==========================================
   # ADMIN BILLING DASHBOARD
@@ -111,6 +134,7 @@ services:
     restart: unless-stopped
     networks:
       - elyon_network
+      - crm_quadradois_net
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.admin.rule=Host(`admin.quadradois.com.br`)"
@@ -137,9 +161,9 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-contato@quadradois.com.br}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "80:80"
-      - "443:443"
+    # ports:
+    #   - "80:80"
+    #   - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
@@ -172,6 +196,31 @@ services:
     networks:
       - elyon_network
 
+  # ==========================================
+  # BACKUP AUTOMATIZADO
+  # ==========================================
+  backup:
+    image: prodrigestivill/postgres-backup-local:15
+    container_name: elyon_backup
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: elyon_postgres
+      POSTGRES_DB: ${DB_NAME:-elyon}
+      POSTGRES_USER: ${DB_USER:-elyon_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD}
+      SCHEDULE: "0 3 * * *"
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+      HEALTHCHECK_PORT: 8080
+    volumes:
+      - ./backups:/backups
+    networks:
+      - elyon_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 # ==========================================
 # VOLUMES
 # ==========================================
@@ -185,4 +234,8 @@ volumes:
     # ==========================================
 networks:
   elyon_network:
-    driver: bridge
+    external: true
+    name: elyon_network
+
+  crm_quadradois_net:
+    external: true

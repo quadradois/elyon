@@ -19,30 +19,30 @@ interface DadosProprietario {
   origem: 'CACHE' | 'SCRAPER_LOCAL' | 'SCRAPER_WEB' | 'MOCK';
 }
 
-// Função para parsear o endereço da Prefeitura
-function parsearEnderecoPrefeitura(endereco: string): Partial<DadosProprietario> {
+// Função para parsear o endereço da Prefeitura (exportada para uso em outros módulos)
+export function parsearEnderecoPrefeitura(endereco: string): Partial<DadosProprietario> {
   const resultado: Partial<DadosProprietario> = {};
-  
+
   if (!endereco) return resultado;
-  
+
   // Exemplo: "AV VITORIA S/N APTO806BL.B QD: 04 LT: 01E ED RES RESERVA BURITI BOX: 108"
-  
+
   // Extrair BOX
   const boxMatch = endereco.match(/BOX[:\s]*(\d+[A-Z]?)/i);
   if (boxMatch) resultado.box = boxMatch[1].trim();
-  
+
   // Extrair Quadra
   const quadraMatch = endereco.match(/QD[:\s]*([^\s]+)/i);
   if (quadraMatch) resultado.quadra = quadraMatch[1].trim();
-  
+
   // Extrair Lote
   const loteMatch = endereco.match(/LT[:\s]*([^\s]+)/i);
   if (loteMatch) resultado.lote = loteMatch[1].trim();
-  
+
   // Extrair Edifício
   const edificioMatch = endereco.match(/ED\s+(.+?)(?:\s+BOX|\s*$)/i);
   if (edificioMatch) resultado.nomeEdificio = edificioMatch[1].trim();
-  
+
   // Extrair Apartamento e Bloco (formato: APTO806BL.B ou APT 806 BL B)
   const aptoMatch = endereco.match(/APT[O]?\s*(\d+)\s*(?:BL[.\s]*([A-Z0-9]+))?/i);
   if (aptoMatch) {
@@ -50,18 +50,18 @@ function parsearEnderecoPrefeitura(endereco: string): Partial<DadosProprietario>
     if (aptoMatch[2]) resultado.bloco = aptoMatch[2];
     resultado.unidade = `APTO ${aptoMatch[1]}${aptoMatch[2] ? ' BL.' + aptoMatch[2] : ''}`;
   }
-  
+
   // Extrair Logradouro (antes de APTO ou QD)
   const logradouroMatch = endereco.match(/^([A-Z\s]+(?:S\/N)?)\s*(?:APTO|APT|QD)/i);
   if (logradouroMatch) resultado.logradouro = logradouroMatch[1].trim();
-  
+
   // Extrair Número do logradouro (se não for S/N)
   const numeroMatch = endereco.match(/([A-Z\s]+)\s+(\d+)\s+(?:APTO|APT|QD)/i);
   if (numeroMatch) {
     resultado.logradouro = numeroMatch[1].trim();
     resultado.numero = numeroMatch[2];
   }
-  
+
   return resultado;
 }
 
@@ -84,7 +84,8 @@ export class ScraperIPTUService {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Referer': 'https://www.goiania.go.gov.br/sistemas/sccer/asp/sccer00201f0.asp'
         },
-        responseType: 'arraybuffer' // Importante para decodificar corretamente se for ISO-8859-1
+        responseType: 'arraybuffer', // Importante para decodificar corretamente se for ISO-8859-1
+        timeout: 15000 // Timeout de 15 segundos para evitar hang
       });
 
       // Decodificar resposta (assumindo UTF-8 ou Latin1, vamos tentar converter para string)
@@ -129,8 +130,9 @@ export class ScraperIPTUService {
 
     } catch (error) {
       console.error(`[Scraper] Erro na busca direta IPTU ${nrinscr}:`, error);
-      // Fallback para Mock apenas em último caso
-      return this.gerarDadosRealistas(nrinscr);
+      // Fallback para Mock DESATIVADO a pedido do usuário
+      // return this.gerarDadosRealistas(nrinscr);
+      throw error;
     }
   }
 
@@ -147,13 +149,13 @@ export class ScraperIPTUService {
 
     // Base de dados expandida
     const sobrenomes = [
-      'Silva', 'Santos', 'Oliveira', 'Souza', 'Rodrigues', 'Ferreira', 'Alves', 
-      'Pereira', 'Lima', 'Gomes', 'Costa', 'Ribeiro', 'Martins', 'Carvalho', 
+      'Silva', 'Santos', 'Oliveira', 'Souza', 'Rodrigues', 'Ferreira', 'Alves',
+      'Pereira', 'Lima', 'Gomes', 'Costa', 'Ribeiro', 'Martins', 'Carvalho',
       'Almeida', 'Lopes', 'Soares', 'Fernandes', 'Vieira', 'Barbosa'
     ];
     const prenomes = [
-      'Carlos', 'Ana', 'José', 'Maria', 'João', 'Paulo', 'Lucas', 'Fernanda', 
-      'Rafael', 'Juliana', 'Pedro', 'Mariana', 'Gabriel', 'Camila', 'Felipe', 
+      'Carlos', 'Ana', 'José', 'Maria', 'João', 'Paulo', 'Lucas', 'Fernanda',
+      'Rafael', 'Juliana', 'Pedro', 'Mariana', 'Gabriel', 'Camila', 'Felipe',
       'Amanda', 'Bruno', 'Beatriz', 'Gustavo', 'Larissa'
     ];
     const logradouros = [
@@ -161,23 +163,23 @@ export class ScraperIPTUService {
       'Av. Deputado Jamel Cecílio', 'Rua T-55', 'Rua C-137', 'Av. T-10'
     ];
     const bairros = [
-      'Setor Bueno', 'Setor Oeste', 'Jardim Goiás', 'Setor Marista', 'Centro', 
+      'Setor Bueno', 'Setor Oeste', 'Jardim Goiás', 'Setor Marista', 'Centro',
       'Setor Pedro Ludovico', 'Parque Amazônia', 'Setor Sul', 'Jardim América'
     ];
-    
+
     // Seleção baseada no hash
     const nome = `${prenomes[seed % prenomes.length]} ${sobrenomes[seed % sobrenomes.length]} ${sobrenomes[(seed + 1) % sobrenomes.length]}`;
-    
+
     // Endereço mais variado
     const logradouro = logradouros[seed % logradouros.length];
     const bairro = bairros[seed % bairros.length];
     const numero = (seed % 2000) + 1;
     const quadra = (seed % 100) + 1;
     const lote = (seed % 30) + 1;
-    
+
     // CPF gerado a partir do hash para não repetir com IPTUs parecidos
     const cpfNum = (seed * 123456789).toString().slice(0, 11).padEnd(11, '0');
-    const cpf = `${cpfNum.slice(0,3)}.${cpfNum.slice(3,6)}.${cpfNum.slice(6,9)}-${cpfNum.slice(9,11)}`;
+    const cpf = `${cpfNum.slice(0, 3)}.${cpfNum.slice(3, 6)}.${cpfNum.slice(6, 9)}-${cpfNum.slice(9, 11)}`;
 
     return {
       nrinscr,

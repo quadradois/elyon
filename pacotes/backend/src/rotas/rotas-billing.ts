@@ -6,9 +6,9 @@ import { prisma as prismaClient } from '../lib/db';
 import { servicoCreditos } from '../servicos/servico-creditos';
 import * as servicoGestaoClientes from '../servicos/servico-gestao-clientes';
 import * as servicoAsaas from '../servicos/servico-asaas';
-import { 
-  verificarSuperAdmin, 
-  verificarAutenticacao 
+import {
+  verificarSuperAdmin,
+  verificarAutenticacao
 } from '../middleware/middleware-auth';
 
 // Cast para evitar erros de tipo até regenerar Prisma
@@ -27,9 +27,13 @@ const router = Router();
 router.get('/saldo', verificarAutenticacao, async (req: Request, res: Response) => {
   try {
     const tenantId = req.tenantId;
-    
+
     if (!tenantId) {
-      return res.status(401).json({ erro: 'Não autorizado' });
+      console.warn('[Billing] Tentativa de consultar saldo sem tenantId. Usuario:', req.usuario?.email);
+      return res.status(401).json({
+        erro: 'Não autorizado',
+        mensagem: 'Tenant não identificado para este usuário'
+      });
     }
 
     const saldo = await servicoCreditos.consultarSaldo(tenantId);
@@ -71,7 +75,7 @@ router.get('/pacotes', async (req: Request, res: Response) => {
     const hoje = new Date();
     const isDia15 = hoje.getDate() === 15;
 
-    const pacotesComPromocao = pacotes.map(pacote => {
+    const pacotesComPromocao = pacotes.map((pacote: any) => {
       const promocao = servicoCreditos.calcularCreditosRecarga(pacote.creditos, hoje);
       return {
         ...pacote,
@@ -105,7 +109,7 @@ router.get('/pacotes', async (req: Request, res: Response) => {
 router.get('/transacoes', async (req: Request, res: Response) => {
   try {
     const tenantId = req.tenantId;
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado' });
     }
@@ -125,7 +129,7 @@ router.get('/transacoes', async (req: Request, res: Response) => {
 
     res.json({
       sucesso: true,
-      transacoes: transacoes.map(t => ({
+      transacoes: transacoes.map((t: any) => ({
         ...t,
         valor: Number(t.valor)
       })),
@@ -153,7 +157,7 @@ router.get('/transacoes', async (req: Request, res: Response) => {
 router.post('/recarga', async (req: Request, res: Response) => {
   try {
     const tenantId = req.tenantId;
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado' });
     }
@@ -219,12 +223,33 @@ router.post('/recarga', async (req: Request, res: Response) => {
 /**
  * POST /billing/webhook/asaas
  * Recebe notificações de pagamento do Asaas
+ * Eventos suportados:
+ * - PAYMENT_CONFIRMED / PAYMENT_RECEIVED: Pagamento confirmado
+ * - PAYMENT_OVERDUE: Pagamento atrasado
+ * - SUBSCRIPTION_CREATED: Assinatura criada
+ * - SUBSCRIPTION_RENEWED: Assinatura renovada
+ * - SUBSCRIPTION_DELETED: Assinatura cancelada
  */
 router.post('/webhook/asaas', async (req: Request, res: Response) => {
   try {
-    const { event, payment } = req.body;
+    // Validar token de autenticação (se configurado)
+    const webhookToken = servicoAsaas.getWebhookToken();
+    const receivedToken = req.headers['asaas-access-token'] as string;
 
-    console.log('Webhook Asaas recebido:', event, payment?.id);
+    if (webhookToken && receivedToken !== webhookToken) {
+      console.warn('[Webhook Asaas] ⚠️ Token inválido recebido');
+      // Ainda retorna 200 para não ficar retentando
+      return res.sendStatus(200);
+    }
+
+    const { event, payment, subscription } = req.body;
+    const timestamp = new Date().toISOString();
+
+    console.log(`[Webhook Asaas] ${timestamp} | Evento: ${event} | ID: ${payment?.id || subscription?.id}`);
+
+    // ========================================
+    // EVENTOS DE PAGAMENTO
+    // ========================================
 
     if (event === 'PAYMENT_CONFIRMED' || event === 'PAYMENT_RECEIVED') {
       // Buscar transação pelo ID do pagamento Asaas
@@ -233,7 +258,13 @@ router.post('/webhook/asaas', async (req: Request, res: Response) => {
       });
 
       if (!transacao) {
-        console.warn('Transação não encontrada para payment:', payment.id);
+        console.warn('[Webhook Asaas] Transação não encontrada para payment:', payment.id);
+        return res.sendStatus(200);
+      }
+
+      // Verificar se já foi processado
+      if (transacao.status === 'CONFIRMADO') {
+        console.log('[Webhook Asaas] Transação já confirmada, ignorando duplicata');
         return res.sendStatus(200);
       }
 
@@ -255,15 +286,242 @@ router.post('/webhook/asaas', async (req: Request, res: Response) => {
       });
 
       console.log(
-        `Créditos adicionados: ${transacao.creditos} para tenant ${transacao.tenantId}`
+        `[Webhook Asaas] ✅ PAGAMENTO CONFIRMADO | ${transacao.creditos} créditos → tenant ${transacao.tenantId}`
       );
+    }
+
+    // Cobrança criada
+    if (event === 'PAYMENT_CREATED') {
+      console.log(`[Webhook Asaas] 📝 COBRANÇA CRIADA | Payment: ${payment.id} | Valor: R$ ${payment.value}`);
+      // Log apenas - a transação já foi criada no momento da compra
+    }
+
+    // Cobrança atualizada (valor ou vencimento alterado)
+    if (event === 'PAYMENT_UPDATED') {
+      console.log(`[Webhook Asaas] ✏️ COBRANÇA ATUALIZADA | Payment: ${payment.id}`);
+
+      // Atualizar valor na transação se mudou
+      if (payment.value) {
+        await prisma.transacao.updateMany({
+          where: { asaasPagamentoId: payment.id },
+          data: { valor: payment.value }
+        });
+      }
+    }
+
+    // Pagamento atrasado
+    if (event === 'PAYMENT_OVERDUE') {
+      console.log(`[Webhook Asaas] ⚠️ PAGAMENTO ATRASADO | Payment: ${payment.id}`);
+
+      // Marcar transação como atrasada
+      await prisma.transacao.updateMany({
+        where: { asaasPagamentoId: payment.id },
+        data: { status: 'ATRASADO' }
+      });
+
+      // Buscar tenant pela transação
+      const transacao = await prisma.transacao.findFirst({
+        where: { asaasPagamentoId: payment.id },
+        include: { tenant: true }
+      });
+
+      if (transacao?.tenant) {
+        // Atualizar status de pagamento do tenant
+        await prisma.tenant.update({
+          where: { id: transacao.tenantId },
+          data: { statusPagamento: 'ATRASADO' }
+        });
+
+        console.log(`[Webhook Asaas] Tenant ${transacao.tenant.nome} marcado como ATRASADO`);
+      }
+    }
+
+    // Cobrança removida/cancelada
+    if (event === 'PAYMENT_DELETED') {
+      console.log(`[Webhook Asaas] 🗑️ COBRANÇA REMOVIDA | Payment: ${payment.id}`);
+
+      // Marcar transação como cancelada
+      await prisma.transacao.updateMany({
+        where: { asaasPagamentoId: payment.id },
+        data: { status: 'CANCELADO' }
+      });
+    }
+
+    // Cobrança estornada
+    if (event === 'PAYMENT_REFUNDED' || event === 'PAYMENT_PARTIALLY_REFUNDED') {
+      const parcial = event === 'PAYMENT_PARTIALLY_REFUNDED';
+      console.log(`[Webhook Asaas] 💸 ESTORNO ${parcial ? 'PARCIAL' : 'TOTAL'} | Payment: ${payment.id}`);
+
+      const transacao = await prisma.transacao.findFirst({
+        where: { asaasPagamentoId: payment.id }
+      });
+
+      if (transacao && transacao.status === 'CONFIRMADO') {
+        // Marcar como estornado
+        await prisma.transacao.update({
+          where: { id: transacao.id },
+          data: { status: 'ESTORNADO' }
+        });
+
+        // Remover créditos (se já foram adicionados)
+        // Nota: Isso pode resultar em saldo negativo, tratar no serviço de créditos
+        console.log(`[Webhook Asaas] ⚠️ Transação ${transacao.id} estornada - considerar remover créditos`);
+      }
+    }
+
+    // Cobrança restaurada (após estar vencida ou deletada)
+    if (event === 'PAYMENT_RESTORED') {
+      console.log(`[Webhook Asaas] ♻️ COBRANÇA RESTAURADA | Payment: ${payment.id}`);
+
+      // Restaurar para pendente
+      await prisma.transacao.updateMany({
+        where: { asaasPagamentoId: payment.id },
+        data: { status: 'PENDENTE' }
+      });
+    }
+
+    // Chargeback recebido (disputa de cartão)
+    if (event === 'PAYMENT_CHARGEBACK_REQUESTED') {
+      console.log(`[Webhook Asaas] 🚨 CHARGEBACK RECEBIDO | Payment: ${payment.id}`);
+
+      // Tratar como estorno potencial
+      await prisma.transacao.updateMany({
+        where: { asaasPagamentoId: payment.id },
+        data: { status: 'DISPUTA' }
+      });
+    }
+
+    // ========================================
+    // EVENTOS DE ASSINATURA
+    // ========================================
+
+    if (event === 'SUBSCRIPTION_CREATED') {
+      console.log(`[Webhook Asaas] 📝 ASSINATURA CRIADA | ID: ${subscription.id}`);
+      // Log apenas, a assinatura já foi salva no momento da criação
+    }
+
+    if (event === 'SUBSCRIPTION_UPDATED') {
+      console.log(`[Webhook Asaas] ✏️ ASSINATURA ATUALIZADA | ID: ${subscription.id}`);
+
+      // Buscar tenant pela assinatura
+      const tenant = await prisma.tenant.findFirst({
+        where: { asaasAssinaturaId: subscription.id }
+      });
+
+      if (tenant) {
+        // Atualizar valor se mudou
+        if (subscription.value) {
+          await prisma.tenant.update({
+            where: { id: tenant.id },
+            data: { valorPlano: subscription.value }
+          });
+          console.log(`[Webhook Asaas] Valor atualizado para R$ ${subscription.value}`);
+        }
+      }
+    }
+
+    if (event === 'SUBSCRIPTION_RENEWED') {
+      console.log(`[Webhook Asaas] 🔄 ASSINATURA RENOVADA | ID: ${subscription.id}`);
+
+      // Buscar tenant pela assinatura
+      const tenant = await prisma.tenant.findFirst({
+        where: { asaasAssinaturaId: subscription.id }
+      });
+
+      if (tenant) {
+        // Renovar créditos do plano
+        await servicoCreditos.renovarPlano(tenant.id);
+        console.log(`[Webhook Asaas] ✅ Plano renovado para tenant ${tenant.nome}`);
+      } else {
+        console.warn(`[Webhook Asaas] Tenant não encontrado para assinatura ${subscription.id}`);
+      }
+    }
+
+    if (event === 'SUBSCRIPTION_INACTIVATED') {
+      console.log(`[Webhook Asaas] ⏸️ ASSINATURA INATIVADA | ID: ${subscription.id}`);
+
+      // Buscar tenant pela assinatura
+      const tenant = await prisma.tenant.findFirst({
+        where: { asaasAssinaturaId: subscription.id }
+      });
+
+      if (tenant) {
+        // Marcar assinatura como inativa (mas não cancelada)
+        await prisma.tenant.update({
+          where: { id: tenant.id },
+          data: { statusPagamento: 'PENDENTE' }
+        });
+
+        console.log(`[Webhook Asaas] Tenant ${tenant.nome} com assinatura inativa`);
+      }
+    }
+
+    if (event === 'SUBSCRIPTION_DELETED') {
+      console.log(`[Webhook Asaas] ❌ ASSINATURA REMOVIDA | ID: ${subscription.id}`);
+
+      // Buscar tenant pela assinatura
+      const tenant = await prisma.tenant.findFirst({
+        where: { asaasAssinaturaId: subscription.id }
+      });
+
+      if (tenant) {
+        // Marcar tenant como cancelado e limpar referência da assinatura
+        await prisma.tenant.update({
+          where: { id: tenant.id },
+          data: {
+            statusPagamento: 'CANCELADO',
+            asaasAssinaturaId: null // Limpar referência
+          }
+        });
+
+        console.log(`[Webhook Asaas] Tenant ${tenant.nome} marcado para cancelamento`);
+      }
     }
 
     res.sendStatus(200);
   } catch (erro) {
-    console.error('Erro no webhook Asaas:', erro);
+    console.error('[Webhook Asaas] ❌ Erro:', erro);
     // Retornar 200 mesmo com erro para Asaas não retentar
     res.sendStatus(200);
+  }
+});
+
+// ====================================
+// TESTAR CONEXÃO ASAAS (Admin)
+// ====================================
+
+/**
+ * GET /billing/admin/testar-asaas
+ * Testa a conexão com a API do Asaas
+ */
+router.get('/admin/testar-asaas', verificarSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    const resultado = await servicoAsaas.testarConexao();
+
+    if (resultado.sucesso) {
+      res.json({
+        sucesso: true,
+        mensagem: resultado.mensagem,
+        detalhes: resultado.detalhes,
+        webhookUrl: `${process.env.BACKEND_URL || 'http://localhost:3000'}/api/billing/webhook/asaas`,
+        instrucoes: {
+          painel: 'Configure o webhook no painel ASAAS em: Integrações → Webhooks',
+          eventos: ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAYMENT_OVERDUE', 'SUBSCRIPTION_RENEWED', 'SUBSCRIPTION_DELETED']
+        }
+      });
+    } else {
+      res.status(500).json({
+        sucesso: false,
+        erro: resultado.mensagem,
+        instrucoes: 'Configure as variáveis ASAAS_API_URL e ASAAS_API_KEY no arquivo .env'
+      });
+    }
+  } catch (erro: any) {
+    console.error('[Billing] Erro ao testar Asaas:', erro);
+    res.status(500).json({
+      sucesso: false,
+      erro: erro.message
+    });
   }
 });
 
@@ -277,12 +535,12 @@ router.post('/webhook/asaas', async (req: Request, res: Response) => {
  */
 router.post('/admin/adicionar-creditos', verificarSuperAdmin, async (req: Request, res: Response) => {
   try {
-    
+
     const { tenantId, quantidade, tipo, descricao } = req.body;
 
     if (!tenantId || !quantidade || !tipo) {
-      return res.status(400).json({ 
-        erro: 'tenantId, quantidade e tipo são obrigatórios' 
+      return res.status(400).json({
+        erro: 'tenantId, quantidade e tipo são obrigatórios'
       });
     }
 
@@ -393,7 +651,7 @@ router.post('/admin/simular-pagamento', verificarSuperAdmin, async (req: Request
  */
 router.post('/admin/renovar', verificarSuperAdmin, async (req: Request, res: Response) => {
   try {
-    
+
     const { tenantId } = req.body;
 
     if (!tenantId) {
@@ -679,13 +937,13 @@ router.get('/admin/planos', verificarSuperAdmin, async (req: Request, res: Respo
 router.get('/calcular-upgrade', verificarAutenticacao, async (req: Request, res: Response) => {
   try {
     const tenantId = req.tenantId;
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado' });
     }
 
     const { novoPlano } = req.query;
-    
+
     if (!novoPlano || !['STARTER', 'GROWTH', 'PRO'].includes(novoPlano as string)) {
       return res.status(400).json({ erro: 'novoPlano inválido. Use: STARTER, GROWTH ou PRO' });
     }
@@ -702,7 +960,7 @@ router.get('/calcular-upgrade', verificarAutenticacao, async (req: Request, res:
 
     // Verificar se é upgrade (não downgrade)
     if (configNovo.valorMensal <= configAtual.valorMensal) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Só é possível fazer upgrade para um plano mais caro',
         planoAtual,
         novoPlano
@@ -765,7 +1023,7 @@ router.get('/calcular-upgrade', verificarAutenticacao, async (req: Request, res:
 router.post('/contratar-agente-extra', verificarAutenticacao, async (req: Request, res: Response) => {
   try {
     const tenantId = req.tenantId;
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado' });
     }
@@ -776,15 +1034,15 @@ router.post('/contratar-agente-extra', verificarAutenticacao, async (req: Reques
     }
 
     if (!tenant.asaasClienteId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Cliente não possui cadastro financeiro',
-        mensagem: 'Complete seu cadastro financeiro antes de contratar.' 
+        mensagem: 'Complete seu cadastro financeiro antes de contratar.'
       });
     }
 
     // Criar assinatura no Asaas
     console.log(`[Billing] Criando assinatura de Agente Extra para tenant ${tenant.nome}...`);
-    
+
     const assinatura = await servicoAsaas.criarAssinatura({
       clienteId: tenant.asaasClienteId,
       valor: 99.00,
@@ -827,7 +1085,7 @@ router.post('/contratar-agente-extra', verificarAutenticacao, async (req: Reques
 router.post('/comprar-creditos', verificarAutenticacao, async (req: Request, res: Response) => {
   try {
     const tenantId = req.tenantId;
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado' });
     }
@@ -850,7 +1108,7 @@ router.post('/comprar-creditos', verificarAutenticacao, async (req: Request, res
 
     const plano = tenant.planoTipo || 'STARTER';
     const config = servicoGestaoClientes.CONFIGURACOES_PLANOS[plano as keyof typeof servicoGestaoClientes.CONFIGURACOES_PLANOS];
-    
+
     const valorTotal = quantidade * config.custoPorCreditoExtra;
 
     // Calcular comparativo PRO (para marketing)
@@ -884,7 +1142,7 @@ router.post('/comprar-creditos', verificarAutenticacao, async (req: Request, res
     try {
       // Verificar se tenant tem cliente Asaas, senão criar
       let asaasClienteId = tenant.asaasClienteId;
-      
+
       if (!asaasClienteId) {
         // Criar cliente no Asaas
         const clienteAsaas = await servicoAsaas.criarCliente({
@@ -893,16 +1151,16 @@ router.post('/comprar-creditos', verificarAutenticacao, async (req: Request, res
           telefone: tenant.telefone,
           cpfCnpj: tenant.cnpj
         });
-        
+
         asaasClienteId = clienteAsaas.id;
-        
+
         // Salvar ID do cliente Asaas no tenant
         await prisma.tenant.update({
           where: { id: tenantId },
           data: { asaasClienteId }
         });
       }
-      
+
       // Criar cobrança PIX
       const cobranca = await servicoAsaas.criarCobranca({
         clienteId: asaasClienteId,
@@ -910,23 +1168,23 @@ router.post('/comprar-creditos', verificarAutenticacao, async (req: Request, res
         descricao: `Compra de ${quantidade} créditos - Elyon`,
         tipoPagamento: 'PIX'
       });
-      
+
       // Gerar QR Code PIX
       const pixData = await servicoAsaas.gerarPixQrCode(cobranca.id);
-      
+
       // Atualizar transação com ID do pagamento Asaas
       await prisma.transacao.update({
         where: { id: transacao.id },
         data: { asaasPagamentoId: cobranca.id }
       });
-      
+
       pagamento = {
         id: cobranca.id,
         pixQrCode: pixData.qrCodeUrl,
         pixPayload: pixData.payload,
         invoiceUrl: cobranca.invoiceUrl
       };
-      
+
       console.log('[Billing] Cobrança PIX criada:', cobranca.id);
     } catch (erroAsaas: any) {
       console.error('[Billing] Erro Asaas:', erroAsaas.message);
@@ -963,7 +1221,7 @@ router.post('/comprar-creditos', verificarAutenticacao, async (req: Request, res
 router.post('/upgrade', verificarAutenticacao, async (req: Request, res: Response) => {
   try {
     const tenantId = req.tenantId;
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autorizado' });
     }
@@ -1025,7 +1283,7 @@ router.post('/upgrade', verificarAutenticacao, async (req: Request, res: Respons
 
     await prisma.transacao.update({
       where: { id: transacao.id },
-      data: { 
+      data: {
         status: 'CONFIRMADO',
         confirmadoEm: new Date()
       }

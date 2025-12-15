@@ -33,7 +33,7 @@ interface UnidadeImovel {
 }
 
 export class MapaService {
-  
+
   // ============================================
   // NOVOS MÉTODOS: Busca Hierárquica
   // ============================================
@@ -44,7 +44,7 @@ export class MapaService {
    */
   async listarBairros(): Promise<Bairro[]> {
     console.log('[MapaService] Listando bairros...');
-    
+
     try {
       const response = await axios.get(MAPA_API_URL, {
         params: {
@@ -86,14 +86,14 @@ export class MapaService {
    */
   async listarEdificiosPorBairro(cdbairro: number): Promise<Edificio[]> {
     console.log(`[MapaService] Listando edifícios do bairro ${cdbairro}...`);
-    
+
     // 1. Tentar cache primeiro
     const doCache = await this.buscarEdificiosDoBairroNoCache(cdbairro);
     if (doCache.length > 0) {
       console.log(`[MapaService] ✅ ${doCache.length} edifícios do cache (bairro ${cdbairro})`);
       return doCache;
     }
-    
+
     // 2. Tentar API externa
     try {
       const response = await axios.get(MAPA_API_URL, {
@@ -113,10 +113,10 @@ export class MapaService {
       }
 
       const features = response.data.features || [];
-      
+
       // Agrupar para contar unidades por edifício
       const edificiosMap = new Map<number, Edificio>();
-      
+
       for (const f of features) {
         const codigo = f.attributes.cdedificio;
         if (!edificiosMap.has(codigo)) {
@@ -133,7 +133,7 @@ export class MapaService {
 
       const edificios = Array.from(edificiosMap.values());
       console.log(`[MapaService] ✅ ${edificios.length} edifícios da API (bairro ${cdbairro})`);
-      
+
       return edificios;
 
     } catch (error) {
@@ -161,13 +161,13 @@ export class MapaService {
    * Suporta busca por cdedificio OU por nome do edifício (para cache)
    */
   async buscarUnidadesPorEdificio(
-    cdedificio: number, 
-    offset: number = 0, 
+    cdedificio: number,
+    offset: number = 0,
     limit: number = 500,
     nomeEdificio?: string // Novo parâmetro opcional para buscar por nome
   ): Promise<{ unidades: UnidadeImovel[]; total: number; hasMore: boolean }> {
     console.log(`[MapaService] Buscando unidades do edifício ${cdedificio} (offset: ${offset}, limit: ${limit})...`);
-    
+
     // 1. PRIMEIRO: Se temos nome do edifício, tentar buscar no cache local
     if (nomeEdificio) {
       const doCache = await this.buscarUnidadesNoCache(nomeEdificio, offset, limit);
@@ -176,7 +176,7 @@ export class MapaService {
         return doCache;
       }
     }
-    
+
     // 2. Tentar API externa
     try {
       // Primeiro, contar total de registros
@@ -188,9 +188,9 @@ export class MapaService {
         },
         timeout: 15000
       });
-      
+
       const total = countResponse.data.count || 0;
-      
+
       // Buscar página atual
       const response = await axios.get(MAPA_API_URL, {
         params: {
@@ -222,9 +222,9 @@ export class MapaService {
 
       const hasMore = (offset + unidades.length) < total;
       console.log(`[MapaService] ${unidades.length} unidades (${offset + 1}-${offset + unidades.length} de ${total})`);
-      
+
       // Salvar no cache em background
-      this.salvarNoCache(unidades).catch(err => 
+      this.salvarNoCache(unidades).catch(err =>
         console.error('[MapaService] Erro ao salvar cache:', err)
       );
 
@@ -232,7 +232,7 @@ export class MapaService {
 
     } catch (error) {
       console.error('[MapaService] ❌ Erro na API externa:', error);
-      
+
       // 3. Fallback: Buscar no cache pelo nome do edifício (se tiver)
       if (nomeEdificio) {
         console.log(`[MapaService] Tentando fallback por nome: "${nomeEdificio}"...`);
@@ -242,7 +242,7 @@ export class MapaService {
           return doCache;
         }
       }
-      
+
       console.log('[MapaService] API indisponível e cache vazio');
       return { unidades: [], total: 0, hasMore: false };
     }
@@ -252,8 +252,8 @@ export class MapaService {
    * Busca unidades de um edifício no cache local (por nome)
    */
   private async buscarUnidadesNoCache(
-    nomeEdificio: string, 
-    offset: number = 0, 
+    nomeEdificio: string,
+    offset: number = 0,
     limit: number = 500
   ): Promise<{ unidades: UnidadeImovel[]; total: number; hasMore: boolean }> {
     try {
@@ -291,7 +291,7 @@ export class MapaService {
       }));
 
       const hasMore = (offset + unidades.length) < total;
-      
+
       return { unidades, total, hasMore };
     } catch (error) {
       console.error('[MapaService] Erro ao buscar unidades no cache:', error);
@@ -305,19 +305,19 @@ export class MapaService {
    */
   async buscarEdificiosPorNome(termo: string, limite: number = 20): Promise<Edificio[]> {
     console.log(`[MapaService] Buscando edifícios por nome: "${termo}"...`);
-    
+
     // 1. PRIMEIRO: Tentar buscar no cache local
     const doCache = await this.buscarEdificiosNoCache(termo, limite);
     if (doCache.length > 0) {
       console.log(`[MapaService] ✅ ${doCache.length} edifícios encontrados no CACHE`);
       // Tentar atualizar cache em background (não bloqueia)
-      this.atualizarCacheEdificiosBackground(termo, limite).catch(() => {});
+      this.atualizarCacheEdificiosBackground(termo, limite).catch(() => { });
       return doCache;
     }
-    
+
     // 2. Se cache vazio, tentar API externa
     console.log(`[MapaService] Cache vazio, tentando API externa...`);
-    
+
     try {
       const response = await axios.get(MAPA_API_URL, {
         params: {
@@ -337,10 +337,10 @@ export class MapaService {
       }
 
       const features = response.data.features || [];
-      
+
       // Agrupar por cdedificio para evitar duplicatas
       const edificiosMap = new Map<number, Edificio>();
-      
+
       for (const f of features) {
         const codigo = f.attributes.cdedificio;
         if (!edificiosMap.has(codigo)) {
@@ -354,18 +354,18 @@ export class MapaService {
 
       const edificios = Array.from(edificiosMap.values());
       console.log(`[MapaService] ✅ ${edificios.length} edifícios encontrados na API`);
-      
+
       // Salvar no cache para próximas buscas
-      this.salvarEdificiosNoCache(edificios, termo).catch(err => 
+      this.salvarEdificiosNoCache(edificios, termo).catch(err =>
         console.error('[MapaService] Erro ao salvar cache de edifícios:', err)
       );
-      
+
       return edificios;
 
     } catch (error) {
       console.error('[MapaService] ❌ Erro na API externa:', error);
       console.log('[MapaService] API indisponível e cache vazio - retornando mock');
-      
+
       // 3. Fallback Final: Mock de edifícios conhecidos
       return this.mockEdificiosPorNome(termo);
     }
@@ -454,7 +454,7 @@ export class MapaService {
           nmlogradou: f.attributes.nmlogradou,
           incompl: f.attributes.incompl
         }));
-        
+
         await this.salvarNoCache(imoveis);
         console.log(`[MapaService] Cache atualizado em background: ${imoveis.length} imóveis`);
       }
@@ -479,9 +479,9 @@ export class MapaService {
       { codigo: 90009, nome: 'GRAN VILLAGE', logradouro: 'AV. ARAGUAIA - SETOR SUL' },
       { codigo: 90010, nome: 'LIVING PARK', logradouro: 'RUA 22 - SETOR OESTE' },
     ];
-    
+
     const termoUpper = termo.toUpperCase();
-    return edificiosConhecidos.filter(e => 
+    return edificiosConhecidos.filter(e =>
       e.nome.includes(termoUpper) || termoUpper.includes(e.nome.split(' ')[0])
     );
   }
@@ -500,7 +500,7 @@ export class MapaService {
    */
   async buscarCondominiosHorizontais(termo: string, limite: number = 50): Promise<Bairro[]> {
     console.log(`[MapaService] Buscando condomínios horizontais: "${termo}" (limite: ${limite})...`);
-    
+
     try {
       // Buscar bairros que contêm o termo - sem limite na API para pegar todos
       const response = await axios.get(MAPA_API_URL, {
@@ -522,38 +522,38 @@ export class MapaService {
 
       const features = response.data.features || [];
       console.log(`[MapaService] API retornou ${features.length} bairros contendo "${termo}"`);
-      
+
       // Remover duplicatas
       const bairrosMap = new Map<number, Bairro>();
-      
+
       // Prefixos/padrões comuns de condomínios horizontais
       const padroesCondominio = [
-        'JARDINS', 'JARDIM', 'JD ', 'JD.', 
-        'ALPHAVILLE', 'ALDEIA', 'PORTAL', 
-        'RESIDENCIAL', 'RES ', 'RES.', 
+        'JARDINS', 'JARDIM', 'JD ', 'JD.',
+        'ALPHAVILLE', 'ALDEIA', 'PORTAL',
+        'RESIDENCIAL', 'RES ', 'RES.',
         'COND ', 'COND.', 'CONDOMINIO', 'CONDOMÍNIO',
-        'VILLAGE', 'RESERVA', 'GRANVILLE', 
+        'VILLAGE', 'RESERVA', 'GRANVILLE',
         'GOIANIA GOLF', 'GOIÂNIA GOLF',
         'ALTO DA BOA VISTA', 'PARQUE'
       ];
-      
+
       // Bairros tradicionais que NÃO são condomínios horizontais
       const bairrosTradicionais = [
         'SETOR', 'CENTRO', 'VILA', 'BAIRRO', 'CONJUNTO', 'NUCLEO'
       ];
-      
+
       for (const f of features) {
         const codigo = f.attributes.cdbairro;
         const nome = f.attributes.nmbairro?.trim()?.toUpperCase() || '';
-        
+
         if (!codigo || bairrosMap.has(codigo)) continue;
-        
+
         // Verificar se é bairro tradicional (NÃO incluir)
         const ehBairroTradicional = bairrosTradicionais.some(p => nome.startsWith(p));
-        
+
         // Verificar se parece ser um condomínio horizontal
         const pareceCondominio = padroesCondominio.some(p => nome.includes(p));
-        
+
         // Incluir se:
         // 1. Parece condomínio E não é bairro tradicional
         // 2. OU nome começa exatamente com o termo buscado (ex: buscar "florença" → "FLORENÇA RESIDENCE")
@@ -574,12 +574,12 @@ export class MapaService {
         if (!aStartsWith && bStartsWith) return 1;
         return a.nome.localeCompare(b.nome);
       });
-      
+
       // Aplicar limite
       bairros = bairros.slice(0, limite);
-      
+
       console.log(`[MapaService] ${bairros.length} condomínios horizontais encontrados (de ${features.length} bairros na API)`);
-      
+
       return bairros;
 
     } catch (error) {
@@ -594,7 +594,7 @@ export class MapaService {
    */
   async listarTodasCasasPorCondominio(cdbairro: number): Promise<{ casas: any[]; total: number }> {
     console.log(`[MapaService] Buscando TODAS as casas do condomínio ${cdbairro}...`);
-    
+
     try {
       // Primeiro, contar total de registros
       const countResponse = await axios.get(MAPA_API_URL, {
@@ -605,10 +605,10 @@ export class MapaService {
         },
         timeout: 30000
       });
-      
+
       const total = countResponse.data.count || 0;
       console.log(`[MapaService] Total de casas no condomínio: ${total}`);
-      
+
       if (total === 0) {
         return { casas: [], total: 0 };
       }
@@ -617,10 +617,10 @@ export class MapaService {
       const BATCH_SIZE = 1000;
       const todasCasas: any[] = [];
       let offset = 0;
-      
+
       while (offset < total) {
         console.log(`[MapaService] Buscando lote ${offset}-${offset + BATCH_SIZE} de ${total}...`);
-        
+
         const response = await axios.get(MAPA_API_URL, {
           params: {
             where: `cdbairro = ${cdbairro}`,
@@ -639,7 +639,7 @@ export class MapaService {
         }
 
         const features = response.data.features || [];
-        
+
         for (const f of features) {
           todasCasas.push({
             nrinscr: f.attributes.nrinscr,
@@ -653,17 +653,17 @@ export class MapaService {
             nrlote: f.attributes.nrlote?.trim() || ''
           });
         }
-        
+
         offset += BATCH_SIZE;
-        
+
         // Se recebeu menos que o batch, acabou
         if (features.length < BATCH_SIZE) break;
       }
 
       console.log(`[MapaService] Total carregado: ${todasCasas.length} casas`);
-      
+
       // Salvar no cache em background
-      this.salvarNoCache(todasCasas).catch(err => 
+      this.salvarNoCache(todasCasas).catch(err =>
         console.error('[MapaService] Erro ao salvar cache:', err)
       );
 
@@ -685,7 +685,7 @@ export class MapaService {
     limit: number = 500
   ): Promise<{ casas: any[]; total: number; hasMore: boolean }> {
     console.log(`[MapaService] Listando casas do condomínio ${cdbairro} (offset: ${offset}, limit: ${limit})...`);
-    
+
     try {
       // Primeiro, contar total de registros
       const countResponse = await axios.get(MAPA_API_URL, {
@@ -696,9 +696,9 @@ export class MapaService {
         },
         timeout: 30000
       });
-      
+
       const total = countResponse.data.count || 0;
-      
+
       // Buscar página atual
       const response = await axios.get(MAPA_API_URL, {
         params: {
@@ -732,9 +732,9 @@ export class MapaService {
 
       const hasMore = (offset + casas.length) < total;
       console.log(`[MapaService] ${casas.length} casas (${offset + 1}-${offset + casas.length} de ${total})`);
-      
+
       // Salvar no cache em background
-      this.salvarNoCache(casas).catch(err => 
+      this.salvarNoCache(casas).catch(err =>
         console.error('[MapaService] Erro ao salvar cache:', err)
       );
 
@@ -763,21 +763,21 @@ export class MapaService {
     limite: number = 50
   ): Promise<any[]> {
     console.log(`[MapaService] Buscando por endereço: "${endereco}" ${numero ? `Nº ${numero}` : ''}...`);
-    
+
     try {
       // Construir cláusula WHERE
       const whereClauses: string[] = [];
-      
+
       // Busca pelo logradouro (nome da rua)
       const enderecoLimpo = endereco.toUpperCase().trim();
       whereClauses.push(`nmlogradou LIKE '%${enderecoLimpo}%'`);
-      
+
       // Se tiver número, adiciona filtro
       if (numero) {
         const numeroLimpo = numero.trim();
         whereClauses.push(`nrimovel LIKE '%${numeroLimpo}%'`);
       }
-      
+
       const response = await axios.get(MAPA_API_URL, {
         params: {
           where: whereClauses.join(' AND '),
@@ -810,9 +810,9 @@ export class MapaService {
       }));
 
       console.log(`[MapaService] ${imoveis.length} imóveis encontrados`);
-      
+
       // Salvar no cache em background
-      this.salvarNoCache(imoveis).catch(err => 
+      this.salvarNoCache(imoveis).catch(err =>
         console.error('[MapaService] Erro ao salvar cache:', err)
       );
 
@@ -880,7 +880,8 @@ export class MapaService {
           outFields: 'nrinscr,nmedificio,nmbairro,nmlogradou,incompl',
           returnGeometry: false,
           f: 'json'
-        }
+        },
+        timeout: 15000 // Timeout de 15 segundos
       });
 
       if (response.data.error) {
@@ -891,7 +892,7 @@ export class MapaService {
       const resultados = features.map((f: any) => f.attributes);
 
       // 2. Salvar no Cache (Background)
-      this.salvarNoCache(resultados).catch(err => 
+      this.salvarNoCache(resultados).catch(err =>
         console.error('[MapaService] Erro ao salvar cache:', err)
       );
 
@@ -915,7 +916,7 @@ export class MapaService {
 
   private async buscarNoCache(params: BuscaParams) {
     const whereLocal: any = {};
-    
+
     if (params.nrinscr) {
       whereLocal.inscricaoIptu = params.nrinscr.replace(/[^0-9]/g, '');
     }
@@ -949,10 +950,10 @@ export class MapaService {
   private async salvarNoCache(resultados: any[]) {
     if (resultados.length === 0) return;
     console.log(`[MapaService] Salvando ${resultados.length} imóveis no cache...`);
-    
+
     for (const r of resultados) {
       if (!r.nrinscr) continue;
-      
+
       await prisma.imovel.upsert({
         where: { inscricaoIptu: r.nrinscr },
         update: {

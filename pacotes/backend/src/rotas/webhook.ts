@@ -3,7 +3,6 @@ import { prisma } from '../lib/db';
 import { openaiService } from '../servicos/openai';
 import { elyonCore } from '../agentes/elyon-core';
 import { sdrWorker, ConfiguracaoAgente } from '../agentes/workers/sdr-worker';
-import { sdrWorker, ConfiguracaoAgente } from '../agentes/workers/sdr-worker';
 import { getWhatsAppService } from '../servicos/whatsapp';
 
 const router = Router();
@@ -26,13 +25,13 @@ async function salvarMensagemProspeccao(params: {
       const existente = await prisma.mensagemProspeccao.findFirst({
         where: { messageId: params.messageId }
       });
-      
+
       if (existente) {
         console.log(`[Webhook] ⚠️ Mensagem ${params.messageId} já existe, ignorando duplicata`);
         return;
       }
     }
-    
+
     await prisma.mensagemProspeccao.create({
       data: {
         contatoId: params.contatoId,
@@ -71,10 +70,10 @@ async function carregarHistoricoMensagens(
         dataHora: true
       }
     });
-    
+
     // Inverter para ordem cronológica (mais antiga primeiro)
     const ordenado = mensagens.reverse();
-    
+
     // Converter para formato OpenAI
     return ordenado.map((m: { direcao: string; conteudo: string }) => ({
       role: m.direcao === 'ENTRADA' ? 'user' as const : 'assistant' as const,
@@ -125,9 +124,9 @@ async function buscarConfiguracaoAgentePorInstancia(instanceName: string, tenant
       estaAtivo: true
     }
   });
-  
+
   if (!agente) return null;
-  
+
   // Buscar tenant para pegar política
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -137,7 +136,7 @@ async function buscarConfiguracaoAgentePorInstancia(instanceName: string, tenant
       perfilLocacao: true
     }
   });
-  
+
   return { ...agente, tenant };
 }
 
@@ -147,12 +146,12 @@ async function buscarConfiguracaoAgentePorInstancia(instanceName: string, tenant
 function normalizarTelefone(telefone: string): string {
   // Remove tudo que não é dígito
   const apenasDigitos = telefone.replace(/\D/g, '');
-  
+
   // Remove DDI 55 se presente
   if (apenasDigitos.startsWith('55') && apenasDigitos.length > 11) {
     return apenasDigitos.slice(2);
   }
-  
+
   return apenasDigitos;
 }
 
@@ -165,10 +164,10 @@ function normalizarTelefone(telefone: string): string {
 async function buscarContatoProspeccao(telefone: string) {
   // Normalizar telefone de entrada (remover DDI e formatação)
   const telNormalizado = normalizarTelefone(telefone);
-  
+
   // Pegar os últimos 8 dígitos
   const ultimosDigitos = telNormalizado.slice(-8);
-  
+
   // Para lidar com telefones com/sem o nono dígito, vamos buscar também com variação
   let ultimosDigitosVar = '';
   if (telNormalizado.length === 11) {
@@ -180,9 +179,9 @@ async function buscarContatoProspeccao(telefone: string) {
     const comNono = telNormalizado.slice(0, 2) + '9' + telNormalizado.slice(2);
     ultimosDigitosVar = comNono.slice(-8);
   }
-  
+
   console.log(`[Webhook] Buscando contato - Tel: ${telNormalizado}, Últimos8: ${ultimosDigitos}, Variação: ${ultimosDigitosVar}`);
-  
+
   try {
     // Usar query raw para comparar telefones normalizados
     // REGEXP_REPLACE remove caracteres não-numéricos antes de comparar
@@ -201,7 +200,7 @@ async function buscarContatoProspeccao(telefone: string) {
       FROM contatos c
       LEFT JOIN campanhas camp ON c."campanhaId" = camp.id
       LEFT JOIN tenants t ON camp."tenantId" = t.id
-      LEFT JOIN empreendimentos e ON camp."empreendimentoId" = e.id
+      LEFT JOIN empreendimentos_conhecimento e ON camp."empreendimentoId" = e.id
       WHERE c."statusProspeccao" IN ('CONTATANDO', 'RESPONDEU', 'INTERESSADO', 'LEAD', 'MORNO_FUTURO')
         AND (
           RIGHT(REGEXP_REPLACE(COALESCE(c.telefone, ''), '[^0-9]', '', 'g'), 8) = $1
@@ -217,11 +216,11 @@ async function buscarContatoProspeccao(telefone: string) {
         )
       LIMIT 1
     `, ultimosDigitos, ultimosDigitosVar || ultimosDigitos);
-    
+
     if (contatos && contatos.length > 0) {
       const c = contatos[0];
       console.log(`[Webhook] ✅ Contato encontrado: ${c.nome} (${c.telefone})`);
-      
+
       // Montar objeto similar ao retorno do Prisma
       return {
         ...c,
@@ -241,13 +240,13 @@ async function buscarContatoProspeccao(telefone: string) {
         } : null
       };
     }
-    
+
     console.log(`[Webhook] ❌ Contato NÃO encontrado para telefone ${telefone}`);
     return null;
-    
+
   } catch (error) {
     console.error('[Webhook] Erro na busca de contato:', error);
-    
+
     // Fallback para busca simples se SQL raw falhar
     console.log('[Webhook] Tentando fallback com busca simples...');
     const contato = await prisma.contato.findFirst({
@@ -269,7 +268,7 @@ async function buscarContatoProspeccao(telefone: string) {
         }
       }
     });
-    
+
     return contato;
   }
 }
@@ -301,7 +300,7 @@ async function jaRespondemosMensagem(contatoId: string, timestampMensagem: Date)
         dataHora: 'asc'
       }
     });
-    
+
     return respostaPosterior !== null;
   } catch (error) {
     console.error('[Webhook] Erro ao verificar se já respondemos:', error);
@@ -319,38 +318,38 @@ async function deveProcessarMensagem(
   contatoId: string | null
 ): Promise<{ processar: boolean; motivo: string }> {
   const agora = Date.now();
-  
+
   // Se não tem timestamp, processar (mensagem nova)
   if (!messageTimestamp) {
     return { processar: true, motivo: 'Sem timestamp (assume nova)' };
   }
-  
+
   // Converter timestamp para ms se necessário (Evolution pode enviar em segundos)
   const timestampMs = messageTimestamp > 9999999999 ? messageTimestamp : messageTimestamp * 1000;
   const idadeMensagem = agora - timestampMs;
-  
+
   // REGRA 1: Mensagem muito antiga (> 48h) → IGNORAR SEMPRE
   if (idadeMensagem > TEMPO_MAXIMO_MSG_MS) {
     const horas = Math.round(idadeMensagem / 1000 / 60 / 60);
     return { processar: false, motivo: `Mensagem muito antiga (${horas}h > 48h)` };
   }
-  
+
   // REGRA 2: Mensagem recente (< 5 min) → PROCESSAR SEMPRE
   if (idadeMensagem < TEMPO_VERIFICAR_RESPOSTA_MS) {
     return { processar: true, motivo: 'Mensagem recente (< 5min)' };
   }
-  
+
   // REGRA 3: Mensagem entre 5min e 48h → Verificar se já respondemos
   if (contatoId) {
     const timestampDate = new Date(timestampMs);
     const jaRespondemos = await jaRespondemosMensagem(contatoId, timestampDate);
-    
+
     if (jaRespondemos) {
       const minutos = Math.round(idadeMensagem / 1000 / 60);
       return { processar: false, motivo: `Mensagem de ${minutos}min atrás já foi respondida` };
     }
   }
-  
+
   // Se chegou aqui, processa (mensagem entre 5min-48h sem resposta)
   const minutos = Math.round(idadeMensagem / 1000 / 60);
   return { processar: true, motivo: `Mensagem de ${minutos}min atrás ainda não respondida` };
@@ -396,7 +395,7 @@ const processandoContato = new Map<string, boolean>();
 function podeMosResponder(contatoId: string): boolean {
   const ultimaResposta = ultimaRespostaPorContato.get(contatoId);
   if (!ultimaResposta) return true;
-  
+
   const tempoDesdeUltimaResposta = Date.now() - ultimaResposta;
   return tempoDesdeUltimaResposta > COOLDOWN_RESPOSTA_MS;
 }
@@ -406,7 +405,7 @@ function podeMosResponder(contatoId: string): boolean {
  */
 function registrarResposta(contatoId: string): void {
   ultimaRespostaPorContato.set(contatoId, Date.now());
-  
+
   // Limpar registros antigos (> 5 min) para não acumular memória
   const agora = Date.now();
   for (const [id, timestamp] of ultimaRespostaPorContato.entries()) {
@@ -429,7 +428,7 @@ function adicionarAFilaDebounce(
   processarCallback: () => Promise<void>
 ): boolean {
   let fila = filasDebounce.get(contatoId);
-  
+
   if (!fila) {
     // Primeira mensagem - criar fila e agendar processamento
     fila = {
@@ -439,9 +438,9 @@ function adicionarAFilaDebounce(
       telefone
     };
     filasDebounce.set(contatoId, fila);
-    
-    console.log(`[Debounce] 📥 Nova fila para ${contatoId} - Aguardando ${DEBOUNCE_MS/1000}s...`);
-    
+
+    console.log(`[Debounce] 📥 Nova fila para ${contatoId} - Aguardando ${DEBOUNCE_MS / 1000}s...`);
+
     // Agendar processamento após debounce
     fila.timer = setTimeout(async () => {
       try {
@@ -453,19 +452,19 @@ function adicionarAFilaDebounce(
         filasDebounce.delete(contatoId);
       }
     }, DEBOUNCE_MS);
-    
+
     return true; // Mensagem adicionada, será processada depois
   }
-  
+
   // Já existe fila - adicionar mensagem e resetar timer
   fila.mensagens.push(mensagem);
   console.log(`[Debounce] 📥 +1 mensagem na fila de ${contatoId} (total: ${fila.mensagens.length})`);
-  
+
   // Resetar timer
   if (fila.timer) {
     clearTimeout(fila.timer);
   }
-  
+
   fila.timer = setTimeout(async () => {
     try {
       await processarCallback();
@@ -475,7 +474,7 @@ function adicionarAFilaDebounce(
       filasDebounce.delete(contatoId);
     }
   }, DEBOUNCE_MS);
-  
+
   return true; // Mensagem adicionada à fila existente
 }
 
@@ -488,14 +487,14 @@ function obterMensagensConsolidadas(contatoId: string): { mensagens: MensagemPen
   if (!fila || fila.mensagens.length === 0) {
     return null;
   }
-  
+
   // Consolidar mensagens em um único texto
   const textoConsolidado = fila.mensagens
     .map(m => m.conteudo)
     .join('\n');
-  
+
   console.log(`[Debounce] 📤 Consolidando ${fila.mensagens.length} mensagens de ${contatoId}`);
-  
+
   return {
     mensagens: fila.mensagens,
     textoConsolidado
@@ -505,7 +504,7 @@ function obterMensagensConsolidadas(contatoId: string): { mensagens: MensagemPen
 router.post('/', async (req, res) => {
   try {
     const { event, type, instance, data, sender } = req.body;
-    
+
     // Normalizar instanceName (pode vir undefined em versões antigas)
     const instanceName = instance || process.env.EVOLUTION_INSTANCE_NAME || 'elyon_main';
 
@@ -521,7 +520,7 @@ router.post('/', async (req, res) => {
     if (eventType === 'MESSAGES_UPSERT' || eventType === 'messages.upsert') {
       // Normalização das mensagens: Evolution pode enviar um array em data.messages ou um objeto único em data
       let messages: any[] = [];
-      
+
       if (Array.isArray(data)) {
         messages = data;
       } else if (data?.messages && Array.isArray(data.messages)) {
@@ -539,13 +538,13 @@ router.post('/', async (req, res) => {
       for (const message of messages) {
         try {
           if (!message || !message.key) {
-             console.warn('[Webhook] Mensagem inválida ignorada:', message);
-             continue;
+            console.warn('[Webhook] Mensagem inválida ignorada:', message);
+            continue;
           }
 
           const remoteJid = message.key.remoteJid;
           const fromMe = message.key.fromMe;
-          
+
           if (fromMe) {
             console.log('[Webhook] Ignorando mensagem enviada por mim (fromMe=true)');
             continue;
@@ -553,19 +552,19 @@ router.post('/', async (req, res) => {
 
           if (remoteJid) {
             // Mensagem recebida de um cliente
-            
+
             // Lógica para garantir que pegamos o número de telefone e não o LID
             let targetJid = remoteJid;
             const remoteJidAlt = message.key.remoteJidAlt;
 
             if (targetJid.includes('@lid') && remoteJidAlt && remoteJidAlt.includes('@s.whatsapp.net')) {
-                console.log(`[Webhook] Trocando remoteJid (LID) por remoteJidAlt (Phone): ${remoteJidAlt}`);
-                targetJid = remoteJidAlt;
+              console.log(`[Webhook] Trocando remoteJid (LID) por remoteJidAlt (Phone): ${remoteJidAlt}`);
+              targetJid = remoteJidAlt;
             }
 
             const telefone = targetJid.split('@')[0];
             const texto = message.message?.conversation || message.message?.extendedTextMessage?.text;
-            
+
             // Verifica se é mídia
             const messageType = message.messageType || (message.message?.imageMessage ? 'imageMessage' : (message.message?.audioMessage ? 'audioMessage' : 'conversation'));
             const isImage = messageType === 'imageMessage';
@@ -581,37 +580,37 @@ router.post('/', async (req, res) => {
               // VERIFICAR SE É RESPOSTA DE PROSPECÇÃO ATIVA
               // ====================================
               const contatoProspeccao = await buscarContatoProspeccao(telefone);
-              
+
               if (contatoProspeccao) {
                 console.log(`[Webhook] 🎯 Resposta de PROSPECÇÃO ATIVA! Contato: ${contatoProspeccao.nome}`);
-                
+
                 // ====================================
                 // 🛡️ VERIFICAÇÃO ANTI-FLOOD
                 // ====================================
                 const messageTimestamp = message.messageTimestamp;
                 const messageId = message.key?.id;
-                
+
                 const verificacao = await deveProcessarMensagem(
                   messageTimestamp,
                   messageId,
                   contatoProspeccao.id
                 );
-                
+
                 if (!verificacao.processar) {
                   console.log(`[Webhook] ⏭️ IGNORANDO: ${verificacao.motivo}`);
                   continue;
                 }
-                
+
                 console.log(`[Webhook] ✅ PROCESSANDO: ${verificacao.motivo}`);
-                
+
                 // ====================================
                 // 🆕 VERIFICAR MODO DE ATENDIMENTO
                 // ====================================
                 const modoAtendimento = (contatoProspeccao as any).modoAtendimento || 'IA';
-                
+
                 if (modoAtendimento === 'HUMANO' || modoAtendimento === 'PAUSADO') {
                   console.log(`[Webhook] ⏸️ Modo ${modoAtendimento} - IA não responderá. Atendido por: ${(contatoProspeccao as any).atendidoPor || 'Corretor'}`);
-                  
+
                   // Ainda assim, salvar a mensagem no histórico
                   const conteudoMsg = texto || (isImage ? '[Imagem]' : isAudio ? '[Áudio]' : '[Mídia]');
                   await salvarMensagemProspeccao({
@@ -622,11 +621,11 @@ router.post('/', async (req, res) => {
                     messageId: message.key?.id,
                     telefone: telefone
                   });
-                  
+
                   console.log(`[Webhook] 💬 Mensagem salva no histórico (modo ${modoAtendimento})`);
                   continue; // Não processa com IA, espera atendimento humano
                 }
-                
+
                 // Atualizar status do contato
                 await prisma.contato.update({
                   where: { id: contatoProspeccao.id },
@@ -636,10 +635,10 @@ router.post('/', async (req, res) => {
                     statusProspeccao: 'RESPONDEU'
                   }
                 });
-                
+
                 // 🆕 Processar conteúdo da mensagem (incluindo transcrição de áudio)
                 let conteudoMsgEntrada = texto || '';
-                
+
                 if (isAudio) {
                   // Transcrever áudio usando OpenAI Whisper
                   const base64 = data.base64 || message.base64 || message.message?.base64;
@@ -661,7 +660,7 @@ router.post('/', async (req, res) => {
                 } else if (!conteudoMsgEntrada) {
                   conteudoMsgEntrada = '[Mídia recebida]';
                 }
-                
+
                 // Salvar mensagem de ENTRADA no histórico
                 await salvarMensagemProspeccao({
                   contatoId: contatoProspeccao.id,
@@ -671,22 +670,22 @@ router.post('/', async (req, res) => {
                   messageId: message.key?.id,
                   telefone: telefone
                 });
-                
+
                 // ====================================
                 // 🔄 DEBOUNCE: Atrasar resposta para consolidar mensagens
                 // ====================================
                 const contatoId = contatoProspeccao.id;
-                
+
                 // Criar função de callback para processar após debounce
                 const processarAposDebounce = async () => {
                   console.log(`[Debounce] ⏰ Timer expirado para ${contatoId} - Verificando mutex e cooldown...`);
-                  
+
                   // 🔒 MUTEX: Verificar se já está processando
                   if (processandoContato.get(contatoId)) {
                     console.log(`[Debounce] 🔒 MUTEX: Já processando ${contatoId} - Ignorando callback duplicado`);
                     return;
                   }
-                  
+
                   // 🛡️ Verificar cooldown antes de processar
                   const ultimaResposta = ultimaRespostaPorContato.get(contatoId);
                   if (ultimaResposta) {
@@ -694,8 +693,8 @@ router.post('/', async (req, res) => {
                     if (tempoDesdeUltima < COOLDOWN_RESPOSTA_MS) {
                       // Ainda em cooldown - reagendar para quando terminar
                       const tempoRestante = COOLDOWN_RESPOSTA_MS - tempoDesdeUltima;
-                      console.log(`[Debounce] ⏸️ Cooldown ativo (${Math.round(tempoRestante/1000)}s restantes) - Reagendando...`);
-                      
+                      console.log(`[Debounce] ⏸️ Cooldown ativo (${Math.round(tempoRestante / 1000)}s restantes) - Reagendando...`);
+
                       // Reagendar para quando o cooldown terminar
                       setTimeout(async () => {
                         await processarAposDebounce();
@@ -703,45 +702,45 @@ router.post('/', async (req, res) => {
                       return;
                     }
                   }
-                  
+
                   // 🔒 MUTEX: Marcar que estamos processando
                   processandoContato.set(contatoId, true);
                   console.log(`[Debounce] ✅ Cooldown OK + MUTEX adquirido - Processando com SDR...`);
-                  
+
                   try {
                     // Buscar configuração do agente usando a instância
                     const tenantIdCampanha = contatoProspeccao.campanha?.tenantId;
                     const agenteConfig = await buscarConfiguracaoAgentePorInstancia(instanceName, tenantIdCampanha);
-                    
+
                     console.log(`[Webhook] Agente encontrado: ${agenteConfig?.nome || 'Nenhum (usando padrão)'}`);
-                    
+
                     // 🆕 Carregar histórico de mensagens (últimas 20)
                     // O histórico já conterá TODAS as mensagens que chegaram durante o debounce
                     const historicoMensagens = await carregarHistoricoMensagens(contatoProspeccao.id, 20);
                     console.log(`[Webhook] Histórico carregado: ${historicoMensagens.length} mensagens`);
-                    
+
                     // Se não há histórico (primeira mensagem), usar apenas a atual
-                    const mensagensSDR = historicoMensagens.length > 0 
-                      ? historicoMensagens 
+                    const mensagensSDR = historicoMensagens.length > 0
+                      ? historicoMensagens
                       : [{ role: 'user' as const, content: conteudoMsgEntrada }];
-                    
+
                     // Montar configuração do SDR a partir do agente configurado ou usar padrão
                     const personalidadeAgente = agenteConfig?.personalidade as any;
                     const expertiseAgente = agenteConfig?.expertise as any;
                     const scriptsAgente = agenteConfig?.scripts as any;
                     const perfilImob = agenteConfig?.perfilImobiliaria as any;
-                    
+
                     // Extrair política da imobiliária do Tenant
                     const perfilVenda = agenteConfig?.tenant?.perfilVenda as any || {};
                     const perfilLocacao = agenteConfig?.tenant?.perfilLocacao as any || {};
-                    
+
                     // 🏢 Resolver nome da imobiliária com fallback inteligente
-                    const nomeImobiliariaResolvido = 
-                      perfilImob?.dadosGerais?.nomeImobiliaria || 
+                    const nomeImobiliariaResolvido =
+                      perfilImob?.dadosGerais?.nomeImobiliaria ||
                       contatoProspeccao.campanha?.tenant?.nome ||
                       agenteConfig?.tenant?.nome ||
                       'nossa imobiliária';
-                    
+
                     const configSDR: ConfiguracaoAgente = {
                       nome: agenteConfig?.nome || 'Sofia',
                       personalidade: {
@@ -764,28 +763,28 @@ router.post('/', async (req, res) => {
                         taxaLocacao: perfilLocacao.taxaAdministracao
                       }
                     };
-                    
+
                     console.log(`[Webhook] 🏢 Imobiliária: "${configSDR.tenantNome}" | Empreendimento: "${configSDR.empreendimento}"`);
                     console.log(`[Webhook] 📋 DEBUG DADOS:`);
                     console.log(`[Webhook]   - contatoProspeccao.campanha?.tenant?.nome: "${contatoProspeccao.campanha?.tenant?.nome}"`);
                     console.log(`[Webhook]   - agenteConfig?.tenant?.nome: "${agenteConfig?.tenant?.nome}"`);
                     console.log(`[Webhook]   - campanha.briefingCompleto existe: ${!!contatoProspeccao.campanha?.briefingCompleto}`);
                     console.log(`[Webhook]   - campanha.briefingCompleto tamanho: ${contatoProspeccao.campanha?.briefingCompleto?.length || 0}`);
-                    
+
                     // Montar contexto RAG
                     const partesRAG: string[] = [];
-                    
+
                     if (agenteConfig?.ragPerfilTexto) {
                       partesRAG.push(`### PERFIL DA IMOBILIÁRIA ###\n${agenteConfig.ragPerfilTexto}`);
                     }
-                    
+
                     const empreendimentoData = contatoProspeccao.campanha?.empreendimento as any;
                     if (empreendimentoData?.briefingCompleto) {
                       partesRAG.push(`### CONHECIMENTO DO EMPREENDIMENTO: ${empreendimentoData.nome} ###\n${empreendimentoData.briefingCompleto}`);
                     } else if (contatoProspeccao.campanha?.briefingCompleto) {
                       partesRAG.push(`### CONHECIMENTO DO EMPREENDIMENTO ###\n${contatoProspeccao.campanha.briefingCompleto}`);
                     }
-                    
+
                     if (empreendimentoData?.briefingEstruturado) {
                       const dados = empreendimentoData.briefingEstruturado as any;
                       if (dados.precos || dados.diferenciais || dados.infraestrutura) {
@@ -798,9 +797,9 @@ router.post('/', async (req, res) => {
                         }
                       }
                     }
-                    
+
                     const contextoRAG = partesRAG.length > 0 ? partesRAG.join('\n\n') : undefined;
-                    
+
                     // 🔍 DEBUG: Ver o que está no contextoRAG
                     console.log(`[Webhook] 📚 contextoRAG existe? ${!!contextoRAG}`);
                     if (contextoRAG) {
@@ -811,34 +810,34 @@ router.post('/', async (req, res) => {
                       console.log(`[Webhook] ⚠️ partesRAG.length: ${partesRAG.length}`);
                       console.log(`[Webhook] ⚠️ campanha.briefingCompleto existe? ${!!contatoProspeccao.campanha?.briefingCompleto}`);
                     }
-                    
+
                     // Passar o contatoId para o SDR
-                    const idParaSDR = contatoProspeccao.virouLead && contatoProspeccao.leadId 
-                      ? contatoProspeccao.leadId 
+                    const idParaSDR = contatoProspeccao.virouLead && contatoProspeccao.leadId
+                      ? contatoProspeccao.leadId
                       : contatoProspeccao.id;
-                    
+
                     console.log(`[Webhook] Passando para SDR - ID: ${idParaSDR}`);
-                    
+
                     const resposta = await sdrWorker.processar(
                       mensagensSDR,
                       idParaSDR,
                       configSDR,
                       contextoRAG
                     );
-                    
+
                     console.log(`[Webhook] SDR respondeu: ${resposta?.substring(0, 100)}...`);
-                    
+
                     // Enviar resposta via WhatsApp
                     if (resposta) {
                       try {
                         // Enviar usando o serviço da instância correta
-                      const whatsappService = getWhatsAppService(instanceName);
-                      await whatsappService.enviarMensagemTexto(telefone, resposta);
+                        const whatsappService = getWhatsAppService(instanceName);
+                        await whatsappService.enviarMensagemTexto(telefone, resposta);
                         console.log(`[Webhook] ✅ Resposta enviada para ${telefone}`);
-                        
+
                         // 🛡️ Registrar que respondemos (para cooldown)
                         registrarResposta(contatoId);
-                        
+
                         // Salvar mensagem de SAÍDA no histórico
                         await salvarMensagemProspeccao({
                           contatoId: contatoProspeccao.id,
@@ -847,12 +846,12 @@ router.post('/', async (req, res) => {
                           tipo: 'TEXTO',
                           telefone: telefone
                         });
-                        
+
                       } catch (envioError) {
                         console.error('[Webhook] Erro ao enviar resposta:', envioError);
                       }
                     }
-                    
+
                   } catch (sdrError) {
                     console.error('[Debounce] Erro ao processar com SDR:', sdrError);
                   } finally {
@@ -861,11 +860,11 @@ router.post('/', async (req, res) => {
                     console.log(`[Debounce] 🔓 MUTEX liberado para ${contatoId}`);
                   }
                 };
-                
+
                 // Adicionar à fila de debounce
                 const filaExistente = filasDebounce.has(contatoId);
                 console.log(`[Debounce] Fila existente para ${contatoId}? ${filaExistente}`);
-                
+
                 adicionarAFilaDebounce(
                   contatoId,
                   {
@@ -878,7 +877,7 @@ router.post('/', async (req, res) => {
                   telefone,
                   processarAposDebounce
                 );
-                
+
                 // Não processa imediatamente - o debounce vai cuidar
                 continue;
               }
@@ -889,7 +888,7 @@ router.post('/', async (req, res) => {
 
               // 1. Buscar Lead pelo telefone (tenta formatos variados)
               const ultimosDigitos = telefone.slice(-8);
-              
+
               const lead = await prisma.lead.findFirst({
                 where: {
                   telefone: {
@@ -903,12 +902,12 @@ router.post('/', async (req, res) => {
               // Se não encontrar o lead, cria um novo automaticamente
               if (!lead) {
                 console.log(`[Webhook] Lead não encontrado. Criando novo lead para ${telefone}...`);
-                
+
                 // Busca tenant padrão (primeiro encontrado)
                 const tenant = await prisma.tenant.findFirst();
                 if (!tenant) {
-                    console.error('[Webhook] ERRO: Nenhum tenant encontrado para vincular o lead.');
-                    continue; // Pula para a próxima mensagem
+                  console.error('[Webhook] ERRO: Nenhum tenant encontrado para vincular o lead.');
+                  continue; // Pula para a próxima mensagem
                 }
 
                 const novoLead = await prisma.lead.create({
@@ -956,35 +955,35 @@ router.post('/', async (req, res) => {
                 let urlMidia = null;
 
                 if (isMedia) {
-                    tipoMensagem = isImage ? 'IMAGEM' : 'AUDIO';
-                    
-                    // Tenta pegar o Base64 (Evolution manda se webhookBase64: true)
-                    // A estrutura pode variar, vamos tentar achar o base64
-                    // Log mostra que está em message.message.base64
-                    const base64 = data.base64 || message.base64 || message.message?.base64 || message.message?.imageMessage?.jpegThumbnail; 
-                    
-                    if (base64) {
-                        const mime = isImage ? 'image/jpeg' : 'audio/ogg'; 
-                        urlMidia = `data:${mime};base64,${base64}`;
-                        conteudoMensagem = isImage ? (message.message?.imageMessage?.caption || '') : ''; 
+                  tipoMensagem = isImage ? 'IMAGEM' : 'AUDIO';
 
-                        // SE FOR ÁUDIO: Transcrever
-                        if (isAudio) {
-                            try {
-                                console.log('[Webhook] Transcrevendo áudio...');
-                                const transcricao = await openaiService.transcreverAudioBase64(base64);
-                                conteudoMensagem = transcricao;
-                                console.log(`[Webhook] Transcrição: "${transcricao}"`);
-                            } catch (err) {
-                                console.error('[Webhook] Falha na transcrição:', err);
-                                conteudoMensagem = '[Áudio sem transcrição]';
-                            }
-                        }
+                  // Tenta pegar o Base64 (Evolution manda se webhookBase64: true)
+                  // A estrutura pode variar, vamos tentar achar o base64
+                  // Log mostra que está em message.message.base64
+                  const base64 = data.base64 || message.base64 || message.message?.base64 || message.message?.imageMessage?.jpegThumbnail;
 
-                    } else {
-                        conteudoMensagem = '[Mídia recebida]';
-                        console.warn('[Webhook] Mídia recebida sem base64 explícito.');
+                  if (base64) {
+                    const mime = isImage ? 'image/jpeg' : 'audio/ogg';
+                    urlMidia = `data:${mime};base64,${base64}`;
+                    conteudoMensagem = isImage ? (message.message?.imageMessage?.caption || '') : '';
+
+                    // SE FOR ÁUDIO: Transcrever
+                    if (isAudio) {
+                      try {
+                        console.log('[Webhook] Transcrevendo áudio...');
+                        const transcricao = await openaiService.transcreverAudioBase64(base64);
+                        conteudoMensagem = transcricao;
+                        console.log(`[Webhook] Transcrição: "${transcricao}"`);
+                      } catch (err) {
+                        console.error('[Webhook] Falha na transcrição:', err);
+                        conteudoMensagem = '[Áudio sem transcrição]';
+                      }
                     }
+
+                  } else {
+                    conteudoMensagem = '[Mídia recebida]';
+                    console.warn('[Webhook] Mídia recebida sem base64 explícito.');
+                  }
                 }
 
                 // 4. Salvar Mensagem
@@ -998,17 +997,17 @@ router.post('/', async (req, res) => {
                     enviadaEm: new Date((message.messageTimestamp || Date.now() / 1000) * 1000)
                   }
                 });
-                
+
                 // Atualizar última interação do lead
                 try {
-                    await prisma.lead.update({
-                      where: { id: leadId },
-                      data: { ultimaInteracao: new Date() }
-                    });
+                  await prisma.lead.update({
+                    where: { id: leadId },
+                    data: { ultimaInteracao: new Date() }
+                  });
                 } catch (e) {
-                    console.warn('[Webhook] Aviso: Não foi possível atualizar ultimaInteracao');
+                  console.warn('[Webhook] Aviso: Não foi possível atualizar ultimaInteracao');
                 }
-                
+
                 console.log(`[Webhook] Mensagem salva para o lead ${leadId}`);
 
                 // 5. Acionar Agente Mestre

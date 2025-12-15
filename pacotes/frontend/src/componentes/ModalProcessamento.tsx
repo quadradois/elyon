@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { api } from "../servicos/api";
 import { toast } from "sonner";
+import { ModalCreditosInsuficientes } from "./ModalCreditosInsuficientes";
 
 interface Campanha {
   id: string;
@@ -123,6 +124,11 @@ export function ModalProcessamento({
   const [campanhaSelecionada, setCampanhaSelecionada] = useState<string>("");
   const [dropdownAberto, setDropdownAberto] = useState(false);
   const [vinculandoCampanha, setVinculandoCampanha] = useState(false);
+  const [_jobId, setJobId] = useState<string | null>(null);
+
+  // Estado para modal de créditos
+  const [modalCreditosOpen, setModalCreditosOpen] = useState(false);
+  const [creditosNecessarios, setCreditosNecessarios] = useState(0);
 
   const addLog = (msg: string) => setLogs((prev) => [...prev, msg]);
 
@@ -135,19 +141,57 @@ export function ModalProcessamento({
 
   const executarScraper = async () => {
     setEtapa("SCRAPER");
-    setProgresso(10);
+    setProgresso(5);
     setLogs([]);
     setErro("");
-    addLog("🚀 Iniciando mineração...");
-    addLog(`🔍 Identificando proprietários de ${imoveis.length} imóveis...`);
+    addLog("🚀 Iniciando mineração assíncrona...");
+    addLog(`🔍 Enviando ${imoveis.length} imóveis para processamento...`);
 
     try {
-      setProgresso(30);
-      const responseScraper = await api.post(
-        "/mineracao/identificar-proprietarios",
-        { imoveis }
-      );
-      const proprietarios = responseScraper.data;
+      // 1. Iniciar job assíncrono
+      const responseJob = await api.post("/mineracao/jobs/iniciar", { imoveis });
+      const { jobId: novoJobId, total } = responseJob.data;
+      
+      setJobId(novoJobId);
+      addLog(`✅ Job criado: ${novoJobId}`);
+      addLog(`⏳ Processando ${total} imóveis em background...`);
+      setProgresso(10);
+
+      // 2. Polling para acompanhar progresso
+      let concluido = false;
+      let ultimoProcessados = 0;
+      
+      while (!concluido) {
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Espera 2s
+        
+        const statusResponse = await api.get(`/mineracao/jobs/${novoJobId}/status`);
+        const { job } = statusResponse.data;
+        
+        if (job.processados > ultimoProcessados) {
+          addLog(`📊 Progresso: ${job.processados}/${job.total} imóveis processados`);
+          ultimoProcessados = job.processados;
+        }
+        
+        // Calcular progresso visual (10% a 50%)
+        const progressoVisual = 10 + Math.round((job.processados / job.total) * 40);
+        setProgresso(progressoVisual);
+        
+        if (job.status === 'concluido') {
+          concluido = true;
+          addLog(`✅ Processamento concluído!`);
+        } else if (job.status === 'erro') {
+          throw new Error(job.mensagem || 'Erro no processamento');
+        } else if (job.status === 'cancelado') {
+          throw new Error('Job cancelado');
+        }
+      }
+
+      // 3. Buscar resultado final
+      const resultadoResponse = await api.get(`/mineracao/jobs/${novoJobId}/resultado`);
+      console.log('[DEBUG-FRONT] Response do Job:', resultadoResponse.data);
+      const { proprietarios, creditos, estatisticas: _stats } = resultadoResponse.data;
+      console.log('[DEBUG-FRONT] Proprietarios extraidos:', proprietarios);
+      console.log('[DEBUG-FRONT] Tipo proprietarios:', Array.isArray(proprietarios) ? 'Array' : typeof proprietarios);
 
       setProprietariosEncontrados(proprietarios);
       setEstatisticas(prev => ({
@@ -155,6 +199,7 @@ export function ModalProcessamento({
         proprietariosEncontrados: proprietarios.length
       }));
       addLog(`✅ ${proprietarios.length} proprietários identificados.`);
+      addLog(`💰 Créditos consumidos: ${creditos?.consumidos || 0}`);
       setProgresso(50);
 
       // Se modo turbo, continua automaticamente
@@ -168,16 +213,45 @@ export function ModalProcessamento({
     } catch (error: any) {
       console.error(error);
       setEtapa("ERRO");
-      setErro(error.response?.data?.erro || "Erro na etapa de identificação.");
+      
+      const msgErro = error.response?.data?.erro || error.message || "Erro na etapa de identificação.";
+      setErro(msgErro);
       addLog("❌ Falha ao identificar proprietários.");
+
+      // Verificar se é erro de crédito
+      console.log('[DEBUG] Analisando erro:', msgErro);
+      if (msgErro.toLowerCase().includes("créditos insuficientes") || msgErro.toLowerCase().includes("creditos insuficientes")) {
+        console.log('[DEBUG] Detectado erro de crédito!');
+        const match = msgErro.match(/(\d+) necessários/);
+        if (match && match[1]) {
+          const necessarios = parseInt(match[1]);
+          console.log('[DEBUG] Créditos necessários:', necessarios);
+          setCreditosNecessarios(necessarios);
+          setModalCreditosOpen(true);
+        } else {
+            console.log('[DEBUG] Não foi possível extrair a quantidade necessária via regex.');
+            // Fallback: tenta abrir mesmo sem quantidade definida (modal vai usar default)
+            setModalCreditosOpen(true);
+        }
+      }
+
       toast.error("Erro na mineração", {
-        description: error.response?.data?.erro || "Falha ao identificar proprietários",
+        description: msgErro,
       });
     }
   };
 
-  const executarEnriquecimento = async (proprietariosParam?: any[]) => {
-    const dadosProprietarios = proprietariosParam || proprietariosEncontrados;
+  const executarEnriquecimento = async (proprietariosParam?: any[] | any) => {
+    // Proteção: se proprietariosParam for objeto com proprietarios, desembrulha
+    let dadosProprietarios = proprietariosParam || proprietariosEncontrados;
+    if (dadosProprietarios && !Array.isArray(dadosProprietarios) && dadosProprietarios.proprietarios) {
+      console.warn('[DEBUG] proprietariosParam estava encapsulado, desembrulhando...');
+      dadosProprietarios = dadosProprietarios.proprietarios;
+    }
+    if (!Array.isArray(dadosProprietarios)) {
+      console.error('[DEBUG] dadosProprietarios não é array:', dadosProprietarios);
+      dadosProprietarios = [];
+    }
     
     setEtapa("ENRIQUECIMENTO");
     addLog("🕵️ Analisando dados dos proprietários...");
@@ -351,7 +425,8 @@ export function ModalProcessamento({
   const nomeEmpreendimento = imoveis[0]?.nmedificio || imoveis[0]?.nmbairro || "Imóveis";
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -447,12 +522,25 @@ export function ModalProcessamento({
 
           {/* Mensagem de Erro */}
           {etapa === "ERRO" && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg flex items-center gap-2 text-sm">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <div>
-                <p className="font-medium">Erro no processamento</p>
-                <p className="text-red-500 text-xs">{erro}</p>
+            <div className="space-y-4">
+              <div className="bg-red-50 text-red-600 p-3 rounded-lg flex items-center gap-2 text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <div>
+                  <p className="font-medium">Erro no processamento</p>
+                  <p className="text-red-500 text-xs">{erro}</p>
+                </div>
               </div>
+
+              {/* Botão de Comprar Créditos se for erro de saldo */}
+              {erro.includes("Créditos insuficientes") && (
+                <button
+                  onClick={() => setModalCreditosOpen(true)}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  Comprar Créditos Agora
+                </button>
+              )}
             </div>
           )}
 
@@ -637,6 +725,15 @@ export function ModalProcessamento({
           )}
         </div>
       </DialogContent>
-    </Dialog>
+
+      </Dialog>
+
+      <ModalCreditosInsuficientes
+        isOpen={modalCreditosOpen}
+        onClose={() => setModalCreditosOpen(false)}
+        creditosNecessarios={creditosNecessarios}
+        operacao="realizar esta mineração"
+      />
+    </>
   );
 }

@@ -11,7 +11,7 @@
 
 import { Router } from 'express';
 import { mapaService } from '../../servicos/mapa';
-import { scraperIPTU } from '../../servicos/scraper-iptu';
+import { scraperIPTU, parsearEnderecoPrefeitura } from '../../servicos/scraper-iptu';
 import { assertivaService } from '../../servicos/assertiva';
 import { prisma } from '../../lib/db';
 import { servicoCreditos } from '../../servicos/servico-creditos';
@@ -101,7 +101,7 @@ interface LeadEnriquecido {
 router.post('/buscar', async (req, res) => {
   try {
     const params = buscaSchema.parse(req.body);
-    
+
     if (!params.nmedificio && !params.nmbairro && !params.nmlogradou && !params.nrinscr) {
       return res.status(400).json({ erro: 'Pelo menos um filtro deve ser fornecido' });
     }
@@ -125,7 +125,7 @@ router.post('/buscar', async (req, res) => {
 router.post('/identificar-proprietarios', async (req, res) => {
   try {
     const { imoveis } = identificarSchema.parse(req.body);
-    
+
     if (imoveis.length === 0) {
       return res.status(400).json({ erro: 'Lista de imóveis vazia' });
     }
@@ -136,15 +136,15 @@ router.post('/identificar-proprietarios', async (req, res) => {
     // Obter tenant do header X-Tenant-Id
     const tenantId = req.headers['x-tenant-id'] as string;
     if (!tenantId) {
-      return res.status(400).json({ 
-        erro: 'Tenant não identificado. Envie o header X-Tenant-Id.' 
+      return res.status(400).json({
+        erro: 'Tenant não identificado. Envie o header X-Tenant-Id.'
       });
     }
-    
+
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) {
-      return res.status(400).json({ 
-        erro: 'Tenant não encontrado. Verifique o X-Tenant-Id.' 
+      return res.status(400).json({
+        erro: 'Tenant não encontrado. Verifique o X-Tenant-Id.'
       });
     }
 
@@ -153,7 +153,7 @@ router.post('/identificar-proprietarios', async (req, res) => {
     // ====================================
     const saldo = await servicoCreditos.consultarSaldo(tenantId);
     const creditosNecessarios = imoveis.length;
-    
+
     if (saldo.total < creditosNecessarios) {
       return res.status(402).json({
         erro: 'Créditos insuficientes',
@@ -167,30 +167,30 @@ router.post('/identificar-proprietarios', async (req, res) => {
         necessario: creditosNecessarios
       });
     }
-    
+
     console.log(`[Mineracao] 💰 Créditos: ${saldo.total} disponíveis, ${creditosNecessarios} serão consumidos`);
 
     const BATCH_SIZE = 10;
     const DELAY_ENTRE_BATCHES = 500;
-    
+
     const dadosProprietarios: any[] = [];
     const batches = [];
     let creditosConsumidos = 0;
-    
+
     for (let i = 0; i < imoveis.length; i += BATCH_SIZE) {
       batches.push(imoveis.slice(i, i + BATCH_SIZE));
     }
-    
+
     console.log(`[Mineracao] Dividido em ${batches.length} batches de até ${BATCH_SIZE} imóveis`);
 
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
       const batch = batches[batchIndex];
-      
+
       const resultadosBatch = await Promise.all(
         batch.map(async (imovel) => {
           try {
             const dadosScraper = await scraperIPTU.consultarProprietario(imovel.nrinscr);
-            
+
             // CONSUMIR CRÉDITO após consulta bem-sucedida
             try {
               await servicoCreditos.consumirCredito(tenantId);
@@ -198,26 +198,13 @@ router.post('/identificar-proprietarios', async (req, res) => {
             } catch (e) {
               console.error(`[Mineracao] Erro ao consumir crédito:`, e);
             }
-            
-            if (dadosScraper.nome && dadosScraper.cpf) {
-              prisma.lead.upsert({
-                where: {
-                  tenantId_cpf: { tenantId: tenant!.id, cpf: dadosScraper.cpf }
-                },
-                update: {
-                  nome: dadosScraper.nome,
-                  enderecoPrincipal: dadosScraper.endereco_correspondencia
-                },
-                create: {
-                  tenantId: tenant!.id,
-                  cpf: dadosScraper.cpf,
-                  nome: dadosScraper.nome,
-                  enderecoPrincipal: dadosScraper.endereco_correspondencia,
-                  origem: 'api_iptu_scraper',
-                  status: 'NOVO'
-                }
-              }).catch(e => console.error(`Erro ao persistir lead ${imovel.nrinscr}:`, e));
-            }
+
+            // NOTA: Não criamos Lead aqui!
+            // Os dados são retornados para o frontend que deve:
+            // 1. Vincular a uma Campanha
+            // 2. Criar Contatos (não Leads)
+            // 3. Leads só são criados após qualificação SPIN
+            // Veja: /rotas/campanhas/contatos.rotas.ts
 
             return { ...imovel, ...dadosScraper };
           } catch (error) {
@@ -226,12 +213,12 @@ router.post('/identificar-proprietarios', async (req, res) => {
           }
         })
       );
-      
+
       dadosProprietarios.push(...resultadosBatch);
-      
+
       const processados = Math.min((batchIndex + 1) * BATCH_SIZE, imoveis.length);
       console.log(`[Mineracao] ✓ Batch ${batchIndex + 1}/${batches.length} concluído (${processados}/${imoveis.length})`);
-      
+
       if (batchIndex < batches.length - 1) {
         await new Promise(resolve => setTimeout(resolve, DELAY_ENTRE_BATCHES));
       }
@@ -267,30 +254,39 @@ router.post('/identificar-proprietarios', async (req, res) => {
  */
 router.post('/confirmar-leads', async (req, res) => {
   try {
-    const { proprietarios } = confirmarSchema.parse(req.body);
-    
+    console.log('[DEBUG] /confirmar-leads body:', JSON.stringify(req.body, null, 2));
+
+    let proprietarios;
+    try {
+      const parsed = confirmarSchema.parse(req.body);
+      proprietarios = parsed.proprietarios;
+    } catch (zodError) {
+      console.error('[DEBUG] Zod Error:', JSON.stringify(zodError, null, 2));
+      throw zodError;
+    }
+
     const inicio = Date.now();
     console.log(`[Mineracao] 🚀 Processando ${proprietarios.length} leads (modo otimizado)...`);
 
     // Obter tenant do header X-Tenant-Id
     const tenantId = req.headers['x-tenant-id'] as string;
     if (!tenantId) {
-      return res.status(400).json({ 
-        erro: 'Tenant não identificado. Envie o header X-Tenant-Id.' 
+      return res.status(400).json({
+        erro: 'Tenant não identificado. Envie o header X-Tenant-Id.'
       });
     }
-    
+
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) {
-      return res.status(400).json({ 
-        erro: 'Tenant não encontrado. Verifique o X-Tenant-Id.' 
+      return res.status(400).json({
+        erro: 'Tenant não encontrado. Verifique o X-Tenant-Id.'
       });
     }
 
     let cpfsDoCache = 0;
     let cpfsDaApi = 0;
     let economiaTotal = 0;
-    
+
     const CUSTO_ASSERTIVA = 0.15;
     const precoVendaContato = Number(tenant.precoConsultaCpf) || 2.00;
 
@@ -349,7 +345,7 @@ router.post('/confirmar-leads', async (req, res) => {
       proprietariosDoCache.map(async (p) => {
         const cpfLimpo = p.cpf!.replace(/\D/g, '');
         const cached = cpfsEmCache.get(cpfLimpo)!;
-        
+
         cpfsDoCache++;
         economiaTotal += CUSTO_ASSERTIVA;
 
@@ -362,6 +358,17 @@ router.post('/confirmar-leads', async (req, res) => {
           emails: dadosCache.emails || [],
           score: dadosCache.score || 80,
         } as LeadEnriquecido;
+
+        // COBRANÇA DE CRÉDITO (Apenas se tiver telefone)
+        if (leadEnriquecido.telefones && leadEnriquecido.telefones.length > 0) {
+          try {
+            await servicoCreditos.consumirCredito(tenantId);
+          } catch (e) {
+            console.error(`[Mineracao] Erro ao cobrar crédito do cache:`, e);
+            // Opcional: Bloquear retorno se não tiver crédito?
+            // Por enquanto, apenas logamos e permitimos (política permissiva)
+          }
+        }
 
         await prisma.cacheCpf.update({
           where: { id: cached.id },
@@ -386,67 +393,91 @@ router.post('/confirmar-leads', async (req, res) => {
 
     leadsEnriquecidos.push(...resultadosCache);
 
-    // Processar novos CPFs em lotes
+    // Processar novos documentos (CPF/CNPJ) em lotes
     for (let i = 0; i < proprietariosNovos.length; i += BATCH_SIZE_ASSERTIVA) {
       const lote = proprietariosNovos.slice(i, i + BATCH_SIZE_ASSERTIVA);
-      
+
       const resultadosLote = await Promise.all(
         lote.map(async (p) => {
-          const cpfLimpo = p.cpf!.replace(/\D/g, '');
+          const docLimpo = p.cpf!.replace(/\D/g, '');
+
+          // Validar tamanho do documento (CPF=11, CNPJ=14)
+          if (docLimpo.length !== 11 && docLimpo.length !== 14) {
+            console.log(`[Mineracao] ⚠️ Ignorando documento inválido: ${docLimpo} (${docLimpo.length} dígitos)`);
+            return p as LeadEnriquecido;
+          }
+
           cpfsDaApi++;
-          
-          const enriquecido = await assertivaService.enriquecerCPF(cpfLimpo, p.nome || '');
-          
-          const leadEnriquecido = { ...p, ...enriquecido } as LeadEnriquecido;
+          const tipoDOC = docLimpo.length === 11 ? 'CPF' : 'CNPJ';
 
-          const expiraEm = new Date();
-          expiraEm.setDate(expiraEm.getDate() + 90);
+          try {
+            // Método universal: detecta CPF ou CNPJ automaticamente
+            const enriquecido = await assertivaService.enriquecerDocumento(docLimpo, p.nome || '');
 
-          const novoCache = await prisma.cacheCpf.create({
-            data: {
-              cpf: cpfLimpo,
-              dados: {
-                nome: enriquecido.nome,
-                telefones: enriquecido.telefones,
-                emails: enriquecido.emails,
-                score: enriquecido.score,
-                dataNascimento: enriquecido.dataNascimento,
-                idade: enriquecido.idade,
-                sexo: enriquecido.sexo,
-                signo: enriquecido.signo,
-                situacaoCadastral: enriquecido.situacaoCadastral,
-                obitoProvavel: enriquecido.obitoProvavel,
-                nomeMae: enriquecido.nomeMae,
-                ppe: enriquecido.ppe,
-                rendaEstimada: enriquecido.rendaEstimada,
-                faixaSalarial: enriquecido.faixaSalarial,
-                profissao: enriquecido.profissao,
-                setor: enriquecido.setor,
-                empresaAtual: enriquecido.empresaAtual,
-                cnpjEmpresa: enriquecido.cnpjEmpresa,
-                endereco: enriquecido.endereco,
-                participacoesEmpresas: enriquecido.participacoesEmpresas,
-                redesSociais: enriquecido.redesSociais,
-              },
-              fonte: 'assertiva',
-              expiraEm,
-              primeiraConsultaPor: tenant.id
+            // COBRANÇA DE CRÉDITO (Apenas se tiver telefone)
+            if (enriquecido.telefones && enriquecido.telefones.length > 0) {
+              try {
+                await servicoCreditos.consumirCredito(tenantId);
+              } catch (e) {
+                console.error(`[Mineracao] Erro ao cobrar crédito da API:`, e);
+              }
             }
-          });
 
-          await prisma.consultaCpf.create({
-            data: {
-              tenantId: tenant.id,
-              cpf: cpfLimpo,
-              veioDoCache: false,
-              custoParaNos: CUSTO_ASSERTIVA,
-              cobradoDe: precoVendaContato,
-              lucro: precoVendaContato - CUSTO_ASSERTIVA,
-              cacheId: novoCache.id
-            }
-          });
+            const leadEnriquecido = { ...p, ...enriquecido } as LeadEnriquecido;
 
-          return leadEnriquecido;
+            const expiraEm = new Date();
+            expiraEm.setDate(expiraEm.getDate() + 90);
+
+            const novoCache = await prisma.cacheCpf.create({
+              data: {
+                cpf: docLimpo,
+                dados: {
+                  nome: enriquecido.nome,
+                  telefones: enriquecido.telefones,
+                  emails: enriquecido.emails,
+                  score: enriquecido.score,
+                  dataNascimento: enriquecido.dataNascimento,
+                  idade: enriquecido.idade,
+                  sexo: enriquecido.sexo,
+                  signo: enriquecido.signo,
+                  situacaoCadastral: enriquecido.situacaoCadastral,
+                  obitoProvavel: enriquecido.obitoProvavel,
+                  nomeMae: enriquecido.nomeMae,
+                  ppe: enriquecido.ppe,
+                  rendaEstimada: enriquecido.rendaEstimada,
+                  faixaSalarial: enriquecido.faixaSalarial,
+                  profissao: enriquecido.profissao,
+                  setor: enriquecido.setor,
+                  empresaAtual: enriquecido.empresaAtual,
+                  cnpjEmpresa: enriquecido.cnpjEmpresa,
+                  endereco: enriquecido.endereco,
+                  participacoesEmpresas: enriquecido.participacoesEmpresas,
+                  redesSociais: enriquecido.redesSociais,
+                },
+                fonte: 'assertiva',
+                expiraEm,
+                primeiraConsultaPor: tenant.id
+              }
+            });
+
+            await prisma.consultaCpf.create({
+              data: {
+                tenantId: tenant.id,
+                cpf: docLimpo,
+                veioDoCache: false,
+                custoParaNos: CUSTO_ASSERTIVA,
+                cobradoDe: precoVendaContato,
+                lucro: precoVendaContato - CUSTO_ASSERTIVA,
+                cacheId: novoCache.id
+              }
+            });
+
+            return leadEnriquecido;
+          } catch (enriquecimentoError: any) {
+            console.error(`[Mineracao] Erro ao enriquecer ${tipoDOC} ${docLimpo}:`, enriquecimentoError?.message);
+            // Retornar proprietário sem enriquecimento para não quebrar o lote
+            return p as LeadEnriquecido;
+          }
         })
       );
 
@@ -478,79 +509,104 @@ router.post('/confirmar-leads', async (req, res) => {
       leadsEnriquecidos.map(async (dados) => {
         if (!dados.nome) return dados;
 
-        const cpfFinal = dados.cpf || `00000000000-${Math.random().toString().slice(2,5)}`;
+        // Fallback: se apartamento não está definido, tentar parsear do campo incompl
+        if (!dados.apartamento && dados.incompl) {
+          const dadosParsed = parsearEnderecoPrefeitura(dados.incompl);
+          if (dadosParsed.apartamento) dados.apartamento = dadosParsed.apartamento;
+          if (dadosParsed.bloco) dados.bloco = dadosParsed.bloco;
+          if (dadosParsed.box) dados.box = dadosParsed.box;
+          if (dadosParsed.unidade) dados.unidade = dadosParsed.unidade;
+          if (dadosParsed.quadra) dados.quadra = dadosParsed.quadra;
+          if (dadosParsed.lote) dados.lote = dadosParsed.lote;
+        }
 
-        const lead = await prisma.lead.upsert({
-          where: { tenantId_cpf: { tenantId: tenant!.id, cpf: cpfFinal } },
-          update: {
-            nome: dados.nome,
-            telefone: dados.telefones?.[0]?.numero || null,
-            email: dados.emails?.[0] || null,
-            enderecoPrincipal: dados.endereco_correspondencia,
-            origem: 'api_iptu'
-          },
-          create: {
-            tenantId: tenant!.id,
-            cpf: cpfFinal,
-            nome: dados.nome,
-            telefone: dados.telefones?.[0]?.numero || null,
-            email: dados.emails?.[0] || null,
-            enderecoPrincipal: dados.endereco_correspondencia,
-            origem: 'api_iptu',
-            status: 'NOVO'
-          }
-        });
+        const cpfFinal = dados.cpf || `00000000000-${Math.random().toString().slice(2, 5)}`;
 
-        const imovel = await prisma.imovel.upsert({
-          where: { inscricaoIptu: dados.nrinscr },
-          update: {
-            leadId: lead.id,
-            nomeEdificio: dados.nomeEdificio || dados.nmedificio,
-            bairro: dados.nmbairro,
-            logradouro: dados.nmlogradou,
-            complemento: dados.incompl,
-            apartamento: dados.apartamento,
-            bloco: dados.bloco,
-            unidade: dados.unidade,
-            box: dados.box,
-            quadra: dados.quadra,
-            lote: dados.lote,
-            tipoImovel: dados.tipoImovel,
-          },
-          create: {
-            inscricaoIptu: dados.nrinscr,
-            leadId: lead.id,
-            nomeEdificio: dados.nomeEdificio || dados.nmedificio,
-            bairro: dados.nmbairro || 'Desconhecido',
-            logradouro: dados.nmlogradou || 'Desconhecido',
-            complemento: dados.incompl,
-            apartamento: dados.apartamento,
-            bloco: dados.bloco,
-            unidade: dados.unidade,
-            box: dados.box,
-            quadra: dados.quadra,
-            lote: dados.lote,
-            tipoImovel: dados.tipoImovel,
-            statusCaptacao: 'IDENTIFICADO'
-          }
-        });
+        // NOTA: NÃO criamos Lead aqui!
+        // Leads só devem ser criados após qualificação SPIN
+        // Os dados são retornados para o frontend que deve:
+        // 1. Criar uma Campanha
+        // 2. Vincular os dados como Contatos (não Leads)
+        // 3. Disparar prospecção IA
+        // 4. IA qualifica e converte Contato → Lead
 
-        return { ...dados, leadId: lead.id, imovelId: imovel.id };
+        // Apenas persistimos o imóvel (dado valioso de referência)
+        let imovelId: string | null = null;
+        try {
+          const imovel = await prisma.imovel.upsert({
+            where: { inscricaoIptu: dados.nrinscr },
+            update: {
+              nomeEdificio: dados.nomeEdificio || dados.nmedificio,
+              bairro: dados.nmbairro,
+              logradouro: dados.nmlogradou,
+              complemento: dados.incompl,
+              apartamento: dados.apartamento,
+              bloco: dados.bloco,
+              unidade: dados.unidade,
+              box: dados.box,
+              quadra: dados.quadra,
+              lote: dados.lote,
+              tipoImovel: dados.tipoImovel,
+            },
+            create: {
+              inscricaoIptu: dados.nrinscr,
+              nomeEdificio: dados.nomeEdificio || dados.nmedificio,
+              bairro: dados.nmbairro || 'Desconhecido',
+              logradouro: dados.nmlogradou || 'Desconhecido',
+              complemento: dados.incompl,
+              apartamento: dados.apartamento,
+              bloco: dados.bloco,
+              unidade: dados.unidade,
+              box: dados.box,
+              quadra: dados.quadra,
+              lote: dados.lote,
+              tipoImovel: dados.tipoImovel,
+              statusCaptacao: 'IDENTIFICADO'
+            }
+          });
+          imovelId = imovel.id;
+        } catch (e) {
+          console.error(`[Mineracao] Erro ao salvar imóvel ${dados.nrinscr}:`, e);
+        }
+
+        // Retornar dados enriquecidos (sem leadId - será criado via fluxo correto)
+        return {
+          ...dados,
+          cpf: cpfFinal,
+          imovelId,
+          // Dados prontos para criar Contato
+          telefone: dados.telefones?.[0]?.numero || null,
+          email: dados.emails?.[0] || null,
+        };
       })
     );
 
+    // Contagem de resultados
+    const comTelefone = resultadosPersistidos.filter(r => r.telefones && r.telefones.length > 0).length;
+    const comEmail = resultadosPersistidos.filter(r => r.emails && r.emails.length > 0).length;
+    const comImovel = resultadosPersistidos.filter(r => r.imovelId).length;
+
     return res.json({
       total: resultadosPersistidos.length,
-      sucesso: resultadosPersistidos.filter(r => r.leadId).length,
+      comTelefone,
+      comEmail,
+      comImovel,
       doCache: cpfsDoCache,
       dApi: cpfsDaApi,
       economia: economiaTotal,
-      dados: resultadosPersistidos
+      dados: resultadosPersistidos,
+      // IMPORTANTE: Instruções para o frontend
+      instrucoes: {
+        mensagem: 'Dados enriquecidos. Para prospectar, vincule a uma Campanha e crie Contatos.',
+        proximoPasso: 'POST /api/campanhas/:id/vincular-leads-minerados'
+      }
     });
 
-  } catch (error) {
-    console.error('Erro ao confirmar leads:', error);
-    return res.status(500).json({ erro: 'Falha ao confirmar leads' });
+  } catch (error: any) {
+    console.error('[ERRO] confirmar-leads falhou:', error?.message || error);
+    console.error('[ERRO] Stack:', error?.stack);
+    // console.error('[ERRO] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    return res.status(500).json({ erro: 'Falha ao confirmar leads', detalhes: error?.message });
   }
 });
 

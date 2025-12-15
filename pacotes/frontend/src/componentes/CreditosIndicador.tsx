@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Coins, AlertTriangle, RefreshCw } from "lucide-react";
+import { Coins, AlertTriangle } from "lucide-react";
 import { api } from "../servicos/api";
 import { cn } from "../lib/utils";
 

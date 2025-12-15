@@ -23,6 +23,10 @@ import { Creditos } from "./paginas/Creditos";
 import { WhatsAppProvider } from "./contextos/WhatsAppContext";
 import { SessoesWhatsapp } from "./paginas/SessoesWhatsapp";
 import { MeusAgentes } from "./paginas/MeusAgentes";
+import { Upgrade } from "./paginas/Upgrade";
+
+// Páginas Admin
+import { AdminClientes, AdminTransacoes, AdminLeadsVip, AdminPacotes, AdminPlanos } from "./paginas/admin";
 
 // Rota Protegida
 function RotaPrivada({ children }: { children: React.ReactNode }) {
@@ -32,6 +36,22 @@ function RotaPrivada({ children }: { children: React.ReactNode }) {
   ) : (
     <Navigate to="/login" />
   );
+}
+
+// Rota Protegida para Admin (verifica papel SUPER_ADMIN)
+function RotaAdmin({ children }: { children: React.ReactNode }) {
+  const token = localStorage.getItem("elyon_token");
+  const usuario = JSON.parse(localStorage.getItem("elyon_usuario") || "{}");
+
+  if (!token) {
+    return <Navigate to="/login" />;
+  }
+
+  if (usuario.papel !== "SUPER_ADMIN") {
+    return <Navigate to="/dashboard" />;
+  }
+
+  return <WhatsAppProvider>{children}</WhatsAppProvider>;
 }
 
 function App() {
@@ -101,6 +121,17 @@ function App() {
 
         <Route
           path="/dashboard/whatsapp"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <SessoesWhatsapp />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/sessoes-whatsapp"
           element={
             <RotaPrivada>
               <LayoutDashboard>
@@ -286,7 +317,18 @@ function App() {
           }
         />
 
-        {/* Placeholder para outras rotas */}
+        <Route
+          path="/dashboard/upgrade"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <Upgrade />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        {/* Placeholder para outras rotas dashboard */}
         <Route
           path="/dashboard/*"
           element={
@@ -297,6 +339,65 @@ function App() {
                 </div>
               </LayoutDashboard>
             </RotaPrivada>
+          }
+        />
+
+        {/* ============================================ */}
+        {/* ROTAS ADMIN (APENAS SUPER_ADMIN)            */}
+        {/* ============================================ */}
+
+        <Route
+          path="/admin/clientes"
+          element={
+            <RotaAdmin>
+              <LayoutDashboard>
+                <AdminClientes />
+              </LayoutDashboard>
+            </RotaAdmin>
+          }
+        />
+
+        <Route
+          path="/admin/transacoes"
+          element={
+            <RotaAdmin>
+              <LayoutDashboard>
+                <AdminTransacoes />
+              </LayoutDashboard>
+            </RotaAdmin>
+          }
+        />
+
+        <Route
+          path="/admin/leads-vip"
+          element={
+            <RotaAdmin>
+              <LayoutDashboard>
+                <AdminLeadsVip />
+              </LayoutDashboard>
+            </RotaAdmin>
+          }
+        />
+
+        <Route
+          path="/admin/pacotes"
+          element={
+            <RotaAdmin>
+              <LayoutDashboard>
+                <AdminPacotes />
+              </LayoutDashboard>
+            </RotaAdmin>
+          }
+        />
+
+        <Route
+          path="/admin/planos"
+          element={
+            <RotaAdmin>
+              <LayoutDashboard>
+                <AdminPlanos />
+              </LayoutDashboard>
+            </RotaAdmin>
           }
         />
 

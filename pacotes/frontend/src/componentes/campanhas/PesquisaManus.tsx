@@ -27,7 +27,6 @@ import {
   Brain,
   Building2,
   MapPin,
-  Search,
   RefreshCw,
   FileText,
   Edit3,
@@ -85,8 +84,7 @@ export function PesquisaManusModal({
   const [estado, setEstado] = useState(dadosIniciais?.estado || "GO");
 
   // Estado
-  // TODO: Reativar quando a API Manus estiver funcionando
-  // const [iniciando, setIniciando] = useState(false);
+  const [iniciando, setIniciando] = useState(false);
   const [pesquisa, setPesquisa] = useState<Pesquisa | null>(null);
   const [verificando, setVerificando] = useState(false);
   const [aplicando, setAplicando] = useState(false);
@@ -176,8 +174,7 @@ export function PesquisaManusModal({
     }
 
     try {
-      // TODO: Reativar quando a API Manus estiver funcionando
-      // setIniciando(true);
+      setIniciando(true);
       setProgresso(0);
 
       const response = await api.post("/pesquisas", {
@@ -202,8 +199,7 @@ export function PesquisaManusModal({
       const msg = error.response?.data?.erro || "Erro ao iniciar pesquisa";
       toast.error(msg);
     } finally {
-      // TODO: Reativar quando a API Manus estiver funcionando
-      // setIniciando(false);
+      setIniciando(false);
     }
   };
 
@@ -602,22 +598,11 @@ export function PesquisaManusModal({
               </div>
             </div>
 
-            {/* Aviso - Em Breve */}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm">
-              <p className="font-medium flex items-center gap-2 text-amber-800">
-                🚧 Funcionalidade em desenvolvimento
-              </p>
-              <p className="mt-1 text-amber-700">
-                A pesquisa automática via IA estará disponível em breve. 
-                Por enquanto, utilize o <strong>preenchimento manual</strong> abaixo.
-              </p>
-            </div>
-
             {/* Info Box */}
-            <div className="bg-purple-50 rounded-lg p-4 text-sm text-purple-800 opacity-60">
+            <div className="bg-purple-50 rounded-lg p-4 text-sm text-purple-800 opacity-80">
               <p className="font-medium flex items-center gap-2">
                 <Sparkles className="w-4 h-4" />
-                Como vai funcionar?
+                Como funciona?
               </p>
               <ul className="mt-2 space-y-1 text-purple-700">
                 <li>• A IA irá buscar informações na web sobre o empreendimento</li>
@@ -628,29 +613,36 @@ export function PesquisaManusModal({
             </div>
 
             <div className="flex flex-col gap-3">
-              {/* Botão principal - Preenchimento Manual */}
+              {/* Botão principal - Pesquisa IA */}
               <Button 
-                onClick={() => setModoManual(true)}
-                className="w-full"
+                onClick={iniciarPesquisa} 
+                disabled={iniciando}
+                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md"
               >
-                <Edit3 className="w-4 h-4 mr-2" />
-                Preencher Briefing Manualmente
+                {iniciando ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Iniciando Pesquisa...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Pesquisar com IA (Recomendado)
+                  </>
+                )}
               </Button>
               
               <div className="flex justify-center gap-3">
                 <Button variant="outline" onClick={onFechar}>
                   Cancelar
                 </Button>
-                {/* Botão de pesquisa IA desabilitado temporariamente */}
                 <Button 
-                  variant="outline" 
-                  onClick={iniciarPesquisa} 
-                  disabled={true}
-                  className="opacity-50 cursor-not-allowed"
-                  title="Em breve"
+                  variant="ghost" 
+                  onClick={() => setModoManual(true)}
+                  className="text-slate-500 hover:text-slate-700"
                 >
-                  <Search className="w-4 h-4 mr-2" />
-                  Pesquisa IA (em breve)
+                  <Edit3 className="w-4 h-4 mr-2" />
+                  Preencher Manualmente
                 </Button>
               </div>
             </div>

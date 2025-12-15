@@ -32,7 +32,7 @@ export function ModalPagamentoPIX({
   creditos,
 }: ModalPagamentoPIXProps) {
   const [copiado, setCopiado] = useState(false);
-  const [verificando, setVerificando] = useState(false);
+  // const [verificando, setVerificando] = useState(false);
 
   const copiarPIX = async () => {
     if (!pagamento?.pixPayload) return;

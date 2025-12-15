@@ -16,6 +16,7 @@
 
 import { Router, Request } from 'express';
 import { prisma } from '../lib/db';
+import { StatusConexao } from '@prisma/client';
 import { getWhatsAppService, limparCacheWhatsApp } from '../servicos/whatsapp';
 import axios from 'axios';
 import { z } from 'zod';
@@ -62,6 +63,7 @@ const criarSessaoSchema = z.object({
 /**
  * GET /api/sessoes-whatsapp
  * Lista todas as sessões do tenant
+ * ATUALIZADO: Agora verifica status real de cada sessão no Evolution API
  */
 router.get('/', async (req, res) => {
   try {
@@ -80,19 +82,81 @@ router.get('/', async (req, res) => {
       orderBy: { criadoEm: 'desc' }
     });
 
+    // Verificar status real de cada sessão no Evolution API
+    const sessoesComStatusReal = await Promise.all(
+      sessoes.map(async (s) => {
+        try {
+          const service = getWhatsAppService(s.instanceName);
+          const statusEvolution = await service.verificarStatus();
+
+          // Mapear estado do Evolution para nosso enum
+          let statusReal: StatusConexao = s.status;
+          let numeroAtualizado = s.numeroWhatsapp;
+          let nomeAtualizado = s.nomeWhatsapp;
+
+          if (statusEvolution?.instance?.state === 'open') {
+            statusReal = StatusConexao.CONECTADO;
+            // Capturar número se disponível
+            if ((statusEvolution.instance as any).ownerJid) {
+              const jid = (statusEvolution.instance as any).ownerJid;
+              numeroAtualizado = jid.split('@')[0];
+            }
+            if ((statusEvolution.instance as any).profileName) {
+              nomeAtualizado = (statusEvolution.instance as any).profileName;
+            }
+          } else if (statusEvolution?.instance?.state === 'connecting') {
+            statusReal = StatusConexao.CONECTANDO;
+          } else if (statusEvolution?.instance?.state === 'close' || !statusEvolution) {
+            statusReal = StatusConexao.DESCONECTADO;
+          }
+
+          // Atualizar no banco se status mudou (para manter sincronizado)
+          if (statusReal !== s.status || numeroAtualizado !== s.numeroWhatsapp) {
+            await prisma.sessaoWhatsapp.update({
+              where: { id: s.id },
+              data: {
+                status: statusReal,
+                ultimoStatus: new Date(),
+                numeroWhatsapp: statusReal === StatusConexao.DESCONECTADO ? null : numeroAtualizado,
+                nomeWhatsapp: statusReal === StatusConexao.DESCONECTADO ? null : nomeAtualizado
+              }
+            }).catch(err => console.error('[SessoesWhatsapp] Erro ao atualizar status:', err));
+
+            console.log(`[SessoesWhatsapp] 🔄 Status atualizado: ${s.instanceName} ${s.status} -> ${statusReal}`);
+          }
+
+          return {
+            id: s.id,
+            nome: s.nome,
+            descricao: s.descricao,
+            instanceName: s.instanceName,
+            numeroWhatsapp: statusReal === StatusConexao.DESCONECTADO ? null : numeroAtualizado,
+            nomeWhatsapp: statusReal === StatusConexao.DESCONECTADO ? null : nomeAtualizado,
+            status: statusReal,
+            agente: s.agente,
+            criadoEm: s.criadoEm
+          };
+        } catch (err) {
+          // Se falhar ao verificar Evolution, retorna status do banco
+          console.error(`[SessoesWhatsapp] Erro ao verificar ${s.instanceName}:`, err);
+          return {
+            id: s.id,
+            nome: s.nome,
+            descricao: s.descricao,
+            instanceName: s.instanceName,
+            numeroWhatsapp: s.numeroWhatsapp,
+            nomeWhatsapp: s.nomeWhatsapp,
+            status: s.status,
+            agente: s.agente,
+            criadoEm: s.criadoEm
+          };
+        }
+      })
+    );
+
     return res.json({
       sucesso: true,
-      sessoes: sessoes.map(s => ({
-        id: s.id,
-        nome: s.nome,
-        descricao: s.descricao,
-        instanceName: s.instanceName,
-        numeroWhatsapp: s.numeroWhatsapp,
-        nomeWhatsapp: s.nomeWhatsapp,
-        status: s.status,
-        agente: s.agente,
-        criadoEm: s.criadoEm
-      }))
+      sessoes: sessoesComStatusReal
     });
 
   } catch (error: any) {
@@ -113,17 +177,17 @@ router.post('/', async (req, res) => {
     }
 
     const dados = criarSessaoSchema.parse(req.body);
-    
+
     // Gerar instanceName único
     const instanceName = gerarInstanceName(tenantId, dados.nome);
-    
+
     // Verificar se já existe
     const existente = await prisma.sessaoWhatsapp.findUnique({
       where: { instanceName }
     });
-    
+
     if (existente) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Já existe uma sessão com este nome',
         sugestao: 'Use um nome diferente'
       });
@@ -162,11 +226,11 @@ router.post('/', async (req, res) => {
 
   } catch (error: any) {
     console.error('[SessoesWhatsapp] Erro ao criar:', error);
-    
+
     if (error.name === 'ZodError') {
       return res.status(400).json({ erro: 'Dados inválidos', detalhes: error.errors });
     }
-    
+
     return res.status(500).json({ erro: 'Erro ao criar sessão' });
   }
 });
@@ -289,16 +353,16 @@ router.post('/:id/conectar', async (req, res) => {
 
     // Obter serviço para esta instância
     const service = getWhatsAppService(sessao.instanceName);
-    
+
     console.log(`[SessoesWhatsapp] 🔄 Conectando: ${sessao.instanceName}`);
-    
+
     const resultado = await service.conectarInstancia();
 
     // Verificar resposta
     if (resultado?.base64 || resultado?.qrcode) {
       const qrCode = resultado.base64 || resultado.qrcode;
-      return res.json({ 
-        sucesso: true, 
+      return res.json({
+        sucesso: true,
         qrcode: qrCode,
         instanceName: sessao.instanceName
       });
@@ -314,16 +378,16 @@ router.post('/:id/conectar', async (req, res) => {
       return res.json({ sucesso: true, status: 'CONECTADO' });
     }
 
-    return res.json({ 
-      sucesso: true, 
+    return res.json({
+      sucesso: true,
       status: status?.instance?.state || 'AGUARDANDO'
     });
 
   } catch (error: any) {
     console.error('[SessoesWhatsapp] Erro ao conectar:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       erro: 'Erro ao conectar',
-      detalhes: error.message 
+      detalhes: error.message
     });
   }
 });
@@ -361,7 +425,7 @@ router.get('/:id/status', async (req, res) => {
 
     if (status?.instance?.state === 'open') {
       novoStatus = 'CONECTADO';
-      
+
       // Tentar capturar número e nome se disponíveis
       // Evolution v2 geralmente retorna ownerJid no formato 5511999999999@s.whatsapp.net
       if ((status.instance as any).ownerJid) {
@@ -384,7 +448,7 @@ router.get('/:id/status', async (req, res) => {
           console.error('Erro ao buscar detalhes extras:', err);
         }
       }
-      
+
       if ((status.instance as any).profileName) {
         nomeWhatsapp = (status.instance as any).profileName;
       }
@@ -398,8 +462,8 @@ router.get('/:id/status', async (req, res) => {
     if (novoStatus !== sessao.status || numeroWhatsapp !== sessao.numeroWhatsapp) {
       await prisma.sessaoWhatsapp.update({
         where: { id },
-        data: { 
-          status: novoStatus, 
+        data: {
+          status: novoStatus,
           ultimoStatus: new Date(),
           numeroWhatsapp,
           nomeWhatsapp
@@ -457,8 +521,8 @@ router.post('/:id/desconectar', async (req, res) => {
     // Atualizar status
     await prisma.sessaoWhatsapp.update({
       where: { id },
-      data: { 
-        status: 'DESCONECTADO', 
+      data: {
+        status: 'DESCONECTADO',
         ultimoStatus: new Date(),
         numeroWhatsapp: null,
         nomeWhatsapp: null
@@ -537,7 +601,7 @@ router.post('/:id/configurar', async (req, res) => {
     }
 
     const service = getWhatsAppService(sessao.instanceName);
-    
+
     // Se foi passado ignorarGrupos, atualiza
     if (typeof ignorarGrupos === 'boolean') {
       await service.atualizarConfiguracao(ignorarGrupos);
