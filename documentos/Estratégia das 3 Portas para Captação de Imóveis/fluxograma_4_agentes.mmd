@@ -1,0 +1,58 @@
+flowchart TD
+    subgraph AGENTE1["🎯 AGENTE 1: Caçador de Oportunidades"]
+        A1[📱 Contato Inicial Cold Outreach] --> A2{Confirma interesse em vender/alugar?}
+        A2 -->|Não| A3[🙏 Agradecer e arquivar]
+        A2 -->|Sim| A4[🔍 Iniciar Perguntas de Diagnóstico]
+        A4 --> A5[⏰ Há quanto tempo está vendendo?]
+        A5 --> A6[👀 Quantas visitas recebeu?]
+        A6 --> A7[💰 Recebeu propostas? Por que não fechou?]
+        A7 --> A8[🤝 Como está o suporte do corretor atual?]
+        A8 --> A9[📸 Fotos profissionais? Vídeo? Tour virtual?]
+        A9 --> A10{Identificou DORES e INSATISFAÇÃO?}
+        A10 -->|Não| A11[📝 Continuar investigação]
+        A11 --> A5
+        A10 -->|Sim| A12[📋 Registrar Briefing das Dores]
+    end
+
+    subgraph AGENTE2["💡 AGENTE 2: Especialista em Soluções"]
+        A12 --> B1[📖 Receber Briefing do Agente 1]
+        B1 --> B2[👋 Apresentar-se como Especialista]
+        B2 --> B3[🎯 Conectar DORES às SOLUÇÕES]
+        B3 --> B4[📸 Dor: Fotos ruins → Solução: Produção Profissional]
+        B3 --> B5[👀 Dor: Poucas visitas → Solução: Anúncios Direcionados]
+        B3 --> B6[🤷 Dor: Sem suporte → Solução: Acompanhamento Proativo]
+        B4 & B5 & B6 --> B7{Faz sentido dar um UPGRADE?<br/>Podemos continuar?}
+        B7 -->|Não| B8[🔄 Reforçar benefícios ou arquivar]
+    end
+
+    subgraph AGENTE3["🤝 AGENTE 3: Fechador de Negócios"]
+        B7 -->|Sim| C1[📄 Apresentar Opções de Contrato]
+        C1 --> C2[⭐ Destacar Benefícios da Exclusividade]
+        C2 --> C3[📅 Explicar Prazo do Contrato]
+        C3 --> C4[💰 Apresentar Comissão como INVESTIMENTO]
+        C4 --> C5[📊 Justificar: Material + Anúncios + Assessoria]
+        C5 --> C6[📋 Explicar Próximas Etapas]
+        C6 --> C7{Podemos avançar para<br/>documentação e contrato?}
+        C7 -->|Dúvidas| C8[❓ Esclarecer dúvidas]
+        C8 --> C7
+    end
+
+    subgraph AGENTE4["✅ AGENTE 4: Coordenador de Onboarding"]
+        C7 -->|Sim| D1[📑 Solicitar Documentação]
+        D1 --> D2[💾 Atualizar Dados no Sistema]
+        D2 --> D3[📝 Enviar Link do Contrato]
+        D3 --> D4{Contrato Assinado?}
+        D4 -->|Não| D5[⏳ Acompanhar e lembrar]
+        D5 --> D4
+        D4 -->|Sim| D6[📅 Agendar Visita Técnica]
+        D6 --> D7[🎉 CAPTAÇÃO CONCLUÍDA]
+        D7 --> D8[📸 Produção de Material]
+        D8 --> D9[🚀 Ativação do Anúncio]
+    end
+
+    style AGENTE1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style AGENTE2 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style AGENTE3 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style AGENTE4 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style D7 fill:#4caf50,stroke:#2e7d32,color:#fff
+    style D9 fill:#2196f3,stroke:#1565c0,color:#fff
