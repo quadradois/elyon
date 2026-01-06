@@ -1,243 +1,157 @@
-# 🚀 Guia de Deploy - ELYON
+# 🚀 Guia de Deploy - ELYON SaaS
 
-Este documento descreve o processo completo de deploy do sistema ELYON para produção.
+**Versão da Documentação:** 2.0 (Pós-Auditoria de Segurança 2025)
+**Status do Sistema:** Produção Segura
 
-## 📋 Pré-requisitos
+---
 
-### No servidor (VPS)
+## 🏗️ Arquitetura de Infraestrutura
 
-- Ubuntu 22.04 LTS ou similar
-- Docker 24+ e Docker Compose v2+
-- Mínimo 4GB RAM (recomendado 8GB+)
-- 50GB+ de disco SSD
-- Portas 80 e 443 liberadas
+O ambiente ELYON utiliza uma arquitetura de serviços segmentada para maior segurança:
 
-### DNS Configurado
+1.  **Infraestrutura Compartilhada (`/root/infra`)**
+    *   **Traefik:** Reverse Proxy com Socket Proxy e TLS Hardening.
+    *   **Socket Proxy:** Isola o socket Docker do Traefik.
+    *   **Rede:** Gerencia SSL (Let's Encrypt) e roteamento para todos os apps (ELYON, CRM).
 
-Aponte os seguintes subdomínios para o IP do servidor:
+2.  **Aplicação ELYON (`/root/elyon`)**
+    *   **Frontend:** Nginx (porta 80 interna).
+    *   **Backend:** Node.js (usuário não-root `nodejs`).
+    *   **PostgreSQL:** Banco de dados dedicado.
+    *   **Redis:** Cache dedicado.
+    *   **Backup:** Container dedicado de automação de backup.
 
+---
+
+## 📋 Pré-requisitos & Segurança
+
+### 1. Gestão de Secrets (CRÍTICO)
+
+Não utilizamos mais variáveis de ambiente para senhas sensíveis no `.env`. Utilize o diretório de secrets:
+
+```bash
+# Localização dos secrets
+/root/elyon/secrets/
+├── db_password.txt    (chmod 600)
+├── redis_password.txt (chmod 600)
+└── jwt_secret.txt     (chmod 600)
 ```
-elyon.quadradois.com.br     → IP_DO_SERVIDOR
-api.elyon.quadradois.com.br → IP_DO_SERVIDOR
-admin.quadradois.com.br     → IP_DO_SERVIDOR
+
+**Para alterar uma senha:**
+1. Edite o arquivo correspondente em `/root/elyon/secrets/`.
+2. Reinicie os serviços afetados: `./scripts/deploy.sh restart`.
+
+### 2. Infraestrutura (Traefik)
+
+O Traefik deve estar rodando antes de iniciar o ELYON.
+
+```bash
+cd /root/infra
+docker compose ps
+# Deve mostrar: elyon_traefik e docker_socket_proxy UP
 ```
 
 ---
 
-## 🔧 Instalação Inicial
+## 🚀 Comandos de Deploy (ELYON)
 
-### 1. Conectar ao Servidor
-
-```bash
-ssh root@SEU_SERVIDOR
-```
-
-### 2. Instalar Docker
+O script `./scripts/deploy.sh` continua sendo a principal interface de comando.
 
 ```bash
-# Atualizar sistema
-apt update && apt upgrade -y
-
-# Instalar Docker
-curl -fsSL https://get.docker.com | sh
-
-# Instalar Docker Compose
-apt install docker-compose-plugin -y
-
-# Verificar instalação
-docker --version
-docker compose version
-```
-
-### 3. Clonar Repositório
-
-```bash
-cd /opt
-git clone https://github.com/quadradois/elyon.git
-cd elyon
-```
-
-### 4. Configurar Variáveis de Ambiente
-
-```bash
-# Copiar template
-cp .env.production.example .env
-
-# Editar variáveis
-nano .env
-```
-
-**⚠️ IMPORTANTE:** Configure TODAS as variáveis obrigatórias:
-
-- `DB_PASSWORD` - Senha forte para PostgreSQL
-- `REDIS_PASSWORD` - Senha forte para Redis
-- `JWT_SECRET` - Gere com: `openssl rand -hex 32`
-- `OPENAI_API_KEY` - Sua chave da OpenAI
-- `ASAAS_API_KEY` - Chave do Asaas (produção!)
-
-### 5. Deploy Inicial
-
-```bash
-# Tornar script executável
+cd /root/elyon
 chmod +x scripts/deploy.sh
+```
 
-# Build das imagens
-./scripts/deploy.sh build
+### Iniciar Aplicação
 
-# Iniciar serviços
+```bash
 ./scripts/deploy.sh up
 ```
 
----
-
-## 🔐 Configurar Webhook do Asaas
-
-Após o deploy, configure o webhook no painel Asaas:
-
-1. Acesse [Asaas → Integrações → Webhooks](https://www.asaas.com/configuracoes/integracao)
-2. Clique em **Adicionar Webhook**
-3. Configure:
-   - **URL**: `https://api.elyon.quadradois.com.br/api/billing/webhook`
-   - **Enviar para URL**: Marcar
-   - **Eventos**:
-     - ✅ PAYMENT_CONFIRMED
-     - ✅ PAYMENT_RECEIVED
-     - ✅ PAYMENT_OVERDUE
-     - ✅ SUBSCRIPTION_CREATED
-     - ✅ SUBSCRIPTION_DELETED
-4. Salvar
-
-### Testar Webhook
+### Atualizar Aplicação (Zero-downtime attempt)
 
 ```bash
-# Ver logs do backend
-./scripts/deploy.sh logs | grep webhook
+./scripts/deploy.sh update
+# Executa: git pull → build → down → up
 ```
 
----
-
-## 📊 Comandos Úteis
+### Logs em Tempo Real
 
 ```bash
-# Ver status dos containers
-./scripts/deploy.sh status
-
-# Ver logs em tempo real
 ./scripts/deploy.sh logs
+```
 
-# Reiniciar serviços
-./scripts/deploy.sh restart
+### Status dos Containers
 
-# Executar migrations
-./scripts/deploy.sh migrate
-
-# Atualizar (git pull + rebuild)
-./scripts/deploy.sh update
-
-# Parar tudo
-./scripts/deploy.sh down
+```bash
+./scripts/deploy.sh status
 ```
 
 ---
 
-## 🔄 Atualizações
+## 💾 Backup e Recuperação
 
-### Atualização Simples (sem breaking changes)
+O backup agora é **100% automatizado** via container dedicado. Não use scripts manuais via crontab.
+
+### Configuração Atual
+*   **Container:** `elyon_backup`
+*   **Horário:** Diariamente às 03:00 AM
+*   **Retenção:** 7 dias, 4 semanas, 6 meses
+*   **Local:** `/root/elyon/backups`
+
+### Verificar Status dos Backups
 
 ```bash
-cd /opt/elyon
-git pull origin main
-./scripts/deploy.sh update
+# Ver últimos logs de execução
+docker logs elyon_backup
+
+# Listar arquivos de backup
+ls -lh /root/elyon/backups
 ```
 
-### Atualização com Migrations
+### Como Restaurar um Backup
 
-```bash
-cd /opt/elyon
-git pull origin main
-./scripts/deploy.sh build
-./scripts/deploy.sh down
-./scripts/deploy.sh up
-# Migrations rodam automaticamente no startup
-```
+1.  **Parar a aplicação** (exceto banco):
+    ```bash
+    ./scripts/deploy.sh down
+    docker compose -f docker-compose.prod.yml up -d postgres
+    ```
+
+2.  **Executar Restore:**
+    ```bash
+    # De dentro do container postgres
+    cat /backups/backup_DIARIO_YYYY-MM-DD.sql.gz | gunzip | docker exec -i elyon_postgres psql -U elyon_user -d elyon
+    ```
+    *(Nota: Requer ajuste de caminho dependendo de onde o arquivo estiver. Se estiver no host, use `docker exec -i ... < arquivo.sql`)*
 
 ---
 
-## 🔍 Troubleshooting
+## 🔍 Troubleshooting Comum
 
-### Container não inicia
+### 1. "404 Not Found" no Frontend
+*   Verifique se o container `elyon_frontend` está rodando.
+*   Verifique se o Traefik está detectando o serviço: `docker logs elyon_traefik | grep elyon`.
+*   Verifique se o Cloudflare está em modo **Full (Strict)**.
 
-```bash
-# Ver logs detalhados
-docker-compose -f docker-compose.prod.yml logs backend
+### 2. Erro de Conexão com Banco
+*   Verifique logs do backend: `docker logs elyon_backend`.
+*   Confirme se a senha em `secrets/db_password.txt` bate com a usada pelo banco.
 
-# Verificar se banco está ok
-docker-compose -f docker-compose.prod.yml exec postgres pg_isready
-```
-
-### Erro de SSL/Certificado
-
-```bash
-# Verificar status do Traefik
-docker-compose -f docker-compose.prod.yml logs traefik
-
-# Certificados estão em:
-docker volume inspect elyon_traefik_letsencrypt
-```
-
-### Erro de conexão com banco
-
-```bash
-# Verificar se PostgreSQL está rodando
-docker-compose -f docker-compose.prod.yml ps postgres
-
-# Conectar manualmente
-docker-compose -f docker-compose.prod.yml exec postgres psql -U elyon_user -d elyon
-```
-
----
-
-## 📁 Backups
-
-### Backup do Banco de Dados
-
-```bash
-# Criar backup
-docker-compose -f docker-compose.prod.yml exec postgres pg_dump -U elyon_user elyon > backup_$(date +%Y%m%d).sql
-
-# Restaurar backup
-cat backup.sql | docker-compose -f docker-compose.prod.yml exec -T postgres psql -U elyon_user -d elyon
-```
-
-### Backup Automático (cron)
-
-```bash
-# Editar crontab
-crontab -e
-
-# Adicionar linha (backup diário às 3h)
-0 3 * * * cd /opt/elyon && docker-compose -f docker-compose.prod.yml exec -T postgres pg_dump -U elyon_user elyon > /backups/elyon_$(date +\%Y\%m\%d).sql
-```
+### 3. "Bad Gateway" (502)
+*   Geralmente significa que o Backend ou Frontend não iniciou ou falhou no healthcheck.
+*   Verifique: `./scripts/deploy.sh status`.
 
 ---
 
 ## 🌐 URLs de Produção
 
-| Serviço       | URL                                                     |
-| ------------- | ------------------------------------------------------- |
-| Dashboard     | https://elyon.quadradois.com.br                         |
-| API Backend   | https://api.elyon.quadradois.com.br                     |
-| Admin/Billing | https://admin.quadradois.com.br                         |
-| Webhook Asaas | https://api.elyon.quadradois.com.br/api/billing/webhook |
+| Serviço | URL |
+|---------|-----|
+| **Frontend** | https://elyon.quadradois.com.br |
+| **Backend API** | https://api.elyon.quadradois.com.br |
+| **Admin** | https://admin.quadradois.com.br |
+| **CRM** | https://crm.quadradois.com.br |
 
 ---
 
-## ✅ Checklist Pós-Deploy
-
-- [ ] Dashboard acessível em https://elyon.quadradois.com.br
-- [ ] API respondendo em https://api.elyon.quadradois.com.br/health
-- [ ] Certificado SSL válido (cadeado verde)
-- [ ] Login funcionando
-- [ ] Webhook do Asaas configurado
-- [ ] Teste de pagamento realizado
-- [ ] Backup automático configurado
+**Equipe de DevOps ELYON**

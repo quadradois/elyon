@@ -5,11 +5,11 @@ services:
     container_name: evolution_api
     image: evoapicloud/evolution-api:v2.3.6
     restart: always
-    ports:
-      - "8081:8080"
+    # ports:
+    #   - "8081:8080"
     environment:
       - SERVER_PORT=8080
-      - SERVER_URL=http://localhost:8081
+      - SERVER_URL=http://evo.quadradois.com.br
       - DOCKER_ENV=true
 
       # Database
@@ -34,8 +34,10 @@ services:
       - LOG_BAILEYS=error
 
       # Webhook
-      - WEBHOOK_GLOBAL_URL=http://host.docker.internal:3000/webhooks/evolution
+      - WEBHOOK_GLOBAL_URL=http://elyon_backend:3000/webhooks
       - WEBHOOK_GLOBAL_ENABLED=true
+      - WEBHOOK_GLOBAL_BASE64=true
+      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
       - WEBHOOK_EVENTS_APPLICATION_STARTUP=false
       - WEBHOOK_EVENTS_QRCODE_UPDATED=true
       - WEBHOOK_EVENTS_MESSAGES_SET=false
@@ -60,6 +62,16 @@ services:
     depends_on:
       - postgres_evolution
       - redis_evolution
+    networks:
+      - default
+      - elyon_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.evolution-api.rule=Host(`evo.quadradois.com.br`)"
+      - "traefik.http.routers.evolution-api.entrypoints=web,websecure"
+      - "traefik.http.routers.evolution-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.evolution-api.loadbalancer.server.port=8080"
+      - "traefik.docker.network=elyon_network"
 
   postgres_evolution:
     container_name: postgres_evolution
@@ -71,6 +83,8 @@ services:
       - POSTGRES_DB=evolution
     volumes:
       - evolution_postgres_data:/var/lib/postgresql/data
+    networks:
+      - default
 
   redis_evolution:
     container_name: redis_evolution
@@ -79,7 +93,14 @@ services:
     command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
       - evolution_redis_data:/data
+    networks:
+      - default
 
 volumes:
   evolution_postgres_data:
   evolution_redis_data:
+
+
+networks:
+  elyon_network:
+    external: true

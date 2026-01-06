@@ -263,7 +263,8 @@ cp .env.exemplo .env.local
 - [DIRETRIZES_TECNICAS.md](../docs/DIRETRIZES_TECNICAS.md) - Padrões de código
 - [ELYON_ARCHITECTURE.md](../docs/ELYON_ARCHITECTURE.md) - Arquitetura multi-agentes
 - [SAAS_CACHE_STRATEGY.md](../docs/SAAS_CACHE_STRATEGY.md) - Estratégia de cache
-- [VPS_DEPLOY_GUIDE.md](../docs/VPS_DEPLOY_GUIDE.md) - Guia de deploy
+- [VPS_DEPLOY_GUIDE.md](./DEPLOY.md) - Guia de deploy (Atualizado)
+- [INFRA_README.md](../infra/README.md) - Documentação da Infra Compartilhada (Traefik)
 
 ---
 

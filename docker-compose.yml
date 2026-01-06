@@ -1,54 +1,74 @@
+version: '3.8'
+
 services:
-  # PostgreSQL - Banco de dados principal
-  postgres:
-    image: postgres:15-alpine
-    container_name: elyon_postgres_dev
+  backend:
+    build:
+      context: ./pacotes/backend
+      dockerfile: Dockerfile
+    container_name: elyon_backend
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: elyon
-      POSTGRES_USER: elyon_user
-      POSTGRES_PASSWORD: elyon_dev_2025
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U elyon_user -d elyon"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      NODE_ENV: production
+      PORT: 3000
+      # Conexão com Banco Compartilhado (Infra)
+      DATABASE_URL: postgresql://${DB_USER:-elyon_user}:${DB_PASSWORD}@elyon_postgres:5432/${DB_NAME:-elyon}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@elyon_redis:6379
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Defina OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      ASAAS_API_URL: ${ASAAS_API_URL:-https://api.asaas.com/v3}
+      ASAAS_API_KEY: ${ASAAS_API_KEY}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN}
+      MANUS_API_KEY: ${MANUS_API_KEY}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_S3_REGION: ${AWS_S3_REGION}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME}
+      AWS_S3_BUCKET_LOGOS: ${AWS_S3_BUCKET_LOGOS}
+      ASSERTIVA_CLIENT_ID: ${ASSERTIVA_CLIENT_ID}
+      ASSERTIVA_CLIENT_SECRET: ${ASSERTIVA_CLIENT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL:-https://elyon.quadradois.com.br}
+      BACKEND_URL: ${BACKEND_URL:-https://api.elyon.quadradois.com.br}
+      # 🆕 Feature Flag para 4 Agentes de Captação
+      USAR_ORQUESTRADOR_4_AGENTES: "true"
+    networks:
+      - elyon_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.elyon.quadradois.com.br`)"
+      - "traefik.http.routers.backend.entrypoints=web,websecure"
+      # - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.backend.loadbalancer.server.port=3000"
+      - "traefik.docker.network=elyon_network"
 
-  # Redis - Cache e filas
-  redis:
-    image: redis:7-alpine
-    container_name: elyon_redis_dev
-    command: redis-server --requirepass elyon_redis_2025
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
+  frontend:
+    build:
+      context: ./pacotes/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: https://api.elyon.quadradois.com.br/api
+    container_name: elyon_frontend
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
+    networks:
+      - elyon_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.elyonfront.rule=Host(`elyon.quadradois.com.br`)"
+      - "traefik.http.routers.elyonfront.entrypoints=web,websecure"
+      # - "traefik.http.routers.elyonfront.tls.certresolver=letsencrypt"
+      - "traefik.http.services.elyonfront.loadbalancer.server.port=80"
+      - "traefik.docker.network=elyon_network"
 
-  # Evolution Audio Converter
   audio_converter:
-    image: atendai/evolution-audio-converter:latest
+    image: jrottenberg/ffmpeg:4.4-alpine
     container_name: elyon_audio_converter
-    environment:
-      PORT: 4040
-      API_KEY: ${AUDIO_CONVERTER_API_KEY:-elyon_audio_secret}
-      ENABLE_TRANSCRIPTION: "true"
-      TRANSCRIPTION_PROVIDER: "openai"
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      TRANSCRIPTION_LANGUAGE: "pt"
-    ports:
-      - "4040:4040"
     restart: unless-stopped
+    entrypoint: [ "tail", "-f", "/dev/null" ]
+    networks:
+      - elyon_network
 
-volumes:
-  postgres_data:
-  redis_data:
+networks:
+  elyon_network:
+    external: true
