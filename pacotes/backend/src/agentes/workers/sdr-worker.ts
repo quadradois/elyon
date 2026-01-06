@@ -1,9 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { PrismaClient } from '@prisma/client';
-import { 
-  todasFerramentasSDR, 
-  qualificarLeadTool, 
-  solicitarHumanoTool, 
+import {
+  todasFerramentasSDR,
+  qualificarLeadTool,
+  solicitarHumanoTool,
   buscarImovelTool,
   registrarOptoutTool,
   converterParaLeadTool,
@@ -11,7 +11,6 @@ import {
   agendarAvaliacaoTool,
   agendarFollowupTool
 } from '../../ferramentas/sdr-tools';
-import { PROMPT_CLOSER_V3 } from '../templates-prospeccao';
 import { conhecimentoCuradoService } from '../../servicos/conhecimento-curado';
 import { gerarExemplosParaPrompt, gerarExemplosPorFase } from '../few-shot-examples';
 import { SDRLogger } from '../../servicos/logger';
@@ -69,7 +68,7 @@ export interface ConfiguracaoAgente {
   tenantNome?: string;
   modoProspeccao?: boolean; // Indica se está em modo de prospecção ativa
   empreendimento?: string; // Nome do empreendimento (se prospecção)
-  
+
   // Política da imobiliária (valores configurados no Perfil)
   politica?: {
     comissaoVenda?: number;  // % de comissão de venda (ex: 6)
@@ -122,7 +121,7 @@ export const configPadrao: ConfiguracaoAgente = {
 
 export class CaptadorWorker {
   private anthropic: Anthropic | null = null;
-  
+
   constructor() {
     // Lazy initialization - será criado no primeiro uso
     // Isso garante que o dotenv já carregou as variáveis de ambiente
@@ -211,7 +210,7 @@ export class CaptadorWorker {
    * - Detecta sinais de fechamento
    */
   private async analisarHistoricoParaEstado(
-    mensagens: Array<{role: string, content: string}>
+    mensagens: Array<{ role: string, content: string }>
   ): Promise<AnaliseHistorico> {
     try {
       // Verificar se há mensagens do lead
@@ -239,7 +238,7 @@ export class CaptadorWorker {
       const regexQuartos = /(\d+)\s*(?:quartos?|qtos?|dormit[oó]rios?|suites?)/i;
       const regexOcupacao = /\b(vazio|desocupado|vago|livre|n[aã]o\s*mora|mora|ocupado|alugado|morando)\b/i;
       const regexTimeline = /(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|\d+\s*(?:meses?|dias?|semanas?)|urgente|r[aá]pido|imediato|sem\s*pressa)/i;
-      
+
       // Detectar sinais de fechamento (importante para conversão)
       const sinaisFechamento = [
         /sim[,.]?\s*(?:o\s*que\s*precisa|pode\s*ser|vamos)/i,
@@ -258,15 +257,15 @@ export class CaptadorWorker {
         /\b(?:sim|ok)\b[,.!]?\s*$/i,                          // "sim" ou "ok" no final
         /tudo\s*(?:certo|ok|bem)/i,                           // "tudo certo"
       ];
-      
+
       const leadAceitou = sinaisFechamento.some(regex => regex.test(mensagensLead));
-      
+
       // Log detalhado da detecção
       if (leadAceitou) {
         const matchedPattern = sinaisFechamento.find(regex => regex.test(mensagensLead));
         console.log(`[SDR FSM] ✅ Sinal de fechamento detectado! Pattern: ${matchedPattern}`);
       }
-      
+
       // Extrair via regex primeiro (fallback confiável)
       const matchQuartos = mensagensLead.match(regexQuartos);
       const matchOcupacao = mensagensLead.match(regexOcupacao);
@@ -313,31 +312,31 @@ Retorne APENAS JSON válido (sem markdown, sem explicações):
 
       const conteudo = resposta.content[0];
       const textoResposta = conteudo.type === 'text' ? conteudo.text : '{}';
-      
+
       // Remover markdown se houver (```json ... ```)
       const jsonLimpo = textoResposta
         .replace(/```json\s*/g, '')
         .replace(/```\s*/g, '')
         .trim();
-      
+
       console.log('[SDR FSM] 📊 Resposta LLM para extração:', jsonLimpo);
-      
+
       let dados: any = {};
       try {
         dados = JSON.parse(jsonLimpo);
       } catch (parseError) {
         console.warn('[SDR FSM] ⚠️ Erro parsing JSON, usando apenas regex');
       }
-      
+
       // === FALLBACK COM REGEX (mais confiável para dados específicos) ===
       // Se LLM não extraiu, tentar via regex
-      
+
       // Quartos: regex muito confiável
       if (!dados.quartos && matchQuartos) {
         dados.quartos = parseInt(matchQuartos[1], 10);
         console.log(`[SDR FSM] 📊 Regex extraiu quartos: ${dados.quartos}`);
       }
-      
+
       // Ocupação: normalizar resultado do regex
       if (!dados.ocupacao && matchOcupacao) {
         const ocupacaoRaw = matchOcupacao[1].toLowerCase();
@@ -348,19 +347,19 @@ Retorne APENAS JSON válido (sem markdown, sem explicações):
         }
         console.log(`[SDR FSM] 📊 Regex extraiu ocupacao: ${dados.ocupacao}`);
       }
-      
+
       // Timeline: regex para data/prazo
       if (!dados.timeline && matchTimeline) {
         dados.timeline = matchTimeline[0];
         console.log(`[SDR FSM] 📊 Regex extraiu timeline: ${dados.timeline}`);
       }
-      
+
       // Usar sinal de fechamento detectado anteriormente
       if (leadAceitou && !dados.aceitouAnunciar) {
         dados.aceitouAnunciar = true;
         console.log('[SDR FSM] 📊 Regex detectou aceitação de anúncio');
       }
-      
+
       // Construir estado baseado nos dados extraídos
       const dadosColetados: EstadoQualificacao['dadosColetados'] = {};
       const dadosFaltantes: string[] = [];
@@ -382,7 +381,7 @@ Retorne APENAS JSON válido (sem markdown, sem explicações):
       let proximaFase: FaseSPIN = 'SITUACAO';
 
       const dadosCount = Object.keys(dadosColetados).length;
-      
+
       if (dadosCount === 0) {
         fase = 'SAUDACAO';
         proximaFase = 'SITUACAO';
@@ -419,7 +418,7 @@ Retorne APENAS JSON válido (sem markdown, sem explicações):
 
     } catch (error) {
       console.error('[SDR FSM] Erro ao analisar histórico:', error);
-      
+
       // Fallback seguro
       return {
         estado: {
@@ -440,10 +439,10 @@ Retorne APENAS JSON válido (sem markdown, sem explicações):
    * FSM: Valida se uma tool pode ser executada baseado no estado atual
    */
   private validarToolCall(
-    toolName: string, 
+    toolName: string,
     analise: AnaliseHistorico
   ): { permitido: boolean; motivo?: string } {
-    
+
     // VALIDAÇÃO CRÍTICA: qualificar_lead só com 4+ dados
     if (toolName === 'qualificar_lead') {
       if (!analise.podeQualificar) {
@@ -453,7 +452,7 @@ Retorne APENAS JSON válido (sem markdown, sem explicações):
         };
       }
     }
-    
+
     // ✅ PERMISSÃO ESPECIAL: Se lead aceitou, permitir converter_para_lead e agendar_avaliacao
     // mesmo com menos de 4 dados (o proprietário demonstrou interesse claro)
     if (analise.leadAceitou) {
@@ -476,7 +475,7 @@ Retorne APENAS JSON válido (sem markdown, sem explicações):
 
     return { permitido: true };
   }
-  
+
   /**
    * Gera o system prompt personalizado baseado na configuração do tenant
    * 
@@ -490,21 +489,21 @@ Retorne APENAS JSON válido (sem markdown, sem explicações):
    */
   private gerarSystemPrompt(config: ConfiguracaoAgente, contextoRAG?: string): string {
     const { nome, personalidade, expertise, scripts, tenantNome, politica, modoProspeccao, empreendimento } = config;
-    
+
     // Aplicar configuração de emojis dinamicamente
     const emoji = personalidade.usarEmojis ? '😊' : '';
-    
+
     // Valores da política da imobiliária (com fallback para padrões)
     const comissaoVenda = politica?.comissaoVenda ?? 6; // Default: 6%
     const taxaLocacao = politica?.taxaLocacao ?? 10;    // Default: 10%
-    
+
     // Aplicar tom de voz em variações de resposta
-    const saudacaoContextual = personalidade.tom === 'formal' 
-      ? `${scripts.saudacao}` 
+    const saudacaoContextual = personalidade.tom === 'formal'
+      ? `${scripts.saudacao}`
       : scripts.saudacao;
-    
+
     const tratamento = personalidade.tom === 'formal' ? 'senhor(a)' : 'você';
-    
+
     // Expertise
     const expertiseTexto = expertise.bairros.length > 0 || expertise.tiposImovel.length > 0
       ? `Expertise: ${expertise.bairros.join(', ')} | ${expertise.tiposImovel.join(', ')}`
@@ -765,7 +764,7 @@ Qualifique com excelência${emoji}`;
       console.log(`[CaptadorWorker] 🚀 MODO V3 ATIVO (CLOSER) - Empreendimento: ${empreendimento}`);
       console.log(`[CaptadorWorker] 🏢 Imobiliária no config: ${tenantNome}`);
       console.log(`[CaptadorWorker] 📚 contextoRAG recebido? ${!!contextoRAG} (${contextoRAG?.length || 0} chars)`);
-      
+
       // 🔥 CRÍTICO: Briefing vai NO INÍCIO para máxima atenção do Claude!
       // LLMs têm "primacy effect" - focam mais no início do prompt
       let prefixoBriefing = '';
@@ -790,21 +789,18 @@ ${contextoRAG}
       } else {
         console.log(`[CaptadorWorker] ⚠️ SEM briefing - contextoRAG vazio!`);
       }
-      
-      // Prompt V3 compacto: ~3000 tokens, focado em conversão
+
+      // Prompt V3 compacto: usa o promptBase com briefing
       // Briefing vai ANTES do prompt principal!
-      const promptV3 = prefixoBriefing + PROMPT_CLOSER_V3
-        .replace(/\{empreendimento\}/g, empreendimento || 'o empreendimento')
-        .replace(/\{nome\}/g, nome)
-        .replace(/\{imobiliaria\}/g, tenantNome || 'nossa imobiliária');
-      
+      const promptV3 = prefixoBriefing + promptBase;
+
       return promptV3;
     }
-    
+
     console.log(`[CaptadorWorker] 📋 MODO V1 (SDR passivo) - modoProspeccao=${config.modoProspeccao}`);
     return promptBase;
   }
-  
+
   /**
    * Busca conhecimento relevante (curado + tenant) para o contexto atual
    * 
@@ -829,41 +825,41 @@ ${contextoRAG}
         'SOLUCAO': 'fechamento',
         'QUALIFICADO': undefined,
       };
-      
+
       const categoria = fase ? categoriaMap[fase] : undefined;
-      
+
       // Buscar conhecimento curado (global) - sempre disponível
       const resultados = await conhecimentoCuradoService.buscar({
         query: ultimaMensagem,
         categoria,
         limite: 3,
       });
-      
+
       if (resultados.length === 0) {
         return '';
       }
-      
+
       // Formatar conhecimento para o prompt
       let conhecimento = '\n\n💡 TÉCNICAS SUGERIDAS PARA ESTE MOMENTO:\n';
-      
+
       for (const r of resultados) {
         conhecimento += `\n📌 ${r.titulo} (${Math.round(r.scoreEficacia)}% eficácia):\n`;
         conhecimento += `   "${r.texto}"\n`;
         conhecimento += `   Usar quando: ${r.contextoUso}\n`;
       }
-      
+
       // TODO: Adicionar busca de conhecimento do tenant quando RAG estiver populado
       // if (tenantId) {
       //   const conhecimentoTenant = await buscarConhecimentoTenant(...)
       // }
-      
+
       return conhecimento;
     } catch (error) {
       console.error('[SDR Worker] Erro ao buscar conhecimento:', error);
       return ''; // Falha silenciosa - não impede a conversa
     }
   }
-  
+
   /**
    * Lazy loading do cliente Anthropic
    * Garante que as variáveis de ambiente já foram carregadas
@@ -871,21 +867,21 @@ ${contextoRAG}
   private getClient(): Anthropic {
     if (!this.anthropic) {
       const apiKey = process.env.ANTHROPIC_API_KEY;
-      
+
       if (!apiKey) {
         console.error('[SDR Worker] ❌ ANTHROPIC_API_KEY não encontrada no .env!');
         throw new Error('ANTHROPIC_API_KEY não configurada. Adicione no arquivo .env');
       }
-      
+
       console.log('[SDR Worker] ✅ Inicializando cliente Anthropic...');
-      
+
       this.anthropic = new Anthropic({
         apiKey: apiKey,
       });
     }
     return this.anthropic;
   }
-  
+
   /**
    * Processa uma mensagem do lead e retorna a resposta do SDR
    * 
@@ -897,7 +893,7 @@ ${contextoRAG}
    * @returns Resposta do SDR para enviar ao lead
    */
   async processar(
-    mensagens: Array<{role: string, content: string}>,
+    mensagens: Array<{ role: string, content: string }>,
     leadId: string,
     config: ConfiguracaoAgente = configPadrao,
     contextoRAG?: string,
@@ -908,11 +904,11 @@ ${contextoRAG}
       conversaId,
       leadId
     });
-    
+
     try {
       // 🔍 FASE 1: Tentar carregar estado persistido ou analisar histórico
       let analise: AnaliseHistorico;
-      
+
       if (conversaId) {
         const estadoPersistido = await this.carregarEstadoPersistido(conversaId);
         if (estadoPersistido) {
@@ -924,7 +920,7 @@ ${contextoRAG}
       } else {
         analise = await this.analisarHistoricoParaEstado(mensagens);
       }
-      
+
       SDRLogger.decisaoIA(
         conversaId || leadId,
         `Fase ${analise.estado.fase}`,
@@ -934,10 +930,10 @@ ${contextoRAG}
           faltam: analise.dadosFaltantes
         }
       );
-      
+
       // Gerar system prompt personalizado
       const systemPrompt = this.gerarSystemPrompt(config, contextoRAG);
-      
+
       // 🧠 FASE 1.5: Buscar conhecimento contextual (curado + tenant)
       let conhecimentoContextual = '';
       if (mensagens.length > 0) {
@@ -953,7 +949,7 @@ ${contextoRAG}
           }
         }
       }
-      
+
       // 🎯 FASE 2: Injetar estado atual no contexto do LLM
       const contextoFSM = `
 📊 ESTADO ATUAL DA QUALIFICAÇÃO:
@@ -965,27 +961,27 @@ ${analise.dadosFaltantes.length > 0 ? `  ✗ Faltam: ${analise.dadosFaltantes.jo
 
 ⚠️ INSTRUÇÃO PRIORITÁRIA: ${analise.podeQualificar ? 'Todos os dados coletados! Pode chamar qualificar_lead.' : `CONTINUE coletando! Próxima pergunta: ${analise.dadosFaltantes[0]}`}
 `;
-      
+
       // 📚 FASE 2.5: Gerar exemplos Few-Shot para a fase atual
       const exemplosFewShot = gerarExemplosPorFase(analise.estado.fase, 3);
-      
+
       // Preparar mensagens no formato Anthropic (system separado)
       // Incluir conhecimento contextual + exemplos few-shot se disponível
       const systemMessage = systemPrompt + contextoFSM + conhecimentoContextual + exemplosFewShot + `\n\nLead ID atual: ${leadId}`;
-      
+
       // Converter mensagens para formato Anthropic (validação de alternância)
       const mensagensAnthropic: Anthropic.MessageParam[] = [];
-      
+
       for (const m of mensagens) {
         const role = m.role === 'assistant' ? 'assistant' : 'user';
         const content = m.content?.trim();
-        
+
         // Pular mensagens vazias
         if (!content) {
           console.warn('[SDR Worker] ⚠️ Mensagem vazia ignorada:', m);
           continue;
         }
-        
+
         // Anthropic exige alternância user/assistant - garantir isso
         if (mensagensAnthropic.length > 0) {
           const ultimaRole = mensagensAnthropic[mensagensAnthropic.length - 1].role;
@@ -997,13 +993,13 @@ ${analise.dadosFaltantes.length > 0 ? `  ✗ Faltam: ${analise.dadosFaltantes.jo
             continue;
           }
         }
-        
+
         mensagensAnthropic.push({
           role: role as 'user' | 'assistant',
           content: content
         });
       }
-      
+
       // Anthropic exige que a primeira mensagem seja do 'user'
       if (mensagensAnthropic.length > 0 && mensagensAnthropic[0].role !== 'user') {
         console.warn('[SDR Worker] ⚠️ Primeira mensagem não é do user, corrigindo...');
@@ -1012,49 +1008,49 @@ ${analise.dadosFaltantes.length > 0 ? `  ✗ Faltam: ${analise.dadosFaltantes.jo
           content: '[Início da conversa]'
         });
       }
-      
+
       console.log('[SDR Worker] 📨 Mensagens preparadas:', {
         total: mensagensAnthropic.length,
         roles: mensagensAnthropic.map(m => m.role).join(' → ')
       });
-      
+
       // Preparar tools em formato Anthropic
       // Converter Zod schema para JSON Schema (formato Anthropic)
       const zodToJsonSchema = (zodSchema: any): Anthropic.Tool.InputSchema => {
-        const shape = zodSchema._def.typeName === 'ZodObject' 
-          ? zodSchema._def.shape() 
+        const shape = zodSchema._def.typeName === 'ZodObject'
+          ? zodSchema._def.shape()
           : zodSchema.shape;
-        
+
         const properties: Record<string, any> = {};
         const required: string[] = [];
-        
+
         for (const [key, value] of Object.entries(shape)) {
           const zodType = value as any;
           properties[key] = {
-            type: zodType._def.typeName === 'ZodString' ? 'string' : 
-                  zodType._def.typeName === 'ZodNumber' ? 'number' :
-                  zodType._def.typeName === 'ZodBoolean' ? 'boolean' :
+            type: zodType._def.typeName === 'ZodString' ? 'string' :
+              zodType._def.typeName === 'ZodNumber' ? 'number' :
+                zodType._def.typeName === 'ZodBoolean' ? 'boolean' :
                   zodType._def.typeName === 'ZodEnum' ? 'string' : 'string',
             description: zodType._def.description || undefined,
           };
-          
+
           if (zodType._def.typeName === 'ZodEnum') {
             properties[key].enum = zodType._def.values;
           }
-          
+
           // Verificar se é obrigatório (não é opcional)
           if (!zodType.isOptional || !zodType.isOptional()) {
             required.push(key);
           }
         }
-        
+
         return {
           type: 'object' as const,
           properties,
           required
         };
       };
-      
+
       const tools: Anthropic.Tool[] = [
         {
           name: qualificarLeadTool.name,
@@ -1092,11 +1088,11 @@ ${analise.dadosFaltantes.length > 0 ? `  ✗ Faltam: ${analise.dadosFaltantes.jo
           input_schema: zodToJsonSchema(agendarFollowupTool.parameters)
         }
       ];
-      
+
       // 📊 Log do tamanho do prompt (para análise de custo)
       const tokensEstimados = Math.ceil((systemMessage.length + JSON.stringify(mensagensAnthropic).length) / 4);
       console.log(`[CaptadorWorker] 📊 TOKENS ESTIMADOS: ~${tokensEstimados} (system: ${systemMessage.length} chars, msgs: ${mensagensAnthropic.length})`);
-      
+
       // Chamar Claude com tool calling
       let resposta = await this.getClient().messages.create({
         model: 'claude-haiku-4-5-20251001',
@@ -1106,41 +1102,41 @@ ${analise.dadosFaltantes.length > 0 ? `  ✗ Faltam: ${analise.dadosFaltantes.jo
         messages: mensagensAnthropic,
         tools: tools
       });
-      
+
       // Loop para executar function calls se houver
       const maxIteracoes = 5; // Evitar loops infinitos
       let iteracoes = 0;
-      
+
       while (resposta.stop_reason === 'tool_use' && iteracoes < maxIteracoes) {
         // Adicionar resposta do assistente ao histórico
         mensagensAnthropic.push({
           role: 'assistant',
           content: resposta.content
         });
-        
+
         const toolResults: Anthropic.MessageParam[] = [];
-        
+
         // Executar cada tool call
         for (const block of resposta.content) {
           if (block.type === 'tool_use') {
             const functionName = block.name;
             const functionArgs = block.input as any;
-            
+
             // 📊 Log de tool call
             SDRLogger.toolCall(conversaId || leadId, functionName, functionArgs);
-            
+
             // 🔒 FASE 3: VALIDAÇÃO FSM - Bloquear tool se não atender requisitos
             const validacao = this.validarToolCall(functionName, analise);
-            
+
             let resultado: any;
-            
+
             if (!validacao.permitido) {
               // 📊 Log de bloqueio FSM
               SDRLogger.toolResult(conversaId || leadId, functionName, false, {
                 bloqueio: 'FSM',
                 motivo: validacao.motivo
               });
-              
+
               // Retornar erro para LLM - ele vai tentar coletar dados faltantes
               resultado = {
                 error: 'BLOQUEADO_FSM',
@@ -1158,7 +1154,7 @@ ${analise.dadosFaltantes.length > 0 ? `  ✗ Faltam: ${analise.dadosFaltantes.jo
                   functionArgs.leadId = leadId;
                 }
               }
-              
+
               // Executar a tool apropriada
               if (functionName === 'qualificar_lead') {
                 SDRLogger.qualificacao(conversaId || leadId, leadId, true, analise.estado.dadosColetados);
@@ -1179,11 +1175,11 @@ ${analise.dadosFaltantes.length > 0 ? `  ✗ Faltam: ${analise.dadosFaltantes.jo
               } else {
                 resultado = { error: 'Função desconhecida' };
               }
-              
+
               // 📊 Log de resultado da tool
               SDRLogger.toolResult(conversaId || leadId, functionName, !resultado.error, resultado);
             }
-            
+
             // Adicionar resultado da tool no formato Anthropic
             toolResults.push({
               role: 'user',
@@ -1195,10 +1191,10 @@ ${analise.dadosFaltantes.length > 0 ? `  ✗ Faltam: ${analise.dadosFaltantes.jo
             });
           }
         }
-        
+
         // Adicionar resultados das tools ao histórico
         mensagensAnthropic.push(...toolResults);
-        
+
         // Chamar Claude novamente com os resultados
         resposta = await this.getClient().messages.create({
           model: 'claude-haiku-4-5-20251001',
@@ -1208,10 +1204,10 @@ ${analise.dadosFaltantes.length > 0 ? `  ✗ Faltam: ${analise.dadosFaltantes.jo
           messages: mensagensAnthropic,
           tools: tools
         });
-        
+
         iteracoes++;
       }
-      
+
       // 📊 Log de métricas LLM
       if (resposta.usage) {
         SDRLogger.llmMetricas(
@@ -1222,40 +1218,40 @@ ${analise.dadosFaltantes.length > 0 ? `  ✗ Faltam: ${analise.dadosFaltantes.jo
           Date.now() - inicio
         );
       }
-      
+
       // Extrair resposta final
       let respostaFinal = 'Desculpe, não entendi. Pode reformular?';
-      
+
       for (const block of resposta.content) {
         if (block.type === 'text') {
           respostaFinal = block.text;
           break;
         }
       }
-      
+
       // 📊 Log de resposta gerada
       SDRLogger.respostaGerada(conversaId || leadId, respostaFinal, analise.estado.fase);
-      
+
       // 💾 FASE FINAL: Salvar estado FSM no banco (se tiver conversaId)
       if (conversaId) {
         await this.salvarEstado(conversaId, analise);
       }
-      
+
       // 📊 Log de fim de processamento
       SDRLogger.fimProcessamento(conversaId || leadId, true, Date.now() - inicio);
-      
+
       return respostaFinal;
-      
+
     } catch (error: any) {
       // 📊 Log de erro
       SDRLogger.erro(conversaId || leadId, 'Processamento falhou', error);
       SDRLogger.fimProcessamento(conversaId || leadId, false, Date.now() - inicio);
-      
+
       // Resposta de fallback amigável
       return 'Desculpe, tive um problema técnico. Pode repetir sua mensagem? 😊';
     }
   }
-  
+
   /**
    * Verifica status do agente (para debug/monitoring)
    */
