@@ -50,7 +50,7 @@ router.get('/', async (req, res) => {
     // Base: leads ativos DO TENANT (excluir arquivados e perdidos)
     const baseWhere: any = {
       tenantId, // ✅ FILTRO DE SEGURANÇA
-      status: { notIn: ['ARQUIVADO', 'PERDIDO'] }
+      status: { notIn: ['ARQUIVADO', 'PERDIDO', 'CAPTADO', 'CONVERTIDO', 'INATIVO'] }
     };
 
     // Se tiver busca, adicionar filtros de busca
@@ -196,7 +196,7 @@ router.get('/estatisticas', async (req, res) => {
       db.lead.count({
         where: {
           tenantId, // ✅ FILTRO
-          status: { not: 'ARQUIVADO' }
+          status: { notIn: ['ARQUIVADO', 'CAPTADO', 'CONVERTIDO', 'PERDIDO', 'INATIVO'] }
         }
       }),
 
@@ -205,7 +205,7 @@ router.get('/estatisticas', async (req, res) => {
         where: {
           tenantId, // ✅ FILTRO
           temperatura: 'QUENTE',
-          status: { notIn: ['PERDIDO', 'CAPTADO'] }
+          status: { notIn: ['PERDIDO', 'CAPTADO', 'CONVERTIDO', 'INATIVO'] }
         }
       }),
 
@@ -213,7 +213,7 @@ router.get('/estatisticas', async (req, res) => {
       db.lead.count({
         where: {
           tenantId, // ✅ FILTRO
-          status: { not: 'ARQUIVADO' }, // ✅ Excluir arquivados
+          status: { notIn: ['ARQUIVADO', 'CAPTADO', 'CONVERTIDO', 'PERDIDO', 'INATIVO'] }, // ✅ Excluir arquivados e clientes
           criadoEm: { gte: hoje, lt: amanha }
         }
       }),
@@ -231,7 +231,7 @@ router.get('/estatisticas', async (req, res) => {
         _count: true,
         where: {
           tenantId, // ✅ FILTRO
-          status: { notIn: ['PERDIDO', 'CAPTADO'] }
+          status: { notIn: ['PERDIDO', 'CAPTADO', 'CONVERTIDO', 'INATIVO'] }
         }
       }),
 
@@ -410,6 +410,40 @@ router.get('/:id', async (req, res) => {
         observacoes: l.observacoesSpin
       },
 
+      // ====================================
+      // NOVOS CAMPOS - PLAYBOOK CAPTAÇÃO
+      // ====================================
+
+      // Qualificação Adicional (Fase 2)
+      situacaoFinanceira: l.situacaoFinanceira,
+      temDividas: l.temDividas,
+      estadoConservacao: l.estadoConservacao,
+
+      // Negociação Comercial (Fase 3)
+      comissaoAcordada: l.comissaoAcordada,
+      tipoAutorizacao: l.tipoAutorizacao,
+      prazoTrabalho: l.prazoTrabalho,
+      autorizouAnuncio: l.autorizouAnuncio,
+
+      // Contrato (Fase 4)
+      contratoUrl: l.contratoUrl,
+      dataAssinatura: l.dataAssinatura,
+      vigenciaInicio: l.vigenciaInicio,
+      vigenciaFim: l.vigenciaFim,
+
+      // Tracking IA
+      ultimaAcaoIA: l.ultimaAcaoIA,
+      ultimaAcaoIAEm: l.ultimaAcaoIAEm,
+
+      // Perda
+      motivoPerda: l.motivoPerda,
+
+      // Dados empresa (CNPJ)
+      empresaAtual: l.empresaAtual,
+      cnpjEmpresa: l.cnpjEmpresa,
+      profissao: l.profissao,
+      setor: l.setor,
+
       // Imóveis relacionados (da mineração)
       imoveisMineracao: l.imoveis.map((imovel: any) => ({
         id: imovel.id,
@@ -496,7 +530,6 @@ router.patch('/:id', async (req, res) => {
       return res.status(403).json({ erro: 'Acesso negado' });
     }
 
-    // Campos permitidos para atualização
     const camposPermitidos = [
       // Básicos
       'nome', 'telefone', 'email', 'status', 'temperatura',
@@ -508,7 +541,17 @@ router.patch('/:id', async (req, res) => {
       'motivacaoVenda', 'doresIdentificadas',
       'prazoDesejado', 'urgencia', 'consequencias', 'custosAtuais', 'pressaoTempo',
       'expectativaServico', 'objecoes', 'interesseAvaliacao',
-      'observacoesSpin'
+      'observacoesSpin',
+      // Qualificação adicional (Playbook Fase 2)
+      'situacaoFinanceira', 'temDividas', 'estadoConservacao',
+      // Negociação comercial (Playbook Fase 3)
+      'comissaoAcordada', 'tipoAutorizacao', 'prazoTrabalho', 'autorizouAnuncio',
+      // Contrato (Playbook Fase 4)
+      'contratoUrl', 'dataAssinatura', 'vigenciaInicio', 'vigenciaFim',
+      // Tracking IA
+      'ultimaAcaoIA', 'ultimaAcaoIAEm',
+      // Perda
+      'motivoPerda'
     ];
 
     // Filtrar apenas campos permitidos
@@ -555,8 +598,21 @@ router.delete('/:id', async (req, res) => {
     }
 
     const { id } = req.params;
+    const { confirmacao } = req.body; // Espera "excluir" para confirmar
 
-    const lead = await prisma.lead.findUnique({ where: { id } });
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            conversas: true,
+            atividades: true,
+            imoveis: true
+          }
+        }
+      }
+    });
+
     if (!lead) {
       return res.status(404).json({ erro: 'Lead não encontrado' });
     }
@@ -566,28 +622,75 @@ router.delete('/:id', async (req, res) => {
       return res.status(403).json({ erro: 'Acesso negado' });
     }
 
-    // Primeiro, deletar registros relacionados (em ordem de dependência)
-    // 1. Deletar mensagens das conversas
+    // Contar dados relacionados
+    const [contratosCount, mensagensCount] = await Promise.all([
+      prisma.contrato.count({ where: { leadId: id } }),
+      prisma.mensagem.count({ where: { conversa: { leadId: id } } })
+    ]);
+
+    const dadosVinculados = {
+      conversas: (lead as any)._count.conversas,
+      mensagens: mensagensCount,
+      atividades: (lead as any)._count.atividades,
+      imoveis: (lead as any)._count.imoveis,
+      contratos: contratosCount
+    };
+
+    const totalVinculados = Object.values(dadosVinculados).reduce((a, b) => a + b, 0);
+
+    // Se tem dados vinculados, exige confirmação
+    if (totalVinculados > 0 && confirmacao !== 'excluir') {
+      return res.status(400).json({
+        erro: 'Este lead possui dados vinculados. Para excluir permanentemente, envie confirmacao: "excluir"',
+        requiresConfirmation: true,
+        dadosVinculados,
+        mensagem: `Este lead possui ${totalVinculados} registros vinculados que serão excluídos permanentemente.`
+      });
+    }
+
+    // ======= CASCADE DELETE =======
+    console.log(`[Leads] Excluindo lead ${id} com ${totalVinculados} registros vinculados...`);
+
+    // 1. Deletar contratos
+    if (contratosCount > 0) {
+      await prisma.contrato.deleteMany({
+        where: { leadId: id }
+      });
+      console.log(`[Leads] - ${contratosCount} contratos excluídos`);
+    }
+
+    // 2. Deletar mensagens das conversas
     await prisma.mensagem.deleteMany({
       where: { conversa: { leadId: id } }
     });
 
-    // 2. Deletar conversas
+    // 3. Deletar conversas
     await prisma.conversa.deleteMany({
       where: { leadId: id }
     });
 
-    // 3. Deletar atividades
+    // 4. Deletar atividades
     await prisma.atividade.deleteMany({
       where: { leadId: id }
     });
 
-    // 4. Finalmente, deletar o lead
+    // 5. Desvincular imóveis (não deleta, apenas remove referência)
+    await prisma.imovel.updateMany({
+      where: { leadId: id },
+      data: { leadId: null }
+    });
+
+    // 6. Finalmente, deletar o lead
     await prisma.lead.delete({
       where: { id }
     });
 
-    res.json({ sucesso: true, mensagem: 'Lead excluído permanentemente' });
+    console.log(`[Leads] ✅ Lead ${id} e todos os dados vinculados excluídos com sucesso`);
+    res.json({
+      sucesso: true,
+      mensagem: 'Lead excluído permanentemente',
+      dadosExcluidos: dadosVinculados
+    });
   } catch (error) {
     console.error('Erro ao excluir lead:', error);
     res.status(500).json({ erro: 'Erro interno ao excluir lead' });
@@ -649,6 +752,7 @@ router.post('/:id/perder', async (req, res) => {
       where: { id },
       data: {
         status: 'PERDIDO',
+        motivoPerda: motivo || 'Não informado',
         ultimaInteracao: new Date()
       }
     });
@@ -688,8 +792,10 @@ router.post('/:id/captar', async (req, res) => {
     await prisma.lead.update({
       where: { id },
       data: {
-        status: 'CONVERTIDO',
+        status: 'CAPTADO',
         temperatura: 'QUENTE',
+        tipoAutorizacao: tipoContrato?.includes('EXCLUSIVA') ? 'exclusiva' : 'simples',
+        dataAssinatura: new Date(),
         ultimaInteracao: new Date()
       }
     });
@@ -713,7 +819,7 @@ router.post('/:id/captar', async (req, res) => {
     res.json({
       sucesso: true,
       mensagem: 'Parabéns! Imóvel captado com sucesso! 🎉',
-      lead: { id, status: 'CONVERTIDO' }
+      lead: { id, status: 'CAPTADO' }
     });
   } catch (error) {
     console.error('Erro ao captar lead:', error);

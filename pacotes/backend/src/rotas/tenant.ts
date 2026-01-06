@@ -4,7 +4,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
-import { verificarSuperAdmin } from '../middleware/middleware-auth';
+import { verificarSuperAdmin, verificarAutenticacao } from '../middleware/middleware-auth';
 
 const router = Router();
 
@@ -48,27 +48,27 @@ const extrairTenantId = (req: Request): string | null => {
 // ====================================
 function sintetizarPerfilRAG(tenant: any): string {
   const partes: string[] = [];
-  
+
   // Dados gerais
   partes.push(`IMOBILIÁRIA: ${tenant.nome}`);
   if (tenant.cidade) partes.push(`Localização: ${tenant.cidade}`);
   if (tenant.tempoMercado) partes.push(`${tenant.tempoMercado} anos no mercado`);
   if (tenant.horarioAtendimento) partes.push(`Horário: ${tenant.horarioAtendimento}`);
   if (tenant.atendeFinalDeSemana) partes.push('Atende final de semana');
-  
+
   // Diferenciais
   const diferenciais = tenant.diferenciais as string[] | null;
   if (diferenciais?.length) {
     partes.push(`Diferenciais: ${diferenciais.join(', ')}`);
   }
-  
+
   // Contato
   const contatos: string[] = [];
   if (tenant.telefone) contatos.push(`Tel: ${tenant.telefone}`);
   if (tenant.whatsapp) contatos.push(`WhatsApp: ${tenant.whatsapp}`);
   if (tenant.email) contatos.push(`Email: ${tenant.email}`);
   if (contatos.length) partes.push(`Contato: ${contatos.join(' | ')}`);
-  
+
   // Perfil de Locação
   const locacao = tenant.perfilLocacao as any;
   if (locacao) {
@@ -82,7 +82,7 @@ function sintetizarPerfilRAG(tenant: any): string {
     if (locacao.aceitaPet) locParts.push('Aceita pet');
     partes.push(locParts.join(' | '));
   }
-  
+
   // Perfil de Venda
   const venda = tenant.perfilVenda as any;
   if (venda) {
@@ -97,13 +97,57 @@ function sintetizarPerfilRAG(tenant: any): string {
     if (venda.temParcerias) vendaParts.push(`Parcerias: ${venda.percentualParceria || 50}%`);
     partes.push(vendaParts.join(' | '));
   }
-  
+
   return partes.join('\n');
 }
 
 // ====================================
-// GET /api/tenant/todos - Listar TODOS os tenants (SUPER_ADMIN)
+// GET /api/tenant/meu - Buscar dados do tenant do usuário logado
 // ====================================
+router.get('/meu', verificarAutenticacao, async (req: Request, res: Response) => {
+  try {
+    const tenantId = req.usuario?.tenantId || req.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({ error: 'Usuário não vinculado a um tenant' });
+    }
+
+    // Buscar tenant com dados completos (incluindo billing/plano)
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: {
+        // Incluir contaCreditos se fosse uma relação separada, mas aqui está no próprio tenant
+        // Se houver tabelas relacionadas importantes, inclua aqui
+      }
+    });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant não encontrado' });
+    }
+
+    // Estruturar resposta para compatibilidade com frontend
+    // O frontend espera: response.data.tenant.contaCreditos?.planoTipo OU response.data.tenant.plano
+
+    const resposta = {
+      tenant: {
+        ...tenant,
+        // Mock de contaCreditos para compatibilidade se necessário, mas já incluimos planoTipo no objeto raiz
+        contaCreditos: {
+          planoTipo: tenant.planoTipo,
+          creditosMensais: tenant.creditosMensais,
+          creditosPrepagos: tenant.creditosPrepagos,
+          creditosBonus: tenant.creditosBonus
+        }
+      }
+    };
+
+    res.json(resposta);
+  } catch (error) {
+    console.error('[Tenant] Erro ao buscar dados do tenant logado:', error);
+    res.status(500).json({ error: 'Erro ao buscar dados do tenant' });
+  }
+});
+
 router.get('/todos', verificarSuperAdmin, async (req: Request, res: Response) => {
   try {
     const tenants = await prisma.tenant.findMany({
@@ -129,7 +173,7 @@ router.get('/todos', verificarSuperAdmin, async (req: Request, res: Response) =>
         criadoEm: true,
       }
     });
-    
+
     res.json(tenants);
   } catch (error) {
     console.error('[Tenant] Erro ao listar todos:', error);
@@ -143,11 +187,11 @@ router.get('/todos', verificarSuperAdmin, async (req: Request, res: Response) =>
 router.get('/perfil', async (req: Request, res: Response) => {
   try {
     const tenantId = extrairTenantId(req);
-    
+
     if (!tenantId) {
       return res.status(400).json({ error: 'Tenant ID obrigatório' });
     }
-    
+
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
       select: {
@@ -177,11 +221,11 @@ router.get('/perfil', async (req: Request, res: Response) => {
         atualizadoEm: true,
       }
     });
-    
+
     if (!tenant) {
       return res.status(404).json({ error: 'Tenant não encontrado' });
     }
-    
+
     res.json(tenant);
   } catch (error) {
     console.error('[Tenant] Erro ao buscar perfil:', error);
@@ -196,13 +240,13 @@ router.put('/perfil', async (req: Request, res: Response) => {
   try {
     const tenantId = extrairTenantId(req);
     const dados = req.body;
-    
+
     if (!tenantId) {
       return res.status(400).json({ error: 'Tenant ID obrigatório' });
     }
-    
+
     console.log('[Tenant] Atualizando perfil:', tenantId);
-    
+
     // Atualizar tenant com todos os campos
     const tenantAtualizado = await prisma.tenant.update({
       where: { id: tenantId },
@@ -226,20 +270,20 @@ router.put('/perfil', async (req: Request, res: Response) => {
         perfilVenda: dados.perfilVenda,
       }
     });
-    
+
     // Gerar RAG sintetizado
     const ragTexto = sintetizarPerfilRAG(tenantAtualizado);
-    
+
     // Salvar RAG no tenant
     await prisma.tenant.update({
       where: { id: tenantId },
       data: { ragPerfilTexto: ragTexto }
     });
-    
+
     console.log('[Tenant] ✅ Perfil atualizado com RAG:', ragTexto.substring(0, 100));
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       tenant: tenantAtualizado,
       ragGerado: ragTexto
     });
@@ -255,22 +299,22 @@ router.put('/perfil', async (req: Request, res: Response) => {
 router.post('/perfil/logo', upload.single('logo'), async (req: Request, res: Response) => {
   try {
     const tenantId = extrairTenantId(req);
-    
+
     if (!tenantId) {
       return res.status(400).json({ error: 'Tenant ID obrigatório' });
     }
-    
+
     if (!req.file) {
       return res.status(400).json({ error: 'Nenhum arquivo enviado' });
     }
-    
+
     console.log('[Tenant] 📤 Fazendo upload de logo para tenant:', tenantId);
     console.log('[Tenant] 📦 Bucket S3:', S3_BUCKET_LOGOS);
-    
+
     // Gerar nome único para o arquivo
     const extensao = path.extname(req.file.originalname) || '.png';
     const nomeArquivo = `logos/${tenantId}/${uuidv4()}${extensao}`;
-    
+
     // Fazer upload para S3
     const comando = new PutObjectCommand({
       Bucket: S3_BUCKET_LOGOS,
@@ -280,22 +324,22 @@ router.post('/perfil/logo', upload.single('logo'), async (req: Request, res: Res
       // Nota: ACL 'public-read' requer que o bucket tenha ACLs habilitadas
       // Se não funcionar, remova a linha ACL e configure o bucket com políticas públicas
     });
-    
+
     await s3.send(comando);
-    
+
     // Gerar URL pública
     const logoUrl = `https://${S3_BUCKET_LOGOS}.s3.${process.env.AWS_S3_REGION || 'us-east-2'}.amazonaws.com/${nomeArquivo}`;
-    
+
     // Atualizar tenant com nova logo
     await prisma.tenant.update({
       where: { id: tenantId },
       data: { logoUrl }
     });
-    
+
     console.log('[Tenant] ✅ Logo atualizada:', logoUrl);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       logoUrl,
       message: 'Logo atualizada com sucesso'
     });

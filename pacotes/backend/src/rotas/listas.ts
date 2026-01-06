@@ -1,6 +1,7 @@
-import { Router, Request } from 'express';
+import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/db';
 import { z } from 'zod';
+import { Lista } from '@prisma/client';
 
 const router = Router();
 
@@ -17,22 +18,22 @@ const getTenantId = async (req: Request): Promise<string> => {
   if (req.headers['x-tenant-id']) {
     return req.headers['x-tenant-id'] as string;
   }
-  
+
   // 2. Query param
   if (req.query.tenantId) {
     return req.query.tenantId as string;
   }
-  
+
   // 3. Body
   if (req.body?.tenantId) {
     return req.body.tenantId;
   }
-  
+
   // 4. Fallback: buscar o último tenant criado (mais provável ser o ativo)
   const tenant = await prisma.tenant.findFirst({
     orderBy: { criadoEm: 'desc' }
   });
-  
+
   return tenant?.id || '';
 };
 
@@ -71,6 +72,8 @@ const criarListaSchema = z.object({
   }).passthrough()).optional().default([]),
 });
 
+type ContatoInput = z.infer<typeof criarListaSchema>['contatos'][number];
+
 // ====================================
 // ROTAS
 // ====================================
@@ -79,10 +82,10 @@ const criarListaSchema = z.object({
  * GET /api/listas
  * Lista todas as listas do tenant
  */
-router.get('/', async (req, res) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const tenantId = await getTenantId(req);
-    
+
     if (!tenantId) {
       return res.status(400).json({ erro: 'Nenhum tenant configurado' });
     }
@@ -98,7 +101,7 @@ router.get('/', async (req, res) => {
     });
 
     // Formatar resposta
-    const listasFormatadas = listas.map(lista => ({
+    const listasFormatadas = listas.map((lista: any) => ({
       id: lista.id,
       nome: lista.nome,
       nomeEdificio: lista.nomeEdificio,
@@ -121,7 +124,7 @@ router.get('/', async (req, res) => {
  * GET /api/listas/:id
  * Busca uma lista específica com seus contatos
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { pagina = '1', limite = '50' } = req.query;
@@ -175,7 +178,7 @@ router.get('/:id', async (req, res) => {
  * POST /api/listas
  * Cria uma nova lista com contatos
  */
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     console.log('[Listas] Criando nova lista...');
     console.log('[Listas] Body recebido:', {
@@ -184,7 +187,7 @@ router.post('/', async (req, res) => {
       localizacao: req.body.localizacao,
       contatosLength: req.body.contatos?.length,
     });
-    
+
     const dados = criarListaSchema.parse(req.body);
 
     // Buscar tenant
@@ -194,9 +197,9 @@ router.post('/', async (req, res) => {
     }
 
     // Calcular estatísticas
-    const contatos = dados.contatos || [];
-    const totalEnriquecidos = contatos.filter(c => c.telefone).length;
-    const totalComWhatsapp = contatos.filter(c => c.temWhatsapp).length;
+    const contatos: ContatoInput[] = dados.contatos || [];
+    const totalEnriquecidos = contatos.filter((c: ContatoInput) => c.telefone).length;
+    const totalComWhatsapp = contatos.filter((c: ContatoInput) => c.temWhatsapp).length;
 
     // Criar lista
     const lista = await prisma.lista.create({
@@ -216,17 +219,17 @@ router.post('/', async (req, res) => {
     // Criar contatos
     if (contatos.length > 0) {
       await prisma.contatoLista.createMany({
-        data: contatos.map(c => {
+        data: contatos.map((c: ContatoInput) => {
           // Garantir que strings são strings
           const str = (v: any): string | undefined => {
             if (v === null || v === undefined) return undefined;
             if (typeof v === 'string') return v || undefined;
             return String(v);
           };
-          
+
           // Garantir que CPF é só números
           const cpfLimpo = str(c.cpf)?.replace(/\D/g, '') || undefined;
-          
+
           return {
             listaId: lista.id,
             nome: str(c.nome) || 'Proprietário',
@@ -273,28 +276,28 @@ router.post('/', async (req, res) => {
     console.error('[Listas] Erro ao criar lista:', error);
     console.error('[Listas] Error name:', error.name);
     console.error('[Listas] Error message:', error.message);
-    
+
     if (error.name === 'ZodError') {
       return res.status(400).json({ erro: 'Dados inválidos', detalhes: error.errors });
     }
-    
+
     // Erro de unique constraint (CPF duplicado na lista)
     if (error.code === 'P2002') {
-      return res.status(400).json({ 
+      return res.status(400).json({
         erro: 'Contato duplicado na lista',
         detalhes: 'Já existe um contato com o mesmo CPF nesta lista'
       });
     }
-    
+
     // Erro de foreign key (tenant não existe)
     if (error.code === 'P2003' || error.message?.includes('Foreign key constraint')) {
       console.error('[Listas] Tenant não encontrado:', error.message);
-      return res.status(401).json({ 
+      return res.status(401).json({
         erro: 'Sessão expirada',
         detalhes: 'Faça login novamente para atualizar sua sessão'
       });
     }
-    
+
     return res.status(500).json({ erro: 'Erro ao criar lista', detalhes: error.message });
   }
 });
@@ -303,7 +306,7 @@ router.post('/', async (req, res) => {
  * DELETE /api/listas/:id
  * Exclui uma lista e seus contatos
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -336,7 +339,7 @@ router.delete('/:id', async (req, res) => {
  * POST /api/listas/:id/adicionar-campanha
  * Adiciona contatos de uma lista a uma campanha
  */
-router.post('/:id/adicionar-campanha', async (req, res) => {
+router.post('/:id/adicionar-campanha', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { campanhaId, contatoIds } = req.body;
@@ -368,16 +371,44 @@ router.post('/:id/adicionar-campanha', async (req, res) => {
     });
 
     // Buscar CPFs já existentes na campanha
-    const cpfsExistentes = await prisma.contato.findMany({
+    // Buscar dados para verificação de duplicidade (CPF, IPTU, Telefone)
+    const contatosExistentes = await prisma.contato.findMany({
       where: { campanhaId },
-      select: { cpf: true }
+      select: {
+        cpf: true,
+        inscricaoIptu: true,
+        telefone: true
+      }
     });
-    const cpfsNaCampanha = new Set(cpfsExistentes.map(c => c.cpf?.replace(/\D/g, '')));
+
+    const cpfsNaCampanha = new Set(contatosExistentes.map(c => c.cpf?.replace(/\D/g, '')).filter(Boolean));
+    const iptusNaCampanha = new Set(contatosExistentes.map(c => c.inscricaoIptu?.replace(/\D/g, '')).filter(Boolean));
+    const telefonesNaCampanha = new Set(contatosExistentes.map(c => c.telefone?.replace(/\D/g, '')).filter(Boolean));
 
     // Filtrar contatos não duplicados
-    const contatosNovos = contatosLista.filter(c => {
+    const contatosNovos = contatosLista.filter((c: any) => {
       const cpfLimpo = c.cpf?.replace(/\D/g, '');
-      return cpfLimpo && !cpfsNaCampanha.has(cpfLimpo);
+      const iptuLimpo = c.inscricaoIptu?.replace(/\D/g, '');
+      const telLimpo = c.telefone?.replace(/\D/g, '');
+
+      // 1. Verifica duplicidade por CPF (se existir)
+      if (cpfLimpo && cpfsNaCampanha.has(cpfLimpo)) {
+        return false;
+      }
+
+      // 2. Verifica duplicidade por IPTU (se existir)
+      if (iptuLimpo && iptusNaCampanha.has(iptuLimpo)) {
+        return false;
+      }
+
+      // 3. Verifica duplicidade por Telefone (se existir)
+      if (telLimpo && telefonesNaCampanha.has(telLimpo)) {
+        return false;
+      }
+
+      // Se passou por todas as verificações, permite importar
+      // (Mesmo que não tenha CPF, desde que tenha passado pelas outras checagens)
+      return true;
     });
 
     let adicionados = 0;
@@ -415,7 +446,7 @@ router.post('/:id/adicionar-campanha', async (req, res) => {
       // Marcar contato como usado
       await prisma.contatoLista.update({
         where: { id: contato.id },
-        data: { 
+        data: {
           usadoEmCampanha: true,
           campanhaId: campanhaId
         }

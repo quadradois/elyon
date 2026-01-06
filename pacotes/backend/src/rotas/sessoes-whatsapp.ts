@@ -96,13 +96,24 @@ router.get('/', async (req, res) => {
 
           if (statusEvolution?.instance?.state === 'open') {
             statusReal = StatusConexao.CONECTADO;
-            // Capturar número se disponível
-            if ((statusEvolution.instance as any).ownerJid) {
-              const jid = (statusEvolution.instance as any).ownerJid;
-              numeroAtualizado = jid.split('@')[0];
-            }
-            if ((statusEvolution.instance as any).profileName) {
-              nomeAtualizado = (statusEvolution.instance as any).profileName;
+
+            // Buscar número e nome do perfil via fetchInstances (retorna dados completos)
+            try {
+              const apiUrl = process.env.EVOLUTION_API_URL || '';
+              const apiKey = process.env.EVOLUTION_API_KEY || '';
+              const instancesRes = await axios.get(
+                `${apiUrl}/instance/fetchInstances?instanceName=${s.instanceName}`,
+                { headers: { 'apikey': apiKey } }
+              );
+              const instanceData = instancesRes.data?.[0];
+              if (instanceData?.ownerJid) {
+                numeroAtualizado = instanceData.ownerJid.split('@')[0];
+              }
+              if (instanceData?.profileName) {
+                nomeAtualizado = instanceData.profileName;
+              }
+            } catch (fetchErr) {
+              console.warn(`[SessoesWhatsapp] Erro ao buscar dados da instância ${s.instanceName}:`, fetchErr);
             }
           } else if (statusEvolution?.instance?.state === 'connecting') {
             statusReal = StatusConexao.CONECTANDO;
@@ -125,6 +136,28 @@ router.get('/', async (req, res) => {
             console.log(`[SessoesWhatsapp] 🔄 Status atualizado: ${s.instanceName} ${s.status} -> ${statusReal}`);
           }
 
+          // Buscar configurações extras quando conectado
+          let ignorarGrupos = false;
+          let webhookBase64 = false;
+
+          if (statusReal === StatusConexao.CONECTADO) {
+            try {
+              const config = await service.buscarConfiguracao();
+              // Evolution API retorna groupsIgnore diretamente na raiz, não em settings
+              ignorarGrupos = config?.groupsIgnore || false;
+            } catch { }
+
+            try {
+              const apiUrl = process.env.EVOLUTION_API_URL || '';
+              const apiKey = process.env.EVOLUTION_API_KEY || '';
+              const webhookRes = await axios.get(
+                `${apiUrl}/webhook/find/${s.instanceName}`,
+                { headers: { 'apikey': apiKey } }
+              );
+              webhookBase64 = webhookRes.data?.webhookBase64 || false;
+            } catch { }
+          }
+
           return {
             id: s.id,
             nome: s.nome,
@@ -134,7 +167,9 @@ router.get('/', async (req, res) => {
             nomeWhatsapp: statusReal === StatusConexao.DESCONECTADO ? null : nomeAtualizado,
             status: statusReal,
             agente: s.agente,
-            criadoEm: s.criadoEm
+            criadoEm: s.criadoEm,
+            ignorarGrupos,
+            webhookBase64
           };
         } catch (err) {
           // Se falhar ao verificar Evolution, retorna status do banco
@@ -566,9 +601,32 @@ router.get('/:id/configurar', async (req, res) => {
     }
 
     const service = getWhatsAppService(sessao.instanceName);
-    const config = await service.buscarConfiguracao();
 
-    return res.json({ sucesso: true, config });
+    // Buscar settings da instância
+    const settings = await service.buscarConfiguracao();
+
+    // Buscar configuração do webhook
+    let webhookConfig = null;
+    try {
+      const apiUrl = process.env.EVOLUTION_API_URL || '';
+      const apiKey = process.env.EVOLUTION_API_KEY || '';
+
+      const webhookResponse = await axios.get(
+        `${apiUrl}/webhook/find/${sessao.instanceName}`,
+        { headers: { 'apikey': apiKey } }
+      );
+      webhookConfig = webhookResponse.data;
+    } catch (err) {
+      console.warn('[SessoesWhatsapp] Webhook não encontrado para', sessao.instanceName);
+    }
+
+    return res.json({
+      sucesso: true,
+      config: {
+        settings,
+        webhook: webhookConfig
+      }
+    });
 
   } catch (error: any) {
     console.error('[SessoesWhatsapp] Erro ao buscar configuração:', error);
@@ -578,7 +636,7 @@ router.get('/:id/configurar', async (req, res) => {
 
 /**
  * POST /api/sessoes-whatsapp/:id/configurar
- * Configurações da sessão (ex: ignorar grupos)
+ * Configurações da sessão (ex: ignorar grupos, webhookBase64)
  */
 router.post('/:id/configurar', async (req, res) => {
   try {
@@ -588,7 +646,7 @@ router.post('/:id/configurar', async (req, res) => {
     }
 
     const { id } = req.params;
-    const { ignorarGrupos } = req.body;
+    const { ignorarGrupos, webhookBase64 } = req.body;
 
     const sessao = await prisma.sessaoWhatsapp.findUnique({ where: { id } });
 
@@ -605,6 +663,35 @@ router.post('/:id/configurar', async (req, res) => {
     // Se foi passado ignorarGrupos, atualiza
     if (typeof ignorarGrupos === 'boolean') {
       await service.atualizarConfiguracao(ignorarGrupos);
+    }
+
+    // Se foi passado webhookBase64, atualiza o webhook
+    if (typeof webhookBase64 === 'boolean') {
+      const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.quadradois.com.br';
+      const webhookUrl = `${backendUrl}/api/webhooks/whatsapp`;
+
+      const apiUrl = process.env.EVOLUTION_API_URL || '';
+      const apiKey = process.env.EVOLUTION_API_KEY || '';
+
+      try {
+        await axios.post(
+          `${apiUrl}/webhook/set/${sessao.instanceName}`,
+          {
+            webhook: {
+              url: webhookUrl,
+              enabled: true,
+              byEvents: false,
+              base64: webhookBase64,
+              events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE']
+            }
+          },
+          { headers: { 'Content-Type': 'application/json', 'apikey': apiKey } }
+        );
+        console.log(`[SessoesWhatsapp] Webhook Base64 ${webhookBase64 ? 'ativado' : 'desativado'} para ${sessao.instanceName}`);
+      } catch (webhookError: any) {
+        console.error('[SessoesWhatsapp] Erro ao configurar webhook:', webhookError.message);
+        return res.status(500).json({ erro: 'Erro ao configurar webhook Base64' });
+      }
     }
 
     return res.json({ sucesso: true, mensagem: 'Configuração atualizada' });

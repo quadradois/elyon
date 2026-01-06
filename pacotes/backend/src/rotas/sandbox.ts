@@ -8,10 +8,10 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/db';
-import { 
-  CATALOGO_AGENTES, 
-  gerarSystemPrompt, 
-  TipoAgente 
+import {
+  CATALOGO_AGENTES,
+  gerarSystemPrompt,
+  TipoAgente
 } from '../agentes/templates-agentes';
 import { openaiService } from '../servicos/openai';
 
@@ -23,7 +23,7 @@ const router = Router();
 
 const IniciarSandboxSchema = z.object({
   agenteId: z.string().uuid().optional(),
-  tipoAgente: z.enum(['SDR_VENDAS', 'SDR_LOCACAO', 'SDR_CAPTACAO', 'DOCUMENTOS']).optional(),
+  tipoAgente: z.enum(['SDR_VENDAS', 'SDR_LOCACAO', 'SDR_CAPTACAO', 'DOCUMENTOS', 'SDR_V2_BETA']).optional(),
   personalizacao: z.object({
     nome: z.string().min(2),
     nomeImobiliaria: z.string().min(2),
@@ -61,7 +61,7 @@ const sessoes = new Map<string, SessaoSandbox>();
 setInterval(() => {
   const agora = Date.now();
   const limiteMs = 30 * 60 * 1000; // 30 minutos
-  
+
   for (const [id, sessao] of sessoes.entries()) {
     if (agora - sessao.ultimaInteracaoEm.getTime() > limiteMs) {
       sessoes.delete(id);
@@ -88,7 +88,7 @@ router.get('/tipos', async (_req: Request, res: Response) => {
       corTema: template.corTema,
       defaultNome: template.defaultsPersonalizacao.nome
     }));
-    
+
     res.json({ tipos });
   } catch (error: any) {
     console.error('[SANDBOX] Erro ao listar tipos:', error);
@@ -104,28 +104,28 @@ router.post('/iniciar', async (req: Request, res: Response) => {
   try {
     const dados = IniciarSandboxSchema.parse(req.body);
     const tenantId = (req as any).tenantId;
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Não autenticado' });
     }
-    
+
     let tipoAgente: TipoAgente;
     let personalizacao: any;
-    
+
     // Opção 1: Testar agente existente
     if (dados.agenteId) {
       const agente = await prisma.configuracaoAgente.findFirst({
-        where: { 
+        where: {
           id: dados.agenteId,
-          tenantId 
+          tenantId
         },
         include: { tenant: true }
       });
-      
+
       if (!agente) {
         return res.status(404).json({ erro: 'Agente não encontrado' });
       }
-      
+
       // Usar tipoAgente se existir, senão inferir como SDR_VENDAS
       tipoAgente = ((agente as any).tipoAgente || 'SDR_VENDAS') as TipoAgente;
       personalizacao = {
@@ -144,17 +144,17 @@ router.post('/iniciar', async (req: Request, res: Response) => {
       personalizacao = dados.personalizacao;
     }
     else {
-      return res.status(400).json({ 
-        erro: 'Informe agenteId ou (tipoAgente + personalizacao)' 
+      return res.status(400).json({
+        erro: 'Informe agenteId ou (tipoAgente + personalizacao)'
       });
     }
-    
+
     // Gerar system prompt
     const systemPrompt = gerarSystemPrompt(tipoAgente, personalizacao);
-    
+
     // Criar sessão
     const sessaoId = `sandbox_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     const sessao: SessaoSandbox = {
       id: sessaoId,
       tenantId,
@@ -165,20 +165,20 @@ router.post('/iniciar', async (req: Request, res: Response) => {
       ultimaInteracaoEm: new Date(),
       personalizacao
     };
-    
+
     sessoes.set(sessaoId, sessao);
-    
+
     // Gerar saudação inicial
     const template = CATALOGO_AGENTES[tipoAgente];
     let saudacao = template.defaultsPersonalizacao.saudacao;
     saudacao = saudacao.replace('{nome}', personalizacao.nome);
     saudacao = saudacao.replace('{imobiliaria}', personalizacao.nomeImobiliaria);
-    
+
     // Adicionar ao histórico
     sessao.historico.push({ role: 'assistant', content: saudacao });
-    
+
     console.log(`[SANDBOX] Nova sessão iniciada: ${sessaoId} (${tipoAgente})`);
-    
+
     res.json({
       sessaoId,
       tipoAgente,
@@ -186,17 +186,17 @@ router.post('/iniciar', async (req: Request, res: Response) => {
       saudacao,
       mensagem: 'Sessão de teste iniciada com sucesso'
     });
-    
+
   } catch (error: any) {
     console.error('[SANDBOX] Erro ao iniciar:', error);
-    
+
     if (error.name === 'ZodError') {
-      return res.status(400).json({ 
-        erro: 'Dados inválidos', 
-        detalhes: error.errors 
+      return res.status(400).json({
+        erro: 'Dados inválidos',
+        detalhes: error.errors
       });
     }
-    
+
     res.status(500).json({ erro: 'Erro ao iniciar sessão de teste' });
   }
 });
@@ -209,54 +209,65 @@ router.post('/mensagem', async (req: Request, res: Response) => {
   try {
     const dados = EnviarMensagemSchema.parse(req.body);
     const tenantId = (req as any).tenantId;
-    
+
     // Buscar sessão
     const sessao = sessoes.get(dados.sessaoId);
-    
+
     if (!sessao) {
       return res.status(404).json({ erro: 'Sessão não encontrada ou expirada' });
     }
-    
+
     if (sessao.tenantId !== tenantId) {
       return res.status(403).json({ erro: 'Sessão não pertence a este tenant' });
     }
-    
+
     // Adicionar mensagem do usuário ao histórico
     sessao.historico.push({ role: 'user', content: dados.mensagem });
     sessao.ultimaInteracaoEm = new Date();
-    
+
     // Gerar resposta do agente
-    const mensagensOpenAI = [
-      { role: 'system' as const, content: sessao.systemPrompt },
-      ...sessao.historico.map(h => ({ 
-        role: h.role as 'user' | 'assistant', 
-        content: h.content 
-      }))
-    ];
-    
-    const resposta = await openaiService.gerarResposta(mensagensOpenAI);
-    
+    let resposta: string;
+
+    if (sessao.tipoAgente === 'SDR_V2_BETA' as any) {
+      const { agenteV2 } = await import('../agentes/agente-v2');
+      resposta = await agenteV2.processarMensagem(
+        sessao.historico,
+        dados.mensagem,
+        sessao.systemPrompt // <--- Passando o prompt compilado (RAG + Prompt)
+      );
+    } else {
+      const mensagensOpenAI = [
+        { role: 'system' as const, content: sessao.systemPrompt },
+        ...sessao.historico.map(h => ({
+          role: h.role as 'user' | 'assistant',
+          content: h.content
+        }))
+      ];
+
+      resposta = await openaiService.gerarResposta(mensagensOpenAI);
+    }
+
     // Adicionar resposta ao histórico
     sessao.historico.push({ role: 'assistant', content: resposta });
-    
+
     console.log(`[SANDBOX] ${dados.sessaoId}: "${dados.mensagem.substring(0, 50)}..." → "${resposta.substring(0, 50)}..."`);
-    
+
     res.json({
       resposta,
       historicoTamanho: sessao.historico.length,
       sessaoId: dados.sessaoId
     });
-    
+
   } catch (error: any) {
     console.error('[SANDBOX] Erro ao processar mensagem:', error);
-    
+
     if (error.name === 'ZodError') {
-      return res.status(400).json({ 
-        erro: 'Dados inválidos', 
-        detalhes: error.errors 
+      return res.status(400).json({
+        erro: 'Dados inválidos',
+        detalhes: error.errors
       });
     }
-    
+
     res.status(500).json({ erro: 'Erro ao processar mensagem' });
   }
 });
@@ -269,17 +280,17 @@ router.get('/:sessaoId', async (req: Request, res: Response) => {
   try {
     const { sessaoId } = req.params;
     const tenantId = (req as any).tenantId;
-    
+
     const sessao = sessoes.get(sessaoId);
-    
+
     if (!sessao) {
       return res.status(404).json({ erro: 'Sessão não encontrada ou expirada' });
     }
-    
+
     if (sessao.tenantId !== tenantId) {
       return res.status(403).json({ erro: 'Sessão não pertence a este tenant' });
     }
-    
+
     res.json({
       sessaoId: sessao.id,
       tipoAgente: sessao.tipoAgente,
@@ -288,7 +299,7 @@ router.get('/:sessaoId', async (req: Request, res: Response) => {
       criadaEm: sessao.criadaEm,
       ultimaInteracaoEm: sessao.ultimaInteracaoEm
     });
-    
+
   } catch (error: any) {
     console.error('[SANDBOX] Erro ao buscar sessão:', error);
     res.status(500).json({ erro: 'Erro ao buscar sessão' });
@@ -303,26 +314,26 @@ router.delete('/:sessaoId', async (req: Request, res: Response) => {
   try {
     const { sessaoId } = req.params;
     const tenantId = (req as any).tenantId;
-    
+
     const sessao = sessoes.get(sessaoId);
-    
+
     if (!sessao) {
       return res.status(404).json({ erro: 'Sessão não encontrada' });
     }
-    
+
     if (sessao.tenantId !== tenantId) {
       return res.status(403).json({ erro: 'Sessão não pertence a este tenant' });
     }
-    
+
     sessoes.delete(sessaoId);
-    
+
     console.log(`[SANDBOX] Sessão ${sessaoId} encerrada manualmente`);
-    
-    res.json({ 
+
+    res.json({
       mensagem: 'Sessão encerrada com sucesso',
-      totalMensagens: sessao.historico.length 
+      totalMensagens: sessao.historico.length
     });
-    
+
   } catch (error: any) {
     console.error('[SANDBOX] Erro ao encerrar sessão:', error);
     res.status(500).json({ erro: 'Erro ao encerrar sessão' });
@@ -338,26 +349,26 @@ router.post('/:sessaoId/avaliar', async (req: Request, res: Response) => {
     const { sessaoId } = req.params;
     const { nota, comentario } = req.body;
     const tenantId = (req as any).tenantId;
-    
+
     const sessao = sessoes.get(sessaoId);
-    
+
     if (!sessao) {
       return res.status(404).json({ erro: 'Sessão não encontrada' });
     }
-    
+
     if (sessao.tenantId !== tenantId) {
       return res.status(403).json({ erro: 'Sessão não pertence a este tenant' });
     }
-    
+
     // TODO: Salvar avaliação no banco para métricas
     console.log(`[SANDBOX] Avaliação sessão ${sessaoId}: ${nota}/5 - ${comentario || 'Sem comentário'}`);
-    
-    res.json({ 
+
+    res.json({
       mensagem: 'Avaliação registrada com sucesso',
       nota,
       comentario
     });
-    
+
   } catch (error: any) {
     console.error('[SANDBOX] Erro ao registrar avaliação:', error);
     res.status(500).json({ erro: 'Erro ao registrar avaliação' });

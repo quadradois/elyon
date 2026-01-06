@@ -33,11 +33,11 @@ Classifique como:
 - QUENTE: urgência alta + timeline ≤ 3 meses + sem corretor
 - MORNO: interesse genuíno mas sem urgência imediata
 - FRIO: sem interesse real ou timeline muito longo (>6 meses)`,
-  
+
   parameters: z.object({
     contatoId: z.string().uuid().describe('ID do contato no banco de dados (OBRIGATÓRIO)'),
     leadId: z.string().uuid().optional().describe('ID do lead (opcional - será criado automaticamente se não existir)'),
-    
+
     // CAMPOS OBRIGATÓRIOS
     temperatura: z.enum(['FRIO', 'MORNO', 'QUENTE']).describe(
       'OBRIGATÓRIO! QUENTE: urgência + timeline curto. MORNO: interesse sem urgência. FRIO: sem interesse/timeline longo'
@@ -48,7 +48,7 @@ Classifique como:
     timeline: z.string().min(1).describe(
       'OBRIGATÓRIO! Quando pretende: "1-2 meses", "urgente", "sem pressa", "6 meses+"'
     ),
-    
+
     // DADOS DO IMÓVEL (coletar durante conversa)
     enderecoImovel: z.string().optional().describe('Endereço do imóvel para captação'),
     tipoImovel: z.string().optional().describe('Tipo: apartamento, casa, sala comercial, terreno'),
@@ -57,29 +57,29 @@ Classifique como:
     vagasImovel: z.number().optional().describe('Número de vagas de garagem'),
     valorPretendido: z.number().optional().describe('Valor pretendido em reais (número apenas)'),
     ocupacaoImovel: z.string().optional().describe('Ocupação: próprio, alugado, vazio'),
-    
+
     // SPIN - SITUAÇÃO
     situacaoAtual: z.string().optional().describe('Situação atual do proprietário com o imóvel'),
     tempoDecisao: z.string().optional().describe('Há quanto tempo está pensando em vender'),
     tentativasAnteriores: z.string().optional().describe('Já tentou vender antes? Com qual resultado?'),
     comCorretorAtualmente: z.boolean().optional().describe('Está com algum corretor atualmente?'),
-    
+
     // SPIN - PROBLEMA
     motivacaoVenda: z.string().optional().describe('Motivo principal para vender: mudança, upgrade, dificuldade financeira, etc'),
     doresIdentificadas: z.array(z.string()).optional().describe('Lista de dores/problemas mencionados pelo proprietário'),
-    
+
     // SPIN - IMPLICAÇÃO
     prazoDesejado: z.string().optional().describe('Em quanto tempo gostaria de ter vendido'),
     urgencia: z.enum(['BAIXA', 'MEDIA', 'ALTA']).optional().describe('Nível de urgência detectado'),
     consequencias: z.string().optional().describe('O que acontece se não vender no prazo'),
     custosAtuais: z.string().optional().describe('Custos que está tendo com o imóvel (condomínio, IPTU)'),
     pressaoTempo: z.string().optional().describe('Existe pressão de tempo? Qual?'),
-    
+
     // SPIN - NECESSIDADE
     expectativaServico: z.string().optional().describe('O que espera de um serviço de venda'),
     objecoes: z.array(z.string()).optional().describe('Objeções ou preocupações mencionadas'),
     interesseAvaliacao: z.boolean().optional().describe('Demonstrou interesse em avaliação gratuita?'),
-    
+
     // Observações gerais
     observacoesSpin: z.string().optional().describe('Outras observações relevantes da qualificação SPIN')
   }),
@@ -118,7 +118,7 @@ Classifique como:
     try {
       // Usar db como any para evitar problemas de cache do TypeScript
       const db: any = prisma;
-      
+
       let leadId = args.leadId;
       let leadCriado = false;
 
@@ -144,7 +144,7 @@ Classifique como:
         } else {
           // Criar novo Lead a partir do Contato
           console.log(`[TOOL] qualificar_lead - Criando Lead para contato ${args.contatoId}`);
-          
+
           const novoLead = await db.lead.create({
             data: {
               tenantId: contato.campanha.tenantId,
@@ -199,10 +199,14 @@ Classifique como:
         temperatura: args.temperatura,
         status: "QUALIFICADO",
         ultimaInteracao: new Date(),
-        
+
+        // Tracking IA (Gap 1 do Playbook resolvido)
+        ultimaAcaoIA: `Qualificação SPIN: ${args.temperatura} - ${args.interesse}`,
+        ultimaAcaoIAEm: new Date(),
+
         // Interesse principal
         interesseEm: args.interesse,
-        
+
         // Dados do imóvel
         ...(args.enderecoImovel && { enderecoImovel: args.enderecoImovel }),
         ...(args.tipoImovel && { tipoImovel: args.tipoImovel }),
@@ -211,29 +215,29 @@ Classifique como:
         ...(args.vagasImovel && { vagasImovel: args.vagasImovel }),
         ...(args.valorPretendido && { valorPretendido: args.valorPretendido }),
         ...(args.ocupacaoImovel && { ocupacaoImovel: args.ocupacaoImovel }),
-        
+
         // SPIN - Situação
         ...(args.situacaoAtual && { situacaoAtual: args.situacaoAtual }),
         ...(args.tempoDecisao && { tempoDecisao: args.tempoDecisao }),
         ...(args.tentativasAnteriores && { tentativasAnteriores: args.tentativasAnteriores }),
         ...(args.comCorretorAtualmente !== undefined && { comCorretorAtualmente: args.comCorretorAtualmente }),
-        
+
         // SPIN - Problema
         ...(args.motivacaoVenda && { motivacaoVenda: args.motivacaoVenda }),
         ...(args.doresIdentificadas && args.doresIdentificadas.length > 0 && { doresIdentificadas: args.doresIdentificadas }),
-        
+
         // SPIN - Implicação
         ...(args.prazoDesejado && { prazoDesejado: args.prazoDesejado }),
         ...(args.urgencia && { urgencia: args.urgencia }),
         ...(args.consequencias && { consequencias: args.consequencias }),
         ...(args.custosAtuais && { custosAtuais: args.custosAtuais }),
         ...(args.pressaoTempo && { pressaoTempo: args.pressaoTempo }),
-        
+
         // SPIN - Necessidade
         ...(args.expectativaServico && { expectativaServico: args.expectativaServico }),
         ...(args.objecoes && args.objecoes.length > 0 && { objecoes: args.objecoes }),
         ...(args.interesseAvaliacao !== undefined && { interesseAvaliacao: args.interesseAvaliacao }),
-        
+
         // Observações
         ...(args.observacoesSpin && { observacoesSpin: args.observacoesSpin }),
       };
@@ -249,33 +253,33 @@ Classifique como:
       detalhes.push(`🎯 Temperatura: ${args.temperatura}`);
       detalhes.push(`💼 Interesse: ${args.interesse}`);
       detalhes.push(`⏱️ Timeline: ${args.timeline}`);
-      
+
       if (args.enderecoImovel) detalhes.push(`\n📍 IMÓVEL:`);
       if (args.enderecoImovel) detalhes.push(`  Endereço: ${args.enderecoImovel}`);
       if (args.tipoImovel) detalhes.push(`  Tipo: ${args.tipoImovel}`);
       if (args.areaImovel) detalhes.push(`  Área: ${args.areaImovel}m²`);
       if (args.valorPretendido) detalhes.push(`  Valor: R$ ${args.valorPretendido.toLocaleString('pt-BR')}`);
-      
+
       if (args.motivacaoVenda || args.doresIdentificadas?.length) {
         detalhes.push(`\n🔍 PROBLEMA:`);
         if (args.motivacaoVenda) detalhes.push(`  Motivação: ${args.motivacaoVenda}`);
         if (args.doresIdentificadas?.length) detalhes.push(`  Dores: ${args.doresIdentificadas.join(', ')}`);
       }
-      
+
       if (args.urgencia || args.prazoDesejado) {
         detalhes.push(`\n⚡ IMPLICAÇÃO:`);
         if (args.urgencia) detalhes.push(`  Urgência: ${args.urgencia}`);
         if (args.prazoDesejado) detalhes.push(`  Prazo: ${args.prazoDesejado}`);
         if (args.consequencias) detalhes.push(`  Consequências: ${args.consequencias}`);
       }
-      
+
       if (args.interesseAvaliacao !== undefined) {
         detalhes.push(`\n✅ NECESSIDADE:`);
         detalhes.push(`  Interesse avaliação: ${args.interesseAvaliacao ? 'SIM' : 'NÃO'}`);
         if (args.expectativaServico) detalhes.push(`  Expectativa: ${args.expectativaServico}`);
         if (args.objecoes?.length) detalhes.push(`  Objeções: ${args.objecoes.join(', ')}`);
       }
-      
+
       if (args.observacoesSpin) detalhes.push(`\n📝 Obs: ${args.observacoesSpin}`);
 
       // Registrar atividade de qualificação
@@ -520,7 +524,7 @@ export const buscarImovelTool = {
 export const registrarOptoutTool = {
   name: 'registrar_optout',
   description: 'Registra que o contato NÃO quer mais receber mensagens. Use IMEDIATAMENTE quando o contato pedir para parar de enviar mensagens, disser "não me ligue", "para", "spam", ou qualquer variação de pedido para não ser mais contatado. RESPEITE sempre o pedido!',
-  
+
   parameters: z.object({
     contatoId: z.string().describe('ID do contato ou lead no banco de dados'),
     motivo: z.enum([
@@ -533,7 +537,7 @@ export const registrarOptoutTool = {
     ]).describe('Motivo do opt-out informado pelo contato'),
     observacao: z.string().optional().describe('Observação adicional sobre o motivo do opt-out')
   }),
-  
+
   execute: async (args: {
     contatoId: string;
     motivo: string;
@@ -541,7 +545,7 @@ export const registrarOptoutTool = {
   }) => {
     try {
       console.log(`[TOOL] registrar_optout - Contato ${args.contatoId} - Motivo: ${args.motivo}`);
-      
+
       // Tentar atualizar como Contato primeiro (prospecção ativa)
       try {
         await prisma.contato.update({
@@ -564,7 +568,7 @@ export const registrarOptoutTool = {
               ultimaInteracao: new Date()
             }
           });
-          
+
           // Registrar atividade
           await prisma.atividade.create({
             data: {
@@ -581,7 +585,7 @@ export const registrarOptoutTool = {
           console.error(`[TOOL] registrar_optout - Erro ao atualizar Lead:`, leadError);
         }
       }
-      
+
       // Encerrar conversa ativa se existir
       await prisma.conversa.updateMany({
         where: {
@@ -593,15 +597,15 @@ export const registrarOptoutTool = {
           finalizadaEm: new Date()
         }
       });
-      
+
       console.log(`[TOOL] registrar_optout - Sucesso! Opt-out registrado.`);
-      
+
       return {
         success: true,
         message: 'Opt-out registrado com sucesso. O contato não receberá mais mensagens.',
         motivo: args.motivo
       };
-      
+
     } catch (error) {
       console.error('[TOOL] registrar_optout - Erro:', error);
       return {
@@ -633,7 +637,7 @@ Esta ferramenta converte o CONTATO (proprietário minerado) em LEAD (oportunidad
 
   parameters: z.object({
     contatoId: z.string().describe('ID do contato que está sendo convertido'),
-    
+
     // Dados da qualificação
     temperatura: z.enum(['MORNO', 'QUENTE']).describe(
       'QUENTE: quer vender/alugar em até 3 meses, urgência real. MORNO: tem interesse mas sem pressa definida'
@@ -644,14 +648,14 @@ Esta ferramenta converte o CONTATO (proprietário minerado) em LEAD (oportunidad
     timeline: z.string().describe(
       'Quando pretende vender/alugar. Ex: "1 mês", "3 meses", "sem pressa", "urgente"'
     ),
-    
+
     // Dados do imóvel (se coletados)
     tipoImovel: z.string().optional().describe('Tipo: apartamento, casa, terreno, comercial'),
     quartos: z.number().optional().describe('Quantidade de quartos'),
     area: z.string().optional().describe('Área aproximada em m²'),
     valorPretendido: z.string().optional().describe('Valor que pretende receber'),
     imovelOcupado: z.boolean().optional().describe('Se o imóvel está ocupado ou vazio'),
-    
+
     // Contexto
     motivacao: z.string().optional().describe('Por que quer vender/alugar'),
     observacoes: z.string().optional().describe('Outras informações relevantes')
@@ -705,11 +709,14 @@ Esta ferramenta converte o CONTATO (proprietário minerado) em LEAD (oportunidad
           enderecoPrincipal: contato.endereco,
           origem: 'prospeccao_ativa',
           campanhaOrigemId: contato.campanhaId,
-          status: 'QUALIFICADO',
+          status: 'NOVO',
           temperatura: args.temperatura,
           estagio: 'qualificado_sdr',
           primeiroContato: contato.criadoEm,
-          ultimaInteracao: new Date()
+          ultimaInteracao: new Date(),
+          // Tracking IA
+          ultimaAcaoIA: `Contato convertido em Lead ${args.temperatura}`,
+          ultimaAcaoIAEm: new Date()
         }
       });
 
@@ -915,18 +922,18 @@ export const agendarAvaliacaoTool = {
   description: `Use esta ferramenta quando o proprietário demonstrar interesse em anunciar o imóvel e concordar com uma visita de avaliação.
 O SDR pode agendar diretamente a visita - não precisa passar para humano.
 A data/horário deve ser confirmada na conversa ANTES de usar esta ferramenta.`,
-  
+
   parameters: z.object({
     contatoId: z.string().uuid().describe('ID do contato (proprietário) no banco de dados'),
-    
+
     dataAvaliacao: z.string().describe(
       'Data e hora da avaliação no formato "DD/MM/YYYY HH:mm". Exemplo: "15/12/2025 10:30"'
     ),
-    
+
     observacoes: z.string().optional().describe(
       'Observações para o corretor: instruções de acesso, portaria, melhor forma de contato, etc.'
     ),
-    
+
     // Informações complementares
     enderecoImovel: z.string().optional().describe('Endereço completo do imóvel se diferente do cadastrado'),
     tipoImovel: z.string().optional().describe('Tipo do imóvel: apartamento, casa, sala comercial, etc.'),
@@ -943,7 +950,7 @@ A data/horário deve ser confirmada na conversa ANTES de usar esta ferramenta.`,
   }) => {
     try {
       console.log(`[TOOL] agendar_avaliacao - Contato ${args.contatoId}`);
-      
+
       // Buscar contato
       const contato = await prisma.contato.findUnique({
         where: { id: args.contatoId },
@@ -951,31 +958,31 @@ A data/horário deve ser confirmada na conversa ANTES de usar esta ferramenta.`,
           campanha: true
         }
       });
-      
+
       if (!contato) {
         return { success: false, error: 'Contato não encontrado' };
       }
-      
+
       // Parsear data no formato DD/MM/YYYY HH:mm
       const [dataParte, horaParte] = args.dataAvaliacao.split(' ');
       const [dia, mes, ano] = dataParte.split('/').map(Number);
       const [hora, minuto] = (horaParte || '10:00').split(':').map(Number);
-      
+
       const dataAgendamento = new Date(ano, mes - 1, dia, hora, minuto);
-      
+
       if (isNaN(dataAgendamento.getTime())) {
         return { success: false, error: 'Data inválida. Use o formato DD/MM/YYYY HH:mm' };
       }
-      
+
       // Validar tenantId antes de continuar
       const tenantId = contato.campanha?.tenantId;
       if (!tenantId) {
         return { success: false, error: 'Campanha sem tenant configurado' };
       }
-      
+
       // Se ainda não virou Lead, converter primeiro
       let leadId = contato.leadId;
-      
+
       if (!contato.virouLead || !leadId) {
         // Criar Lead
         const novoLead = await prisma.lead.create({
@@ -989,9 +996,9 @@ A data/horário deve ser confirmada na conversa ANTES de usar esta ferramenta.`,
             cpf: contato.cpf
           }
         });
-        
+
         leadId = novoLead.id;
-        
+
         // Atualizar contato
         await prisma.contato.update({
           where: { id: args.contatoId },
@@ -1002,7 +1009,7 @@ A data/horário deve ser confirmada na conversa ANTES de usar esta ferramenta.`,
           }
         });
       }
-      
+
       // Montar descrição da tarefa
       const detalhes: string[] = [];
       detalhes.push(`📅 DATA: ${args.dataAvaliacao}`);
@@ -1017,13 +1024,13 @@ A data/horário deve ser confirmada na conversa ANTES de usar esta ferramenta.`,
       if (args.observacoes) {
         detalhes.push(`\n📝 OBSERVAÇÕES:\n${args.observacoes}`);
       }
-      
+
       // Gerar token único para confirmação
       const tokenConfirmacao = randomUUID();
-      
+
       // Usar db como any para evitar problemas de cache do TypeScript
       const db: any = prisma;
-      
+
       // Criar atividade/tarefa de avaliação com token de confirmação
       const atividade = await db.atividade.create({
         data: {
@@ -1039,7 +1046,7 @@ A data/horário deve ser confirmada na conversa ANTES de usar esta ferramenta.`,
           confirmacoesEnviadas: 0
         }
       });
-      
+
       // Atualizar status do contato
       await prisma.contato.update({
         where: { id: args.contatoId },
@@ -1048,7 +1055,7 @@ A data/horário deve ser confirmada na conversa ANTES de usar esta ferramenta.`,
           observacoes: `Avaliação agendada para ${args.dataAvaliacao}`
         }
       });
-      
+
       // 📚 Processar conversa para RAG (aprendizado)
       // Executa em background para não bloquear a resposta
       ragConversasService.processarConversaoProspeccao({
@@ -1057,13 +1064,13 @@ A data/horário deve ser confirmada na conversa ANTES de usar esta ferramenta.`,
         tipoConversao: 'AGENDAMENTO',
         empreendimento: contato.nomeEdificio || undefined
       }).catch(err => console.error('[RAG] Erro ao processar conversão:', err));
-      
+
       // Gerar link de confirmação
       const linkConfirmacao = `/confirmar/${atividade.id}/${tokenConfirmacao}`;
-      
+
       console.log(`[TOOL] agendar_avaliacao - Sucesso! Agendado para ${args.dataAvaliacao}`);
       console.log(`[TOOL] agendar_avaliacao - Link confirmação: ${linkConfirmacao}`);
-      
+
       return {
         success: true,
         message: `Avaliação agendada com sucesso para ${args.dataAvaliacao}`,
@@ -1073,7 +1080,7 @@ A data/horário deve ser confirmada na conversa ANTES de usar esta ferramenta.`,
         linkConfirmacao: linkConfirmacao,
         tokenConfirmacao: tokenConfirmacao
       };
-      
+
     } catch (error) {
       console.error('[TOOL] agendar_avaliacao - Erro:', error);
       return {
@@ -1093,18 +1100,18 @@ export const agendarFollowupTool = {
   description: `Use quando o proprietário demonstrar algum interesse mas NÃO quer vender/alugar agora.
 Exemplos: "talvez no próximo ano", "vou pensar e te retorno", "agora não é o momento".
 Esta ferramenta marca o contato como MORNO_FUTURO e agenda um recontato automático.`,
-  
+
   parameters: z.object({
     contatoId: z.string().uuid().describe('ID do contato no banco de dados'),
-    
+
     dataRecontato: z.string().describe(
       'Data para recontato no formato "DD/MM/YYYY". Exemplo: "15/03/2026"'
     ),
-    
+
     motivo: z.string().describe(
       'Motivo pelo qual não quer agora. Exemplo: "inquilino sai em 6 meses", "precisa de reforma primeiro"'
     ),
-    
+
     observacoes: z.string().optional().describe(
       'Observações adicionais para o recontato futuro'
     )
@@ -1118,15 +1125,15 @@ Esta ferramenta marca o contato como MORNO_FUTURO e agenda um recontato automát
   }) => {
     try {
       console.log(`[TOOL] agendar_followup - Contato ${args.contatoId} para ${args.dataRecontato}`);
-      
+
       // Parsear data
       const [dia, mes, ano] = args.dataRecontato.split('/').map(Number);
       const dataAgendamento = new Date(ano, mes - 1, dia, 9, 0); // 9h da manhã
-      
+
       if (isNaN(dataAgendamento.getTime())) {
         return { success: false, error: 'Data inválida. Use o formato DD/MM/YYYY' };
       }
-      
+
       // Atualizar contato
       await prisma.contato.update({
         where: { id: args.contatoId },
@@ -1134,20 +1141,20 @@ Esta ferramenta marca o contato como MORNO_FUTURO e agenda um recontato automát
           statusProspeccao: 'MORNO_FUTURO',
           dataRecontato: dataAgendamento,
           motivoRecontato: args.motivo,
-          observacoes: args.observacoes ? 
-            `${args.observacoes}\n\n---\nMotivo do futuro: ${args.motivo}` : 
+          observacoes: args.observacoes ?
+            `${args.observacoes}\n\n---\nMotivo do futuro: ${args.motivo}` :
             `Motivo do futuro: ${args.motivo}`
         }
       });
-      
+
       console.log(`[TOOL] agendar_followup - Sucesso! Recontato em ${args.dataRecontato}`);
-      
+
       return {
         success: true,
         message: `Recontato agendado para ${args.dataRecontato}. Motivo: ${args.motivo}`,
         dataRecontato: dataAgendamento.toISOString()
       };
-      
+
     } catch (error) {
       console.error('[TOOL] agendar_followup - Erro:', error);
       return {

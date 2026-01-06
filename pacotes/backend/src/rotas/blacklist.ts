@@ -16,14 +16,16 @@ const router = Router();
  */
 router.get('/', async (req, res) => {
   try {
-    const { pagina = '1', limite = '50', tenantId } = req.query;
-    
+    const { pagina = '1', limite = '50', tenantId, busca, motivo } = req.query;
+
     const resultado = await blacklistService.listar(
       tenantId as string,
       parseInt(pagina as string),
-      parseInt(limite as string)
+      parseInt(limite as string),
+      busca as string | undefined,
+      motivo as string | undefined
     );
-    
+
     return res.json(resultado);
   } catch (error: any) {
     console.error('[Blacklist] Erro ao listar:', error);
@@ -38,11 +40,11 @@ router.get('/', async (req, res) => {
 router.get('/estatisticas', async (req, res) => {
   try {
     const { tenantId } = req.query;
-    
+
     const contagens = await blacklistService.contarPorMotivo(tenantId as string);
-    
+
     const total = Object.values(contagens).reduce((a, b) => a + b, 0);
-    
+
     return res.json({
       total,
       porMotivo: contagens
@@ -61,12 +63,12 @@ router.get('/verificar/:telefone', async (req, res) => {
   try {
     const { telefone } = req.params;
     const { tenantId } = req.query;
-    
+
     const bloqueado = await blacklistService.estaBlacklist(telefone, tenantId as string);
-    
-    return res.json({ 
-      telefone, 
-      bloqueado 
+
+    return res.json({
+      telefone,
+      bloqueado
     });
   } catch (error: any) {
     console.error('[Blacklist] Erro ao verificar:', error);
@@ -88,11 +90,11 @@ router.post('/', async (req, res) => {
       campanhaOrigem: z.string().optional(),
       observacoes: z.string().optional()
     });
-    
+
     const dados = schema.parse(req.body);
-    
+
     await blacklistService.adicionar(dados);
-    
+
     return res.json({
       sucesso: true,
       mensagem: 'Telefone adicionado à blacklist'
@@ -118,12 +120,12 @@ router.post('/lote', async (req, res) => {
       tenantId: z.string().optional(),
       observacoes: z.string().optional()
     });
-    
+
     const { telefones, motivo, tenantId, observacoes } = schema.parse(req.body);
-    
+
     let adicionados = 0;
     let erros = 0;
-    
+
     for (const telefone of telefones) {
       try {
         await blacklistService.adicionar({
@@ -137,7 +139,7 @@ router.post('/lote', async (req, res) => {
         erros++;
       }
     }
-    
+
     return res.json({
       sucesso: true,
       adicionados,
@@ -161,9 +163,9 @@ router.delete('/:telefone', async (req, res) => {
   try {
     const { telefone } = req.params;
     const { tenantId } = req.query;
-    
+
     const removido = await blacklistService.remover(telefone, tenantId as string);
-    
+
     if (removido) {
       return res.json({
         sucesso: true,
