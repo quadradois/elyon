@@ -43,6 +43,7 @@ model Tenant {
   horarioAtendimento String?    @default("08:00 às 18:00")
   atendeFinalDeSemana Boolean   @default(false)
   tempoMercado     Int?         // Anos no mercado
+  expedienteSemanal  Json?      // Configuração detalhada: { dias: [{ diaSemana: 0-6, ativo: bool, inicio: "HH:mm", fim: "HH:mm" }], almocoInicio: "HH:mm", almocoFim: "HH:mm" }
   
   // Políticas de Locação e Venda (JSON)
   perfilLocacao    Json?        // { garantiasAceitas, taxaAdministracao, etc }
@@ -82,6 +83,9 @@ model Tenant {
   sessoesWhatsapp    SessaoWhatsapp[]      // 1:N - Múltiplas sessões por tenant
   telefonesBlacklist TelefoneBlacklist[]
   pesquisasManus     PesquisaManus[]
+  contratos          Contrato[]
+  clientes           Cliente[]
+  integracoes        ConfiguracaoIntegracao[]
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
@@ -108,6 +112,54 @@ enum StatusPagamento {
   PAGO
   ATRASADO
   CANCELADO
+}
+
+// ====================================
+// INTEGRAÇÕES EXTERNAS (CRM, etc.)
+// ====================================
+
+model ConfiguracaoIntegracao {
+  id              String          @id @default(uuid())
+  tenantId        String
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Tipo de integração
+  tipo            TipoIntegracao  @default(CRM_QUADRADOIS)
+  nome            String          @default("CRM Principal")
+  
+  // Credenciais (criptografadas)
+  apiUrl          String          // URL base da API
+  apiKeyCriptografada String      // API Key criptografada com Fernet
+  
+  // Mapeamento de tenant no destino
+  tenantIdDestino Int?            // ID do tenant no sistema destino
+  
+  // Status e controle
+  ativo           Boolean         @default(true)
+  ultimoTesteEm   DateTime?       // Quando foi testado pela última vez
+  ultimoTesteOk   Boolean?        // Resultado do último teste
+  ultimoErro      String?         // Mensagem de erro se falhou
+  
+  // Estatísticas
+  totalEnvios     Int             @default(0)
+  totalSucessos   Int             @default(0)
+  totalFalhas     Int             @default(0)
+  ultimoEnvioEm   DateTime?
+  
+  criadoEm        DateTime        @default(now())
+  atualizadoEm    DateTime        @updatedAt
+  
+  @@unique([tenantId, tipo])
+  @@index([tenantId])
+  @@index([tipo])
+  @@map("configuracoes_integracao")
+}
+
+enum TipoIntegracao {
+  CRM_QUADRADOIS    // CRM Quadradois (principal)
+  CRM_OUTRO         // Outro CRM
+  CANALPRO          // API CanalPro/Gandalf
+  WEBHOOK_CUSTOM    // Webhook personalizado
 }
 
 // ====================================
@@ -698,6 +750,8 @@ model Lead {
   imoveis            Imovel[]
   atividades         Atividade[]
   conversas          Conversa[]
+  contratos          Contrato[]
+  cliente            Cliente?
   criadoEm           DateTime    @default(now())
   atualizadoEm       DateTime    @updatedAt
   deletadoEm         DateTime?
@@ -743,6 +797,68 @@ model Lead {
   // Observações gerais do SPIN
   observacoesSpin       String?     @db.Text
 
+  // ====================================
+  // DADOS ADICIONAIS DE QUALIFICAÇÃO (Fase 2)
+  // ====================================
+  
+  // ====================================
+  // ====================================
+  situacaoFinanceira    String?     // "quitado", "financiado"
+  temDividas            Boolean?    // Tem dívidas IPTU/Condomínio?
+  estadoConservacao     String?     // "reforma", "bom", "excelente"
+
+  // ====================================
+  // NEGOCIAÇÃO COMERCIAL (Fase 3)
+  // ====================================
+  comissaoAcordada      String?     // "6%", "5% com exclusividade"
+  tipoAutorizacao       String?     // "exclusiva", "simples"
+  prazoTrabalho         Int?        // Dias de contrato (ex: 90)
+  autorizouAnuncio      Boolean?    // Confirmou que pode anunciar?
+
+  // ====================================
+  // CONTRATO (Fase 4)
+  // ====================================
+  contratoUrl           String?     // URL do PDF assinado
+  dataAssinatura        DateTime?   // Quando assinou
+  vigenciaInicio        DateTime?   // Início do contrato
+  vigenciaFim           DateTime?   // Fim do contrato
+
+  // ====================================
+  // TRACKING IA
+  // ====================================
+  ultimaAcaoIA          String?     // "Enviou follow-up dia 15/12"
+  ultimaAcaoIAEm        DateTime?   // Timestamp da última ação
+
+  // ====================================
+  // DADOS COMPLETOS DO IMÓVEL (Coleta pós-contrato)
+  // ====================================
+  imovelSuites          Int?        // Número de suítes
+  imovelBanheiros       Int?        // Número de banheiros
+  imovelAreaTotal       Float?      // Área total em m²
+  imovelAndar           Int?        // Andar do apartamento
+  imovelCaracteristicas String[]    // ["Armários", "Varanda", "Churrasqueira"]
+  imovelDescricao       String?     @db.Text  // Descrição detalhada
+  imovelFotos           String[]    // URLs das fotos enviadas
+  imovelValorLocacao    Float?      // Valor de locação (se aplicável)
+  imovelValorCondominio Float?      // Valor do condomínio
+  imovelValorIPTU       Float?      // Valor do IPTU anual
+  dadosImovelColetadosEm DateTime?  // Quando os dados foram coletados via IA
+
+  // ====================================
+  // INTEGRAÇÃO CRM
+  // ====================================
+  crmProprietarioId     Int?        // ID do Proprietário no CRM
+  crmPropertyId         Int?        // ID do Property no CRM
+  crmPropertyCode       String?     // Código do imóvel no CRM (ex: AP0001)
+  enviadoParaCrmEm      DateTime?   // Quando foi enviado ao CRM
+  crmSyncStatus         String?     // "pending", "synced", "error"
+  crmSyncError          String?     // Mensagem de erro se falhou
+
+  // ====================================
+  // PERDA/ARQUIVAMENTO
+  // ====================================
+  motivoPerda           String?     // "Expectativa Irreal", "Concorrência", etc.
+
   @@unique([tenantId, cpf])
   @@index([tenantId])
   @@index([cpf])
@@ -753,14 +869,20 @@ model Lead {
 }
 
 enum StatusLead {
-  NOVO
+  NOVO                  // Fase 1: Opener (Qualificação)
+  TENTATIVA_AGENDAMENTO // Fase 2: Presenter (Apresentação)
+  VISITA_AGENDADA       // Fase 2: Variação
+  AVALIACAO_EM_ANDAMENTO // Fase 3: Variação
+  DOCUMENTACAO          // Fase 3: Closer (Negociação)
+  ONBOARDING            // Fase 4: Admin (Onboarding) - 🆕
+  CAPTADO               // Sucesso! Sai do Kanban → Carteira
+  PERDIDO
+  ARQUIVADO
+  // Deprecated (manter para compatibilidade)
   CONTATANDO
   QUALIFICADO
   EM_NEGOCIACAO
-  CAPTADO
   CONVERTIDO
-  PERDIDO
-  ARQUIVADO
   INATIVO
 }
 
@@ -774,6 +896,64 @@ enum Urgencia {
   BAIXA
   MEDIA
   ALTA
+}
+
+// ====================================
+// CONTRATOS (Geração Automática)
+// ====================================
+
+model Contrato {
+  id              String          @id @default(uuid())
+  tenantId        String
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  leadId          String
+  lead            Lead            @relation(fields: [leadId], references: [id])
+  
+  tipo            TipoContrato    @default(CAPTACAO)
+  status          StatusContrato  @default(PENDENTE)
+  
+  // Documento
+  tokenAceite     String          @unique  // Token único para link de aceite
+  hashDocumento   String          // Hash SHA256 para verificação
+  htmlConteudo    String          @db.Text // HTML do contrato renderizado
+  dadosSnapshot   String?         @db.Text // JSON com dados no momento da geração
+  
+  // Datas
+  geradoEm        DateTime        @default(now())
+  enviadoEm       DateTime?       // Quando foi enviado ao proprietário
+  aceiteEm        DateTime?       // Quando foi aceito
+  canceladoEm     DateTime?       // Se foi cancelado
+  
+  // Vigência
+  vigenciaInicio  DateTime?
+  vigenciaFim     DateTime?
+  
+  // Aceite Digital
+  aceiteIp        String?         // IP do aceite
+  aceiteUserAgent String?         // User agent do navegador
+  
+  criadoEm        DateTime        @default(now())
+  atualizadoEm    DateTime        @updatedAt
+  
+  @@index([tenantId])
+  @@index([leadId])
+  @@index([tokenAceite])
+  @@index([status])
+  @@map("contratos")
+}
+
+enum TipoContrato {
+  CAPTACAO     // Autorização de captação (venda/locação)
+  LOCACAO      // Contrato de locação
+  VENDA        // Contrato de compra e venda
+}
+
+enum StatusContrato {
+  PENDENTE     // Gerado, aguardando envio
+  ENVIADO      // Enviado ao proprietário
+  ACEITO       // Aceito digitalmente
+  CANCELADO    // Cancelado
+  EXPIRADO     // Vigência encerrada
 }
 
 // ====================================
@@ -1354,4 +1534,37 @@ model RenovacaoLog {
   @@index([tenantId])
   @@index([renovadoEm])
   @@map("renovacoes_log")
+}
+
+// ====================================
+// CLIENTES (Leads convertidos)
+// ====================================
+
+model Cliente {
+  id              String   @id @default(uuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Dados Pessoais
+  nome            String
+  cpf             String?
+  email           String?
+  telefone        String?
+  endereco        String?
+  
+  // Link com a origem (Lead)
+  origemLeadId    String?  @unique
+  lead            Lead?    @relation(fields: [origemLeadId], references: [id])
+  
+  // Status
+  status          String   @default("ATIVO") // ATIVO, INATIVO, SUSPENSO
+  
+  // Timestamps
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([cpf])
+  @@index([email])
+  @@map("clientes")
 }
