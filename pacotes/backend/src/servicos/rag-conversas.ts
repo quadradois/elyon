@@ -17,7 +17,7 @@
 
 import { prisma } from '../lib/db';
 import { embeddingService } from './embeddings';
-import { anthropicService } from './anthropic';
+import { openaiService } from './openai';
 
 export interface ChunkConversa {
   texto: string;
@@ -122,21 +122,30 @@ Se não houver conhecimento útil para extrair, retorne array vazio: []
 IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qualidade.`;
 
     try {
-      const resposta = await anthropicService.enviarMensagem(
-        'Você é um especialista em análise de conversas. Responda apenas JSON.',
-        [{ role: 'user', content: prompt }],
-        undefined,
-        { maxTokens: 1000, temperature: 0.3 }
+      const resposta = await openaiService.gerarResposta(
+        [
+          { role: 'system', content: 'Você é um especialista em análise de conversas. Responda apenas com um JSON válido.' },
+          { role: 'user', content: prompt }
+        ],
+        {
+          model: 'gpt-4o',
+          maxTokens: 1000,
+          temperature: 0.3,
+          json: true
+        }
       );
 
+      // Limpar blocos de código markdown se houver (ex: ```json ... ```)
+      const limpo = resposta.replace(/```json/g, '').replace(/```/g, '').trim();
+
       // Extrair JSON da resposta
-      const jsonMatch = resposta.texto.match(/\[[\s\S]*\]/);
+      const jsonMatch = limpo.match(/\[[\s\S]*\]/);
       if (!jsonMatch) {
         return [];
       }
 
       const chunksRaw = JSON.parse(jsonMatch[0]);
-      
+
       return chunksRaw
         .filter((c: any) => c.scoreQualidade >= 60) // Filtrar chunks de baixa qualidade
         .map((c: any) => ({
@@ -411,7 +420,7 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
     empreendimento?: string;
   }): Promise<void> {
     const { contatoId, tenantId, tipoConversao, empreendimento } = params;
-    
+
     console.log(`[RAG-Prospecção] 📚 Processando conversão: ${tipoConversao} (contato: ${contatoId})`);
 
     try {
@@ -443,7 +452,7 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
 
       // 4. Extrair chunks com contexto de prospecção
       const chunks = await this.extrairChunksProspeccao(
-        historicoTexto, 
+        historicoTexto,
         tipoConversao,
         empreendimento || (contato?.campanha?.empreendimento as any)?.nome || 'Empreendimento'
       );
@@ -500,48 +509,57 @@ IMPORTANTE:
 - Se não houver insights úteis, retorne array vazio: []`;
 
     try {
-      const resposta = await anthropicService.enviarMensagem(
-        'Você é um especialista em vendas imobiliárias. Responda apenas JSON.',
-        [{ role: 'user', content: prompt }],
-        undefined,
-        { maxTokens: 1000, temperature: 0.3 }
-      );
+      const resposta = await openaiService.gerarResposta(
+          [
+            { role: 'system', content: 'Você é um especialista em vendas imobiliárias. Responda apenas com um JSON válido.' },
+            { role: 'user', content: prompt }
+          ],
+          {
+            model: 'gpt-4o',
+            maxTokens: 1000,
+            temperature: 0.3,
+            json: true
+          }
+        );
 
-      // Extrair JSON da resposta
-      const jsonMatch = resposta.texto.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
+        // Limpar blocos de código markdown
+        const limpo = resposta.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        // Extrair JSON da resposta
+        const jsonMatch = limpo.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) {
+          return [];
+        }
+
+        const chunksRaw = JSON.parse(jsonMatch[0]);
+
+        return chunksRaw
+          .filter((c: any) => c.scoreQualidade >= 70) // Filtro mais alto para prospecção
+          .map((c: any) => ({
+            texto: `[${c.tipo.toUpperCase()}] ${c.texto}${c.contexto ? ` (Usar quando: ${c.contexto})` : ''}`,
+            tipo: c.tipo as any,
+            metadados: {
+              resultado: tipoConversao,
+              empreendimento,
+              scoreQualidade: c.scoreQualidade,
+              fonte: 'prospeccao_ativa'
+            }
+          }));
+
+      } catch (error) {
+        console.error('[RAG-Prospecção] Erro ao extrair chunks:', error);
         return [];
       }
-
-      const chunksRaw = JSON.parse(jsonMatch[0]);
-      
-      return chunksRaw
-        .filter((c: any) => c.scoreQualidade >= 70) // Filtro mais alto para prospecção
-        .map((c: any) => ({
-          texto: `[${c.tipo.toUpperCase()}] ${c.texto}${c.contexto ? ` (Usar quando: ${c.contexto})` : ''}`,
-          tipo: c.tipo as any,
-          metadados: {
-            resultado: tipoConversao,
-            empreendimento,
-            scoreQualidade: c.scoreQualidade,
-            fonte: 'prospeccao_ativa'
-          }
-        }));
-
-    } catch (error) {
-      console.error('[RAG-Prospecção] Erro ao extrair chunks:', error);
-      return [];
     }
-  }
 
   /**
    * Salva chunk de prospecção com embedding
    */
   private async salvarChunkProspeccao(
-    chunk: ChunkConversa,
-    tenantId: string,
-    contatoId: string
-  ): Promise<void> {
+      chunk: ChunkConversa,
+      tenantId: string,
+      contatoId: string
+    ): Promise<void> {
     try {
       // Gerar embedding
       const textoPreparado = embeddingService.prepararTexto(chunk.texto);

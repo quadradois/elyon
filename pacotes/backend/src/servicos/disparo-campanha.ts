@@ -431,15 +431,15 @@ export class DisparoCampanhaService {
         agente: nomeAgente, // Nome dinâmico do agente
         empreendimento: contato.nomeEdificio || campanha.nomeEmpreendimento || 'região',
         bairro: contato.bairroImovel || campanha.localizacao || 'região',
-        tipo: contato.tipoImovel || 'apartamento',
       };
 
       if (tentativa === 1) {
         // Primeira mensagem - usar template de storytelling
-        mensagem = gerarPrimeiraMensagem(dados, true);
+        mensagem = gerarPrimeiraMensagem(dados, 'storytelling');
       } else {
-        // Follow-up
-        mensagem = gerarFollowUp(dados, tentativa);
+        // Follow-up (só aceita 1 ou 2)
+        const tentativaFollowUp = tentativa <= 2 ? tentativa as 1 | 2 : 2;
+        mensagem = gerarFollowUp(dados, tentativaFollowUp);
       }
 
       // Substituir variáveis restantes

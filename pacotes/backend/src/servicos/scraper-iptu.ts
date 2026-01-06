@@ -98,7 +98,18 @@ export class ScraperIPTUService {
 
       if (nomeMatch && nomeMatch[1]) {
         const nome = nomeMatch[1].trim();
-        const cpf = cpfMatch ? cpfMatch[1].trim() : undefined;
+        let cpf = cpfMatch ? cpfMatch[1].trim() : undefined;
+
+        // Limpar mensagens de erro comuns no campo CPF
+        if (cpf && (
+          cpf.includes('DESATUALIZADO') ||
+          cpf.includes('ENCAMINHAR') ||
+          cpf.includes('SECRETARIA MUNICIPAL') ||
+          cpf.length > 20 // CPFs/CNPJs reais não são tão longos
+        )) {
+          console.log(`[Scraper] CPF/CNPJ inválido/mensagem detectada: "${cpf}". Ignorando documento.`);
+          cpf = undefined;
+        }
         // Limpar HTML do endereço (br tags)
         const enderecoRaw = enderecoMatch ? enderecoMatch[1] : '';
         const endereco = enderecoRaw.replace(/<br\s*\/?>/gi, ' ').replace(/\s+/g, ' ').trim();

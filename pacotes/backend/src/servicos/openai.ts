@@ -47,11 +47,22 @@ export class OpenAIService {
     }
   }
 
-  async gerarResposta(mensagens: { role: 'system' | 'user' | 'assistant'; content: string }[]): Promise<string> {
+  async gerarResposta(
+    mensagens: { role: 'system' | 'user' | 'assistant'; content: string }[],
+    options?: {
+      model?: string;
+      temperature?: number;
+      maxTokens?: number;
+      json?: boolean;
+    }
+  ): Promise<string> {
     try {
       const completion = await this.getClient().chat.completions.create({
         messages: mensagens,
-        model: 'gpt-4o-mini', // Modelo rápido e eficiente
+        model: options?.model || 'gpt-4o-mini',
+        temperature: options?.temperature ?? 0.7,
+        max_tokens: options?.maxTokens,
+        response_format: options?.json ? { type: 'json_object' } : undefined
       });
 
       return completion.choices[0].message.content || 'Desculpe, não consegui gerar uma resposta.';

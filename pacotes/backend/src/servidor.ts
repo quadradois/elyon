@@ -10,6 +10,7 @@ import rotaAutenticacao from './rotas/autenticacao';
 import rotaMineracao from './rotas/mineracao';
 import rotaSincronizacao from './rotas/sincronizacao';
 import rotaLeads from './rotas/leads';
+import rotaAgenda from './rotas/agenda'; // Rota para calendário
 import rotaWebhook from './rotas/webhook';
 import rotaWebhookManus from './rotas/webhook-manus';
 import rotaWhatsapp from './rotas/whatsapp';
@@ -21,6 +22,7 @@ import rotaAgentes from './rotas/agentes';
 import rotaMetricasAgentes from './rotas/metricas-agentes';
 import rotaDocumentos from './rotas/documentos';
 import rotaListas from './rotas/listas';
+import rotaContatos from './rotas/contatos';
 import rotaBlacklist from './rotas/blacklist';
 import rotaAlertas from './rotas/alertas';
 import rotaPesquisas from './rotas/pesquisas';
@@ -30,6 +32,9 @@ import rotasBilling from './rotas/rotas-billing';
 import rotaLeadsVip from './rotas/rotas-leads-vip';
 import rotaJobsMineracao from './rotas/mineracao/jobs.rotas';
 import rotaJobsUnidades from './rotas/mineracao/unidades-jobs.rotas';
+import rotaContratos from './rotas/contratos';
+import rotaClientes from './rotas/clientes';
+import rotaConfiguracaoIntegracao from './rotas/configuracao-integracao';
 
 // Importar Prisma do módulo central (evita dependência circular)
 import { prisma } from './lib/db';
@@ -89,7 +94,6 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
-
 // Registrar Rotas
 app.use('/api/auth', rotaAutenticacao);
 app.use('/api/mineracao', rotaMineracao);
@@ -98,6 +102,7 @@ app.use('/api/mineracao/unidades/jobs', rotaJobsUnidades); // Jobs de busca de u
 app.use('/api/sincronizacao', rotaSincronizacao); // Sincronização Base Local
 app.use('/api/leads', rotaLeads);
 app.use('/api/leads', rotaChat); // Monta rota de chat também em /api/leads
+app.use('/api/agenda', rotaAgenda);
 app.use('/api/whatsapp', rotaWhatsapp);
 app.use('/api/sessoes-whatsapp', rotaSessoesWhatsapp);
 app.use('/api/campanhas', rotaCampanhas); // Gestão de campanhas
@@ -106,6 +111,7 @@ app.use('/api/agentes', rotaAgentes);     // Configuração de agentes IA
 app.use('/api/metricas-agentes', rotaMetricasAgentes); // Métricas dos agentes IA
 app.use('/api/documentos', rotaDocumentos); // Upload de documentos para RAG
 app.use('/api/listas', rotaListas);         // Listas de contatos minerados
+app.use('/api/contatos', rotaContatos);     // Busca global de contatos
 app.use('/api/blacklist', rotaBlacklist);   // Blacklist de telefones
 app.use('/api/alertas', rotaAlertas);       // Alertas de escalação para corretores
 app.use('/api/pesquisas', rotaPesquisas);   // Pesquisas de empreendimento via Manus
@@ -113,6 +119,9 @@ app.use('/api/tenant', rotaTenant);         // Perfil da imobiliária/tenant
 app.use('/api/jobs', rotaJobs);             // Jobs/tarefas agendadas (recontato, etc)
 app.use('/api/billing', rotasBilling);      // Créditos, assinaturas, recargas
 app.use('/api/leads-vip', rotaLeadsVip);    // Leads do site de vendas (Supabase)
+app.use('/api/contratos', rotaContratos);   // Geração de contratos digitais
+app.use('/api/clientes', rotaClientes);     // Clientes (Carteira)
+app.use('/api/configuracao/integracao', rotaConfiguracaoIntegracao); // Config integrações CRM
 app.use('/webhooks', rotaWebhook);
 app.use('/webhooks', rotaWebhookManus);     // Webhooks do Manus (pesquisa IA)
 

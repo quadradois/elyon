@@ -16,7 +16,7 @@ const prisma = new PrismaClient();
 // TIPOS
 // ============================================
 
-export type MotivoBlacklist = 
+export type MotivoBlacklist =
   | 'OPTOUT'              // Pessoa pediu para sair
   | 'INVALIDO'            // Número inválido/não existe
   | 'RECLAMACAO'          // Reclamação formal
@@ -43,7 +43,7 @@ interface AdicionarBlacklistParams {
 function normalizarTelefone(telefone: string): string {
   // Remove tudo que não é número
   const apenasNumeros = telefone.replace(/\D/g, '');
-  
+
   // Retorna últimos 8 dígitos (mais confiável para comparação)
   return apenasNumeros.slice(-8);
 }
@@ -53,12 +53,12 @@ function normalizarTelefone(telefone: string): string {
  */
 function normalizarTelefoneCompleto(telefone: string): string {
   let numero = telefone.replace(/\D/g, '');
-  
+
   // Se tiver 10 ou 11 dígitos, adiciona 55 (Brasil)
   if (numero.length === 10 || numero.length === 11) {
     numero = `55${numero}`;
   }
-  
+
   return numero;
 }
 
@@ -67,13 +67,13 @@ function normalizarTelefoneCompleto(telefone: string): string {
 // ============================================
 
 export class BlacklistService {
-  
+
   /**
    * Verifica se um telefone está na blacklist
    */
   async estaBlacklist(telefone: string, tenantId?: string): Promise<boolean> {
     const telefoneNormalizado = normalizarTelefone(telefone);
-    
+
     const encontrado = await prisma.telefoneBlacklist.findFirst({
       where: {
         telefone: { contains: telefoneNormalizado },
@@ -83,16 +83,16 @@ export class BlacklistService {
         ]
       }
     });
-    
+
     return !!encontrado;
   }
-  
+
   /**
    * Adiciona telefone à blacklist
    */
   async adicionar(params: AdicionarBlacklistParams): Promise<void> {
     const telefoneNormalizado = normalizarTelefoneCompleto(params.telefone);
-    
+
     try {
       await prisma.telefoneBlacklist.upsert({
         where: {
@@ -115,9 +115,9 @@ export class BlacklistService {
           observacoes: params.observacoes
         }
       });
-      
+
       console.log(`[Blacklist] ✅ Telefone ${telefoneNormalizado} adicionado (motivo: ${params.motivo})`);
-      
+
     } catch (error: any) {
       // Ignora erro de duplicata
       if (!error.message.includes('Unique constraint')) {
@@ -125,13 +125,13 @@ export class BlacklistService {
       }
     }
   }
-  
+
   /**
    * Remove telefone da blacklist
    */
   async remover(telefone: string, tenantId?: string): Promise<boolean> {
     const telefoneNormalizado = normalizarTelefoneCompleto(telefone);
-    
+
     const resultado = await prisma.telefoneBlacklist.deleteMany({
       where: {
         telefone: telefoneNormalizado,
@@ -141,20 +141,20 @@ export class BlacklistService {
         ]
       }
     });
-    
+
     if (resultado.count > 0) {
       console.log(`[Blacklist] ❌ Telefone ${telefoneNormalizado} removido da blacklist`);
       return true;
     }
-    
+
     return false;
   }
-  
+
   /**
    * Registra opt-out a partir de uma resposta do contato
    */
   async registrarOptout(
-    telefone: string, 
+    telefone: string,
     nomeContato?: string,
     campanhaId?: string,
     tenantId?: string
@@ -167,10 +167,10 @@ export class BlacklistService {
       tenantId,
       observacoes: 'Opt-out solicitado pelo contato'
     });
-    
+
     // Atualizar contatos com esse telefone para status OPTOUT
     const telefoneNormalizado = normalizarTelefone(telefone);
-    
+
     await prisma.contato.updateMany({
       where: {
         OR: [
@@ -186,7 +186,7 @@ export class BlacklistService {
       }
     });
   }
-  
+
   /**
    * Registra número inválido
    */
@@ -200,19 +200,46 @@ export class BlacklistService {
       observacoes: motivo
     });
   }
-  
+
   /**
-   * Lista telefones na blacklist (com paginação)
+   * Lista telefones na blacklist (com paginação e filtros)
    */
   async listar(
     tenantId?: string,
     pagina: number = 1,
-    limite: number = 50
+    limite: number = 50,
+    busca?: string,
+    motivo?: string
   ): Promise<{ telefones: any[]; total: number }> {
-    const where = tenantId 
+    // Base where clause - tenant filter
+    const whereBase: any = tenantId
       ? { OR: [{ tenantId }, { tenantId: null }] }
       : {};
-    
+
+    // Build where conditions
+    const whereConditions: any[] = [whereBase];
+
+    // Filter by motivo
+    if (motivo) {
+      whereConditions.push({ motivo });
+    }
+
+    // Filter by busca (phone or name)
+    if (busca && busca.trim()) {
+      const buscaNormalizada = busca.trim().replace(/\D/g, ''); // Remove non-digits for phone search
+      whereConditions.push({
+        OR: [
+          { telefone: { contains: buscaNormalizada } },
+          { nomeContato: { contains: busca.trim(), mode: 'insensitive' } }
+        ]
+      });
+    }
+
+    // Combine all conditions with AND
+    const where = whereConditions.length > 1
+      ? { AND: whereConditions }
+      : whereBase;
+
     const [telefones, total] = await Promise.all([
       prisma.telefoneBlacklist.findMany({
         where,
@@ -222,42 +249,42 @@ export class BlacklistService {
       }),
       prisma.telefoneBlacklist.count({ where })
     ]);
-    
+
     return { telefones, total };
   }
-  
+
   /**
    * Conta telefones na blacklist por motivo
    */
   async contarPorMotivo(tenantId?: string): Promise<Record<string, number>> {
-    const where = tenantId 
+    const where = tenantId
       ? { OR: [{ tenantId }, { tenantId: null }] }
       : {};
-    
+
     const contagens = await prisma.telefoneBlacklist.groupBy({
       by: ['motivo'],
       where,
       _count: true
     });
-    
+
     const resultado: Record<string, number> = {};
     for (const item of contagens) {
       resultado[item.motivo] = item._count;
     }
-    
+
     return resultado;
   }
-  
+
   /**
    * Filtra lista de telefones removendo os que estão na blacklist
    */
   async filtrarTelefones(
-    telefones: string[], 
+    telefones: string[],
     tenantId?: string
   ): Promise<{ permitidos: string[]; bloqueados: string[] }> {
     const permitidos: string[] = [];
     const bloqueados: string[] = [];
-    
+
     for (const telefone of telefones) {
       if (await this.estaBlacklist(telefone, tenantId)) {
         bloqueados.push(telefone);
@@ -265,7 +292,7 @@ export class BlacklistService {
         permitidos.push(telefone);
       }
     }
-    
+
     return { permitidos, bloqueados };
   }
 }

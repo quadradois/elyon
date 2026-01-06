@@ -18,7 +18,7 @@ const RegistroSchema = z.object({
 });
 
 export class ServicoAutenticacao {
-  
+
   async login(dados: z.infer<typeof LoginSchema>) {
     // 1. Buscar Tenant
     const tenant = await prisma.tenant.findUnique({
@@ -70,7 +70,9 @@ export class ServicoAutenticacao {
       tenant: {
         id: tenant.id,
         nome: tenant.nome,
-        slug: tenant.slug
+        slug: tenant.slug,
+        plano: tenant.plano,
+        planoTipo: tenant.planoTipo
       }
     };
   }
@@ -78,7 +80,7 @@ export class ServicoAutenticacao {
   async registrar(dados: z.infer<typeof RegistroSchema>) {
     // Nota: Em produção, registro geralmente é feito via convite ou admin
     // Aqui permitimos para facilitar testes/MVP se necessário
-    
+
     const tenant = await prisma.tenant.findUnique({
       where: { slug: dados.tenantSlug }
     });

@@ -15,24 +15,24 @@ interface EvolutionInstance {
  */
 export class WhatsAppService {
   private _instanceName: string;
-  
+
   constructor(instanceName: string) {
     this._instanceName = instanceName;
   }
-  
+
   // Usar getters para ler variáveis de ambiente em tempo real
   private get apiUrl(): string {
     return process.env.EVOLUTION_API_URL || '';
   }
-  
+
   private get apiKey(): string {
     return process.env.EVOLUTION_API_KEY || '';
   }
-  
+
   get instanceName(): string {
     return this._instanceName;
   }
-  
+
   private get instanceToken(): string | undefined {
     return process.env.EVOLUTION_INSTANCE_TOKEN;
   }
@@ -58,6 +58,22 @@ export class WhatsAppService {
         { headers: this.getHeaders() }
       );
       console.log('Instância criada com sucesso:', response.data);
+
+      // Auto-configurar webhook após criação
+      const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.quadradois.com.br';
+      const webhookUrl = `${backendUrl}/api/webhooks/whatsapp`;
+
+      try {
+        await this.configurarWebhook(webhookUrl, true);
+        console.log(`Webhook auto-configurado para ${this.instanceName}`);
+
+        // Auto-configurar ignorar grupos
+        await this.atualizarConfiguracao(true);
+        console.log(`Configuração 'Ignorar Grupos' ativada para ${this.instanceName}`);
+      } catch (err) {
+        console.error(`Erro ao auto-configurar instância ${this.instanceName}:`, err);
+      }
+
       return response.data;
     } catch (error: any) {
       console.error('Erro ao criar instância WhatsApp:', error.message);
@@ -104,7 +120,7 @@ export class WhatsAppService {
     try {
       // Formata número para 55DDXXXXXXXXX (apenas dígitos)
       let numeroFormatado = numero.replace(/\D/g, '');
-      
+
       // Se tiver 10 ou 11 dígitos, assume que é BR e adiciona 55
       if (numeroFormatado.length === 10 || numeroFormatado.length === 11) {
         numeroFormatado = `55${numeroFormatado}`;
@@ -144,10 +160,10 @@ export class WhatsAppService {
   async atualizarConfiguracao(ignorarGrupos: boolean): Promise<any> {
     try {
       console.log(`Buscando configurações atuais da instância ${this.instanceName}...`);
-      
+
       // 1. Busca configurações atuais
       const currentSettings = await this.buscarConfiguracao();
-      
+
       // 2. Mescla com a nova configuração
       const newSettings = {
         ...currentSettings,
@@ -155,7 +171,7 @@ export class WhatsAppService {
       };
 
       console.log(`Atualizando configurações da instância ${this.instanceName}...`);
-      
+
       // 3. Envia o objeto completo
       const response = await axios.post(
         `${this.apiUrl}/settings/set/${this.instanceName}`,
@@ -177,10 +193,10 @@ export class WhatsAppService {
         {
           webhook: {
             url: url,
-            webhookByEvents: false,
+            byEvents: false,
             enabled: enabled,
-            events: ['MESSAGES_UPSERT'],
-            webhookBase64: false
+            events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE'],
+            base64: true
           }
         },
         { headers: this.getHeaders() }
