@@ -24,6 +24,10 @@ import { WhatsAppProvider } from "./contextos/WhatsAppContext";
 import { SessoesWhatsapp } from "./paginas/SessoesWhatsapp";
 import { MeusAgentes } from "./paginas/MeusAgentes";
 import { Upgrade } from "./paginas/Upgrade";
+import AceitarContrato from "./paginas/AceitarContrato";
+import { CarteiraClientes } from "./paginas/CarteiraClientes";
+import { Agenda } from "./paginas/Agenda";
+import { Integracoes } from "./paginas/Integracoes";
 
 // Páginas Admin
 import { AdminClientes, AdminTransacoes, AdminLeadsVip, AdminPacotes, AdminPlanos } from "./paginas/admin";
@@ -80,6 +84,12 @@ function App() {
           element={<ConfirmarAgendamento />}
         />
 
+        {/* Rota Pública - Aceite de Contrato Digital */}
+        <Route
+          path="/aceitar-contrato/:token"
+          element={<AceitarContrato />}
+        />
+
         {/* Redireciona /dashboard para /dashboard/prospeccao */}
         <Route
           path="/dashboard"
@@ -114,6 +124,17 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <MeusAgentes />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/agenda"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <Agenda />
               </LayoutDashboard>
             </RotaPrivada>
           }
@@ -169,6 +190,17 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <LeadDetalhes />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/clientes"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <CarteiraClientes />
               </LayoutDashboard>
             </RotaPrivada>
           }
@@ -323,6 +355,17 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <Upgrade />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/integracoes"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <Integracoes />
               </LayoutDashboard>
             </RotaPrivada>
           }

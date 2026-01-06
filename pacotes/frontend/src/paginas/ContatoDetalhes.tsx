@@ -29,7 +29,8 @@ import {
   Activity,
   Target,
   Sparkles,
-  Users
+  Users,
+  Rocket
 } from "lucide-react";
 import { Button } from "../componentes/ui/button";
 import { Textarea } from "../componentes/ui/textarea";
@@ -106,6 +107,8 @@ interface Contato {
   modoAtendimento?: string | null;
   atendidoPor?: string | null;
   pausadoEm?: string | null;
+  virouLead?: boolean;
+  leadId?: string | null;
 
   // Datas
   criadoEm: string;
@@ -204,6 +207,7 @@ export default function ContatoDetalhes() {
   const [enviando, setEnviando] = useState(false);
   const [copiado, setCopiado] = useState<string | null>(null);
   const [alternandoModo, setAlternandoModo] = useState(false);
+  const [promovendo, setPromovendo] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('atendimento');
 
   const mensagensRef = useRef<HTMLDivElement>(null);
@@ -300,6 +304,28 @@ export default function ContatoDetalhes() {
       toast.error('Erro ao alternar modo');
     } finally {
       setAlternandoModo(false);
+    }
+  };
+
+  const promoverLead = async () => {
+    if (!campanhaId || !contatoId || promovendo) return;
+
+    try {
+      setPromovendo(true);
+      const response = await api.post(`/campanhas/${campanhaId}/contatos/${contatoId}/promover`);
+
+      toast.success('Contato promovido com sucesso!', {
+        description: 'Redirecionando para o CRM...'
+      });
+
+      // Redirecionar para o Lead recém criado
+      setTimeout(() => {
+        navigate(`/leads/${response.data.leadId}`);
+      }, 1500);
+
+    } catch (err: any) {
+      toast.error(err.response?.data?.erro || 'Erro ao promover contato');
+      setPromovendo(false);
     }
   };
 
@@ -476,6 +502,27 @@ export default function ContatoDetalhes() {
                 >
                   <Mail className="w-4 h-4 mr-2" />
                   Email
+                </Button>
+              )}
+
+              {/* Botão de Promoção */}
+              {!contato.virouLead ? (
+                <Button
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white ml-2 shadow-sm"
+                  onClick={promoverLead}
+                  disabled={promovendo}
+                >
+                  {promovendo ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Rocket className="w-4 h-4 mr-2" />}
+                  Promover a Oportunidade
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="ml-2 border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
+                  onClick={() => navigate(`/leads/${contato.leadId}`)}
+                >
+                  Ver no CRM
+                  <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
                 </Button>
               )}
             </div>

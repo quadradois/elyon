@@ -84,6 +84,17 @@ export function Configuracao() {
       iconBg: "bg-purple-50",
       path: "/dashboard/relatorios",
     },
+    {
+      id: "integracoes",
+      titulo: "Integrações",
+      descricao: "Conecte com CRMs, portais e APIs externas",
+      icon: FileText,
+      iconColor: "text-indigo-600",
+      iconBg: "bg-indigo-50",
+      path: "/dashboard/integracoes",
+      badge: "Novo",
+      badgeColor: "bg-green-100 text-green-700",
+    },
   ];
 
   // Cards em breve (futuras funcionalidades)
@@ -115,17 +126,6 @@ export function Configuracao() {
       titulo: "Segurança",
       descricao: "Altere senha, autenticação e permissões",
       icon: Lock,
-      iconColor: "text-slate-400",
-      iconBg: "bg-slate-100",
-      path: "#",
-      badge: "Em breve",
-      badgeColor: "bg-slate-200 text-slate-600",
-    },
-    {
-      id: "integracao",
-      titulo: "Integrações",
-      descricao: "Conecte com CRMs, portais e APIs externas",
-      icon: FileText,
       iconColor: "text-slate-400",
       iconBg: "bg-slate-100",
       path: "#",

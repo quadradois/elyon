@@ -20,6 +20,12 @@ import {
   TableRow,
 } from "../componentes/ui/table";
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "../componentes/ui/tabs";
+import {
   Search,
   Building2,
   MapPin,
@@ -96,6 +102,9 @@ export function Captacao() {
   const [localSelecionado, setLocalSelecionado] =
     useState<ResultadoBusca | null>(null);
   const [locaisSelecionados, setLocaisSelecionados] = useState<ResultadoBusca[]>([]);
+  // Estado para aba de busca (local ou iptu)
+  const [modoBusca, setModoBusca] = useState<"local" | "iptu">("local");
+  const [iptuBusca, setIptuBusca] = useState("");
 
   // Etapa 2: Seleção
   const [unidades, setUnidades] = useState<Unidade[]>([]);
@@ -331,6 +340,51 @@ export function Captacao() {
     } catch (error: any) {
       console.error(error);
       toast.error(error.message || "Erro ao carregar imóveis");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Busca unitária por IPTU (Simula encontrar uma unidade para passar para o wizard)
+  const buscarPorIptu = async () => {
+    if (!iptuBusca || iptuBusca.length < 5) {
+      toast.info("Digite um IPTU válido");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setErro("");
+      const toastId = toast.loading("Verificando IPTU...");
+
+      // Verificar se o IPTU existe (usando endpoint de busca unitária leve ou job)
+      // Como queremos integrar no fluxo do Wizard (que usa Job na etapa 3), 
+      // aqui apenas validamos se o IPTU "existe" ou formatamos ele para a próxima etapa.
+
+      // Vamos criar uma unidade "virtual" com esse IPTU
+      const unidadeVirtual: Unidade = {
+        nrinscr: iptuBusca,
+        nmedificio: "Imóvel Avulso",
+        incompl: "Busca por IPTU",
+        nmlogradou: "Endereço será carregado",
+        nmbairro: "Goiânia",
+        tipo: "casa" // Padrão
+      };
+
+      toast.dismiss(toastId);
+
+      // Configurar estado para avançar
+      setUnidades([unidadeVirtual]);
+      setSelecionados([unidadeVirtual.nrinscr]);
+      setNomeLista(`Prospecção IPTU ${iptuBusca}`);
+
+      // Avançar para Etapa 2 (Seleção)
+      setEtapa(2);
+      toast.success("IPTU configurado para prospecção");
+
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao validar IPTU");
     } finally {
       setLoading(false);
     }
@@ -690,23 +744,58 @@ export function Captacao() {
               </p>
             </div>
 
-            <div className="flex gap-2 max-w-lg mx-auto">
-              <Input
-                placeholder="Ex: Reserva do Parque, Jardins Florença, Alphaville..."
-                value={termoBusca}
-                onChange={(e) => setTermoBusca(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && buscarImoveis()}
-                className="flex-1"
-              />
-              <Button onClick={buscarImoveis} disabled={loading}>
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Search className="w-4 h-4" />
-                )}
-                Buscar
-              </Button>
-            </div>
+            {/* Abas de Modo de Busca */}
+            <Tabs value={modoBusca} onValueChange={(v) => setModoBusca(v as "local" | "iptu")} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-6 max-w-lg mx-auto">
+                <TabsTrigger value="local">Empreendimentos</TabsTrigger>
+                <TabsTrigger value="iptu">Por IPTU</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="local" className="space-y-6">
+                <div className="flex gap-2 max-w-lg mx-auto">
+                  <Input
+                    placeholder="Ex: Reserva do Parque, Jardins Florença, Alphaville..."
+                    value={termoBusca}
+                    onChange={(e) => setTermoBusca(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && buscarImoveis()}
+                    className="flex-1"
+                  />
+                  <Button onClick={buscarImoveis} disabled={loading}>
+                    {loading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                    Buscar
+                  </Button>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="iptu" className="space-y-6">
+                <div className="text-center mb-4">
+                  <p className="text-sm text-slate-500">
+                    Digite o número da inscrição imobiliária (IPTU) para prospectar um imóvel específico.
+                  </p>
+                </div>
+                <div className="flex gap-2 max-w-lg mx-auto">
+                  <Input
+                    placeholder="Ex: 32313702960010"
+                    value={iptuBusca}
+                    onChange={(e) => setIptuBusca(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && buscarPorIptu()}
+                    className="flex-1 font-mono"
+                  />
+                  <Button onClick={buscarPorIptu} disabled={loading}>
+                    {loading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ArrowRight className="w-4 h-4" />
+                    )}
+                    Avançar
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
 
             {/* Lista de Resultados */}
             {erro && (

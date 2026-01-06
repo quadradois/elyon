@@ -55,54 +55,79 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
     }
   };
 
+  // Import useToast if available, otherwise just use console for now or minimal alert
+  // Assuming toast is available since UI components exist
+
   const handleBuscaIPTU = async () => {
     if (!iptu) return;
     setLoading(true);
+    setDadosEncontrados(null);
 
-    // Simulação de API Call (Prefeitura + Assertiva)
-    setTimeout(() => {
-      setDadosEncontrados({
-        imovel: {
-          endereco: "Rua T-63, 123, Setor Bueno, Goiânia - GO",
-          area: "120m²",
-          valorVenal: "R$ 450.000,00",
-        },
-        proprietario: {
-          nome: "Carlos Eduardo Silva",
-          cpf: "***.456.789-**",
-          cpfEnriquecido: "123.456.789-00",
-          telefones: ["(62) 99999-8888", "(62) 3232-4444"],
-          email: "carlos.edu@email.com",
-          score: 850,
-        },
-      });
-      setLoading(false);
+    try {
+      // Chamada Real ao Backend
+      const response = await api.post("/mineracao/iptu-unitario", { iptu });
+
+      setDadosEncontrados(response.data);
       setEtapa("resultado");
-    }, 2000);
+    } catch (error: any) {
+      console.error("Erro busca IPTU:", error);
+
+      // Tratamento de erro básico
+      if (error.response?.status === 402) {
+        alert("Saldo insuficiente para realizar a busca.");
+      } else if (error.response?.status === 404) {
+        alert("IPTU não encontrado na base da Prefeitura.");
+      } else {
+        alert("Erro ao buscar IPTU. Tente novamente.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSalvarLead = async () => {
+    if (!dadosEncontrados) return;
     setLoading(true);
+
     try {
-      // Simula delay de API
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Salvar Lead Real
+      // Mapear dados para o formato esperado pelo endpoint POST /leads
+      const leadPayload = {
+        nome: dadosEncontrados.proprietario.nome || "Proprietário Desconhecido",
+        telefone: dadosEncontrados.proprietario.telefones[0]
+          ? dadosEncontrados.proprietario.telefones[0].replace(/\D/g, '') // Limpar formatação
+          : "",
+        email: dadosEncontrados.proprietario.emails[0] || "",
+        cpf: dadosEncontrados.proprietario.cpfEnriquecido || dadosEncontrados.proprietario.cpf,
+
+        // Dados do Imóvel
+        enderecoImovel: dadosEncontrados.imovel.endereco,
+        tipoImovel: dadosEncontrados.imovel.tipo,
+
+        status: "NOVO",
+        origem: "IPTU_HUNTING"
+      };
+
+      await api.post("/leads", leadPayload);
 
       setEtapa("sucesso");
       if (onLeadCreated) {
         onLeadCreated();
       }
-      // Fecha o modal após um breve delay para mostrar o sucesso
+
       setTimeout(() => {
         setOpen(false);
-        // Reseta o estado para a próxima vez
+        // Reseta o estado
         setTimeout(() => {
           setEtapa("busca");
           setIptu("");
           setDadosEncontrados(null);
         }, 500);
       }, 1500);
+
     } catch (error) {
-      console.error(error);
+      console.error("Erro ao salvar lead:", error);
+      alert("Erro ao criar lead. Verifique os dados.");
     } finally {
       setLoading(false);
     }

@@ -34,9 +34,12 @@ import {
   Flame,
   Calendar,
   TrendingUp,
+  LayoutGrid,
+  LayoutList,
 } from "lucide-react";
 import { NovoLeadDialog } from "../componentes/NovoLeadDialog";
 import { ChatModal } from "../componentes/ChatModal";
+import { KanbanLeads } from "../componentes/KanbanLeads";
 import { api } from "../servicos/api";
 
 // Tipos
@@ -73,14 +76,14 @@ interface Estatisticas {
 // Constantes
 const STATUS_OPTIONS = [
   { value: "", label: "Todos os status" },
-  { value: "NOVO", label: "Novo" },
-  { value: "CONTATO_INICIAL", label: "Contato Inicial" },
-  { value: "QUALIFICADO", label: "Qualificado" },
-  { value: "APRESENTACAO", label: "Apresentação" },
-  { value: "PROPOSTA", label: "Proposta" },
-  { value: "NEGOCIACAO", label: "Negociação" },
+  { value: "NOVO", label: "Novos" },
+  { value: "TENTATIVA_AGENDAMENTO", label: "Tentando Agendar" },
+  { value: "VISITA_AGENDADA", label: "Visita Agendada" },
+  { value: "AVALIACAO_EM_ANDAMENTO", label: "Avaliação/Fotos" },
+  { value: "DOCUMENTACAO", label: "Documentação" },
   { value: "CAPTADO", label: "Captado" },
   { value: "PERDIDO", label: "Perdido" },
+  { value: "ARQUIVADO", label: "Arquivado" },
 ];
 
 const TEMPERATURA_OPTIONS = [
@@ -103,14 +106,17 @@ function formatarData(data: string | null): string {
 function getStatusBadge(status: string): { label: string; className: string } {
   const badges: Record<string, { label: string; className: string }> = {
     NOVO: { label: "Novo", className: "bg-blue-100 text-blue-700 border-blue-200" },
-    CONTATO_INICIAL: { label: "Contato", className: "bg-sky-100 text-sky-700 border-sky-200" },
-    QUALIFICADO: { label: "Qualificado", className: "bg-purple-100 text-purple-700 border-purple-200" },
-    APRESENTACAO: { label: "Apresentação", className: "bg-amber-100 text-amber-700 border-amber-200" },
-    PROPOSTA: { label: "Proposta", className: "bg-orange-100 text-orange-700 border-orange-200" },
-    NEGOCIACAO: { label: "Negociação", className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+    TENTATIVA_AGENDAMENTO: { label: "Tentando Agendar", className: "bg-sky-100 text-sky-700 border-sky-200" },
+    VISITA_AGENDADA: { label: "Visita Marcada", className: "bg-amber-100 text-amber-700 border-amber-200" },
+    AVALIACAO_EM_ANDAMENTO: { label: "Avaliação/Fotos", className: "bg-purple-100 text-purple-700 border-purple-200" },
+    DOCUMENTACAO: { label: "Documentação", className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
     CAPTADO: { label: "Captado", className: "bg-green-100 text-green-700 border-green-200" },
     PERDIDO: { label: "Perdido", className: "bg-red-100 text-red-700 border-red-200" },
     ARQUIVADO: { label: "Arquivado", className: "bg-gray-100 text-gray-700 border-gray-200" },
+    // Legado
+    CONTATANDO: { label: "Tentando Agendar", className: "bg-sky-100 text-sky-700 border-sky-200" },
+    QUALIFICADO: { label: "Novo", className: "bg-blue-100 text-blue-700 border-blue-200" },
+    EM_NEGOCIACAO: { label: "Documentação", className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
   };
   return badges[status] || { label: status, className: "bg-gray-100 text-gray-700" };
 }
@@ -143,6 +149,7 @@ export function Leads() {
   const [filtroStatus, setFiltroStatus] = useState("");
   const [filtroTemperatura, setFiltroTemperatura] = useState("");
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("kanban");
 
   // Modal
   const [chatOpen, setChatOpen] = useState(false);
@@ -204,7 +211,10 @@ export function Leads() {
     const matchStatus = filtroStatus === "" || lead.status === filtroStatus;
     const matchTemp = filtroTemperatura === "" || lead.temperatura === filtroTemperatura;
 
-    return matchBusca && matchStatus && matchTemp;
+    // Excluir leads já captados (Clientes) da visualização de leads
+    const isCaptado = ['CAPTADO', 'CONVERTIDO', 'ATIVO'].includes(lead.status);
+
+    return matchBusca && matchStatus && matchTemp && !isCaptado;
   });
 
   const temFiltrosAtivos = termoBusca || filtroStatus || filtroTemperatura;
@@ -242,6 +252,30 @@ export function Leads() {
           </Button>
           <NovoLeadDialog onLeadCreated={carregarDados} />
         </div>
+      </div>
+
+      {/* Tabs de Visualização */}
+      <div className="flex bg-slate-100 p-1 rounded-lg w-fit border border-slate-200">
+        <button
+          onClick={() => setViewMode('kanban')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'kanban'
+            ? 'bg-white text-slate-900 shadow-sm'
+            : 'text-slate-500 hover:text-slate-700'
+            }`}
+        >
+          <LayoutGrid className="w-4 h-4" />
+          Kanban
+        </button>
+        <button
+          onClick={() => setViewMode('list')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list'
+            ? 'bg-white text-slate-900 shadow-sm'
+            : 'text-slate-500 hover:text-slate-700'
+            }`}
+        >
+          <LayoutList className="w-4 h-4" />
+          Lista
+        </button>
       </div>
 
       {/* Cards de Estatísticas */}
@@ -395,158 +429,170 @@ export function Leads() {
         </div>
       )}
 
-      {/* Tabela */}
-      <Card>
-        {loading ? (
-          <CardContent className="flex justify-center items-center h-64">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          </CardContent>
-        ) : leadsFiltrados.length === 0 ? (
-          <CardContent className="p-12 flex flex-col items-center justify-center">
-            <Users className="h-12 w-12 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {temFiltrosAtivos ? "Nenhum lead encontrado" : "Nenhum lead cadastrado"}
-            </h3>
-            <p className="text-gray-500 mb-4">
-              {temFiltrosAtivos
-                ? "Tente ajustar os filtros de busca"
-                : "Comece adicionando seu primeiro lead"
-              }
-            </p>
-            {temFiltrosAtivos ? (
-              <Button variant="outline" onClick={limparFiltros}>
-                Limpar filtros
-              </Button>
-            ) : (
-              <NovoLeadDialog onLeadCreated={carregarDados} />
-            )}
-          </CardContent>
-        ) : (
-          <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[250px]">Lead</TableHead>
-                  <TableHead>Contato</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Temperatura</TableHead>
-                  <TableHead>Origem</TableHead>
-                  <TableHead>Criado em</TableHead>
-                  <TableHead className="w-[80px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {leadsFiltrados.map((lead) => {
-                  const nome = lead.nome || lead.contato?.nome || "Sem nome";
-                  const telefone = lead.telefone || lead.contato?.telefone;
-                  const email = lead.email || lead.contato?.email;
-                  const statusBadge = getStatusBadge(lead.status);
-                  const tempBadge = getTemperaturaBadge(lead.temperatura);
-
-                  return (
-                    <TableRow
-                      key={lead.id}
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
-                    >
-                      <TableCell>
-                        <div className="font-medium text-gray-900">{nome}</div>
-                        {lead.proximaAtividade && (
-                          <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {lead.proximaAtividade.tipo} - {formatarData(lead.proximaAtividade.dataAgendada)}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          {telefone && (
-                            <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                              <Phone className="h-3 w-3" />
-                              {telefone}
-                            </div>
-                          )}
-                          {email && (
-                            <div className="text-xs text-gray-400 truncate max-w-[180px]">
-                              {email}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadge.className}`}>
-                          {statusBadge.label}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {lead.temperatura && (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${tempBadge.className}`}>
-                            {tempBadge.label}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-gray-500">
-                          {lead.origem || "-"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-gray-500">
-                          {formatarData(lead.dataCriacao)}
-                        </span>
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => navigate(`/dashboard/leads/${lead.id}`)}>
-                              <Eye className="h-4 w-4 mr-2" />
-                              Ver detalhes
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleAbrirChat(lead)}>
-                              <MessageSquare className="h-4 w-4 mr-2" />
-                              Abrir chat
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {telefone && (
-                              <>
-                                <DropdownMenuItem onClick={() => {
-                                  const numero = telefone.replace(/\D/g, "");
-                                  window.open(`https://wa.me/55${numero}`, "_blank");
-                                }}>
-                                  <Send className="h-4 w-4 mr-2" />
-                                  WhatsApp
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => window.open(`tel:${telefone.replace(/\D/g, "")}`, "_self")}
-                                >
-                                  <Phone className="h-4 w-4 mr-2" />
-                                  Ligar
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-
-            {/* Footer da tabela */}
-            <div className="px-4 py-3 border-t bg-gray-50 flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                Mostrando {leadsFiltrados.length} de {leads.length} leads
-              </p>
+      {/* Tabela ou Kanban */}
+      {viewMode === 'kanban' ? (
+        <div className="overflow-hidden">
+          {loading ? (
+            <div className="flex justify-center items-center h-64">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             </div>
-          </>
-        )}
-      </Card>
+          ) : (
+            <KanbanLeads leads={leadsFiltrados} onLeadUpdate={carregarDados} />
+          )}
+        </div>
+      ) : (
+        <Card>
+          {loading ? (
+            <CardContent className="flex justify-center items-center h-64">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            </CardContent>
+          ) : leadsFiltrados.length === 0 ? (
+            <CardContent className="p-12 flex flex-col items-center justify-center">
+              <Users className="h-12 w-12 text-gray-300 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {temFiltrosAtivos ? "Nenhum lead encontrado" : "Nenhum lead cadastrado"}
+              </h3>
+              <p className="text-gray-500 mb-4">
+                {temFiltrosAtivos
+                  ? "Tente ajustar os filtros de busca"
+                  : "Comece adicionando seu primeiro lead"
+                }
+              </p>
+              {temFiltrosAtivos ? (
+                <Button variant="outline" onClick={limparFiltros}>
+                  Limpar filtros
+                </Button>
+              ) : (
+                <NovoLeadDialog onLeadCreated={carregarDados} />
+              )}
+            </CardContent>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[250px]">Lead</TableHead>
+                    <TableHead>Contato</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Temperatura</TableHead>
+                    <TableHead>Origem</TableHead>
+                    <TableHead>Criado em</TableHead>
+                    <TableHead className="w-[80px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {leadsFiltrados.map((lead) => {
+                    const nome = lead.nome || lead.contato?.nome || "Sem nome";
+                    const telefone = lead.telefone || lead.contato?.telefone;
+                    const email = lead.email || lead.contato?.email;
+                    const statusBadge = getStatusBadge(lead.status);
+                    const tempBadge = getTemperaturaBadge(lead.temperatura);
+
+                    return (
+                      <TableRow
+                        key={lead.id}
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
+                      >
+                        <TableCell>
+                          <div className="font-medium text-gray-900">{nome}</div>
+                          {lead.proximaAtividade && (
+                            <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {lead.proximaAtividade.tipo} - {formatarData(lead.proximaAtividade.dataAgendada)}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            {telefone && (
+                              <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                                <Phone className="h-3 w-3" />
+                                {telefone}
+                              </div>
+                            )}
+                            {email && (
+                              <div className="text-xs text-gray-400 truncate max-w-[180px]">
+                                {email}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadge.className}`}>
+                            {statusBadge.label}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {lead.temperatura && (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${tempBadge.className}`}>
+                              {tempBadge.label}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-gray-500">
+                            {lead.origem || "-"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-gray-500">
+                            {formatarData(lead.dataCriacao)}
+                          </span>
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => navigate(`/dashboard/leads/${lead.id}`)}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                Ver detalhes
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleAbrirChat(lead)}>
+                                <MessageSquare className="h-4 w-4 mr-2" />
+                                Abrir chat
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {telefone && (
+                                <>
+                                  <DropdownMenuItem onClick={() => {
+                                    const numero = telefone.replace(/\D/g, "");
+                                    window.open(`https://wa.me/55${numero}`, "_blank");
+                                  }}>
+                                    <Send className="h-4 w-4 mr-2" />
+                                    WhatsApp
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => window.open(`tel:${telefone.replace(/\D/g, "")}`, "_self")}
+                                  >
+                                    <Phone className="h-4 w-4 mr-2" />
+                                    Ligar
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+
+              {/* Footer da tabela */}
+              <div className="px-4 py-3 border-t bg-gray-50 flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  Mostrando {leadsFiltrados.length} de {leads.length} leads
+                </p>
+              </div>
+            </>
+          )}
+        </Card>
+      )}
 
       <ChatModal
         lead={activeLead ? {

@@ -21,10 +21,18 @@ import {
   ChevronUp,
   Phone,
   Store,
-  Search,
   Circle,
   Crown,
+  Briefcase,
+  Calendar,
 } from "lucide-react";
+
+// ... (código intermediário omitido, vou usar replace separado para o ícone e menu se for longe)
+// Na verdade, vou fazer em dois chunks se for muito distantes.
+// Linha 26 é imports.
+// Linha 158 é onde entra o menu.
+// Vou fazer um multi_replace.
+
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "../componentes/ui/button";
@@ -93,11 +101,31 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [collapsedSections]);
 
+  // Accordion exclusivo: ao abrir uma seção, fecha as outras
   const toggleSection = (sectionId: string) => {
-    setCollapsedSections(prev => ({
-      ...prev,
-      [sectionId]: !prev[sectionId]
-    }));
+    setCollapsedSections(prev => {
+      const isCurrentlyCollapsed = prev[sectionId] ?? true;
+
+      // Se está fechada (collapsed) e vai abrir, fecha todas as outras
+      if (isCurrentlyCollapsed) {
+        // Cria novo estado com todas as seções fechadas, exceto a clicada
+        const newState: Record<string, boolean> = {};
+        menuSections.forEach(section => {
+          newState[section.id] = section.id !== sectionId; // true = collapsed
+        });
+        // Também fechar seção admin se existir
+        newState['admin'] = sectionId !== 'admin';
+        // Preservar userMenu
+        newState['userMenu'] = prev['userMenu'] || false;
+        return newState;
+      } else {
+        // Se está expandida e vai fechar, apenas fecha ela
+        return {
+          ...prev,
+          [sectionId]: true // collapsed = true
+        };
+      }
+    });
   };
 
   // === DEFINIÇÃO DAS SEÇÕES DO MENU ===
@@ -113,11 +141,6 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           label: "Prospecção com IA",
           path: "/dashboard/captacao",
           destaque: true,
-        },
-        {
-          icon: Search,
-          label: "Prospecção Manual",
-          path: "/dashboard/mineracao",
         },
         {
           icon: List,
@@ -136,6 +159,11 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           icon: Target,
           label: "Campanhas",
           path: "/dashboard/campanhas",
+        },
+        {
+          icon: Calendar,
+          label: "Agenda",
+          path: "/dashboard/agenda",
         },
         {
           icon: Users,
@@ -165,6 +193,11 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
       label: "Gestão",
       defaultExpanded: true,
       items: [
+        {
+          icon: Briefcase,
+          label: "Carteira Clientes",
+          path: "/dashboard/clientes",
+        },
         {
           icon: BarChart3,
           label: "Relatórios",

@@ -126,10 +126,30 @@ export function Upgrade() {
     const carregarPlano = async () => {
         try {
             const response = await api.get("/tenant/meu");
-            if (response.data?.tenant?.contaCreditos?.planoTipo) {
-                setPlanoAtual(response.data.tenant.contaCreditos.planoTipo);
+            const tenant = response.data?.tenant;
+
+            // Tenta ler de contaCreditos primeiro, depois diretamente do tenant
+            let planoFromApi = tenant?.contaCreditos?.planoTipo || tenant?.plano;
+
+            if (planoFromApi) {
+                // Mapeia planos legados para os novos nomes
+                const mapeamento: Record<string, PlanoTipo> = {
+                    SMALL_BUSINESS: "STARTER",
+                    STARTER: "STARTER",
+                    GROWTH: "GROWTH",
+                    PRO: "PRO",
+                };
+                setPlanoAtual(mapeamento[planoFromApi] || "STARTER");
+
+                // Atualiza localStorage com dados frescos da API
+                const tenantLocal = JSON.parse(localStorage.getItem("elyon_tenant") || "{}");
+                if (tenantLocal.id === tenant?.id) {
+                    tenantLocal.plano = planoFromApi;
+                    localStorage.setItem("elyon_tenant", JSON.stringify(tenantLocal));
+                }
             }
         } catch {
+            // Fallback para localStorage se a API falhar
             const tenant = JSON.parse(localStorage.getItem("elyon_tenant") || "{}");
             if (tenant.plano) {
                 const mapeamento: Record<string, PlanoTipo> = {

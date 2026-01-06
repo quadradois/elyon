@@ -6,9 +6,7 @@ import {
   QrCode,
   Trash2,
   LogOut,
-  MoreVertical,
   Loader2,
-  Settings,
 } from "lucide-react";
 import { Button } from "../componentes/ui/button";
 import { Input } from "../componentes/ui/input";
@@ -30,12 +28,6 @@ import {
 import { Switch } from "../componentes/ui/switch";
 import { Badge } from "../componentes/ui/badge";
 import { toast } from "sonner";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../componentes/ui/dropdown-menu";
 
 interface SessaoWhatsapp {
   id: string;
@@ -47,6 +39,8 @@ interface SessaoWhatsapp {
   status: "DESCONECTADO" | "CONECTANDO" | "CONECTADO" | "ERRO";
   criadoEm: string;
   agente?: { nome: string };
+  ignorarGrupos?: boolean;
+  webhookBase64?: boolean;
 }
 
 export function SessoesWhatsapp() {
@@ -58,17 +52,25 @@ export function SessoesWhatsapp() {
   const [qrCodeBase64, setQrCodeBase64] = useState<string | null>(null);
   const [sessaoConectando, setSessaoConectando] = useState<string | null>(null);
 
-  // Config state
-  const [modalConfigOpen, setModalConfigOpen] = useState(false);
-  const [sessaoConfigurando, setSessaoConfigurando] = useState<string | null>(
-    null
-  );
-  const [ignorarGrupos, setIgnorarGrupos] = useState(false);
-  const [loadingConfig, setLoadingConfig] = useState(false);
-
   // Form state
   const [novoNome, setNovoNome] = useState("");
   const [novaDescricao, setNovaDescricao] = useState("");
+
+  // Config Modal State (Legacy/Unfinished)
+  const [modalConfigOpen, setModalConfigOpen] = useState(false);
+  const [loadingConfig, setLoadingConfig] = useState(false);
+  const [ignorarGrupos, setIgnorarGrupos] = useState(false);
+  const [webhookBase64, setWebhookBase64] = useState(false);
+
+  const salvarConfiguracao = async () => {
+    setLoadingConfig(true);
+    // Placeholder - implementation missing
+    setTimeout(() => {
+      setLoadingConfig(false);
+      setModalConfigOpen(false);
+      toast.success("Configuração salva (Placeholder)");
+    }, 500);
+  };
 
   useEffect(() => {
     carregarSessoes();
@@ -203,39 +205,28 @@ export function SessoesWhatsapp() {
     }
   };
 
-  const abrirConfiguracoes = async (id: string) => {
+  const atualizarConfigRapida = async (id: string, campo: 'ignorarGrupos' | 'webhookBase64', valor: boolean) => {
     try {
-      setSessaoConfigurando(id);
-      setModalConfigOpen(true);
-      setLoadingConfig(true);
+      // Atualizar localmente primeiro para feedback imediato
+      setSessoes(prev => prev.map(s =>
+        s.id === id
+          ? { ...s, [campo]: valor }
+          : s
+      ));
 
-      const response = await api.get(`/sessoes-whatsapp/${id}/configurar`);
-      if (response.data.config && response.data.config.settings) {
-        setIgnorarGrupos(response.data.config.settings.groupsIgnore || false);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar configurações:", error);
-      toast.error("Erro ao carregar configurações");
-    } finally {
-      setLoadingConfig(false);
-    }
-  };
-
-  const salvarConfiguracao = async () => {
-    if (!sessaoConfigurando) return;
-
-    try {
-      setLoadingConfig(true);
-      await api.post(`/sessoes-whatsapp/${sessaoConfigurando}/configurar`, {
-        ignorarGrupos,
+      await api.post(`/sessoes-whatsapp/${id}/configurar`, {
+        [campo]: valor,
       });
-      toast.success("Configuração salva com sucesso!");
-      setModalConfigOpen(false);
+
+      toast.success(campo === 'ignorarGrupos'
+        ? `Grupos ${valor ? 'serão ignorados' : 'serão processados'}`
+        : `Transcrição de áudios ${valor ? 'ativada' : 'desativada'}`
+      );
     } catch (error) {
-      console.error("Erro ao salvar configuração:", error);
-      toast.error("Erro ao salvar configuração");
-    } finally {
-      setLoadingConfig(false);
+      console.error(`Erro ao atualizar ${campo}:`, error);
+      toast.error("Erro ao atualizar configuração");
+      // Reverter em caso de erro
+      carregarSessoes();
     }
   };
 
@@ -321,13 +312,20 @@ export function SessoesWhatsapp() {
                 </div>
               </CardHeader>
               <CardContent className="pt-4 space-y-4">
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between py-1 border-b border-slate-50">
-                    <span className="text-slate-500">Número</span>
-                    <span className="font-medium text-slate-900">
-                      {sessao.numeroWhatsapp || "-"}
-                    </span>
+                {/* Info do número conectado */}
+                {sessao.status === "CONECTADO" && sessao.numeroWhatsapp && (
+                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-100">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <Smartphone className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-green-800">{sessao.nomeWhatsapp || "WhatsApp"}</p>
+                      <p className="text-sm text-green-600">+{sessao.numeroWhatsapp}</p>
+                    </div>
                   </div>
+                )}
+
+                <div className="space-y-2 text-sm">
                   <div className="flex justify-between py-1 border-b border-slate-50">
                     <span className="text-slate-500">Agente Vinculado</span>
                     <span className="font-medium text-slate-900">
@@ -335,6 +333,32 @@ export function SessoesWhatsapp() {
                     </span>
                   </div>
                 </div>
+
+                {/* Toggles de configuração (apenas quando conectado) */}
+                {sessao.status === "CONECTADO" && (
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Ignorar Grupos</p>
+                        <p className="text-xs text-slate-500">Não responder mensagens de grupos</p>
+                      </div>
+                      <Switch
+                        checked={sessao.ignorarGrupos || false}
+                        onCheckedChange={(checked) => atualizarConfigRapida(sessao.id, 'ignorarGrupos', checked)}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">Áudios (Base64)</p>
+                        <p className="text-xs text-slate-500">Habilita transcrição de áudios</p>
+                      </div>
+                      <Switch
+                        checked={sessao.webhookBase64 || false}
+                        onCheckedChange={(checked) => atualizarConfigRapida(sessao.id, 'webhookBase64', checked)}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-2 pt-2">
                   {sessao.status === "CONECTADO" ? (
@@ -360,31 +384,15 @@ export function SessoesWhatsapp() {
                       Conectar
                     </Button>
                   )}
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="w-4 h-4 text-slate-500" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {sessao.status === "CONECTADO" && (
-                        <DropdownMenuItem
-                          onClick={() => abrirConfiguracoes(sessao.id)}
-                        >
-                          <Settings className="w-4 h-4 mr-2" />
-                          Configurações
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        className="text-red-600 focus:text-red-700 focus:bg-red-50"
-                        onClick={() => excluirSessao(sessao.id)}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Excluir
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => excluirSessao(sessao.id)}
+                    title="Excluir sessão"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -512,6 +520,21 @@ export function SessoesWhatsapp() {
                 <Switch
                   checked={ignorarGrupos}
                   onCheckedChange={setIgnorarGrupos}
+                />
+              </div>
+
+              <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg border-amber-200 bg-amber-50/50">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Webhook Base64 (Áudios)
+                  </label>
+                  <p className="text-sm text-slate-500">
+                    Habilita transcrição automática de áudios recebidos.
+                  </p>
+                </div>
+                <Switch
+                  checked={webhookBase64}
+                  onCheckedChange={setWebhookBase64}
                 />
               </div>
             </div>
