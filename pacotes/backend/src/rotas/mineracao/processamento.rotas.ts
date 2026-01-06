@@ -610,4 +610,150 @@ router.post('/confirmar-leads', async (req, res) => {
   }
 });
 
+
+// ============================================
+// BUSCA UNITÁRIA (Flow "Novo Lead por IPTU")
+// ============================================
+
+/**
+ * POST /iptu-unitario
+ * Realiza o fluxo completo para um único IPTU:
+ * 1. Scraper Prefeitura (identifica proprietário/CPF)
+ * 2. Assertiva (enriquece contatos)
+ * 3. Consumo de Créditos
+ */
+router.post('/iptu-unitario', async (req, res) => {
+  try {
+    const { iptu } = req.body;
+
+    if (!iptu) {
+      return res.status(400).json({ erro: 'IPTU é obrigatório' });
+    }
+
+    // Obter tenant do header X-Tenant-Id
+    const tenantId = req.headers['x-tenant-id'] as string;
+    if (!tenantId) {
+      return res.status(401).json({ erro: 'Não autorizado' });
+    }
+
+    console.log(`[Mineracao] 🔎 Iniciando busca unitária para IPTU ${iptu}`);
+
+    // 1. Verificar saldo inicial (pelo menos 1 crédito para começar)
+    if (!(await servicoCreditos.temCreditos(tenantId))) {
+      return res.status(402).json({
+        erro: 'Sem créditos disponíveis',
+        mensagem: 'Recarregue seus créditos para usar a Busca Inteligente.'
+      });
+    }
+
+    // 2. SCRAPER PREFEITURA
+    let dadosProprietario;
+    try {
+      dadosProprietario = await scraperIPTU.consultarProprietario(iptu);
+    } catch (error) {
+      console.error(`[Mineracao] Erro no scraper para IPTU ${iptu}:`, error);
+      return res.status(404).json({
+        erro: 'Dados não encontrados na Prefeitura',
+        detalhes: 'Verifique se o número do IPTU está correto.'
+      });
+    }
+
+    // REMOVIDO: Cobrança pelo scraper.
+    // Nova Regra: Cobrar APENAS se houver enriquecimento com contatos (telefone).
+
+    // Se não tiver CPF/CNPJ, retorna o que achou (apenas dados do imóvel/proprietário básico)
+    if (!dadosProprietario.cpf) {
+      return res.json({
+        encontrado: true,
+        tipo: 'BASICO',
+        mensagem: 'Proprietário identificado, mas sem CPF cadastrado na Prefeitura.',
+        imovel: {
+          endereco: dadosProprietario.endereco_correspondencia,
+          tipo: dadosProprietario.tipoImovel,
+          // Mapear campos parseados
+          ...dadosProprietario
+        },
+        proprietario: {
+          nome: dadosProprietario.nome,
+          cpf: null,
+          telefones: [],
+          emails: []
+        },
+        creditosConsumidos: 0 // Gratuito se não achou CPF
+      });
+    }
+
+    // 3. ENRIQUECIMENTO ASSERTIVA
+    let dadosEnriquecidos;
+    let creditosConsumidosCount = 0;
+
+    try {
+      // Remover máscara do CPF/CNPJ
+      const docLimpo = dadosProprietario.cpf.replace(/\D/g, '');
+
+      // Enriquecer
+      dadosEnriquecidos = await assertivaService.enriquecerDocumento(
+        docLimpo,
+        dadosProprietario.nome
+      );
+
+      // Cobrar crédito SE encontrou telefone (Regra de Negócio: Pagamos por contato)
+      if (dadosEnriquecidos.telefones && dadosEnriquecidos.telefones.length > 0) {
+        try {
+          // Cobramos 1 crédito pelo Lead completo (Endereço + Proprietário + Contatos)
+          await servicoCreditos.consumirCredito(tenantId);
+          creditosConsumidosCount = 1;
+        } catch (e) {
+          console.warn('[Mineracao] Falha ao cobrar crédito do enriquecimento');
+        }
+      }
+
+    } catch (error) {
+      console.error('[Mineracao] Erro no enriquecimento:', error);
+      // Se falhar o enriquecimento, segue com dados básicos do scraper
+      dadosEnriquecidos = null;
+    }
+
+    // 4. FORMATAR RESPOSTA FINAL
+    const proprietarioFinal = dadosEnriquecidos ? {
+      nome: dadosEnriquecidos.nome,
+      cpf: dadosEnriquecidos.cpf, // ou CNPJ
+      cpfEnriquecido: dadosEnriquecidos.cpf,
+      telefones: dadosEnriquecidos.telefones.map(t => `(${t.numero.slice(0, 2)}) ${t.numero.slice(2)}`), // Formatar visualmente
+      emails: dadosEnriquecidos.emails,
+      score: dadosEnriquecidos.score,
+      // Extras
+      idade: dadosEnriquecidos.idade,
+      profissao: dadosEnriquecidos.profissao,
+      rendaEstimada: dadosEnriquecidos.rendaEstimada
+    } : {
+      nome: dadosProprietario.nome,
+      cpf: dadosProprietario.cpf,
+      telefones: [],
+      emails: [],
+      score: null
+    };
+
+    return res.json({
+      encontrado: true,
+      tipo: dadosEnriquecidos ? 'ENRIQUECIDO' : 'BASICO',
+      imovel: {
+        endereco: dadosProprietario.endereco_correspondencia,
+        area: 'N/D', // Scraper atual não pega área construída, futuro improvement
+        valorVenal: 'N/D',
+        // Dados parseados úteis
+        apartamento: dadosProprietario.apartamento,
+        bloco: dadosProprietario.bloco,
+        edificio: dadosProprietario.nomeEdificio
+      },
+      proprietario: proprietarioFinal,
+      creditosConsumidos: creditosConsumidosCount
+    });
+
+  } catch (error: any) {
+    console.error('[Mineracao] Erro fatal na busca unitária:', error);
+    return res.status(500).json({ erro: 'Erro interno no servidor' });
+  }
+});
+
 export default router;

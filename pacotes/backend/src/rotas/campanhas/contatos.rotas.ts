@@ -37,11 +37,11 @@ const getTenantId = (req: Request): string | null => {
  */
 const verificarCampanhaTenant = async (campanhaId: string, tenantId: string | null): Promise<any | 'forbidden' | null> => {
   if (!tenantId) return 'forbidden';
-  
+
   const campanha = await prisma.campanha.findUnique({ where: { id: campanhaId } });
   if (!campanha) return null;
   if (campanha.tenantId !== tenantId) return 'forbidden';
-  
+
   return campanha;
 };
 
@@ -88,7 +88,7 @@ router.get('/:id/contatos', async (req, res) => {
   try {
     const { id } = req.params;
     const tenantId = getTenantId(req);
-    
+
     // ✅ Verificar ownership da campanha
     const campanha = await verificarCampanhaTenant(id, tenantId);
     if (campanha === null) {
@@ -97,16 +97,16 @@ router.get('/:id/contatos', async (req, res) => {
     if (campanha === 'forbidden') {
       return res.status(403).json({ erro: 'Acesso negado' });
     }
-    
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const status = req.query.status as string;
-    
+
     const where: any = { campanhaId: id };
     if (status) {
       where.statusProspeccao = status;
     }
-    
+
     const [contatosBrutos, total] = await Promise.all([
       prisma.contato.findMany({
         where,
@@ -116,7 +116,7 @@ router.get('/:id/contatos', async (req, res) => {
       }),
       prisma.contato.count({ where })
     ]);
-    
+
     const contatos = contatosBrutos.map((c: any) => ({
       id: c.id,
       nome: c.nome,
@@ -159,26 +159,26 @@ router.get('/:id/contatos', async (req, res) => {
       observacoes: c.observacoes,
       criadoEm: c.criadoEm,
     }));
-    
+
     const estatisticas = await prisma.contato.groupBy({
       by: ['statusProspeccao'],
       where: { campanhaId: id },
       _count: true
     });
-    
+
     const stats = {
       total,
       porStatus: Object.fromEntries(
         estatisticas.map(e => [e.statusProspeccao, e._count])
       )
     };
-    
+
     return res.json({
       contatos,
       paginacao: { pagina: page, limite: limit, total, totalPaginas: Math.ceil(total / limit) },
       estatisticas: stats
     });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao listar contatos:', error);
     return res.status(500).json({ erro: 'Erro ao listar contatos' });
@@ -193,7 +193,7 @@ router.patch('/:campanhaId/contatos/:contatoId', async (req, res) => {
   try {
     const { campanhaId, contatoId } = req.params;
     const tenantId = getTenantId(req);
-    
+
     // ✅ Verificar ownership da campanha
     const campanha = await verificarCampanhaTenant(campanhaId, tenantId);
     if (campanha === null) {
@@ -202,17 +202,17 @@ router.patch('/:campanhaId/contatos/:contatoId', async (req, res) => {
     if (campanha === 'forbidden') {
       return res.status(403).json({ erro: 'Acesso negado' });
     }
-    
+
     const contatoExistente = await prisma.contato.findFirst({
       where: { id: contatoId, campanhaId }
     });
-    
+
     if (!contatoExistente) {
       return res.status(404).json({ erro: 'Contato não encontrado' });
     }
-    
+
     const { nome, telefone, telefone2, email, endereco, statusProspeccao, observacoes, manifestouInteresse } = req.body;
-    
+
     const contato = await prisma.contato.update({
       where: { id: contatoId },
       data: {
@@ -226,9 +226,9 @@ router.patch('/:campanhaId/contatos/:contatoId', async (req, res) => {
         ...(manifestouInteresse !== undefined && { manifestouInteresse }),
       }
     });
-    
+
     return res.json({ sucesso: true, contato });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao atualizar contato:', error);
     return res.status(500).json({ erro: 'Erro ao atualizar contato' });
@@ -243,26 +243,26 @@ router.post('/:campanhaId/contatos/:contatoId/registrar-tentativa', async (req, 
   try {
     const { campanhaId, contatoId } = req.params;
     const { respondeu, manifestouInteresse, observacoes } = req.body;
-    
+
     const contato = await prisma.contato.findFirst({
       where: { id: contatoId, campanhaId }
     });
-    
+
     if (!contato) {
       return res.status(404).json({ erro: 'Contato não encontrado' });
     }
-    
-    const novoStatus = respondeu 
+
+    const novoStatus = respondeu
       ? (manifestouInteresse ? 'INTERESSADO' : 'SEM_INTERESSE')
       : 'CONTATANDO';
-    
+
     const contatoAtualizado = await prisma.contato.update({
       where: { id: contatoId },
       data: {
         tentativasContato: { increment: 1 },
         ultimaTentativa: new Date(),
         statusProspeccao: novoStatus,
-        ...(respondeu && { 
+        ...(respondeu && {
           respondeu: true,
           primeiraResposta: contato.primeiraResposta || new Date()
         }),
@@ -270,9 +270,9 @@ router.post('/:campanhaId/contatos/:contatoId/registrar-tentativa', async (req, 
         ...(observacoes && { observacoes }),
       }
     });
-    
+
     return res.json({ sucesso: true, contato: contatoAtualizado });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao registrar tentativa:', error);
     return res.status(500).json({ erro: 'Erro ao registrar tentativa' });
@@ -583,19 +583,19 @@ const vincularLeadsMineradosSchema = z.object({
 router.post('/:id/vincular-leads-minerados', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const campanha = await prisma.campanha.findUnique({ where: { id } });
     if (!campanha) {
       return res.status(404).json({ erro: 'Campanha não encontrada' });
     }
-    
+
     const { leads } = vincularLeadsMineradosSchema.parse(req.body);
-    
+
     console.log(`[Campanhas] Vinculando ${leads.length} leads minerados à campanha ${id}...`);
-    
+
     let vinculados = 0;
     let erros = 0;
-    
+
     for (const lead of leads) {
       try {
         const telefones = lead.telefones || [];
@@ -606,10 +606,10 @@ router.post('/:id/vincular-leads-minerados', async (req, res) => {
           if (a.tipo !== 'CELULAR' && b.tipo === 'CELULAR') return 1;
           return 0;
         });
-        
+
         const emails = lead.emails || [];
         const quantidadeWhatsapp = telefones.filter(t => t.whatsapp === true).length;
-        
+
         let enderecoCompleto: string | undefined;
         if (lead.endereco) {
           const e = lead.endereco;
@@ -618,7 +618,7 @@ router.post('/:id/vincular-leads-minerados', async (req, res) => {
             e.bairro, e.cidade, e.uf, e.cep ? `CEP: ${e.cep}` : null
           ].filter(Boolean).join(', ');
         }
-        
+
         const dadosContato: any = {
           campanhaId: id,
           nome: lead.nome,
@@ -677,7 +677,7 @@ router.post('/:id/vincular-leads-minerados', async (req, res) => {
           enriquecidoEm: new Date(),
           statusProspeccao: 'AGUARDANDO',
         };
-        
+
         await prisma.contato.create({ data: dadosContato });
         vinculados++;
       } catch (e: any) {
@@ -685,21 +685,21 @@ router.post('/:id/vincular-leads-minerados', async (req, res) => {
         erros++;
       }
     }
-    
+
     await prisma.campanha.update({
       where: { id },
       data: { totalContatos: { increment: vinculados } }
     });
-    
+
     console.log(`[Campanhas] ✅ ${vinculados} leads vinculados, ${erros} erros`);
-    
+
     return res.json({
       sucesso: true,
       vinculados,
       erros,
       mensagem: `${vinculados} leads vinculados à campanha.${erros > 0 ? ` ${erros} falhas.` : ''}`
     });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao vincular leads:', error);
     if (error.name === 'ZodError') {
@@ -717,25 +717,25 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
   try {
     const { id } = req.params;
     const { edificio } = req.body;
-    
+
     const tenant = await prisma.tenant.findFirst();
     if (!tenant) {
       return res.status(400).json({ erro: 'Nenhum tenant configurado' });
     }
-    
+
     const campanha = await prisma.campanha.findUnique({
       where: { id },
       include: { _count: { select: { contatos: true } } }
     });
-    
+
     if (!campanha) {
       return res.status(404).json({ erro: 'Campanha não encontrada' });
     }
-    
+
     console.log(`[Campanhas] Vinculando leads do banco à campanha "${campanha.nome}"...`);
-    
+
     const whereLeads: any = { tenantId: tenant.id };
-    
+
     let leadIdsDoEdificio: string[] = [];
     if (edificio) {
       const imoveisDoEdificio = await prisma.imovel.findMany({
@@ -743,32 +743,32 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
         select: { leadId: true }
       });
       leadIdsDoEdificio = imoveisDoEdificio.map(i => i.leadId).filter((id): id is string => id !== null);
-      
+
       if (leadIdsDoEdificio.length > 0) {
         whereLeads.id = { in: leadIdsDoEdificio };
       }
     }
-    
+
     const cpfsExistentes = await prisma.contato.findMany({
       where: { campanhaId: id },
       select: { cpf: true }
     });
     const cpfsNaCampanha = new Set(cpfsExistentes.map(c => c.cpf?.replace(/\D/g, '')));
-    
+
     const leads = await prisma.lead.findMany({
       where: whereLeads,
       select: { id: true, nome: true, cpf: true, telefone: true, email: true }
     });
-    
+
     const leadsNovos = leads.filter(lead => {
       const cpfLimpo = lead.cpf?.replace(/\D/g, '');
       return cpfLimpo && !cpfsNaCampanha.has(cpfLimpo);
     });
-    
+
     console.log(`[Campanhas] ${leadsNovos.length} leads novos para vincular`);
-    
+
     let vinculados = 0;
-    
+
     for (const lead of leadsNovos) {
       let telefone = lead.telefone;
       let telefone2: string | null = null;
@@ -812,18 +812,18 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
       let estadoPessoal: string | null = null;
       let cepPessoal: string | null = null;
       let temCacheAssertiva = false;
-      
+
       if (lead.cpf) {
         const cpfLimpo = lead.cpf.replace(/\D/g, '');
-        
+
         const cache = await prisma.cacheCpf.findFirst({ where: { cpf: cpfLimpo } });
-        
+
         if (cache && cache.dados) {
           temCacheAssertiva = true;
           const dados = cache.dados as any;
           const telefones = dados.telefones || [];
           const emails = dados.emails || [];
-          
+
           const telefonesOrdenados = [...telefones].sort((a: any, b: any) => {
             if (a.whatsapp && !b.whatsapp) return -1;
             if (!a.whatsapp && b.whatsapp) return 1;
@@ -831,7 +831,7 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
             if (a.tipo !== 'CELULAR' && b.tipo === 'CELULAR') return 1;
             return 0;
           });
-          
+
           telefone = normalizarTelefone(telefonesOrdenados[0]?.numero || lead.telefone);
           telefone2 = normalizarTelefone(telefonesOrdenados[1]?.numero) || null;
           telefone3 = normalizarTelefone(telefonesOrdenados[2]?.numero) || null;
@@ -840,14 +840,14 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
           quantidadeWhatsapp = telefones.filter((t: any) => t.whatsapp === true).length;
           temWhatsapp = quantidadeWhatsapp > 0;
           telefonesJson = telefones.length > 0 ? telefones : null;
-          
+
           email = emails[0] || lead.email;
           email2 = emails[1] || null;
           email3 = emails[2] || null;
           email4 = emails[3] || null;
           email5 = emails[4] || null;
           emailsJson = emails.length > 0 ? emails : null;
-          
+
           inscricaoIptu = dados.nrinscr || null;
           enderecoImovel = dados.endereco_imovel || dados.nmlogradou || null;
           bairroImovel = dados.nmbairro || null;
@@ -855,7 +855,7 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
           box = dados.box || null;
           tipoImovel = dados.tipo_imovel || dados.tipoImovel || null;
           valorVenal = dados.vlvenal || dados.valorVenal || null;
-          
+
           if (dados.dataNascimento) {
             try {
               const partes = dados.dataNascimento.split('/');
@@ -876,7 +876,7 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
           empresaAtual = dados.empresaAtual || null;
           cnpjEmpresa = dados.cnpjEmpresa || null;
           scoreAssertiva = dados.score || null;
-          
+
           if (dados.endereco) {
             const end = dados.endereco;
             enderecoPessoal = [end.tipoLogradouro, end.logradouro, end.numero, end.complemento]
@@ -886,9 +886,9 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
             cepPessoal = end.cep || null;
           }
         }
-        
+
         const imovel = await prisma.imovel.findFirst({ where: { leadId: lead.id } });
-        
+
         if (imovel) {
           inscricaoIptu = inscricaoIptu || imovel.inscricaoIptu;
           enderecoImovel = enderecoImovel || imovel.logradouro;
@@ -896,7 +896,7 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
           nomeEdificio = nomeEdificio || imovel.nomeEdificio;
         }
       }
-      
+
       await prisma.contato.create({
         data: {
           campanhaId: id,
@@ -951,21 +951,21 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
       });
       vinculados++;
     }
-    
+
     await prisma.campanha.update({
       where: { id },
       data: { totalContatos: { increment: vinculados } }
     });
-    
+
     console.log(`[Campanhas] ✅ ${vinculados} leads vinculados com sucesso`);
-    
+
     return res.json({
       sucesso: true,
       vinculados,
       total: campanha._count.contatos + vinculados,
       mensagem: `${vinculados} contatos vinculados à campanha`
     });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao vincular leads:', error);
     return res.status(500).json({ erro: 'Erro ao vincular leads do banco' });
@@ -983,19 +983,19 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
 router.post('/:id/contatos/:contatoId/limpar-historico', async (req, res) => {
   try {
     const { id, contatoId } = req.params;
-    
+
     // Verificar se campanha existe
     const campanha = await prisma.campanha.findUnique({
       where: { id }
     });
-    
+
     if (!campanha) {
       return res.status(404).json({ erro: 'Campanha não encontrada' });
     }
-    
+
     // Verificar se contato existe e pertence à campanha
     const contato = await prisma.contato.findFirst({
-      where: { 
+      where: {
         id: contatoId,
         campanhaId: id
       },
@@ -1003,18 +1003,18 @@ router.post('/:id/contatos/:contatoId/limpar-historico', async (req, res) => {
         _count: { select: { mensagens: true } }
       }
     });
-    
+
     if (!contato) {
       return res.status(404).json({ erro: 'Contato não encontrado nesta campanha' });
     }
-    
+
     const totalMensagensAntes = contato._count.mensagens;
-    
+
     // Deletar todas as mensagens do contato
     await prisma.mensagemProspeccao.deleteMany({
       where: { contatoId }
     });
-    
+
     // Resetar status do contato para permitir novo envio
     await prisma.contato.update({
       where: { id: contatoId },
@@ -1025,16 +1025,16 @@ router.post('/:id/contatos/:contatoId/limpar-historico', async (req, res) => {
         // Manter dados do contato, apenas resetar conversa
       }
     });
-    
+
     console.log(`[Campanhas] 🧹 Histórico limpo para contato ${contato.nome} (${totalMensagensAntes} mensagens removidas)`);
-    
+
     return res.json({
       sucesso: true,
       mensagem: `Histórico de ${contato.nome} limpo com sucesso`,
       mensagensRemovidas: totalMensagensAntes,
       novoStatus: 'AGUARDANDO'
     });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao limpar histórico:', error);
     return res.status(500).json({ erro: 'Erro ao limpar histórico de conversa' });
@@ -1048,7 +1048,7 @@ router.post('/:id/contatos/:contatoId/limpar-historico', async (req, res) => {
 router.post('/:id/limpar-todos-historicos', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Verificar se campanha existe
     const campanha = await prisma.campanha.findUnique({
       where: { id },
@@ -1056,24 +1056,24 @@ router.post('/:id/limpar-todos-historicos', async (req, res) => {
         _count: { select: { contatos: true } }
       }
     });
-    
+
     if (!campanha) {
       return res.status(404).json({ erro: 'Campanha não encontrada' });
     }
-    
+
     // Buscar todos os contatos da campanha
     const contatos = await prisma.contato.findMany({
       where: { campanhaId: id },
       select: { id: true }
     });
-    
+
     const contatoIds = contatos.map(c => c.id);
-    
+
     // Deletar todas as mensagens de todos os contatos
     const resultado = await prisma.mensagemProspeccao.deleteMany({
       where: { contatoId: { in: contatoIds } }
     });
-    
+
     // Resetar status de todos os contatos
     await prisma.contato.updateMany({
       where: { campanhaId: id },
@@ -1084,9 +1084,9 @@ router.post('/:id/limpar-todos-historicos', async (req, res) => {
         respondeu: false,
       }
     });
-    
+
     console.log(`[Campanhas] 🧹 Histórico de ${contatoIds.length} contatos limpo (${resultado.count} mensagens removidas)`);
-    
+
     return res.json({
       sucesso: true,
       mensagem: `Histórico de todos os ${contatoIds.length} contatos limpo`,
@@ -1094,7 +1094,7 @@ router.post('/:id/limpar-todos-historicos', async (req, res) => {
       mensagensRemovidas: resultado.count,
       novoStatus: 'AGUARDANDO'
     });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao limpar históricos:', error);
     return res.status(500).json({ erro: 'Erro ao limpar históricos de conversa' });
@@ -1113,15 +1113,15 @@ router.post('/:id/contatos/:contatoId/assumir-humano', async (req, res) => {
   try {
     const { id, contatoId } = req.params;
     const { atendente, motivo } = req.body;
-    
+
     const contato = await prisma.contato.findFirst({
       where: { id: contatoId, campanhaId: id }
     });
-    
+
     if (!contato) {
       return res.status(404).json({ erro: 'Contato não encontrado' });
     }
-    
+
     await prisma.contato.update({
       where: { id: contatoId },
       data: {
@@ -1131,16 +1131,16 @@ router.post('/:id/contatos/:contatoId/assumir-humano', async (req, res) => {
         motivoPausa: motivo || 'Atendimento manual solicitado'
       }
     });
-    
+
     console.log(`[Campanhas] 👤 Conversa de ${contato.nome} assumida por humano`);
-    
+
     return res.json({
       sucesso: true,
       mensagem: `Você assumiu a conversa com ${contato.nome}`,
       modoAtendimento: 'HUMANO',
       aviso: 'O SDR está pausado. Mensagens recebidas não serão respondidas automaticamente.'
     });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao assumir conversa:', error);
     return res.status(500).json({ erro: 'Erro ao assumir conversa' });
@@ -1155,22 +1155,22 @@ router.post('/:id/contatos/:contatoId/devolver-ia', async (req, res) => {
   try {
     const { id, contatoId } = req.params;
     const { limparHistorico } = req.body; // Opcional: limpar histórico ao devolver
-    
+
     const contato = await prisma.contato.findFirst({
       where: { id: contatoId, campanhaId: id }
     });
-    
+
     if (!contato) {
       return res.status(404).json({ erro: 'Contato não encontrado' });
     }
-    
+
     // Limpar histórico se solicitado
     if (limparHistorico) {
       await prisma.mensagemProspeccao.deleteMany({
         where: { contatoId }
       });
     }
-    
+
     await prisma.contato.update({
       where: { id: contatoId },
       data: {
@@ -1180,9 +1180,9 @@ router.post('/:id/contatos/:contatoId/devolver-ia', async (req, res) => {
         motivoPausa: null
       }
     });
-    
+
     console.log(`[Campanhas] 🤖 Conversa de ${contato.nome} devolvida para IA`);
-    
+
     return res.json({
       sucesso: true,
       mensagem: `Conversa com ${contato.nome} devolvida para o SDR`,
@@ -1190,7 +1190,7 @@ router.post('/:id/contatos/:contatoId/devolver-ia', async (req, res) => {
       historicoLimpo: !!limparHistorico,
       aviso: 'O SDR voltará a responder automaticamente.'
     });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao devolver conversa:', error);
     return res.status(500).json({ erro: 'Erro ao devolver conversa para IA' });
@@ -1205,15 +1205,15 @@ router.post('/:id/contatos/:contatoId/pausar', async (req, res) => {
   try {
     const { id, contatoId } = req.params;
     const { motivo } = req.body;
-    
+
     const contato = await prisma.contato.findFirst({
       where: { id: contatoId, campanhaId: id }
     });
-    
+
     if (!contato) {
       return res.status(404).json({ erro: 'Contato não encontrado' });
     }
-    
+
     await prisma.contato.update({
       where: { id: contatoId },
       data: {
@@ -1222,15 +1222,15 @@ router.post('/:id/contatos/:contatoId/pausar', async (req, res) => {
         motivoPausa: motivo || 'Conversa pausada'
       }
     });
-    
+
     console.log(`[Campanhas] ⏸️ Conversa de ${contato.nome} pausada`);
-    
+
     return res.json({
       sucesso: true,
       mensagem: `Conversa com ${contato.nome} pausada`,
       modoAtendimento: 'PAUSADO'
     });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao pausar conversa:', error);
     return res.status(500).json({ erro: 'Erro ao pausar conversa' });
@@ -1244,7 +1244,7 @@ router.post('/:id/contatos/:contatoId/pausar', async (req, res) => {
 router.get('/:id/contatos/:contatoId/modo-atendimento', async (req, res) => {
   try {
     const { id, contatoId } = req.params;
-    
+
     const contato = await prisma.contato.findFirst({
       where: { id: contatoId, campanhaId: id },
       select: {
@@ -1256,13 +1256,13 @@ router.get('/:id/contatos/:contatoId/modo-atendimento', async (req, res) => {
         motivoPausa: true
       }
     });
-    
+
     if (!contato) {
       return res.status(404).json({ erro: 'Contato não encontrado' });
     }
-    
+
     return res.json(contato);
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao buscar modo de atendimento:', error);
     return res.status(500).json({ erro: 'Erro ao buscar modo de atendimento' });
@@ -1277,10 +1277,10 @@ router.get('/:id/contatos/:contatoId/modo-atendimento', async (req, res) => {
 router.delete('/:id/contatos/:contatoId', async (req, res) => {
   try {
     const { id, contatoId } = req.params;
-    
+
     // Verificar se o contato existe e pertence à campanha
     const contato = await prisma.contato.findFirst({
-      where: { 
+      where: {
         id: contatoId,
         campanhaId: id
       },
@@ -1288,54 +1288,54 @@ router.delete('/:id/contatos/:contatoId', async (req, res) => {
         mensagens: true
       }
     });
-    
+
     if (!contato) {
       return res.status(404).json({ erro: 'Contato não encontrado nesta campanha' });
     }
-    
+
     // Deletar mensagens do contato primeiro
     if (contato.mensagens.length > 0) {
       await prisma.mensagemProspeccao.deleteMany({
         where: { contatoId }
       });
     }
-    
+
     // Se o contato virou lead, também deletar o lead e suas dependências
     if (contato.leadId) {
       const lead = await prisma.lead.findUnique({
         where: { id: contato.leadId },
         include: { conversas: true }
       });
-      
+
       if (lead) {
         // Deletar mensagens das conversas
         for (const conversa of lead.conversas) {
           await prisma.mensagem.deleteMany({ where: { conversaId: conversa.id } });
         }
-        
+
         // Deletar conversas
         await prisma.conversa.deleteMany({ where: { leadId: lead.id } });
-        
+
         // Deletar atividades
         await prisma.atividade.deleteMany({ where: { leadId: lead.id } });
-        
+
         // Deletar o lead
         await prisma.lead.delete({ where: { id: lead.id } });
       }
     }
-    
+
     // Deletar o contato
     await prisma.contato.delete({
       where: { id: contatoId }
     });
-    
+
     console.log(`[Campanhas] 🗑️ Contato ${contato.nome} excluído da campanha ${id}`);
-    
-    return res.json({ 
-      sucesso: true, 
-      mensagem: `Contato ${contato.nome} excluído com sucesso` 
+
+    return res.json({
+      sucesso: true,
+      mensagem: `Contato ${contato.nome} excluído com sucesso`
     });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao excluir contato:', error);
     return res.status(500).json({ erro: 'Erro ao excluir contato' });
@@ -1347,14 +1347,14 @@ router.delete('/:id/contatos', async (req, res) => {
   try {
     const { id } = req.params;
     const { contatoIds } = req.body;
-    
+
     if (!contatoIds || !Array.isArray(contatoIds) || contatoIds.length === 0) {
       return res.status(400).json({ erro: 'Lista de IDs de contatos é obrigatória' });
     }
-    
+
     // Buscar contatos com seus leads
     const contatos = await prisma.contato.findMany({
-      where: { 
+      where: {
         id: { in: contatoIds },
         campanhaId: id
       },
@@ -1364,19 +1364,19 @@ router.delete('/:id/contatos', async (req, res) => {
         leadId: true
       }
     });
-    
+
     if (contatos.length === 0) {
       return res.status(404).json({ erro: 'Nenhum contato encontrado' });
     }
-    
+
     const idsEncontrados = contatos.map(c => c.id);
     const leadIds = contatos.filter(c => c.leadId).map(c => c.leadId as string);
-    
+
     // Deletar mensagens de prospecção
     await prisma.mensagemProspeccao.deleteMany({
       where: { contatoId: { in: idsEncontrados } }
     });
-    
+
     // Deletar leads e suas dependências
     if (leadIds.length > 0) {
       // Buscar conversas dos leads
@@ -1385,43 +1385,43 @@ router.delete('/:id/contatos', async (req, res) => {
         select: { id: true }
       });
       const conversaIds = conversas.map(c => c.id);
-      
+
       // Deletar mensagens das conversas
       if (conversaIds.length > 0) {
         await prisma.mensagem.deleteMany({
           where: { conversaId: { in: conversaIds } }
         });
       }
-      
+
       // Deletar conversas
       await prisma.conversa.deleteMany({
         where: { leadId: { in: leadIds } }
       });
-      
+
       // Deletar atividades
       await prisma.atividade.deleteMany({
         where: { leadId: { in: leadIds } }
       });
-      
+
       // Deletar leads
       await prisma.lead.deleteMany({
         where: { id: { in: leadIds } }
       });
     }
-    
+
     // Deletar contatos
     const resultado = await prisma.contato.deleteMany({
       where: { id: { in: idsEncontrados } }
     });
-    
+
     console.log(`[Campanhas] 🗑️ ${resultado.count} contatos excluídos da campanha ${id}`);
-    
-    return res.json({ 
-      sucesso: true, 
+
+    return res.json({
+      sucesso: true,
       mensagem: `${resultado.count} contatos excluídos com sucesso`,
       excluidos: resultado.count
     });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao excluir contatos:', error);
     return res.status(500).json({ erro: 'Erro ao excluir contatos' });
@@ -1433,35 +1433,35 @@ router.delete('/:id/contatos/todos', async (req, res) => {
   try {
     const { id } = req.params;
     const { confirmar } = req.body;
-    
+
     if (confirmar !== true) {
-      return res.status(400).json({ 
-        erro: 'Confirmação obrigatória. Envie { confirmar: true } no body' 
+      return res.status(400).json({
+        erro: 'Confirmação obrigatória. Envie { confirmar: true } no body'
       });
     }
-    
+
     // Buscar todos os contatos da campanha
     const contatos = await prisma.contato.findMany({
       where: { campanhaId: id },
       select: { id: true, leadId: true }
     });
-    
+
     if (contatos.length === 0) {
-      return res.json({ 
-        sucesso: true, 
+      return res.json({
+        sucesso: true,
         mensagem: 'Nenhum contato para excluir',
         excluidos: 0
       });
     }
-    
+
     const contatoIds = contatos.map(c => c.id);
     const leadIds = contatos.filter(c => c.leadId).map(c => c.leadId as string);
-    
+
     // Deletar mensagens de prospecção
     await prisma.mensagemProspeccao.deleteMany({
       where: { contatoId: { in: contatoIds } }
     });
-    
+
     // Deletar leads e suas dependências
     if (leadIds.length > 0) {
       const conversas = await prisma.conversa.findMany({
@@ -1469,42 +1469,144 @@ router.delete('/:id/contatos/todos', async (req, res) => {
         select: { id: true }
       });
       const conversaIds = conversas.map(c => c.id);
-      
+
       if (conversaIds.length > 0) {
         await prisma.mensagem.deleteMany({
           where: { conversaId: { in: conversaIds } }
         });
       }
-      
+
       await prisma.conversa.deleteMany({
         where: { leadId: { in: leadIds } }
       });
-      
+
       await prisma.atividade.deleteMany({
         where: { leadId: { in: leadIds } }
       });
-      
+
       await prisma.lead.deleteMany({
         where: { id: { in: leadIds } }
       });
     }
-    
+
     // Deletar todos os contatos
     const resultado = await prisma.contato.deleteMany({
       where: { campanhaId: id }
     });
-    
+
     console.log(`[Campanhas] 🗑️ TODOS os ${resultado.count} contatos excluídos da campanha ${id}`);
-    
-    return res.json({ 
-      sucesso: true, 
+
+    return res.json({
+      sucesso: true,
       mensagem: `Todos os ${resultado.count} contatos foram excluídos`,
       excluidos: resultado.count
     });
-    
+
   } catch (error: any) {
     console.error('[Campanhas] Erro ao excluir todos contatos:', error);
     return res.status(500).json({ erro: 'Erro ao excluir contatos' });
+  }
+});
+
+// ============================================
+// PROMOÇÃO MANUAL DE CONTATO -> LEAD
+// ============================================
+
+/**
+ * POST /:campanhaId/contatos/:contatoId/promover
+ * Promove manualmente um contato para Lead (sem passar pela IA)
+ */
+router.post('/:campanhaId/contatos/:contatoId/promover', async (req, res) => {
+  try {
+    const { campanhaId, contatoId } = req.params;
+    const tenantId = getTenantId(req);
+
+    const campanha = await verificarCampanhaTenant(campanhaId, tenantId);
+    if (!campanha || campanha === 'forbidden') {
+      return res.status(403).json({ erro: 'Acesso negado à campanha' });
+    }
+
+    const contato = await prisma.contato.findUnique({
+      where: { id: contatoId }
+    });
+
+    if (!contato) {
+      return res.status(404).json({ erro: 'Contato não encontrado' });
+    }
+
+    if (contato.virouLead && contato.leadId) {
+      return res.status(400).json({
+        erro: 'Contato já promovido',
+        leadId: contato.leadId
+      });
+    }
+
+    // Criar o Lead
+    const novoLead = await prisma.lead.create({
+      data: {
+        tenantId: campanha.tenantId,
+        nome: contato.nome,
+        telefone: contato.telefone,
+        email: contato.email,
+        cpf: contato.cpf,
+        origem: `MINERACAO_MANUAL`,
+        campanhaOrigemId: campanhaId,
+        // contatoOrigemId: contatoId, // Campo não existe no schema ainda (revisar) ou usar connect se for relation
+        contatoOrigem: { connect: { id: contatoId } }, // Usando connect relation
+        status: 'NOVO',
+        temperatura: 'QUENTE', // Promovido manualmente = Quente
+
+        // Dados do Imóvel
+        enderecoImovel: contato.enderecoImovel,
+        tipoImovel: contato.tipoImovel,
+        areaImovel: contato.areaConstruida ? String(contato.areaConstruida) : null,
+        valorPretendido: contato.valorVenal ? String(contato.valorVenal) : null,
+
+        // Dados de Empresa (Atualmente ficam apenas no Contato)
+        // cnpjEmpresa: contato.cnpjEmpresa,
+        // empresaAtual: contato.empresaAtual,
+        // setor: contato.setor,
+        // profissao: contato.profissao,
+        // participacoesEmpresas: contato.participacoesEmpresas ?? undefined,
+      }
+    });
+
+    // Atualizar o Contato
+    await prisma.contato.update({
+      where: { id: contatoId },
+      data: {
+        virouLead: true,
+        virouLeadEm: new Date(),
+        leadId: novoLead.id, // O Prisma já deve ter atualizado via connect, mas reforçamos
+        statusProspeccao: 'LEAD',
+        modoAtendimento: 'HUMANO' // Sai da mão da IA
+      }
+    });
+
+    // Registrar Atividade Inicial
+    const db: any = prisma; // Workaround type
+    await db.atividade.create({
+      data: {
+        leadId: novoLead.id,
+        tipo: 'NOTA',
+        titulo: '🚀 Promovido Manualmente',
+        descricao: 'Contato promovido a Lead manualmente pelo corretor.',
+        criadoPor: 'corretor',
+        completadoEm: new Date()
+      }
+    });
+
+    console.log(`[Campanhas] ✅ Contato ${contato.nome} promovido a Lead ${novoLead.id}`);
+
+    return res.json({
+      sucesso: true,
+      mensagem: 'Contato promovido com sucesso!',
+      leadId: novoLead.id
+    });
+
+  } catch (error: any) {
+    console.error('[Campanhas] Erro ao promover contato:', error);
+    return res.status(500).json({ erro: 'Erro ao promover contato: ' + error.message });
   }
 });
 
