@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  site:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: elyon_site
+    restart: unless-stopped
+    networks:
+      - elyon_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.site.rule=Host(`quadradois.com.br`)"
+      - "traefik.http.routers.site.entrypoints=web,websecure"
+      - "traefik.http.routers.site.tls.certresolver=letsencrypt"
+      - "traefik.http.services.site.loadbalancer.server.port=80"
+
+networks:
+  elyon_network:
+    external: true
