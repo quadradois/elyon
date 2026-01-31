@@ -102,7 +102,16 @@ services:
     networks:
       - elyon_network
     labels:
-      - "traefik.enable=false"
+      - "traefik.enable=true"
+      - "traefik.http.routers.elyonfront.rule=Host(`elyon.quadradois.com.br`)"
+      - "traefik.http.routers.elyonfront.entrypoints=websecure"
+      - "traefik.http.routers.elyonfront.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.elyonfront.service=elyonfront"
+      - "traefik.http.routers.elyonfront-http.rule=Host(`elyon.quadradois.com.br`)"
+      - "traefik.http.routers.elyonfront-http.entrypoints=web"
+      - "traefik.http.routers.elyonfront-http.service=elyonfront"
+      - "traefik.http.services.elyonfront.loadbalancer.server.port=80"
+      - "traefik.docker.network=elyon_network"
 
   # ==========================================
   # SITE INSTITUCIONAL
@@ -155,15 +164,15 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      # - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      # - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-contato@quadradois.com.br}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-    # ports:
-    #   - "80:80"
-    #   - "443:443"
+    ports:
+      - "80:80"
+      - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
