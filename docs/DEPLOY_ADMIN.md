@@ -1,6 +1,6 @@
 # 🚀 Guia de Deploy - Admin Billing Dashboard
 
-> **URL Final:** https://admin.quadradois.com.br
+> **URL Final:** https://admin.elyon.ia.br
 
 ---
 
@@ -8,7 +8,7 @@
 
 - [ ] Acesso SSH ao servidor
 - [ ] Docker e Docker Compose instalados
-- [ ] DNS de `admin.quadradois.com.br` apontando para o IP do servidor
+- [ ] DNS de `admin.elyon.ia.br` apontando para o IP do servidor
 - [ ] Repositório clonado em `/opt/elyon`
 
 ---
@@ -67,7 +67,7 @@ elyon_admin   Up 2 minutes   80/tcp
 ### 5. Verificar logs do admin
 
 ```bash
-docker compose -f docker-compose.prod.yml logs admin
+docker compose -f docker-compose.yml logs admin
 ```
 
 Deve mostrar nginx iniciando sem erros.
@@ -78,7 +78,7 @@ Deve mostrar nginx iniciando sem erros.
 docker compose -f docker-compose.prod.yml logs traefik | grep admin
 ```
 
-Deve mostrar que o certificado foi gerado para `admin.quadradois.com.br`.
+Deve mostrar que o certificado foi gerado para `admin.elyon.ia.br`.
 
 ### 7. Testar acesso
 
@@ -96,7 +96,7 @@ Deve retornar `HTTP/2 200`.
 
 ```bash
 # Ver logs detalhados
-docker compose -f docker-compose.prod.yml logs admin --tail 50
+docker compose -f docker-compose.yml logs admin --tail 50
 
 # Verificar se o build funcionou
 docker images | grep admin
@@ -124,7 +124,7 @@ docker compose -f docker-compose.prod.yml logs traefik | grep -i acme
 Verifique se o DNS está configurado:
 
 ```bash
-nslookup admin.quadradois.com.br
+nslookup admin.elyon.ia.br
 ```
 
 Deve retornar o IP do servidor.
@@ -160,7 +160,7 @@ site-quadradois/admin/
 - [ ] `docker compose build` sem erros
 - [ ] `docker compose up -d` sem erros
 - [ ] Container `elyon_admin` rodando
-- [ ] https://admin.quadradois.com.br acessível
+- [ ] https://admin.elyon.ia.br acessível
 - [ ] Certificado SSL válido (cadeado verde)
 
 ---

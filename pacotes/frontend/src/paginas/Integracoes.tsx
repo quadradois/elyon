@@ -53,7 +53,7 @@ export function Integracoes() {
     const [mensagem, setMensagem] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
 
     // URL fixa do CRM - não precisa configurar
-    const CRM_API_URL = 'https://api.quadradois.com.br/api';
+    const CRM_API_URL = 'https://api.elyon.ia.br/api';
 
     // Form state - apenas API Key necessária
     const [formData, setFormData] = useState({

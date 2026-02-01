@@ -7,7 +7,7 @@ dotenv.config();
 async function fixWebhooks() {
     const apiUrl = process.env.EVOLUTION_API_URL;
     const apiKey = process.env.EVOLUTION_API_KEY;
-    const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.quadradois.com.br';
+    const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.ia.br';
 
     if (!apiUrl || !apiKey) {
         console.error('ERRO: Variáveis de ambiente EVOLUTION_API_URL e EVOLUTION_API_KEY são obrigatórias.');

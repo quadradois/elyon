@@ -55,10 +55,13 @@ const allowedOrigins = [
   'http://localhost:5173',  // Frontend Elyon (Vite)
   'http://localhost:3001',  // Admin Dashboard (serve)
   'http://127.0.0.1:3001',  // Admin alternativo
-  'http://elyon.quadradois.com.br',     // Produção Elyon
-  'https://elyon.quadradois.com.br',    // Produção Elyon HTTPS
-  'http://admin.quadradois.com.br',     // Produção Admin
-  'https://admin.quadradois.com.br',    // Produção Admin HTTPS
+  'http://elyon.ia.br',     // Produção Elyon
+  'https://elyon.ia.br',    // Produção Elyon HTTPS
+  'http://admin.elyon.ia.br',     // Produção Admin
+  'https://admin.elyon.ia.br',    // Produção Admin HTTPS
+  'https://crm.elyon.ia.br',            // Novo CRM
+  'https://elyon.ia.br',                // Novo Site
+  'https://api.elyon.ia.br',            // Nova API
 ];
 
 app.use(cors({
@@ -143,8 +146,8 @@ if (require.main === module) {
   // Inicializar WebSocket no servidor HTTP
   websocketService.inicializar(server);
 
-  server.listen(PORT, async () => {
-    console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+  server.listen(PORT as number, '0.0.0.0', async () => {
+    console.log(`🚀 Servidor rodando em http://0.0.0.0:${PORT}`);
     console.log(`🔌 WebSocket ativo para alertas em tempo real`);
     console.log(`🏥 Health check: http://localhost:${PORT}/api/saude`);
 

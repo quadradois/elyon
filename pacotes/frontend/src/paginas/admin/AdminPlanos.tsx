@@ -27,7 +27,7 @@ interface PlanoConfig {
     icone: 'starter' | 'growth' | 'pro';
 }
 
-// Configurações dos planos (baseado no site quadradois.com.br)
+// Configurações dos planos (baseado no site elyon.ia.br)
 const PLANOS_INICIAIS: PlanoConfig[] = [
     {
         id: 'STARTER',

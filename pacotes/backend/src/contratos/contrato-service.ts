@@ -117,7 +117,7 @@ export async function gerarContratoCaptacao(dados: DadosContrato): Promise<Contr
 
     if (contratoExistente) {
         // Idempotência: Se já existe, retorna o link do existente
-        const baseUrl = process.env.FRONTEND_URL || 'https://elyon.quadradois.com.br';
+        const baseUrl = process.env.FRONTEND_URL || 'https://elyon.ia.br';
         const linkAceite = `${baseUrl}/aceitar-contrato/${contratoExistente.tokenAceite}`;
 
         return {
@@ -141,7 +141,7 @@ export async function gerarContratoCaptacao(dados: DadosContrato): Promise<Contr
     const hashContrato = gerarHashContrato(dadosParaHash);
 
     // 4. Montar URL de aceite
-    const baseUrl = process.env.FRONTEND_URL || 'https://elyon.quadradois.com.br';
+    const baseUrl = process.env.FRONTEND_URL || 'https://elyon.ia.br';
     const linkAceite = `${baseUrl}/aceitar-contrato/${tokenAceite}`;
 
     // Extrair perfil de venda do tenant para defaults

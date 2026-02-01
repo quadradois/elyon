@@ -136,12 +136,12 @@ elyon/
 ## 🌐 Domínios
 
 ```
-quadradois.com.br           → Landing page
-admin.quadradois.com.br     → Billing
-elyon.quadradois.com.br     → Dashboard
-api.elyon.quadradois.com.br → Backend API
-evo.quadradois.com.br       → Evolution API (WhatsApp)
-n8n.quadradois.com.br       → N8n (futuro)
+elyon.ia.br           → Landing page
+admin.elyon.ia.br     → Billing
+crm.elyon.ia.br       → Dashboard
+api.elyon.ia.br       → Backend API
+evo.elyon.ia.br       → Evolution API (WhatsApp)
+n8n.elyon.ia.br       → N8n (futuro)
 ```
 
 ---
@@ -284,9 +284,9 @@ Proprietário - Quadra Dois © 2025
 
 ## 🎯 Contato
 
-**Email**: contato@quadradois.com.br  
-**Website**: https://quadradois.com.br  
-**ELYON**: https://elyon.quadradois.com.br
+**Email**: contato@elyon.ia.br  
+**Website**: https://elyon.ia.br  
+**ELYON**: https://elyon.ia.br
 
 ---
 

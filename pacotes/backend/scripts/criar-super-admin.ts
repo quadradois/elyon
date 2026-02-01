@@ -48,7 +48,7 @@ async function main() {
       data: {
         tenantId: tenants[0].id,
         nome: 'Super Admin',
-        email: 'admin@quadradois.com.br',
+        email: 'admin@elyon.ia.br',
         senha: senhaHash,
         papel: 'SUPER_ADMIN',
         estaAtivo: true

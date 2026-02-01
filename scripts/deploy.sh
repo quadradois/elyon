@@ -48,75 +48,74 @@ show_help() {
 # Função para build
 do_build() {
     echo -e "${YELLOW}🔨 Construindo imagens Docker...${NC}"
-    docker-compose -f docker-compose.prod.yml build --no-cache
+    docker compose -f docker-compose.yml build --no-cache
     echo -e "${GREEN}✅ Build concluído!${NC}"
 }
 
 # Função para iniciar
 do_up() {
     echo -e "${YELLOW}🚀 Iniciando serviços...${NC}"
-    docker-compose -f docker-compose.prod.yml up -d
+    docker compose -f docker-compose.prod.yml up -d
     echo -e "${GREEN}✅ Serviços iniciados!${NC}"
     echo ""
     echo "URLs disponíveis:"
-    echo "  Frontend: https://elyon.quadradois.com.br"
-    echo "  API:      https://api.elyon.quadradois.com.br"
-    echo "  Admin:    https://admin.quadradois.com.br"
+    echo "  CRM:      https://crm.elyon.ia.br"
+    echo "  Site:     https://elyon.ia.br"
+    echo "  API:      https://api.elyon.ia.br"
     echo ""
 }
 
 # Função para parar
 do_down() {
     echo -e "${YELLOW}⏹️ Parando serviços...${NC}"
-    docker-compose -f docker-compose.prod.yml down
+    docker compose -f docker-compose.prod.yml down
     echo -e "${GREEN}✅ Serviços parados!${NC}"
 }
 
 # Função para reiniciar
 do_restart() {
     echo -e "${YELLOW}🔄 Reiniciando serviços...${NC}"
-    docker-compose -f docker-compose.prod.yml restart
+    docker compose -f docker-compose.prod.yml restart
     echo -e "${GREEN}✅ Serviços reiniciados!${NC}"
 }
 
 # Função para logs
 do_logs() {
     echo -e "${YELLOW}📜 Exibindo logs (Ctrl+C para sair)...${NC}"
-    docker-compose -f docker-compose.prod.yml logs -f
+    docker compose -f docker-compose.yml logs -f
 }
 
 # Função para migrations
 do_migrate() {
     echo -e "${YELLOW}🔄 Executando migrations...${NC}"
-    docker-compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
+    docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
     echo -e "${GREEN}✅ Migrations aplicadas!${NC}"
 }
 
 # Função para status
 do_status() {
     echo -e "${YELLOW}📊 Status dos containers:${NC}"
-    docker-compose -f docker-compose.prod.yml ps
+    docker compose -f docker-compose.yml ps
 }
 
-# Função para limpar
+# Função para limpeza
 do_clean() {
-    echo -e "${YELLOW}🧹 Limpando containers e volumes órfãos...${NC}"
+    echo -e "${YELLOW}🧹 Limpando sistema...${NC}"
     docker system prune -f
-    docker volume prune -f
     echo -e "${GREEN}✅ Limpeza concluída!${NC}"
 }
 
-# Função para atualizar
+# Função para update
 do_update() {
-    echo -e "${YELLOW}📥 Atualizando sistema...${NC}"
-    git pull origin main
+    echo -e "${YELLOW}🔄 Atualizando aplicação...${NC}"
+    git pull
     do_build
     do_down
     do_up
     echo -e "${GREEN}✅ Atualização concluída!${NC}"
 }
 
-# Processar comando
+# Lógica principal
 case "$1" in
     build)
         do_build
@@ -145,11 +144,7 @@ case "$1" in
     update)
         do_update
         ;;
-    help|--help|-h)
-        show_help
-        ;;
     *)
-        echo -e "${RED}❌ Comando inválido: $1${NC}"
         show_help
         exit 1
         ;;

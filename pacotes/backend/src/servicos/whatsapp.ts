@@ -60,7 +60,7 @@ export class WhatsAppService {
       console.log('Instância criada com sucesso:', response.data);
 
       // Auto-configurar webhook após criação
-      const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.quadradois.com.br';
+      const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.ia.br';
       const webhookUrl = `${backendUrl}/api/webhooks/whatsapp`;
 
       try {

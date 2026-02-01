@@ -667,7 +667,7 @@ router.post('/:id/configurar', async (req, res) => {
 
     // Se foi passado webhookBase64, atualiza o webhook
     if (typeof webhookBase64 === 'boolean') {
-      const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.quadradois.com.br';
+      const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.ia.br';
       const webhookUrl = `${backendUrl}/api/webhooks/whatsapp`;
 
       const apiUrl = process.env.EVOLUTION_API_URL || '';

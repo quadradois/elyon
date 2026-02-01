@@ -29,7 +29,7 @@ async function main() {
     where: {
       tenantId_email: {
         tenantId: tenantQuadraDois.id,
-        email: 'admin@quadradois.com.br'
+        email: 'admin@elyon.ia.br'
       }
     },
     update: {

@@ -12,9 +12,9 @@ export function Login() {
 
   // Valores padrão para desenvolvimento
   const [form, setForm] = useState({
-    email: "admin@quadradois.com.br",
+    email: "admin@elyon.ia.br",
     senha: "admin123",
-    tenantSlug: "quadradois",
+    tenantSlug: "elyon",
   });
 
   const handleLogin = async (e: React.FormEvent) => {

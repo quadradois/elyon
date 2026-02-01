@@ -5,17 +5,15 @@ services:
     container_name: evolution_api
     image: evoapicloud/evolution-api:v2.3.6
     restart: always
-    # ports:
-    #   - "8081:8080"
     environment:
       - SERVER_PORT=8080
-      - SERVER_URL=http://evo.quadradois.com.br
+      - SERVER_URL=https://evo.elyon.ia.br
       - DOCKER_ENV=true
 
-      # Database
-      - DATABASE_ENABLED=true
+      # Database - Skip migrations completely (use existing database)
+      - DATABASE_ENABLED=false
       - DATABASE_PROVIDER=postgresql
-      - DATABASE_CONNECTION_URI=postgresql://evolution:evolution_pass@postgres_evolution:5432/evolution
+      - DATABASE_CONNECTION_URI=postgresql://evolution:b5ec391ce6329f29dfffb5d90c40f61c@postgres_evolution:5432/evolution_db?schema=evolution_api
       - DATABASE_CLIENT_NAME=evolution_exchange
 
       # Redis
@@ -62,12 +60,13 @@ services:
     depends_on:
       - postgres_evolution
       - redis_evolution
+    volumes:
+      - evolution_instances:/evolution/instances
     networks:
-      - default
       - elyon_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.evolution-api.rule=Host(`evo.quadradois.com.br`)"
+      - "traefik.http.routers.evolution-api.rule=Host(`evo.elyon.ia.br`)"
       - "traefik.http.routers.evolution-api.entrypoints=web,websecure"
       - "traefik.http.routers.evolution-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.evolution-api.loadbalancer.server.port=8080"
@@ -79,12 +78,13 @@ services:
     restart: always
     environment:
       - POSTGRES_USER=evolution
-      - POSTGRES_PASSWORD=evolution_pass
-      - POSTGRES_DB=evolution
+      - POSTGRES_PASSWORD=b5ec391ce6329f29dfffb5d90c40f61c
+      - POSTGRES_DB=evolution_db
+      - POSTGRES_HOST_AUTH_METHOD=trust
     volumes:
       - evolution_postgres_data:/var/lib/postgresql/data
     networks:
-      - default
+      - elyon_network
 
   redis_evolution:
     container_name: redis_evolution
@@ -94,12 +94,18 @@ services:
     volumes:
       - evolution_redis_data:/data
     networks:
-      - default
+      - elyon_network
 
 volumes:
+  evolution_instances:
+    external: true
+    name: evolution-api_evolution_instances
   evolution_postgres_data:
+    external: true
+    name: evolution-api_postgres_data
   evolution_redis_data:
-
+    external: true
+    name: evolution-api_evolution_redis
 
 networks:
   elyon_network:

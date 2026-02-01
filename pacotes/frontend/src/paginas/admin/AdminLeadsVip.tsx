@@ -155,7 +155,7 @@ export function AdminLeadsVip() {
                 <div className="p-4 border-b border-slate-700">
                     <h2 className="font-semibold text-white">Solicitações de Contato (Prospects B2B)</h2>
                     <p className="text-xs text-slate-400 mt-1">
-                        Corretores, imobiliárias e incorporadoras que preencheram o formulário no site quadradois.com.br
+                        Corretores, imobiliárias e incorporadoras que preencheram o formulário no site elyon.ia.br
                     </p>
                 </div>
 

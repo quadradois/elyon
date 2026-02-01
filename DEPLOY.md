@@ -27,19 +27,12 @@ O ambiente ELYON utiliza uma arquitetura de serviços segmentada para maior segu
 
 ### 1. Gestão de Secrets (CRÍTICO)
 
-Não utilizamos mais variáveis de ambiente para senhas sensíveis no `.env`. Utilize o diretório de secrets:
+Utilizamos variáveis de ambiente no arquivo `.env` para configuração sensível. Certifique-se de que o arquivo `.env` está configurado corretamente (copie de `.env.production.example`).
 
 ```bash
-# Localização dos secrets
-/root/elyon/secrets/
-├── db_password.txt    (chmod 600)
-├── redis_password.txt (chmod 600)
-└── jwt_secret.txt     (chmod 600)
+# Permissões do .env devem ser restritas
+chmod 600 .env
 ```
-
-**Para alterar uma senha:**
-1. Edite o arquivo correspondente em `/root/elyon/secrets/`.
-2. Reinicie os serviços afetados: `./scripts/deploy.sh restart`.
 
 ### 2. Infraestrutura (Traefik)
 
@@ -147,10 +140,10 @@ ls -lh /root/elyon/backups
 
 | Serviço | URL |
 |---------|-----|
-| **Frontend** | https://elyon.quadradois.com.br |
-| **Backend API** | https://api.elyon.quadradois.com.br |
-| **Admin** | https://admin.quadradois.com.br |
-| **CRM** | https://crm.quadradois.com.br |
+| **Frontend** | https://elyon.ia.br |
+| **Backend API** | https://api.elyon.ia.br |
+| **Admin** | https://admin.elyon.ia.br |
+| **CRM** | https://crm.elyon.ia.br |
 
 ---
 
