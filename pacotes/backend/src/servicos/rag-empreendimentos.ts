@@ -1,5 +1,6 @@
 import { prisma } from '../lib/db';
 import { embeddingService } from './embeddings';
+import { getRedisClient } from '../lib/redis';
 
 export class RAGEmpreendimentos {
   /**
@@ -22,10 +23,10 @@ export class RAGEmpreendimentos {
         ${dados.briefing.caracteristicas?.join(', ') || ''}
         ${dados.briefing.diferenciais?.join(', ') || ''}
       `.trim();
-      
+
       console.log(`[RAG] Gerando embedding para: ${dados.nome}`);
       const vetor = await embeddingService.gerar(textoParaEmbedding);
-      
+
       return await prisma.empreendimentoConhecimento.create({
         data: {
           nome: dados.nome,
@@ -46,20 +47,46 @@ export class RAGEmpreendimentos {
       throw error;
     }
   }
-  
+
   /**
    * Busca por nome exato e localização (GLOBAL - ignora tenant)
    */
   async buscarPorNome(nome: string, localizacao: string) {
-    return await prisma.empreendimentoConhecimento.findFirst({
-      where: { 
+    const cacheKey = `rag:empreendimento:${nome.toLowerCase().replace(/\s+/g, '_')}`;
+
+    try {
+      const redis = await getRedisClient();
+      const cached = await redis.get(cacheKey);
+
+      if (cached) {
+        console.log(`[RAG] ⚡ Cache Hit: ${nome}`);
+        return JSON.parse(cached);
+      }
+    } catch (e) {
+      console.warn('[RAG] Erro ao buscar no cache:', e);
+    }
+
+    const resultado = await prisma.empreendimentoConhecimento.findFirst({
+      where: {
         nome: { equals: nome, mode: 'insensitive' },
         localizacao: { contains: localizacao, mode: 'insensitive' },
         // tenantId removido da busca!
       },
     });
+
+    if (resultado) {
+      try {
+        const redis = await getRedisClient();
+        // Cache por 1 hora (3600 segundos)
+        await redis.set(cacheKey, JSON.stringify(resultado), { EX: 3600 });
+      } catch (e) {
+        console.warn('[RAG] Erro ao salvar no cache:', e);
+      }
+    }
+
+    return resultado;
   }
-  
+
   /**
    * Busca semântica (GLOBAL - ignora tenant)
    */
@@ -67,14 +94,14 @@ export class RAGEmpreendimentos {
     try {
       // Gerar embedding da query
       const queryVetor = await embeddingService.gerar(query);
-      
+
       // Buscar todos os empreendimentos (GLOBAL) que têm embedding
       const todos = await prisma.empreendimentoConhecimento.findMany({
-        where: { 
-          embedding: { not: null } 
+        where: {
+          embedding: { not: null }
         },
       });
-      
+
       // Calcular similaridades
       const comSimilaridade = todos.map(emp => {
         try {
@@ -87,13 +114,13 @@ export class RAGEmpreendimentos {
           return { ...emp, similaridade: 0 };
         }
       });
-      
+
       // Ordenar e limitar
       return comSimilaridade
         .filter(item => item.similaridade > 0.5) // Filtro mínimo de relevância (ajustado para 0.5)
         .sort((a, b) => b.similaridade - a.similaridade)
         .slice(0, limit);
-        
+
     } catch (error) {
       console.error('[RAG] Erro na busca semântica:', error);
       return [];

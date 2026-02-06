@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { CircuitBreaker } from '../utils/circuit-breaker';
 
 interface EvolutionInstance {
   instanceName: string;
@@ -15,9 +16,14 @@ interface EvolutionInstance {
  */
 export class WhatsAppService {
   private _instanceName: string;
+  private breaker: CircuitBreaker;
 
   constructor(instanceName: string) {
     this._instanceName = instanceName;
+    this.breaker = new CircuitBreaker(`WhatsApp-${instanceName}`, {
+      failureThreshold: 3,
+      resetTimeout: 30000 // 30 segundos
+    });
   }
 
   // Usar getters para ler variáveis de ambiente em tempo real
@@ -61,7 +67,7 @@ export class WhatsAppService {
 
       // Auto-configurar webhook após criação
       const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.ia.br';
-      const webhookUrl = `${backendUrl}/api/webhooks/whatsapp`;
+      const webhookUrl = `${backendUrl}/webhooks/evolution`;
 
       try {
         await this.configurarWebhook(webhookUrl, true);
@@ -127,16 +133,18 @@ export class WhatsAppService {
       }
 
       // Evolution API v2.x espera apenas o número, sem @s.whatsapp.net
-      const response = await axios.post(
-        `${this.apiUrl}/message/sendText/${this.instanceName}`,
-        {
-          number: numeroFormatado,
-          text: texto,
-          delay: 1200,
-          linkPreview: false
-        },
-        { headers: this.getHeaders() }
-      );
+      const response = await this.breaker.execute(async () => {
+        return await axios.post(
+          `${this.apiUrl}/message/sendText/${this.instanceName}`,
+          {
+            number: numeroFormatado,
+            text: texto,
+            delay: 1200,
+            linkPreview: false
+          },
+          { headers: this.getHeaders() }
+        );
+      });
       return response.data;
     } catch (error) {
       console.error('Erro ao enviar mensagem WhatsApp:', error);
@@ -258,8 +266,10 @@ export function limparCacheWhatsApp(instanceName: string): void {
 }
 
 /**
- * @deprecated Use getWhatsAppService(instanceName) para multi-tenant
- * Mantido para compatibilidade - usa instância padrão do .env
+ * @deprecated ATENÇÃO: Este singleton NÃO é multi-tenant!
+ * Use getWhatsAppService(instanceName) com o nome obtido via:
+ * import { getInstanceName } from './whatsapp-resolver';
+ * const instanceName = await getInstanceName(tenantId);
  */
 export const whatsappService = new WhatsAppService(
   process.env.EVOLUTION_INSTANCE_NAME || 'elyon_main'

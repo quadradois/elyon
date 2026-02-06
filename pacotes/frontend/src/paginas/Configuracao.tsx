@@ -92,8 +92,17 @@ export function Configuracao() {
       iconColor: "text-indigo-600",
       iconBg: "bg-indigo-50",
       path: "/dashboard/integracoes",
-      badge: "Novo",
-      badgeColor: "bg-green-100 text-green-700",
+    },
+    {
+      id: "configuracao-llm",
+      titulo: "Configuração de IA",
+      descricao: "Use sua própria API Key (BYOK) - OpenAI, Anthropic, Groq...",
+      icon: Shield,
+      iconColor: "text-violet-600",
+      iconBg: "bg-violet-50",
+      path: "/dashboard/configuracao-llm",
+      badge: "BYOK",
+      badgeColor: "bg-violet-100 text-violet-700",
     },
   ];
 

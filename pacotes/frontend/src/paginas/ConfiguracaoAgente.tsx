@@ -64,6 +64,7 @@ interface ConfiguracaoAgenteData {
   tenantId: string;
   nome: string;
   avatar: string | null;
+  genero?: string; // 🆕
   tipoAgente: string;
   modoCreacao: string;
   status: StatusAgente;
@@ -126,6 +127,7 @@ export function ConfiguracaoAgente() {
   const [formData, setFormData] = useState({
     nome: "Sofia",
     avatar: null as string | null,
+    genero: "feminino" as "feminino" | "masculino", // 🆕
     tomDeVoz: "amigavel" as "formal" | "amigavel" | "entusiasta",
     usarEmojis: true,
     bairros: "",
@@ -136,6 +138,7 @@ export function ConfiguracaoAgente() {
       "Foi um prazer ajudar! Se precisar de algo mais, estou por aqui. Até logo! 👋",
     estaAtivo: true,
     sessaoWhatsappId: "none" as string,
+    tipoAgente: 'SDR_CAPTACAO' as string,
   });
   useEffect(() => {
     carregarSessoes();
@@ -211,6 +214,7 @@ export function ConfiguracaoAgente() {
     setFormData({
       nome: agente.nome,
       avatar: agente.avatar,
+      genero: (agente.genero as "feminino" | "masculino") || "feminino", // 🆕
       tomDeVoz: agente.personalidade?.tom || "amigavel",
       usarEmojis: agente.personalidade?.usarEmojis ?? true,
       bairros: agente.expertise?.bairros?.join(", ") || "",
@@ -219,6 +223,7 @@ export function ConfiguracaoAgente() {
       despedida: agente.scripts?.despedida || "",
       estaAtivo: agente.estaAtivo,
       sessaoWhatsappId: agente.sessaoWhatsappId || "none",
+      tipoAgente: agente.tipoAgente || 'SDR_CAPTACAO',
     });
 
     setTermosAceitos(agente.termosAceitos);
@@ -232,6 +237,7 @@ export function ConfiguracaoAgente() {
       const payload = {
         nome: formData.nome,
         avatar: formData.avatar,
+        genero: formData.genero, // 🆕
         personalidade: {
           tom: formData.tomDeVoz,
           usarEmojis: formData.usarEmojis,
@@ -261,6 +267,7 @@ export function ConfiguracaoAgente() {
           formData.sessaoWhatsappId === "none"
             ? null
             : formData.sessaoWhatsappId,
+        tipoAgente: formData.tipoAgente,
       };
 
       let response;
@@ -573,11 +580,10 @@ export function ConfiguracaoAgente() {
       {/* Banner de Status */}
       {agenteExiste && (
         <div
-          className={`p-4 rounded-lg flex items-center justify-between ${
-            formData.estaAtivo
-              ? "bg-green-50 border border-green-200"
-              : "bg-yellow-50 border border-yellow-200"
-          }`}
+          className={`p-4 rounded-lg flex items-center justify-between ${formData.estaAtivo
+            ? "bg-green-50 border border-green-200"
+            : "bg-yellow-50 border border-yellow-200"
+            }`}
         >
           <div className="flex items-center gap-3">
             {formData.estaAtivo ? (
@@ -638,6 +644,53 @@ export function ConfiguracaoAgente() {
                   {formData.nome.charAt(0).toUpperCase()}
                 </span>
               </div>
+
+              {/* 🆕 Seletor de Gênero */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, genero: "feminino" })}
+                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${formData.genero === "feminino"
+                    ? "bg-pink-100 text-pink-700 border border-pink-200"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    }`}
+                >
+                  👩 Feminino
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, genero: "masculino" })}
+                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${formData.genero === "masculino"
+                    ? "bg-blue-100 text-blue-700 border border-blue-200"
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    }`}
+                >
+                  👨 Masculino
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                Tipo de Agente
+              </label>
+              <Select
+                value={formData.tipoAgente}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, tipoAgente: val })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SDR_CAPTACAO">SDR de Captação (Inbound/Outbound)</SelectItem>
+                  <SelectItem value="SDR_VENDAS">SDR de Vendas (Qualificação)</SelectItem>
+                  <SelectItem value="SDR_LOCACAO">SDR de Locação</SelectItem>
+                  <SelectItem value="DOCUMENTOS">Assistente de Documentação</SelectItem>
+                  <SelectItem value="PERSONALIZADO">Personalizado</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -743,11 +796,10 @@ export function ConfiguracaoAgente() {
                   key={tom}
                   type="button"
                   onClick={() => setFormData({ ...formData, tomDeVoz: tom })}
-                  className={`p-4 rounded-lg border text-center transition-all ${
-                    formData.tomDeVoz === tom
-                      ? "border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600"
-                      : "border-slate-200 hover:border-slate-300 text-slate-600"
-                  }`}
+                  className={`p-4 rounded-lg border text-center transition-all ${formData.tomDeVoz === tom
+                    ? "border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600"
+                    : "border-slate-200 hover:border-slate-300 text-slate-600"
+                    }`}
                 >
                   <span className="text-2xl block mb-1">
                     {tom === "formal" ? "👔" : tom === "amigavel" ? "😊" : "🚀"}
@@ -894,22 +946,20 @@ export function ConfiguracaoAgente() {
                     {documentosSalvos.map((doc) => (
                       <div
                         key={doc.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border ${
-                          doc.status === "ERRO"
-                            ? "bg-red-50 border-red-200"
-                            : doc.status === "SUCESSO"
-                              ? "bg-green-50 border-green-200"
-                              : "bg-white border-slate-200"
-                        }`}
+                        className={`flex items-center gap-3 p-3 rounded-lg border ${doc.status === "ERRO"
+                          ? "bg-red-50 border-red-200"
+                          : doc.status === "SUCESSO"
+                            ? "bg-green-50 border-green-200"
+                            : "bg-white border-slate-200"
+                          }`}
                       >
                         <FileText
-                          className={`w-4 h-4 ${
-                            doc.status === "ERRO"
-                              ? "text-red-500"
-                              : doc.status === "SUCESSO"
-                                ? "text-green-500"
-                                : "text-slate-400"
-                          }`}
+                          className={`w-4 h-4 ${doc.status === "ERRO"
+                            ? "text-red-500"
+                            : doc.status === "SUCESSO"
+                              ? "text-green-500"
+                              : "text-slate-400"
+                            }`}
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">

@@ -31,6 +31,7 @@ import {
   Building2,
   MapPin,
   FileEdit,
+  Bot,
 } from "lucide-react";
 import { api } from "../servicos/api";
 
@@ -46,6 +47,13 @@ interface Campanha {
   criadoEm: string;
 }
 
+// Interface para agentes disponíveis
+interface AgenteOpcao {
+  id: string;
+  nome: string;
+  tipoAgente: string;
+}
+
 export function Campanhas() {
   const navigate = useNavigate();
   const [campanhas, setCampanhas] = useState<Campanha[]>([]);
@@ -55,6 +63,10 @@ export function Campanhas() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [termoBusca, setTermoBusca] = useState("");
   const [buscandoCep, setBuscandoCep] = useState(false);
+
+  // Agentes disponíveis para vincular
+  const [agentes, setAgentes] = useState<AgenteOpcao[]>([]);
+  const [carregandoAgentes, setCarregandoAgentes] = useState(false);
 
   // Form state com campos separados de endereço
   const [formData, setFormData] = useState({
@@ -69,10 +81,12 @@ export function Campanhas() {
     estado: "GO",
     tipoImovel: "Apartamento",
     perfilImovel: "Economico",
+    agenteId: "", // ID do agente vinculado
   });
 
   useEffect(() => {
     carregarCampanhas();
+    carregarAgentes();
   }, []);
 
   const carregarCampanhas = async () => {
@@ -88,15 +102,28 @@ export function Campanhas() {
     }
   };
 
+  // Carrega agentes disponíveis para seleção
+  const carregarAgentes = async () => {
+    try {
+      setCarregandoAgentes(true);
+      const response = await api.get("/agentes");
+      setAgentes(response.data.agentes || []);
+    } catch (error) {
+      console.error("Erro ao carregar agentes:", error);
+    } finally {
+      setCarregandoAgentes(false);
+    }
+  };
+
   // Consulta CEP via ViaCEP
   const consultarCep = async (cep: string) => {
     const cepLimpo = cep.replace(/\D/g, '');
     if (cepLimpo.length !== 8) return;
-    
+
     try {
       setBuscandoCep(true);
       const response = await api.get(`/campanhas/cep/${cepLimpo}`);
-      
+
       if (response.data.sucesso && response.data.dados) {
         const dados = response.data.dados;
         setFormData(prev => ({
@@ -130,7 +157,7 @@ export function Campanhas() {
       const response = await api.post("/campanhas", formData);
 
       console.log("Campanha criada:", response.data);
-      
+
       // Redirecionar para a página de detalhes para preencher o briefing
       setDialogOpen(false);
       setFormData({
@@ -145,8 +172,9 @@ export function Campanhas() {
         estado: "GO",
         tipoImovel: "Apartamento",
         perfilImovel: "Economico",
+        agenteId: "",
       });
-      
+
       // Navegar para a campanha criada para preencher o briefing
       navigate(`/dashboard/campanhas/${response.data.campanha.id}?aba=empreendimento`);
     } catch (error: any) {
@@ -384,6 +412,7 @@ export function Campanhas() {
                     <option>Apartamento</option>
                     <option>Casa</option>
                     <option>Lote</option>
+                    <option>Chácara</option>
                     <option>Comercial</option>
                   </select>
                 </div>
@@ -404,6 +433,33 @@ export function Campanhas() {
                     <option value="Luxo">Luxo</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Seleção de Agente Vinculado */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <Bot className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-700">Agente de IA (opcional)</span>
+                </div>
+                <select
+                  id="agenteId"
+                  className="w-full border border-blue-200 rounded-md p-2 text-sm bg-white"
+                  value={formData.agenteId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, agenteId: e.target.value })
+                  }
+                  disabled={carregandoAgentes}
+                >
+                  <option value="">Selecionar depois...</option>
+                  {agentes.map((agente) => (
+                    <option key={agente.id} value={agente.id}>
+                      {agente.nome} ({agente.tipoAgente.replace('_', ' ')})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-blue-600 mt-2">
+                  🤖 Vincule um agente especialista para atender os leads desta campanha.
+                </p>
               </div>
 
               <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">

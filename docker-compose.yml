@@ -1,8 +1,14 @@
 # ============================================
-# ELYON - Docker Compose Production
+# ELYON - Docker Compose Production (Hardened)
 # ============================================
 # Uso: docker-compose up -d
 # ============================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   # ==========================================
@@ -16,15 +22,23 @@ services:
       POSTGRES_DB: ${DB_NAME:-elyon}
       POSTGRES_USER: ${DB_USER:-elyon_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD}
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-elyon_user} -d ${DB_NAME:-elyon}" ]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - elyon_network
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    logging: *default-logging
 
   # ==========================================
   # CACHE
@@ -33,7 +47,7 @@ services:
     image: redis:7-alpine
     container_name: elyon_redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD:?Defina REDIS_PASSWORD}
+    command: redis-server --maxmemory 200mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:?Defina REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -42,7 +56,13 @@ services:
       timeout: 3s
       retries: 5
     networks:
-      - elyon_network
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    logging: *default-logging
 
   # ==========================================
   # BACKEND API
@@ -59,10 +79,13 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-elyon_user}:${DB_PASSWORD}@elyon_postgres:5432/${DB_NAME:-elyon}
       REDIS_URL: redis://:${REDIS_PASSWORD}@elyon_redis:6379
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET}
+      NODE_OPTIONS: "--max-old-space-size=768"
       OPENAI_API_KEY: ${OPENAI_API_KEY:?Defina OPENAI_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
       EVOLUTION_API_URL: ${EVOLUTION_API_URL}
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-elyon_7de90821_teste}
       ASAAS_API_URL: ${ASAAS_API_URL:-https://api.asaas.com/v3}
       ASAAS_API_KEY: ${ASAAS_API_KEY}
       ASSERTIVA_CLIENT_ID: ${ASSERTIVA_CLIENT_ID}
@@ -70,10 +93,28 @@ services:
       ASSERTIVA_API_URL: ${ASSERTIVA_API_URL:-https://api.assertivasolucoes.com.br}
       FRONTEND_URL: ${FRONTEND_URL:-https://crm.elyon.ia.br}
       BACKEND_URL: ${BACKEND_URL:-https://api.elyon.ia.br}
+      USAR_ORQUESTRADOR_4_AGENTES: 'true'
 
     networks:
       - elyon_network
       - crm_quadradois_net
+      - backend_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    logging: *default-logging
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://127.0.0.1:3000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.elyonbackend.rule=Host(`api.elyon.ia.br`)"
@@ -81,6 +122,12 @@ services:
       - "traefik.http.routers.elyonbackend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.elyonbackend.service=elyonbackend"
       - "traefik.http.services.elyonbackend.loadbalancer.server.port=3000"
+      # Sticky sessions para WebSocket
+      - "traefik.http.services.elyonbackend.loadbalancer.sticky.cookie=true"
+      - "traefik.http.services.elyonbackend.loadbalancer.sticky.cookie.name=elyon_sticky"
+      # Middleware para Headers WebSocket
+      - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.elyonbackend.middlewares=sslheader"
       - "traefik.docker.network=elyon_network"
 
   # ==========================================
@@ -96,6 +143,14 @@ services:
     restart: unless-stopped
     networks:
       - elyon_network
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    logging: *default-logging
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.elyonfront.rule=Host(`crm.elyon.ia.br`)"
@@ -126,6 +181,12 @@ services:
       - "traefik.http.routers.site.entrypoints=websecure"
       - "traefik.http.routers.site.tls.certresolver=letsencrypt"
       - "traefik.http.services.site.loadbalancer.server.port=80"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    logging: *default-logging
 
   # ==========================================
   # ADMIN BILLING DASHBOARD
@@ -147,18 +208,40 @@ services:
   #     - "traefik.http.services.admin.loadbalancer.server.port=80"
 
   # ==========================================
+  # SOCKET PROXY (Security)
+  # ==========================================
+  socket_proxy:
+    image: tecnativa/docker-socket-proxy
+    container_name: elyon_socket_proxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CONTAINERS: 1
+    networks:
+      - elyon_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 32M
+    logging: *default-logging
+
+  # ==========================================
   # REVERSE PROXY (Traefik)
   # ==========================================
   traefik:
     image: traefik:latest
     container_name: elyon_traefik
     restart: unless-stopped
-    environment:
-      - DOCKER_API_VERSION=1.44
+    # environment:
+    #   - DOCKER_HOST=tcp://elyon_socket_proxy:2375
     command:
       - "--api.dashboard=true"
+      - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
+      # - "--providers.docker.endpoint=tcp://elyon_socket_proxy:2375"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       # - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
@@ -167,14 +250,27 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-contato@quadradois.com.br}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--accesslog.bufferingsize=100"
     ports:
       - "80:80"
       - "443:443"
+      - "8888:8080"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
+      - ./logs/traefik:/var/log/traefik
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - socket_proxy
     networks:
       - elyon_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    logging: *default-logging
     labels:
       - "traefik.enable=true"
       # Traefik dashboard interno em traefik.elyon.ia.br (opcional)
@@ -201,6 +297,12 @@ services:
       TRANSCRIPTION_LANGUAGE: "pt"
     networks:
       - elyon_network
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    logging: *default-logging
 
   # ==========================================
   # BACKUP AUTOMATIZADO
@@ -222,7 +324,13 @@ services:
     volumes:
       - ./backups:/backups
     networks:
-      - elyon_network
+      - backend_net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging: *default-logging
     depends_on:
       postgres:
         condition: service_healthy
@@ -235,13 +343,16 @@ volumes:
   redis_data:
   traefik_letsencrypt:
 
-# ==========================================
-# NETWORKS
-# ==========================================
+    # ==========================================
+    # NETWORKS
+    # ==========================================
 networks:
   elyon_network:
     external: true
     name: elyon_network
+
+  backend_net:
+    internal: true
 
   crm_quadradois_net:
     external: true

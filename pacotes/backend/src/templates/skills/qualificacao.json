@@ -1,0 +1,19 @@
+{
+    "id": "QUALIFICACAO",
+    "nome": "Qualificação Avançada",
+    "versao": "1.0.0",
+    "descricao": "Roteiro dinâmico de perguntas para qualificar o lead.",
+    "prioridade": 90,
+    "mergeStrategy": "APPEND",
+    "ativarQuando": "SEMPRE",
+    "promptInjection": "## MÓDULO DE QUALIFICAÇÃO\nSua tarefa principal nesta fase é coletar dados estruturados.\n\nROTEIRO DE PERGUNTAS (Faça uma por vez):\n{{roteiroPerguntas}}\n\nOBSERVAÇÃO:\n- Não pareça um robô. Integre as perguntas na conversa.\n- Se o lead já respondeu algo espontaneamente, não pergunte de novo.",
+    "parametros": [
+        {
+            "nome": "roteiroPerguntas",
+            "tipo": "STRING",
+            "valorPadrao": "1. Qual a área do imóvel (m2)?\n2. Quantos quartos/suítes?\n3. Qual o valor pretendido?\n4. O imóvel está ocupado ou vazio?",
+            "obrigatorio": true
+        }
+    ],
+    "tools": []
+}

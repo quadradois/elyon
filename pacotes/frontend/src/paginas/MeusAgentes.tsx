@@ -162,8 +162,16 @@ export function MeusAgentes() {
                       <CardTitle className="text-base font-semibold text-slate-900">
                         {agente.nome}
                       </CardTitle>
-                      <CardDescription className="text-xs mt-1">
-                        {agente.tipoAgente.replace("_", " ")}
+                      <CardDescription className="text-xs mt-1 font-medium bg-slate-100 px-2 py-0.5 rounded-full inline-block">
+                        {
+                          {
+                            'SDR_CAPTACAO': 'SDR de Captação',
+                            'SDR_VENDAS': 'SDR de Vendas',
+                            'SDR_LOCACAO': 'SDR de Locação',
+                            'DOCUMENTOS': 'Assistente de Documentação',
+                            'PERSONALIZADO': 'Personalizado'
+                          }[agente.tipoAgente] || agente.tipoAgente.replace("_", " ")
+                        }
                       </CardDescription>
                     </div>
                   </div>
@@ -236,7 +244,8 @@ export function MeusAgentes() {
             </Card>
           ))}
         </div>
-      )}
-    </div>
+      )
+      }
+    </div >
   );
 }

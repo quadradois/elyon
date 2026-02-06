@@ -73,15 +73,23 @@ class WebSocketService {
 
     // Criar nova conexão
     // Criar nova conexão
-    // Usar URL relativa para aproveitar o proxy do Nginx
-    const wsUrl = '/';
+    // Conectar diretamente ao Backend (API URL)
+    // Se VITE_API_URL não estiver definida, usar a mesma origem (dev)
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://api.elyon.ia.br';
 
-    this.socket = io(wsUrl, {
+    // Remover protocolo http/https para deixar o io() decidir ou usar URL completa
+    console.log('[WS] Conectando a:', apiUrl);
+
+    this.socket = io(apiUrl, {
       path: '/ws',
-      transports: ['websocket', 'polling'],
+      transports: ['websocket', 'polling'], // Tenta websocket primeiro
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+      // Headers extras se necessário
+      extraHeaders: {
+        'x-tenant-id': tenantId
+      }
     });
 
     // Eventos de conexão

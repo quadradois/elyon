@@ -1,6 +1,26 @@
 import OpenAI from 'openai';
 import { prisma } from '../../lib/db';
-import { ConfiguracaoAgente, configPadrao } from './sdr-worker';
+// DEPRECATED: import { ConfiguracaoAgente, configPadrao } from './sdr-worker';
+// Tipos definidos localmente para independência
+
+export interface PersonalidadeAgente {
+  tom: 'formal' | 'amigavel' | 'entusiasta';
+  usarEmojis: boolean;
+}
+
+export interface ConfiguracaoAgente {
+  nome: string;
+  tenantNome?: string;
+  personalidade: PersonalidadeAgente;
+}
+
+export const configPadrao: ConfiguracaoAgente = {
+  nome: 'Assistente',
+  personalidade: {
+    tom: 'amigavel',
+    usarEmojis: true
+  }
+};
 
 /**
  * DOCUMENTOS WORKER
@@ -12,6 +32,10 @@ import { ConfiguracaoAgente, configPadrao } from './sdr-worker';
  * - Validar documentos recebidos
  * - Orientar sobre documentação pendente
  * - Notificar corretor quando documentação completa
+ * 
+ * REFATORADO em 2026-02-06:
+ * - Removida dependência do sdr-worker (deprecado)
+ * - Tipos definidos localmente
  */
 
 // Ferramentas do worker de documentos
@@ -132,11 +156,11 @@ const documentosPorOperacao = {
 
 export class DocumentosWorker {
   private openai: OpenAI | null = null;
-  
+
   constructor() {
     // Lazy initialization
   }
-  
+
   private getClient(): OpenAI {
     if (!this.openai) {
       this.openai = new OpenAI({
@@ -145,13 +169,13 @@ export class DocumentosWorker {
     }
     return this.openai;
   }
-  
+
   /**
    * Gera o system prompt para o worker de documentos
    */
   private gerarSystemPrompt(config: ConfiguracaoAgente, contexto?: { tipoOperacao?: string; documentosPendentes?: string[] }): string {
     const { nome, personalidade, tenantNome } = config;
-    
+
     let instrucoesTom = '';
     switch (personalidade.tom) {
       case 'formal':
@@ -163,8 +187,8 @@ export class DocumentosWorker {
       default:
         instrucoesTom = 'Seja amigável e acolhedor. Demonstre paciência.';
     }
-    
-    const instrucaoEmoji = personalidade.usarEmojis 
+
+    const instrucaoEmoji = personalidade.usarEmojis
       ? 'Use emojis com moderação (📄, ✅, ⏳).'
       : 'Não use emojis.';
 
@@ -247,7 +271,7 @@ Lembre-se: você está facilitando um processo burocrático. Seja paciente! 📄
    */
   private async executarFerramenta(nome: string, args: any, leadId: string): Promise<any> {
     console.log(`[Documentos Worker] Executando ferramenta: ${nome}`, args);
-    
+
     switch (nome) {
       case 'solicitar_documento':
         return {
@@ -257,7 +281,7 @@ Lembre-se: você está facilitando um processo burocrático. Seja paciente! 📄
           obrigatorio: args.obrigatorio,
           prazo: args.prazo
         };
-        
+
       case 'registrar_documento':
         // Aqui poderia salvar no banco
         return {
@@ -266,7 +290,7 @@ Lembre-se: você está facilitando um processo burocrático. Seja paciente! 📄
           tipoDocumento: args.tipoDocumento,
           status: args.status
         };
-        
+
       case 'verificar_pendencias':
         // Aqui buscaria do banco os documentos pendentes
         // Por enquanto retorna mock
@@ -276,7 +300,7 @@ Lembre-se: você está facilitando um processo burocrático. Seja paciente! 📄
           completos: ['RG', 'CPF', 'COMPROVANTE_RESIDENCIA'],
           percentualCompleto: 60
         };
-        
+
       case 'notificar_corretor':
         console.log(`[Documentos Worker] 📢 Notificação para corretor: ${args.motivo}`);
         return {
@@ -284,7 +308,7 @@ Lembre-se: você está facilitando um processo burocrático. Seja paciente! 📄
           mensagem: 'Corretor notificado com sucesso',
           motivo: args.motivo
         };
-        
+
       default:
         return { erro: 'Ferramenta não reconhecida' };
     }
@@ -294,28 +318,28 @@ Lembre-se: você está facilitando um processo burocrático. Seja paciente! 📄
    * Processa mensagem do cliente sobre documentos
    */
   async processar(
-    mensagens: Array<{role: string, content: string}>,
+    mensagens: Array<{ role: string, content: string }>,
     leadId: string,
     config: ConfiguracaoAgente = configPadrao,
     contexto?: { tipoOperacao?: string; documentosPendentes?: string[] }
   ): Promise<string> {
     try {
       console.log(`[Documentos Worker] Processando para lead ${leadId}`);
-      
+
       const systemPrompt = this.gerarSystemPrompt(config, contexto);
-      
+
       const mensagensCompletas: OpenAI.Chat.ChatCompletionMessageParam[] = [
         { role: 'system', content: systemPrompt },
         ...mensagens as any[]
       ];
-      
+
       const tools: OpenAI.Chat.ChatCompletionTool[] = [
         { type: 'function', function: { name: solicitarDocumentoTool.name, description: solicitarDocumentoTool.description, parameters: solicitarDocumentoTool.parameters as any } },
         { type: 'function', function: { name: registrarDocumentoTool.name, description: registrarDocumentoTool.description, parameters: registrarDocumentoTool.parameters as any } },
         { type: 'function', function: { name: verificarPendenciasTool.name, description: verificarPendenciasTool.description, parameters: verificarPendenciasTool.parameters as any } },
         { type: 'function', function: { name: notificarCorretorTool.name, description: notificarCorretorTool.description, parameters: notificarCorretorTool.parameters as any } },
       ];
-      
+
       let resposta = await this.getClient().chat.completions.create({
         model: 'gpt-4o-mini',
         messages: mensagensCompletas,
@@ -324,30 +348,30 @@ Lembre-se: você está facilitando um processo burocrático. Seja paciente! 📄
         temperature: 0.7,
         max_tokens: 400
       });
-      
+
       // Loop para executar function calls
       const maxIteracoes = 5;
       let iteracoes = 0;
-      
+
       while (resposta.choices[0].message.tool_calls && iteracoes < maxIteracoes) {
         const toolCalls = resposta.choices[0].message.tool_calls;
-        
+
         mensagensCompletas.push(resposta.choices[0].message as any);
-        
+
         for (const toolCall of toolCalls) {
           const call = toolCall as any;
           const functionName = call.function.name;
           const functionArgs = JSON.parse(call.function.arguments);
-          
+
           const resultado = await this.executarFerramenta(functionName, functionArgs, leadId);
-          
+
           mensagensCompletas.push({
             role: 'tool',
             tool_call_id: call.id,
             content: JSON.stringify(resultado)
           } as any);
         }
-        
+
         resposta = await this.getClient().chat.completions.create({
           model: 'gpt-4o-mini',
           messages: mensagensCompletas,
@@ -356,17 +380,17 @@ Lembre-se: você está facilitando um processo burocrático. Seja paciente! 📄
           temperature: 0.7,
           max_tokens: 400
         });
-        
+
         iteracoes++;
       }
-      
-      const textoResposta = resposta.choices[0].message.content || 
+
+      const textoResposta = resposta.choices[0].message.content ||
         'Desculpe, tive um problema ao processar sua mensagem. Pode repetir?';
-      
+
       console.log(`[Documentos Worker] Resposta: "${textoResposta.substring(0, 80)}..."`);
-      
+
       return textoResposta;
-      
+
     } catch (error) {
       console.error('[Documentos Worker] Erro:', error);
       return 'Desculpe, estou com dificuldades técnicas. Um corretor entrará em contato em breve.';

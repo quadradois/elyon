@@ -28,6 +28,10 @@ import AceitarContrato from "./paginas/AceitarContrato";
 import { CarteiraClientes } from "./paginas/CarteiraClientes";
 import { Agenda } from "./paginas/Agenda";
 import { Integracoes } from "./paginas/Integracoes";
+import { ConfiguracaoLLM } from "./paginas/ConfiguracaoLLM";
+import NovoAgente from "./paginas/Agentes/NovoAgente";
+import { Playbooks } from "./paginas/Playbooks";
+import PlaybookEditor from "./paginas/PlaybookEditor";
 
 // Páginas Admin
 import { AdminClientes, AdminTransacoes, AdminLeadsVip, AdminPacotes, AdminPlanos } from "./paginas/admin";
@@ -94,6 +98,17 @@ function App() {
         <Route
           path="/dashboard"
           element={<Navigate to="/dashboard/prospeccao" replace />}
+        />
+
+        <Route
+          path="/dashboard/agente/novo"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <NovoAgente />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
         />
 
         <Route
@@ -366,6 +381,41 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <Integracoes />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        {/* PLAYBOOKS */}
+        <Route
+          path="/dashboard/playbooks"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <Playbooks />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/playbooks/:id"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <PlaybookEditor />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        {/* CONFIGURAÇÃO LLM (BYOK) */}
+        <Route
+          path="/dashboard/configuracao-llm"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <ConfiguracaoLLM />
               </LayoutDashboard>
             </RotaPrivada>
           }

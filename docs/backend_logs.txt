@@ -1,0 +1,25 @@
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "elyon", schema "public" at "elyon_postgres:5432"
+
+25 migrations found in prisma/migrations
+
+
+No pending migrations to apply.
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.9.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.9.0
+npm notice To update run: npm install -g npm@11.9.0
+npm notice
+[WS] 🚀 WebSocket Service inicializado
+🚀 Servidor rodando em http://0.0.0.0:3000
+🔌 WebSocket ativo para alertas em tempo real
+🏥 Health check: http://localhost:3000/api/saude
+[SessoesWhatsapp] 🔄 Status atualizado: elyon_7de90821_teste CONECTADO -> DESCONECTADO
+[WS] 🔌 Nova conexão: H2-ktai0sgIM8Lj0AAAB
+[WS] ✅ Cliente autenticado: H2-ktai0sgIM8Lj0AAAB (Tenant: 7de90821-c5b9-4d68-ba9a-bcf57e0035e7)
+[WS] 🔌 Nova conexão: tsVphNnw8u98HQG3AAAD
+[WS] ✅ Cliente autenticado: tsVphNnw8u98HQG3AAAD (Tenant: 7de90821-c5b9-4d68-ba9a-bcf57e0035e7)
+[WS] 🔌 Desconectado: H2-ktai0sgIM8Lj0AAAB
+[WS] 🔌 Nova conexão: FmloNxdpsyI9GGtPAAAF
+[WS] ✅ Cliente autenticado: FmloNxdpsyI9GGtPAAAF (Tenant: 7de90821-c5b9-4d68-ba9a-bcf57e0035e7)
+[WS] 🔌 Desconectado: tsVphNnw8u98HQG3AAAD

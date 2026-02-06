@@ -1,0 +1,30 @@
+{
+    "id": "RAG_SEARCH",
+    "nome": "Busca Inteligente (RAG)",
+    "versao": "1.0.0",
+    "descricao": "Capacidade de buscar informações sobre imóveis ou políticas da empresa na base de conhecimento.",
+    "prioridade": 50,
+    "mergeStrategy": "APPEND",
+    "ativarQuando": "SEMPRE",
+    "promptInjection": "## MÓDULO DE BUSCA (RAG)\nVocê tem acesso à base de conhecimento da empresa.\n\nPROTOCOLO DE RESPOSTA:\n1. Se o cliente perguntar algo específico (preço, metragem, regras), use o contexto fornecido ou busque na base.\n2. Se não souber, diga: \"Vou verificar essa informação específica e te retorno\".\n3. NUNCA invente dados técnicos do imóvel.",
+    "parametros": [],
+    "tools": [
+        {
+            "type": "function",
+            "name": "buscar_conhecimento",
+            "description": "Busca informações na base de conhecimento (RAG)",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Pergunta ou termo de busca"
+                    }
+                },
+                "required": [
+                    "query"
+                ]
+            }
+        }
+    ]
+}

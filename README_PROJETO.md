@@ -388,6 +388,51 @@ Se perguntarem imobiliária → DIGA: "Eliézer Barbosas - Imóveis"
 
 ---
 
+### 3.1. Arquitetura LLM Unificada (BYOK)
+
+**Status:** ✅ 100% Funcional (implementado em 06/02/2026)
+
+**Descrição:** Sistema que permite tenants usarem suas próprias chaves de API (BYOK - Bring Your Own Key).
+
+**Decisão Arquitetural (06/02/2026):**
+> ⚠️ **OpenAI Agents SDK + LiteLLM** como arquitetura unificada para suportar múltiplos providers.
+
+**Providers Suportados:**
+| Provider | Icone | Modelos |
+|----------|-------|---------|
+| OpenAI | 🤖 | gpt-4o, gpt-4o-mini, gpt-4-turbo |
+| Anthropic | 🧠 | claude-3-5-sonnet, claude-3-5-haiku |
+| Groq | ⚡ | llama-3.3-70b, mixtral-8x7b |
+| Mistral | 🌀 | mistral-large, mistral-medium |
+| Azure OpenAI | ☁️ | gpt-4, gpt-35-turbo |
+| Google Vertex | 🔵 | gemini-pro, gemini-1.5-pro |
+| Together AI | 🤝 | Llama-3-70b, Mixtral-8x7B |
+| DeepSeek | 🔍 | deepseek-chat, deepseek-coder |
+
+**Features:**
+- ✅ API Keys criptografadas com AES-256
+- ✅ Fallback para chave do sistema
+- ✅ Métricas de uso por provider
+- ✅ Teste de conexão via UI
+- ✅ Priorização de providers
+
+**API Endpoints:**
+```
+GET  /api/configuracao/llm           - Lista configs do tenant
+POST /api/configuracao/llm           - Criar BYOK config
+PUT  /api/configuracao/llm/:provider - Atualizar
+DEL  /api/configuracao/llm/:provider - Remover
+POST /api/configuracao/llm/:provider/testar - Testar conexão
+GET  /api/configuracao/llm/metricas  - Métricas de uso
+```
+
+**Arquivos principais:**
+- `pacotes/backend/src/rotas/config-llm.ts`
+- `pacotes/backend/src/servicos/llm-provider-factory.ts`
+- `pacotes/frontend/src/paginas/ConfiguracaoLLM.tsx`
+
+---
+
 ### 4. Integração WhatsApp (Evolution API)
 
 **Status:** ✅ 100% Funcional

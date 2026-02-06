@@ -1,0 +1,97 @@
+{
+    "id": "AGENDAMENTO",
+    "nome": "Agendamento de Visitas",
+    "versao": "1.0.0",
+    "descricao": "Capacidade de negociar horários e agendar visitas/avaliações.",
+    "prioridade": 80,
+    "mergeStrategy": "APPEND",
+    "ativarQuando": "SEMPRE",
+    "promptInjection": "## MÓDULO DE AGENDAMENTO\nVocê tem acesso à agenda para marcar visitas o avaliações.\n\nREGRAS DE HORÁRIO:\n- Dias disponíveis: {{diasDisponiveis}}\n- Horário comercial: {{horarioInicio}} às {{horarioFim}}\n\nPROTOCOLO:\n1. Sempre confirme se o cliente pode no horário sugerido.\n2. Se o cliente sugerir um horário fora do expediente, negocie educadamente.\n3. Use a ferramenta 'criar_evento' apenas após confirmação explícita.",
+    "parametros": [
+        {
+            "nome": "diasDisponiveis",
+            "tipo": "MULTI_SELECT",
+            "opcoes": [
+                "Segunda",
+                "Terça",
+                "Quarta",
+                "Quinta",
+                "Sexta",
+                "Sábado"
+            ],
+            "valorPadrao": [
+                "Segunda",
+                "Terça",
+                "Quarta",
+                "Quinta",
+                "Sexta"
+            ],
+            "obrigatorio": true
+        },
+        {
+            "nome": "horarioInicio",
+            "tipo": "STRING",
+            "valorPadrao": "09:00",
+            "obrigatorio": true
+        },
+        {
+            "nome": "horarioFim",
+            "tipo": "STRING",
+            "valorPadrao": "18:00",
+            "obrigatorio": true
+        }
+    ],
+    "tools": [
+        {
+            "type": "function",
+            "name": "criar_evento",
+            "description": "Cria um agendamento confirmado na agenda",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "string",
+                        "description": "DD/MM/YYYY"
+                    },
+                    "hora": {
+                        "type": "string",
+                        "description": "HH:mm"
+                    },
+                    "tipo": {
+                        "type": "string",
+                        "enum": [
+                            "VISITA",
+                            "AVALIACAO",
+                            "REUNIAO"
+                        ]
+                    }
+                },
+                "required": [
+                    "data",
+                    "hora",
+                    "tipo"
+                ]
+            }
+        },
+        {
+            "type": "function",
+            "name": "verificar_disponibilidade",
+            "description": "Verifica se um horário está livre",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "string"
+                    },
+                    "hora": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "data",
+                    "hora"
+                ]
+            }
+        }
+    ]
+}

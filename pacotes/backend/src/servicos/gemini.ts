@@ -39,11 +39,11 @@ interface GeminiConfig {
 export class GeminiClient {
   private apiKey: string;
   private baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-  private defaultModel = 'gemini-1.5-flash'; // Modelo rápido e gratuito
+  private defaultModel = 'gemini-2.0-flash'; // Modelo estável disponível
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.GEMINI_API_KEY || '';
-    
+
     if (!this.apiKey) {
       console.warn('[Gemini] ⚠️ GEMINI_API_KEY não configurada');
     }
@@ -91,11 +91,11 @@ export class GeminiClient {
 
     try {
       console.log('[Gemini] 🤖 Enviando requisição...');
-      
+
       // Usar AbortController para timeout maior
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-      
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -104,7 +104,7 @@ export class GeminiClient {
         body: JSON.stringify(body),
         signal: controller.signal,
       });
-      
+
       clearTimeout(timeoutId);
 
       if (!response.ok) {
@@ -120,7 +120,7 @@ export class GeminiClient {
       }
 
       const text = data.candidates[0].content.parts[0].text;
-      
+
       if (data.usageMetadata) {
         console.log(`[Gemini] ✅ Tokens: ${data.usageMetadata.totalTokenCount} (prompt: ${data.usageMetadata.promptTokenCount}, resposta: ${data.usageMetadata.candidatesTokenCount})`);
       }
@@ -153,18 +153,18 @@ IMPORTANTE: Retorne APENAS JSON válido, sem markdown, sem \`\`\`json, sem texto
 
     // Limpar resposta (remover possíveis markdown)
     let cleanJson = response.trim();
-    
+
     // Remover blocos de código markdown se presentes
     if (cleanJson.startsWith('```json')) {
       cleanJson = cleanJson.slice(7);
     } else if (cleanJson.startsWith('```')) {
       cleanJson = cleanJson.slice(3);
     }
-    
+
     if (cleanJson.endsWith('```')) {
       cleanJson = cleanJson.slice(0, -3);
     }
-    
+
     cleanJson = cleanJson.trim();
 
     try {

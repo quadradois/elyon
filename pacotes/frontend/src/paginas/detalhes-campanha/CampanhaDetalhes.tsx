@@ -1,4 +1,5 @@
 import { useParams } from "react-router-dom";
+import { useEffect } from "react";
 import { Button } from "../../componentes/ui/button";
 import { UploadCSV } from "../../componentes/UploadCSV";
 import { EditorBriefing } from "../../componentes/EditorBriefing";
@@ -38,7 +39,10 @@ import {
   List,
   Zap,
   Brain,
+  Bot,
 } from "lucide-react";
+
+import { api } from "../../servicos/api";
 
 // Hooks e componentes internos
 import { useCampanhaDetalhes, getStatusColor, StatusCampanha } from "./hooks/useCampanhaDetalhes";
@@ -101,6 +105,12 @@ export function CampanhaDetalhes() {
     fecharNotificacao,
     navigate,
   } = hook;
+
+  // IMPORTANTE: useEffect DEVE vir ANTES de qualquer early return
+  // para não violar as regras de hooks do React
+  useEffect(() => {
+    hook.carregarAgentes();
+  }, [hook.carregarAgentes]);
 
   const getStatusModalConfig = () => {
     const configs: Record<StatusCampanha, {
@@ -165,6 +175,7 @@ export function CampanhaDetalhes() {
   const briefing = campanha.briefingEstruturado;
   const confiabilidade = parseFloat(campanha.briefingConfiabilidade || "0");
 
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -191,13 +202,19 @@ export function CampanhaDetalhes() {
                 {campanha.nomeEmpreendimento}
               </div>
             )}
+            {campanha.agente && (
+              <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                <Bot className="w-4 h-4" />
+                Agente: {campanha.agente.nome} ({campanha.agente.tipoAgente.replace('_', ' ')})
+              </div>
+            )}
           </div>
         </div>
 
         <div className="flex gap-2">
           {/* Botão Importar de Lista */}
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="gap-2 bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
             onClick={abrirModalLista}
           >
@@ -223,26 +240,24 @@ export function CampanhaDetalhes() {
                   Importe contatos via arquivo CSV ou cole manualmente.
                 </DialogDescription>
               </DialogHeader>
-              
+
               {/* Abas */}
               <div className="flex border-b border-slate-200">
                 <button
                   onClick={() => setAbaImportacao('csv')}
-                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                    abaImportacao === 'csv' 
-                      ? 'border-blue-600 text-blue-600' 
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${abaImportacao === 'csv'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
                 >
                   📄 Arquivo CSV
                 </button>
                 <button
                   onClick={() => setAbaImportacao('texto')}
-                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                    abaImportacao === 'texto' 
-                      ? 'border-blue-600 text-blue-600' 
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${abaImportacao === 'texto'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
                 >
                   ✏️ Colar Texto
                 </button>
@@ -277,10 +292,11 @@ export function CampanhaDetalhes() {
                       <Button
                         variant="outline"
                         onClick={() => setModalImportacaoOpen(false)}
+                        type="button"
                       >
                         Cancelar
                       </Button>
-                      <Button onClick={importarContatos} disabled={importando}>
+                      <Button onClick={importarContatos} disabled={importando} type="button">
                         {importando ? (
                           <>
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -327,7 +343,7 @@ export function CampanhaDetalhes() {
               Reativar
             </Button>
           )}
-          
+
           {/* Botão Excluir - sempre visível */}
           <Button
             variant="outline"
@@ -385,8 +401,8 @@ export function CampanhaDetalhes() {
               <span className="text-3xl font-bold text-slate-900">
                 {campanha.totalContatos > 0
                   ? Math.round(
-                      (campanha.totalLeads / campanha.totalContatos) * 100
-                    )
+                    (campanha.totalLeads / campanha.totalContatos) * 100
+                  )
                   : 0}
                 %
               </span>
@@ -401,11 +417,10 @@ export function CampanhaDetalhes() {
         <nav className="flex gap-4" aria-label="Tabs">
           <button
             onClick={() => setAbaAtiva('visao-geral')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              abaAtiva === 'visao-geral' 
-                ? 'border-blue-600 text-blue-600' 
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-            }`}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${abaAtiva === 'visao-geral'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
           >
             <span className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
@@ -414,11 +429,10 @@ export function CampanhaDetalhes() {
           </button>
           <button
             onClick={() => setAbaAtiva('contatos')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              abaAtiva === 'contatos' 
-                ? 'border-blue-600 text-blue-600' 
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-            }`}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${abaAtiva === 'contatos'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
           >
             <span className="flex items-center gap-2">
               <Users className="w-4 h-4" />
@@ -432,11 +446,10 @@ export function CampanhaDetalhes() {
           </button>
           <button
             onClick={() => setAbaAtiva('empreendimento')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              abaAtiva === 'empreendimento' 
-                ? 'border-blue-600 text-blue-600' 
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-            }`}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${abaAtiva === 'empreendimento'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
           >
             <span className="flex items-center gap-2">
               <Building2 className="w-4 h-4" />
@@ -445,11 +458,10 @@ export function CampanhaDetalhes() {
           </button>
           <button
             onClick={() => setAbaAtiva('disparos')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              abaAtiva === 'disparos' 
-                ? 'border-blue-600 text-blue-600' 
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-            }`}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${abaAtiva === 'disparos'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
           >
             <span className="flex items-center gap-2">
               <Zap className="w-4 h-4" />
@@ -460,12 +472,14 @@ export function CampanhaDetalhes() {
       </div>
 
       {/* Conteúdo das Abas */}
-      
+
       {/* ABA: Visão Geral */}
       {abaAtiva === 'visao-geral' && (
-        <AbaVisaoGeral 
-          campanha={campanha} 
-          estatisticasContatos={estatisticasContatos} 
+        <AbaVisaoGeral
+          campanha={campanha}
+          estatisticasContatos={estatisticasContatos}
+          agentes={hook.agentes}
+          onAtualizar={hook.atualizarCampanha}
         />
       )}
 
@@ -503,7 +517,7 @@ export function CampanhaDetalhes() {
                       {campanha?.briefingCompleto ? 'Atualizar Briefing com IA' : 'Criar Briefing com IA'}
                     </h3>
                     <p className="text-sm text-purple-700 mb-4">
-                      {campanha?.briefingCompleto 
+                      {campanha?.briefingCompleto
                         ? 'Quer pesquisar novamente para atualizar as informações do empreendimento?'
                         : 'Deixe a IA pesquisar informações detalhadas sobre o empreendimento. Isso preencherá o briefing automaticamente.'
                       }
@@ -528,6 +542,65 @@ export function CampanhaDetalhes() {
               </CardContent>
             </Card>
           )}
+
+          {/* UPLOAD DE CONHECIMENTO (SKILL CUSTOMIZADA) */}
+          <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <Upload className="w-6 h-6 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-blue-900 mb-1">
+                    Knowledge Base (Skill Customizada)
+                  </h3>
+                  <p className="text-sm text-blue-700 mb-4">
+                    Faça upload de um PDF ou documento de texto com as informações específicas deste produto (Tabela de preços, diferenciais, localização, etc).
+                    Isso criará uma "Skill de Conhecimento" exclusiva para esta campanha.
+                  </p>
+
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="file"
+                      id="upload-conhecimento"
+                      accept=".pdf,.txt"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+
+                        try {
+                          mostrarNotificacao('sucesso', 'Processando documento...'); // Usando como loading
+                          const formData = new FormData();
+                          formData.append('arquivo', file);
+
+                          await api.post(`/campanhas/${id}/conhecimento`, formData, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                          });
+
+                          mostrarNotificacao('sucesso', 'Conhecimento processado e injetado com sucesso!');
+                          carregarCampanha();
+                        } catch (error) {
+                          console.error(error);
+                          mostrarNotificacao('erro', 'Falha ao processar o arquivo.');
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor="upload-conhecimento"
+                      className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Upload PDF/TXT
+                    </label>
+                    <span className="text-xs text-blue-600/70 italic">
+                      Máximo 10MB. O conteúdo substituirá o briefing atual.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Editor de Briefing Manual */}
           <EditorBriefing
@@ -566,9 +639,9 @@ export function CampanhaDetalhes() {
           {(() => {
             const config = getStatusModalConfig();
             if (!config) return null;
-            
+
             const IconeStatus = config.icone;
-            
+
             return (
               <>
                 <DialogHeader className="text-center sm:text-center">
@@ -622,7 +695,7 @@ export function CampanhaDetalhes() {
             </div>
             <DialogTitle className="text-xl">Excluir Campanha</DialogTitle>
             <DialogDescription className="text-slate-600 text-base pt-2">
-              Tem certeza que deseja excluir a campanha <strong>"{campanha?.nome}"</strong>? 
+              Tem certeza que deseja excluir a campanha <strong>"{campanha?.nome}"</strong>?
               <span className="block mt-2 text-red-600 font-medium">
                 Todos os contatos associados serão removidos permanentemente.
               </span>
@@ -660,14 +733,12 @@ export function CampanhaDetalhes() {
 
       {/* Toast de Notificação */}
       {notificacao && (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border animate-in slide-in-from-right-5 duration-300 ${
-          notificacao.tipo === 'sucesso' 
-            ? 'bg-green-50 border-green-200 text-green-800' 
-            : 'bg-red-50 border-red-200 text-red-800'
-        }`}>
-          <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-            notificacao.tipo === 'sucesso' ? 'bg-green-100' : 'bg-red-100'
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border animate-in slide-in-from-right-5 duration-300 ${notificacao.tipo === 'sucesso'
+          ? 'bg-green-50 border-green-200 text-green-800'
+          : 'bg-red-50 border-red-200 text-red-800'
           }`}>
+          <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${notificacao.tipo === 'sucesso' ? 'bg-green-100' : 'bg-red-100'
+            }`}>
             {notificacao.tipo === 'sucesso' ? (
               <CheckCircle2 className="w-5 h-5 text-green-600" />
             ) : (
@@ -675,12 +746,11 @@ export function CampanhaDetalhes() {
             )}
           </div>
           <p className="font-medium">{notificacao.mensagem}</p>
-          <button 
+          <button
             onClick={fecharNotificacao}
             title="Fechar notificação"
-            className={`ml-2 p-1 rounded-lg hover:bg-white/50 transition-colors ${
-              notificacao.tipo === 'sucesso' ? 'text-green-600' : 'text-red-600'
-            }`}
+            className={`ml-2 p-1 rounded-lg hover:bg-white/50 transition-colors ${notificacao.tipo === 'sucesso' ? 'text-green-600' : 'text-red-600'
+              }`}
           >
             <X className="w-4 h-4" />
           </button>

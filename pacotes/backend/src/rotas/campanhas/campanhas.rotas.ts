@@ -12,6 +12,24 @@ import { prisma } from '../../lib/db';
 import { consultaCEP } from '../../servicos/cep';
 import { ragEmpreendimentos } from '../../servicos/rag-empreendimentos';
 import { z } from 'zod';
+import multer from 'multer';
+import fs from 'fs';
+const pdfParse = require('pdf-parse');
+
+// Configuração do Multer (Memória para processamento imediato)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.mimetype === 'text/plain') {
+      cb(null, true);
+    } else {
+      cb(new Error('Formato inválido. Apenas PDF ou TXT são permitidos.'));
+    }
+  },
+});
 
 const router = Router();
 
@@ -48,6 +66,8 @@ const criarCampanhaSchema = z.object({
   localizacao: z.string().optional(),
   tipoImovel: z.string().optional().default('Apartamento'),
   perfilImovel: z.string().optional(),
+  // Agente Vinculado (opcional - pode ser atribuído depois)
+  agenteId: z.string().uuid().optional().nullable(),
 });
 
 // ============================================
@@ -62,11 +82,11 @@ router.get('/cep/:cep', async (req, res) => {
   try {
     const { cep } = req.params;
     const dados = await consultaCEP.consultar(cep);
-    
+
     if (!dados) {
       return res.status(404).json({ erro: 'CEP não encontrado', cep });
     }
-    
+
     return res.json({ sucesso: true, dados });
   } catch (error: any) {
     console.error('[Campanhas] Erro ao consultar CEP:', error);
@@ -85,24 +105,24 @@ router.get('/cep/:cep', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     console.log('[Campanhas] Criando campanha (modo manual)...');
-    
+
     const dados = criarCampanhaSchema.parse(req.body);
-    const localizacaoCompleta = dados.localizacao || 
+    const localizacaoCompleta = dados.localizacao ||
       `${dados.bairro}, ${dados.cidade} - ${dados.estado}`;
-    
+
     // Usar X-Tenant-Id do header
     const tenantId = getTenantIdFromHeader(req);
     if (!tenantId) {
-      return res.status(400).json({ 
-        erro: 'Tenant não identificado. Envie o header X-Tenant-Id.' 
+      return res.status(400).json({
+        erro: 'Tenant não identificado. Envie o header X-Tenant-Id.'
       });
     }
-    
+
     // Verificar se tenant existe
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) {
-      return res.status(400).json({ 
-        erro: 'Tenant não encontrado. Verifique o X-Tenant-Id.' 
+      return res.status(400).json({
+        erro: 'Tenant não encontrado. Verifique o X-Tenant-Id.'
       });
     }
 
@@ -123,7 +143,14 @@ router.post('/', async (req, res) => {
         localizacao: localizacaoCompleta,
         tipoImovel: dados.tipoImovel,
         perfilImovel: dados.perfilImovel,
+        // Vincular agente se fornecido
+        agenteId: dados.agenteId || null,
       },
+      include: {
+        agente: {
+          select: { id: true, nome: true, tipoAgente: true }
+        }
+      }
     });
 
     console.log(`[Campanhas] ✅ Campanha criada (modo manual): ${campanha.id}`);
@@ -135,17 +162,18 @@ router.post('/', async (req, res) => {
         nome: campanha.nome,
         nomeEmpreendimento: campanha.nomeEmpreendimento,
         status: campanha.status,
+        agente: campanha.agente, // Retorna dados do agente vinculado
       },
       mensagem: 'Campanha criada! Preencha o briefing do empreendimento.',
     });
 
   } catch (error: any) {
     console.error('[Campanhas] Erro ao criar campanha:', error);
-    
+
     if (error.name === 'ZodError') {
       return res.status(400).json({ erro: 'Dados inválidos', detalhes: error.errors });
     }
-    
+
     return res.status(500).json({ erro: 'Erro interno ao criar campanha' });
   }
 });
@@ -156,18 +184,18 @@ router.post('/', async (req, res) => {
  */
 router.post('/criar-com-pesquisa', async (req, res) => {
   console.log('[Campanhas] ⚠️ Rota legada /criar-com-pesquisa chamada - redirecionando...');
-  
+
   try {
     const dados = criarCampanhaSchema.parse(req.body);
-    const localizacaoCompleta = dados.localizacao || 
+    const localizacaoCompleta = dados.localizacao ||
       `${dados.bairro}, ${dados.cidade} - ${dados.estado}`;
-    
+
     // Usar X-Tenant-Id do header
     const tenantId = getTenantIdFromHeader(req);
     if (!tenantId) {
       return res.status(400).json({ erro: 'Tenant não identificado. Envie X-Tenant-Id.' });
     }
-    
+
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) {
       return res.status(400).json({ erro: 'Tenant não encontrado.' });
@@ -212,23 +240,24 @@ router.post('/criar-com-pesquisa', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const tenantId = getTenantIdFromHeader(req);
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Tenant não identificado.' });
     }
-    
+
     const campanha = await prisma.campanha.findUnique({
       where: { id: req.params.id },
       include: {
         contatos: { take: 10, orderBy: { criadoEm: 'desc' } },
         _count: { select: { contatos: true, leads: true } },
+        agente: { select: { id: true, nome: true, tipoAgente: true } },
       },
     });
 
     if (!campanha) {
       return res.status(404).json({ erro: 'Campanha não encontrada' });
     }
-    
+
     // ✅ Verificar ownership
     if (campanha.tenantId !== tenantId) {
       return res.status(403).json({ erro: 'Acesso negado' });
@@ -270,6 +299,9 @@ router.get('/:id', async (req, res) => {
       status: campanha.status,
       criadoEm: campanha.criadoEm,
       atualizadoEm: campanha.atualizadoEm,
+      // Agente vinculado
+      agenteId: campanha.agenteId,
+      agente: campanha.agente,
     };
 
     return res.json({ campanha: campanhaFormatada });
@@ -287,11 +319,11 @@ router.get('/:id', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const tenantId = getTenantIdFromHeader(req);
-    
+
     if (!tenantId) {
       return res.status(401).json({ erro: 'Tenant não identificado. Envie o header X-Tenant-Id.' });
     }
-    
+
     const campanhas = await prisma.campanha.findMany({
       where: { tenantId }, // ✅ FILTRO DE SEGURANÇA
       orderBy: { criadoEm: 'desc' },
@@ -308,7 +340,7 @@ router.get('/', async (req, res) => {
         totalContatos: c._count.contatos,
         totalLeads: c._count.leads,
         temBriefing: !!c.briefingCompleto,
-        confiabilidade: c.briefingConfiabilidade 
+        confiabilidade: c.briefingConfiabilidade
           ? parseFloat(c.briefingConfiabilidade.toString())
           : null,
         criadoEm: c.criadoEm,
@@ -342,7 +374,7 @@ router.put('/:id/briefing', async (req, res) => {
     if (!campanha) {
       return res.status(404).json({ erro: 'Campanha não encontrada' });
     }
-    
+
     // ✅ Verificar ownership
     const tenantId = getTenantIdFromHeader(req);
     if (!tenantId || campanha.tenantId !== tenantId) {
@@ -390,6 +422,109 @@ router.put('/:id/briefing', async (req, res) => {
   }
 });
 
+
+/**
+ * POST /:id/conhecimento
+ * Upload de arquivo (PDF/TXT) para Knowledge Skill (RAG)
+ */
+router.post('/:id/conhecimento', upload.single('arquivo'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const file = req.file;
+
+    // 1. Validação básica
+    if (!file) {
+      return res.status(400).json({ erro: 'Nenhum arquivo enviado' });
+    }
+
+    // 2. Verificar permissão e existência
+    const tenantId = getTenantIdFromHeader(req);
+    const campanha = await prisma.campanha.findUnique({ where: { id } });
+
+    if (!campanha) return res.status(404).json({ erro: 'Campanha não encontrada' });
+    if (!tenantId || campanha.tenantId !== tenantId) {
+      return res.status(403).json({ erro: 'Acesso negado' });
+    }
+
+    // 3. Extrair texto
+    let textoExtraido = '';
+
+    if (file.mimetype === 'application/pdf') {
+      console.log(`[RAG] Extraindo texto de PDF: ${file.originalname}`);
+      const pdfData = await pdfParse(file.buffer);
+      textoExtraido = pdfData.text;
+    } else {
+      console.log(`[RAG] Lendo texto plano: ${file.originalname}`);
+      textoExtraido = file.buffer.toString('utf-8');
+    }
+
+    // Limpeza básica
+    textoExtraido = textoExtraido.replace(/\s+/g, ' ').trim();
+
+    if (textoExtraido.length < 50) {
+      return res.status(400).json({ erro: 'O arquivo contém pouco ou nenhum texto legível.' });
+    }
+
+    // 4. Salvar/Atualizar no RAG
+    // Se já tem empreendimentoId, atualizamos. Se não, criamos.
+    let empreendimentoId = campanha.empreendimentoId;
+
+    if (empreendimentoId) {
+      console.log(`[RAG] Atualizando conhecimento existente: ${empreendimentoId}`);
+      await ragEmpreendimentos.atualizar(empreendimentoId, {
+        briefingCompleto: textoExtraido,
+        // Mantemos outros campos ou atualizamos se necessário
+        validado: true, // Auto-validado pois veio de upload explícito
+        validadoPor: (req as any).usuario?.id || 'sistema'
+      });
+    } else {
+      console.log(`[RAG] Criando novo conhecimento base para campanha: ${campanha.nome}`);
+      const novoConhecimento = await ragEmpreendimentos.salvar({
+        nome: campanha.nomeEmpreendimento || `Empreendimento ${campanha.nome}`,
+        localizacao: campanha.localizacao || 'Não informada',
+        tipo: campanha.tipoImovel || 'Geral',
+        briefing: {
+          resumo_sdr: textoExtraido,
+          origem: 'UPLOAD_ARQUIVO',
+          arquivo: file.originalname,
+          confiabilidade: 1.0
+        },
+        tenantId: tenantId
+      });
+      empreendimentoId = novoConhecimento.id;
+    }
+
+    // 5. Vincular à Campanha
+    const campanhaAtualizada = await prisma.campanha.update({
+      where: { id },
+      data: {
+        empreendimentoId: empreendimentoId,
+        briefingCompleto: textoExtraido,
+        briefingValidado: true,
+        briefingConfiabilidade: "1.0", // Alta confiança pois é upload do usuário
+        editadoEm: new Date()
+      }
+    });
+
+    return res.json({
+      sucesso: true,
+      mensagem: 'Conhecimento processado com sucesso!',
+      caracteres: textoExtraido.length,
+      campanha: {
+        id: campanhaAtualizada.id,
+        temBriefing: true
+      }
+    });
+
+  } catch (error: any) {
+    console.error('[Campanhas] Erro no upload de conhecimento:', error);
+    return res.status(500).json({
+      erro: 'Erro ao processar arquivo de conhecimento',
+      detalhes: error.message
+    });
+  }
+});
+
 /**
  * PATCH /:id/status
  * Atualizar status da campanha
@@ -404,7 +539,7 @@ router.patch('/:id/status', async (req, res) => {
     if (!campanha) {
       return res.status(404).json({ erro: 'Campanha não encontrada' });
     }
-    
+
     // ✅ Verificar ownership
     const tenantId = getTenantIdFromHeader(req);
     if (!tenantId || campanha.tenantId !== tenantId) {
@@ -431,13 +566,89 @@ router.patch('/:id/status', async (req, res) => {
 });
 
 /**
+ * PATCH /:id
+ * Atualiza dados gerais da campanha
+ */
+router.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Schema flexível para atualização
+    const atualizarSchema = z.object({
+      nome: z.string().min(3).optional(),
+      nomeEmpreendimento: z.string().min(3).optional(),
+      cep: z.string().optional(),
+      logradouro: z.string().optional(),
+      numero: z.string().optional(),
+      complemento: z.string().optional(),
+      bairro: z.string().optional(),
+      cidade: z.string().optional(),
+      estado: z.string().length(2).optional(),
+      agenteId: z.string().uuid().optional().nullable(),
+      tipoImovel: z.string().optional(),
+      perfilImovel: z.string().optional(),
+    });
+
+    const dados = atualizarSchema.parse(req.body);
+
+    const campanha = await prisma.campanha.findUnique({ where: { id } });
+    if (!campanha) {
+      return res.status(404).json({ erro: 'Campanha não encontrada' });
+    }
+
+    // ✅ Verificar ownership
+    const tenantId = getTenantIdFromHeader(req);
+    if (!tenantId || campanha.tenantId !== tenantId) {
+      return res.status(403).json({ erro: 'Acesso negado' });
+    }
+
+    // Atualizar localização se campos de endereço mudarem
+    let localizacao = campanha.localizacao;
+    if (dados.bairro || dados.cidade || dados.estado) {
+      const bairro = dados.bairro || campanha.bairro;
+      const cidade = dados.cidade || campanha.cidade;
+      const estado = dados.estado || campanha.estado;
+      localizacao = `${bairro}, ${cidade} - ${estado}`;
+    }
+
+    const campanhaAtualizada = await prisma.campanha.update({
+      where: { id },
+      data: {
+        ...dados,
+        localizacao,
+        editadoEm: new Date(),
+      },
+      include: {
+        agente: {
+          select: { id: true, nome: true, tipoAgente: true }
+        }
+      }
+    });
+
+    console.log(`[Campanhas] Campanha ${id} atualizada com sucesso`);
+
+    return res.json({
+      sucesso: true,
+      campanha: campanhaAtualizada
+    });
+
+  } catch (error: any) {
+    console.error('[Campanhas] Erro ao atualizar campanha:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ erro: 'Dados inválidos', detalhes: error.errors });
+    }
+    return res.status(500).json({ erro: 'Erro ao atualizar campanha' });
+  }
+});
+
+/**
  * DELETE /:id
  * Exclui uma campanha e todos os seus contatos
  */
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const campanha = await prisma.campanha.findUnique({
       where: { id },
       include: { _count: { select: { contatos: true } } }
@@ -446,7 +657,7 @@ router.delete('/:id', async (req, res) => {
     if (!campanha) {
       return res.status(404).json({ erro: 'Campanha não encontrada' });
     }
-    
+
     // ✅ Verificar ownership
     const tenantId = getTenantIdFromHeader(req);
     if (!tenantId || campanha.tenantId !== tenantId) {
@@ -459,8 +670,8 @@ router.delete('/:id', async (req, res) => {
 
     console.log(`[Campanhas] ✅ Campanha "${campanha.nome}" excluída com sucesso`);
 
-    return res.json({ 
-      sucesso: true, 
+    return res.json({
+      sucesso: true,
       mensagem: `Campanha "${campanha.nome}" excluída com sucesso`,
       contatosExcluidos: campanha._count.contatos
     });
@@ -511,13 +722,13 @@ router.delete('/cache-empreendimentos/:id', async (req, res) => {
 router.post('/limpar-cache-empreendimento', async (req, res) => {
   try {
     const { nome, localizacao } = req.body;
-    
+
     if (!nome || !localizacao) {
       return res.status(400).json({ erro: 'Nome e localização são obrigatórios' });
     }
-    
+
     const deletado = await ragEmpreendimentos.deletarPorNome(nome, localizacao);
-    
+
     if (deletado) {
       return res.json({
         sucesso: true,

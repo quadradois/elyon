@@ -25,6 +25,7 @@ import {
   Crown,
   Briefcase,
   Calendar,
+  BookOpen,
 } from "lucide-react";
 
 // ... (código intermediário omitido, vou usar replace separado para o ícone e menu se for longe)
@@ -184,6 +185,11 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           icon: Phone,
           label: "Sessões WhatsApp",
           path: "/dashboard/sessoes-whatsapp",
+        },
+        {
+          icon: BookOpen,
+          label: "Playbooks",
+          path: "/dashboard/playbooks",
         },
       ],
     },

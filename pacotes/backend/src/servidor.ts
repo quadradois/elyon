@@ -35,6 +35,8 @@ import rotaJobsUnidades from './rotas/mineracao/unidades-jobs.rotas';
 import rotaContratos from './rotas/contratos';
 import rotaClientes from './rotas/clientes';
 import rotaConfiguracaoIntegracao from './rotas/configuracao-integracao';
+import rotaPlaybooks from './rotas/playbooks';
+import rotaConfigLLM from './rotas/config-llm';  // BYOK - Configuração de LLM
 
 // Importar Prisma do módulo central (evita dependência circular)
 import { prisma } from './lib/db';
@@ -125,8 +127,10 @@ app.use('/api/leads-vip', rotaLeadsVip);    // Leads do site de vendas (Supabase
 app.use('/api/contratos', rotaContratos);   // Geração de contratos digitais
 app.use('/api/clientes', rotaClientes);     // Clientes (Carteira)
 app.use('/api/configuracao/integracao', rotaConfiguracaoIntegracao); // Config integrações CRM
-app.use('/webhooks', rotaWebhook);
-app.use('/webhooks', rotaWebhookManus);     // Webhooks do Manus (pesquisa IA)
+app.use('/api/playbooks', rotaPlaybooks);   // Sistema de Playbooks
+app.use('/api/configuracao/llm', rotaConfigLLM); // BYOK - Configuração de LLM por tenant
+app.use('/webhooks/evolution', rotaWebhook);
+app.use('/webhooks', rotaWebhookManus);     // Webhooks do Manus (POST /webhooks/manus)
 
 // Error handler global para PayloadTooLargeError
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

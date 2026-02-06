@@ -29,9 +29,9 @@ router.get('/contatos/:id', async (req, res) => {
       where: { id },
       include: {
         campanha: {
-          select: { 
+          select: {
             id: true,
-            nome: true, 
+            nome: true,
             tenantId: true,
             empreendimento: { select: { nome: true } }
           }
@@ -142,7 +142,9 @@ router.post('/contatos/:id/mensagens', async (req, res) => {
       return res.status(400).json({ erro: 'Contato não possui telefone cadastrado' });
     }
 
-    const instanciaWhatsApp = process.env.EVOLUTION_INSTANCE_NAME || 'elyon_main';
+    // 🆕 Multi-Tenant: Buscar instância do banco baseada no Tenant
+    const { getInstanceName } = await import('../../servicos/whatsapp-resolver');
+    const instanciaWhatsApp = await getInstanceName(contato.campanha.tenantId);
 
     let telefoneFormatado = contato.telefone.replace(/\D/g, '');
     if (!telefoneFormatado.startsWith('55')) {

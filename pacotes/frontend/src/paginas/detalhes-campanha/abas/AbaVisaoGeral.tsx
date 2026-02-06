@@ -1,17 +1,89 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "../../../componentes/ui/card";
-import { DollarSign } from "lucide-react";
-import { CampanhaDetalhes, formatarPreco } from "../hooks/useCampanhaDetalhes";
+import { DollarSign, Bot, Save, Loader2 } from "lucide-react";
+import { Button } from "../../../componentes/ui/button";
+import { CampanhaDetalhes, formatarPreco, AgenteOpcao } from "../hooks/useCampanhaDetalhes";
+import { useState, useEffect } from "react";
 
 interface AbaVisaoGeralProps {
   campanha: CampanhaDetalhes;
   estatisticasContatos: Record<string, number>;
+  agentes: AgenteOpcao[];
+  onAtualizar: (dados: any) => Promise<void>;
 }
 
-export function AbaVisaoGeral({ campanha, estatisticasContatos }: AbaVisaoGeralProps) {
+export function AbaVisaoGeral({ campanha, estatisticasContatos, agentes, onAtualizar }: AbaVisaoGeralProps) {
   const briefing = campanha.briefingEstruturado;
+  const [agenteSelecionado, setAgenteSelecionado] = useState(campanha.agenteId || "");
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    setAgenteSelecionado(campanha.agenteId || "");
+  }, [campanha.agenteId]);
+
+  const handleSalvarAgente = async () => {
+    try {
+      setSalvando(true);
+      await onAtualizar({ agenteId: agenteSelecionado || null });
+    } finally {
+      setSalvando(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
+      {/* Configuração de Agente */}
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+        <CardHeader className="pb-2">
+          <div className="flex items-center gap-2">
+            <Bot className="w-5 h-5 text-blue-600" />
+            <CardTitle className="text-lg text-blue-900">Agente de IA Responsável</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1 w-full">
+              <label htmlFor="agente-select" className="text-sm font-medium text-blue-800 mb-1 block">
+                Selecione o Agente para atender esta campanha:
+              </label>
+              <select
+                id="agente-select"
+                className="w-full border border-blue-200 rounded-md p-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                value={agenteSelecionado}
+                onChange={(e) => setAgenteSelecionado(e.target.value)}
+              >
+                <option value="">-- Sem Agente Vinculado --</option>
+                {agentes.map((agente) => (
+                  <option key={agente.id} value={agente.id}>
+                    {agente.nome} ({agente.tipoAgente.replace('_', ' ')})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-blue-600 mt-1">
+                ⚠️ Alterar o agente afetará como os novos leads são abordados. O histórico anterior será mantido.
+              </p>
+            </div>
+            <Button
+              onClick={handleSalvarAgente}
+              disabled={salvando || agenteSelecionado === (campanha.agenteId || "")}
+              className="bg-blue-600 hover:bg-blue-700 text-white min-w-[120px]"
+            >
+              {salvando ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Salvar
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Resumo rápido do empreendimento */}
       {briefing && (
         <Card>
@@ -33,7 +105,7 @@ export function AbaVisaoGeral({ campanha, estatisticasContatos }: AbaVisaoGeralP
           </CardContent>
         </Card>
       )}
-      
+
       {/* Estatísticas de Contatos */}
       <Card>
         <CardHeader>

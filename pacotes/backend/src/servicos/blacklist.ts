@@ -8,9 +8,8 @@
  * - Bloqueados pelo WhatsApp
  */
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/db';
+import { ultimosDigitos } from '../utils/telefone';
 
 // ============================================
 // TIPOS
@@ -40,12 +39,11 @@ interface AdicionarBlacklistParams {
 /**
  * Normaliza telefone para comparação (apenas últimos 8 dígitos)
  */
+/**
+ * Normaliza telefone para comparação (apenas últimos 8 dígitos)
+ */
 function normalizarTelefone(telefone: string): string {
-  // Remove tudo que não é número
-  const apenasNumeros = telefone.replace(/\D/g, '');
-
-  // Retorna últimos 8 dígitos (mais confiável para comparação)
-  return apenasNumeros.slice(-8);
+  return ultimosDigitos(telefone, 8);
 }
 
 /**

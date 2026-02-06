@@ -31,6 +31,8 @@ export interface ConfiguracaoSdrAgent {
     tom: 'formal' | 'amigavel' | 'entusiasta';
     usarEmojis: boolean;
     briefingEmpreendimento?: string;
+    tenantId?: string;        // Para BYOK - buscar config LLM do tenant
+    modelOverride?: string;   // Override de modelo (ex: 'anthropic/claude-haiku-4-5')
 }
 
 const configPadrao: ConfiguracaoSdrAgent = {
@@ -144,10 +146,19 @@ CADA CONVERSA DEVE TERMINAR COM UMA FERRAMENTA CHAMADA!
 // SDR AGENT
 // ====================================
 
-export function criarSdrAgent(config: ConfiguracaoSdrAgent = configPadrao): Agent {
+/**
+ * Cria um agente SDR com modelo dinâmico (suporta BYOK)
+ * 
+ * @param config - Configuração do agente
+ * @param modelo - Modelo LLM a usar (default: gpt-4o-mini, pode ser anthropic/claude-...)
+ */
+export function criarSdrAgent(
+    config: ConfiguracaoSdrAgent = configPadrao,
+    modelo: string = 'gpt-4o-mini'
+): Agent {
     return new Agent({
         name: `SDR ${config.nome}`,
-        model: 'gpt-4o-mini',
+        model: modelo,  // Agora dinâmico!
         instructions: gerarSystemPrompt(config),
         tools: todasToolsSDR
     });

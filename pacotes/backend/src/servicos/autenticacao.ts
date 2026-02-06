@@ -7,7 +7,10 @@ import { z } from 'zod';
 const LoginSchema = z.object({
   email: z.string().email(),
   senha: z.string().min(6),
-  tenantSlug: z.string()
+  tenantSlug: z.string().optional(),
+  slug: z.string().optional()
+}).refine(data => data.tenantSlug || data.slug, {
+  message: 'tenantSlug ou slug é obrigatório'
 });
 
 const RegistroSchema = z.object({
@@ -20,9 +23,12 @@ const RegistroSchema = z.object({
 export class ServicoAutenticacao {
 
   async login(dados: z.infer<typeof LoginSchema>) {
+    // Normalizar: aceita tanto 'slug' quanto 'tenantSlug'
+    const slugTenant = dados.tenantSlug || dados.slug;
+
     // 1. Buscar Tenant
     const tenant = await prisma.tenant.findUnique({
-      where: { slug: dados.tenantSlug }
+      where: { slug: slugTenant }
     });
 
     if (!tenant) throw new Error('Tenant não encontrado');

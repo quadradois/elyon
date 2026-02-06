@@ -181,7 +181,7 @@ export function criarAdminAgent(config: {
 
     return new Agent({
         name: 'admin_agent',
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         instructions: prompt,
         tools: [
             moverParaFaseTool,

@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    /* STANDARD THEME (Global Defaults - Blue/Rounded) */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
 
@@ -13,7 +14,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 222.2 47.4% 11.2%;
+    --primary: 221.2 83.2% 53.3%;
+    /* BLUE-600 */
     --primary-foreground: 210 40% 98%;
 
     --secondary: 210 40% 96.1%;
@@ -30,70 +32,79 @@
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 221.2 83.2% 53.3%;
 
     --radius: 0.5rem;
+    /* STANDARD ROUNDED */
 
-    /* ========================================= */
-    /* Premium Plus Design System Variables     */
-    /* ========================================= */
+    /* Custom Effects */
+    --shadow-glow-primary: 0 0 20px hsla(221, 83%, 53%, 0.4);
+    --shadow-glow-success: 0 0 20px hsla(142, 71%, 45%, 0.4);
+    --shadow-soft: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-premium: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 
-    /* Gradientes Premium */
-    --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
-    --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    --gradient-info: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-    --gradient-premium-dark: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(221 83% 53%), hsl(221 83% 40%));
+    --gradient-success: linear-gradient(135deg, hsl(142 71% 45%), hsl(142 76% 36%));
 
-    /* Sombras Sofisticadas */
-    --shadow-soft: 0 2px 8px -2px rgba(0, 0, 0, 0.08), 0 1px 4px -1px rgba(0, 0, 0, 0.04);
-    --shadow-medium: 0 4px 12px -2px rgba(0, 0, 0, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.06);
-    --shadow-premium: 0 8px 30px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08);
-    --shadow-glow-primary: 0 0 20px -2px rgba(99, 102, 241, 0.25);
-    --shadow-glow-success: 0 0 20px -2px rgba(16, 185, 129, 0.25);
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(0, 0, 0, 0.1);
+  }
 
-    /* Cores de Acento Premium */
-    --premium-indigo: #6366f1;
-    --premium-violet: #8b5cf6;
-    --premium-purple: #a855f7;
-    --premium-gold: #f59e0b;
-    --premium-emerald: #10b981;
+  /* AGENT BUILDER SCOPED THEME */
+  .theme-agent-builder {
+    --background: 222.2 47% 11%;
+    --foreground: 210 40% 98%;
 
-    /* Backgrounds Refinados */
-    --bg-subtle: #f8fafc;
-    --bg-muted: #f1f5f9;
-    --glass-bg: rgba(255, 255, 255, 0.8);
-    --glass-border: rgba(255, 255, 255, 0.18);
+    --card: 222.2 47% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --primary: 45 93% 47%;
+    /* AMBER */
+    --primary-foreground: 222.2 47% 11%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --border: 217 33% 20%;
+
+    --radius: 0rem;
+    /* SHARP */
+
+    --shadow-glow-primary: 0 0 20px hsla(45, 93%, 47%, 0.4);
+    --gradient-primary: linear-gradient(135deg, hsl(45 93% 47%), hsl(25 90% 45%));
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    /* Same as root because we are Technical Dark by default */
+    --background: 222.2 47% 11%;
     --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%;
+    --card: 222.2 47% 11%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222.2 84% 4.9%;
+    --popover: 222.2 47% 11%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 45 93% 47%;
+    --primary-foreground: 222.2 47% 11%;
 
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 45 93% 47%;
+    --accent-foreground: 222.2 47% 11%;
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 62% 30%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 45 93% 47%;
+
+    /* Re-declare if needed or inherit from :root */
   }
 }
 
@@ -231,11 +242,13 @@
 }
 
 /* Glow effect para status ativos */
-.glow-success {
+.glow-success,
+.shadow-glow-success {
   box-shadow: var(--shadow-glow-success);
 }
 
-.glow-primary {
+.glow-primary,
+.shadow-glow-primary {
   box-shadow: var(--shadow-glow-primary);
 }
 

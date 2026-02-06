@@ -312,7 +312,7 @@ export async function resetarSenha(tenantId: string, novaSenha?: string) {
   const usuario = await prisma.usuario.findFirst({
     where: {
       tenantId,
-      papel: 'ADMIN'
+      papel: { in: ['ADMIN', 'SUPER_ADMIN'] }
     }
   });
 

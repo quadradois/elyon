@@ -149,15 +149,21 @@ IMPORTANT: Use the tool \`atualizar_dados_lead\` immediately if the user provide
 // CRIAR AGENTE CLOSER
 // ====================================
 
-export function criarCloserAgent(config: {
-    nomeAgente: string;
-    genero?: string;
-    nomeImobiliaria: string;
-    comissaoPadrao?: string;
-    prazoContrato?: number;
-    doresIdentificadas?: string[];
-    diferenciais?: string[];
-}): Agent {
+/**
+ * Cria o Closer Agent com modelo dinâmico (suporta BYOK)
+ */
+export function criarCloserAgent(
+    config: {
+        nomeAgente: string;
+        genero?: string;
+        nomeImobiliaria: string;
+        comissaoPadrao?: string;
+        prazoContrato?: number;
+        doresIdentificadas?: string[];
+        diferenciais?: string[];
+    },
+    modelo: string = 'gpt-4o-mini'
+): Agent {
     const prompt = gerarPromptCloser({
         nomeAgente: config.nomeAgente,
         genero: config.genero || 'feminino',
@@ -170,7 +176,7 @@ export function criarCloserAgent(config: {
 
     return new Agent({
         name: 'closer_agent_v7',
-        model: 'gpt-4o',
+        model: modelo,  // Agora dinâmico!
         instructions: prompt,
         tools: [
             moverParaFaseTool,

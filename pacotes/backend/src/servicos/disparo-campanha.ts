@@ -434,10 +434,25 @@ export class DisparoCampanhaService {
       };
 
       if (tentativa === 1) {
-        // Primeira mensagem - usar template de storytelling
-        mensagem = gerarPrimeiraMensagem(dados, 'storytelling');
+        // 🆕 CORREÇÃO (06/02/2026): Buscar template nas configurações da campanha (JSON)
+        // Isso permite alterar o texto sem deploy, via banco de dados.
+        // E resolve o problema de 'campanhaId' não existir no model de MensagemProspeccao.
+
+        const config = (campanha.configDisparo as any) || {};
+
+        if (config.templatePrimeiraMensagem) {
+          console.log(`[Disparo] Usando template PERSONALIZADO da campanha ${campanha.id}`);
+          mensagem = config.templatePrimeiraMensagem;
+        } else {
+          console.log(`[Disparo] Template personalizado não encontrado, usando FALLBACK hardcoded (Storytelling)`);
+          mensagem = gerarPrimeiraMensagem(dados, 'storytelling');
+        }
+
       } else {
-        // Follow-up (só aceita 1 ou 2)
+        // Follow-up: Também tentar buscar do banco se implementado, senão fallback
+        // Por enquanto, mantendo follow-up hardcoded para minimizar risco, mas idealmente migrar tudo
+        // TODO: Implementar busca de follow-up no banco
+
         const tentativaFollowUp = tentativa <= 2 ? tentativa as 1 | 2 : 2;
         mensagem = gerarFollowUp(dados, tentativaFollowUp);
       }

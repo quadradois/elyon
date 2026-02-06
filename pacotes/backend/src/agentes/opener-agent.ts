@@ -118,16 +118,22 @@ The conversation starts with a template message. Your job begins when the user r
 `;
 }
 
-export function criarOpenerAgent(config: {
-    nomeAgente: string;
-    genero?: string;
-    nomeImobiliaria: string;
-    cidade?: string;
-    empreendimento?: string;
-}): Agent {
+/**
+ * Cria o Opener Agent com modelo dinâmico (suporta BYOK)
+ */
+export function criarOpenerAgent(
+    config: {
+        nomeAgente: string;
+        genero?: string;
+        nomeImobiliaria: string;
+        cidade?: string;
+        empreendimento?: string;
+    },
+    modelo: string = 'gpt-4o-mini'
+): Agent {
     return new Agent({
         name: 'opener_agent_v7',
-        model: 'gpt-4o',
+        model: modelo,  // Agora dinâmico!
         instructions: gerarPromptOpener({
             nomeAgente: config.nomeAgente,
             genero: config.genero || 'feminino',

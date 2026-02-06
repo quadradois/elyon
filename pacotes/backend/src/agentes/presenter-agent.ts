@@ -153,13 +153,19 @@ ${SERVICOS_OFERECIDOS}
 // CRIAR AGENTE PRESENTER
 // ====================================
 
-export function criarPresenterAgent(config: {
-    nomeAgente: string;
-    genero?: string;
-    nomeImobiliaria: string;
-    diferenciais?: string[];
-    situacaoAtual?: string;
-}): Agent {
+/**
+ * Cria o Presenter Agent com modelo dinâmico (suporta BYOK)
+ */
+export function criarPresenterAgent(
+    config: {
+        nomeAgente: string;
+        genero?: string;
+        nomeImobiliaria: string;
+        diferenciais?: string[];
+        situacaoAtual?: string;
+    },
+    modelo: string = 'gpt-4o-mini'
+): Agent {
     const prompt = gerarPromptPresenter({
         nomeAgente: config.nomeAgente,
         genero: config.genero || 'feminino',
@@ -170,7 +176,7 @@ export function criarPresenterAgent(config: {
 
     return new Agent({
         name: 'presenter_agent',
-        model: 'gpt-4o-mini',
+        model: modelo,  // Agora dinâmico!
         instructions: prompt,
         tools: [
             moverParaFaseTool,

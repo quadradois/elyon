@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/servidor.ts",
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/templates && cp -r src/templates/* dist/templates/",
     "start": "node dist/servidor.js",
     "migrar": "prisma migrate dev",
     "migrar:deploy": "prisma migrate deploy",
@@ -28,6 +28,7 @@
     "express": "^4.18.2",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
+    "litellm": "^0.12.0",
     "multer": "^2.0.2",
     "openai": "^6.9.1",
     "papaparse": "^5.5.3",

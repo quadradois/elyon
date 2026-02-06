@@ -35,6 +35,12 @@ export interface CampanhaDetalhes {
   status: string;
   criadoEm: string;
   atualizadoEm: string;
+  agenteId?: string | null;
+  agente?: {
+    id: string;
+    nome: string;
+    tipoAgente: string;
+  } | null;
 }
 
 export interface Contato {
@@ -98,15 +104,21 @@ export interface Notificacao {
   mensagem: string;
 }
 
+export interface AgenteOpcao {
+  id: string;
+  nome: string;
+  tipoAgente: string;
+}
+
 // Utilitários
 export const formatarTelefone = (tel: string | null): string => {
   if (!tel) return '-';
   const limpo = tel.replace(/\D/g, '');
   if (limpo.length === 11) {
-    return `(${limpo.slice(0,2)}) ${limpo.slice(2,7)}-${limpo.slice(7)}`;
+    return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 7)}-${limpo.slice(7)}`;
   }
   if (limpo.length === 10) {
-    return `(${limpo.slice(0,2)}) ${limpo.slice(2,6)}-${limpo.slice(6)}`;
+    return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 6)}-${limpo.slice(6)}`;
   }
   return tel;
 };
@@ -147,11 +159,12 @@ export const getStatusProspeccaoColor = (status: string): string => {
 // Hook Principal
 export function useCampanhaDetalhes(id: string | undefined) {
   const navigate = useNavigate();
-  
+
   // Estados principais
   const [campanha, setCampanha] = useState<CampanhaDetalhes | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
+  const [agentes, setAgentes] = useState<AgenteOpcao[]>([]);
 
   // Estados para Abas
   const [abaAtiva, setAbaAtiva] = useState<TabType>('visao-geral');
@@ -183,7 +196,7 @@ export function useCampanhaDetalhes(id: string | undefined) {
   const [modalStatusOpen, setModalStatusOpen] = useState(false);
   const [novoStatusPendente, setNovoStatusPendente] = useState<StatusCampanha | null>(null);
   const [processando, setProcessando] = useState(false);
-  
+
   // Estados para Notificação
   const [notificacao, setNotificacao] = useState<Notificacao | null>(null);
 
@@ -207,6 +220,28 @@ export function useCampanhaDetalhes(id: string | undefined) {
     }
   }, [id]);
 
+  const carregarAgentes = useCallback(async () => {
+    try {
+      const response = await api.get("/agentes");
+      setAgentes(response.data.agentes || []);
+    } catch (error) {
+      console.error("Erro ao carregar agentes:", error);
+    }
+  }, []);
+
+  const atualizarCampanha = useCallback(async (dados: any) => {
+    if (!id) return;
+    try {
+      await api.patch(`/campanhas/${id}`, dados);
+      mostrarNotificacao('sucesso', 'Campanha atualizada com sucesso!');
+      carregarCampanha();
+    } catch (error) {
+      console.error("Erro ao atualizar campanha:", error);
+      mostrarNotificacao('erro', 'Erro ao atualizar dados da campanha.');
+      throw error;
+    }
+  }, [id, mostrarNotificacao, carregarCampanha]);
+
   const carregarContatos = useCallback(async () => {
     if (!id) return;
     try {
@@ -215,7 +250,7 @@ export function useCampanhaDetalhes(id: string | undefined) {
       params.append('page', paginaAtual.toString());
       params.append('limit', '20');
       if (filtroStatus) params.append('status', filtroStatus);
-      
+
       const response = await api.get(`/campanhas/${id}/contatos?${params}`);
       setContatos(response.data.contatos);
       setTotalContatos(response.data.paginacao.total);
@@ -230,7 +265,7 @@ export function useCampanhaDetalhes(id: string | undefined) {
 
   const exportarContatos = useCallback(() => {
     if (!contatos.length || !campanha) return;
-    
+
     const headers = ['Nome', 'CPF', 'Telefone', 'Telefone 2', 'WhatsApp', 'Email', 'Endereço Imóvel', 'Bairro', 'Área (m²)', 'Score', 'Status'];
     const rows = contatos.map(c => [
       c.nome,
@@ -245,7 +280,7 @@ export function useCampanhaDetalhes(id: string | undefined) {
       c.scoreAssertiva || '',
       c.statusProspeccao,
     ]);
-    
+
     const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -258,7 +293,7 @@ export function useCampanhaDetalhes(id: string | undefined) {
 
   const excluirCampanha = useCallback(async () => {
     if (!campanha) return;
-    
+
     setProcessando(true);
     try {
       await api.delete(`/campanhas/${id}`);
@@ -285,13 +320,13 @@ export function useCampanhaDetalhes(id: string | undefined) {
       setProcessando(true);
       await api.patch(`/campanhas/${id}/status`, { status: novoStatusPendente });
       setModalStatusOpen(false);
-      
+
       const statusLabels: Record<StatusCampanha, string> = {
         PAUSADA: 'pausada',
         FINALIZADA: 'finalizada',
         ATIVA: 'reativada'
       };
-      
+
       mostrarNotificacao('sucesso', `Campanha ${statusLabels[novoStatusPendente]} com sucesso!`);
       carregarCampanha();
     } catch (error) {
@@ -375,10 +410,10 @@ export function useCampanhaDetalhes(id: string | undefined) {
       });
 
       const { adicionados, duplicados } = response.data;
-      
+
       setModalListaOpen(false);
       setListaSelecionada('');
-      
+
       if (adicionados > 0) {
         mostrarNotificacao('sucesso', `${adicionados} contatos importados da lista!${duplicados > 0 ? ` (${duplicados} duplicados ignorados)` : ''}`);
         carregarCampanha();
@@ -448,11 +483,11 @@ export function useCampanhaDetalhes(id: string | undefined) {
     notificacao,
     processando,
     novoStatusPendente,
-    
+
     // Estados de Abas
     abaAtiva,
     setAbaAtiva,
-    
+
     // Estados de Modais
     modalImportacaoOpen,
     setModalImportacaoOpen,
@@ -462,21 +497,25 @@ export function useCampanhaDetalhes(id: string | undefined) {
     setModalExcluirOpen,
     modalStatusOpen,
     setModalStatusOpen,
-    
+
     // Estados de Importação
     abaImportacao,
     setAbaImportacao,
     textoImportacao,
     setTextoImportacao,
     importando,
-    
+
     // Funções de Paginação
     setPaginaAtual,
     setFiltroStatus,
     setListaSelecionada,
-    
+
     // Ações
     carregarCampanha,
+    carregarAgentes,
+    atualizarCampanha,
+    setAgentes, // Expor se precisar
+    agentes, // Expor lista
     carregarContatos,
     exportarContatos,
     excluirCampanha,

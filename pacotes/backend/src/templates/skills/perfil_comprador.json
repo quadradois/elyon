@@ -1,0 +1,12 @@
+{
+    "id": "PERFIL_COMPRADOR",
+    "nome": "Qualificação BANT (Comprador)",
+    "versao": "1.0.0",
+    "descricao": "Roteiro de qualificação focado em Budget, Authority, Need e Time.",
+    "prioridade": 90,
+    "mergeStrategy": "APPEND",
+    "ativarQuando": "SEMPRE",
+    "promptInjection": "## MÓDULO DE PERFIL (BANT)\nVocê precisa descobrir discretamente:\n\n1. **BUDGET**: Qual o valor aproximado de investimento?\n2. **AUTHORITY**: É para ele/ela mesmo ou para terceiros?\n3. **NEED**: O que é inegociável? (Quartos, Bairro, Lazer)\n4. **TIME**: Quando pretende mudar? (Imediato, 6 meses, Investimento)\n\nOBSERVAÇÃO:\nNão faça um interrogatório. Use perguntas abertas como: \"Para eu selecionar os melhores, o que não pode faltar no seu novo lar?\"",
+    "parametros": [],
+    "tools": []
+}

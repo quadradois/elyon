@@ -86,6 +86,8 @@ model Tenant {
   contratos          Contrato[]
   clientes           Cliente[]
   integracoes        ConfiguracaoIntegracao[]
+  playbooks          Playbook[]
+  configuracoesLLM   ConfiguracaoLLM[]     // 1:N - Configurações de LLM (BYOK)
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
@@ -163,6 +165,61 @@ enum TipoIntegracao {
 }
 
 // ====================================
+// CONFIGURAÇÃO LLM (BYOK - Bring Your Own Key)
+// ====================================
+
+model ConfiguracaoLLM {
+  id                  String    @id @default(uuid())
+  tenantId            String
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Provider Configuration
+  tipoProvider        TipoLLM   @default(ANTHROPIC)
+  modeloPreferido     String    @default("claude-haiku-4-5-20251001")
+  apiKeyCriptografada String?   // API Key criptografada (null = usar chave do sistema)
+  baseUrl             String?   // URL customizada (para Azure, self-hosted, etc.)
+  
+  // Status
+  ativo               Boolean   @default(true)
+  priorizacao         Int       @default(1)  // Para fallback (menor = maior prioridade)
+  
+  // Limites e Controle
+  maxTokensPorMes     Int?      // Limite de tokens (null = ilimitado)
+  maxRequisicoesPorMinuto Int?  // Rate limiting
+  
+  // Métricas de Uso
+  totalChamadas       Int       @default(0)
+  totalTokensInput    BigInt    @default(0)
+  totalTokensOutput   BigInt    @default(0)
+  custoEstimado       Decimal   @default(0)
+  ultimoUsoEm         DateTime?
+  
+  // Validação
+  ultimoTesteEm       DateTime?
+  ultimoTesteOk       Boolean?
+  ultimoErro          String?
+  
+  criadoEm            DateTime  @default(now())
+  atualizadoEm        DateTime  @updatedAt
+  
+  @@unique([tenantId, tipoProvider])
+  @@index([tenantId])
+  @@index([ativo])
+  @@map("configuracoes_llm")
+}
+
+enum TipoLLM {
+  OPENAI            // OpenAI (GPT-4, GPT-4o, etc.)
+  ANTHROPIC         // Anthropic Claude
+  AZURE_OPENAI      // Azure OpenAI Service
+  GOOGLE_VERTEX     // Google Vertex AI (Gemini)
+  GROQ              // Groq (Llama, Mixtral)
+  MISTRAL           // Mistral AI
+  TOGETHER          // Together AI
+  DEEPSEEK          // DeepSeek
+}
+
+// ====================================
 // CONFIGURAÇÃO DO AGENTE IA
 // ====================================
 
@@ -215,6 +272,10 @@ model ConfiguracaoAgente {
   criadoEm      DateTime      @default(now())
   atualizadoEm  DateTime      @updatedAt
 
+  // Relacionamento com Campanhas (um agente pode atender várias campanhas)
+  campanhas     Campanha[]
+  playbooks       Playbook[]
+
   @@index([tenantId])
   @@map("configuracoes_agente")
 }
@@ -257,7 +318,6 @@ enum StatusDocumento {
 enum TipoAgente {
   SDR_CAPTACAO
   PERSONALIZADO
-  // DEPRECATED - mantidos para compatibilidade
   SDR_VENDAS
   SDR_LOCACAO
   DOCUMENTOS
@@ -548,6 +608,10 @@ model Campanha {
   // Configurações de Disparo de Prospecção Ativa
   configDisparo Json? // { mensagensPorMinuto, atrasoEntreMensagens, maxTentativas, horarioInicio, horarioFim }
 
+  // Agente Vinculado (qual agente atende esta campanha)
+  agenteId      String?
+  agente        ConfiguracaoAgente? @relation(fields: [agenteId], references: [id])
+
   // Relacionamentos
   contatos       Contato[]
   leads          Lead[]    @relation("CampanhaOrigem")
@@ -590,6 +654,9 @@ model Contato {
   email3              String?                // Email terciário
   email4              String?                // Email 4
   email5              String?                // Email 5
+  
+  // Respostas do Playbook
+  respostasPlaybook   LeadPlaybookResponse[]
   emailsJson          Json?                  // Array completo de emails
   
   // Dados do Imóvel (da Mineração/IPTU)
@@ -735,6 +802,7 @@ model Lead {
   nome               String
   email              String?
   telefone           String?
+
   telefoneVerificado Boolean     @default(false)
   dataNascimento     DateTime?
   enderecoPrincipal  String?
@@ -1568,3 +1636,161 @@ model Cliente {
   @@index([email])
   @@map("clientes")
 }
+
+// ============================================
+// SISTEMA DE PLAYBOOKS
+// ============================================
+
+enum TipoPlaybook {
+  QUALIFICACAO
+  VENDA
+  LOCACAO
+  CAPTACAO
+  COMERCIAL
+}
+
+enum TipoItemPlaybook {
+  CHECKBOX
+  TEXTO
+  SELECT
+  NUMERO
+  DATA
+}
+
+model Playbook {
+  id              String   @id @default(uuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Identificação
+  nome            String
+  descricao       String?
+  tipo            TipoPlaybook @default(QUALIFICACAO)
+  
+  // Configurações
+  ePadrao         Boolean  @default(false)
+  estaAtivo       Boolean  @default(true)
+  
+  // Vínculo com Agente (opcional)
+  agenteId        String?
+  agente          ConfiguracaoAgente? @relation(fields: [agenteId], references: [id])
+  
+  // Relacionamentos
+  etapas          PlaybookStage[]
+  respostas       LeadPlaybookResponse[]
+  
+  // Auditoria
+  criadoPorId     String?
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+  
+  @@unique([nome, tenantId])
+  @@index([tenantId, ePadrao])
+  @@map("playbooks")
+}
+
+model PlaybookStage {
+  id              String   @id @default(uuid())
+  playbookId      String
+  playbook        Playbook @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+  
+  // Identificação
+  nome            String
+  descricao       String?
+  icone           String   @default("📋")
+  
+  // Ordenação
+  ordem           Int      @default(0)
+  
+  // Script para o corretor/IA
+  scriptTexto     String?  @db.Text
+  
+  // Contexto extra para IA
+  aiPromptContext String?  @db.Text
+  
+  // Relacionamentos
+  itens           PlaybookItem[]
+  objecoes        PlaybookObjection[]
+  
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+  
+  @@index([playbookId, ordem])
+  @@map("playbook_stages")
+}
+
+model PlaybookItem {
+  id              String   @id @default(uuid())
+  stageId         String
+  stage           PlaybookStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  
+  // Conteúdo
+  texto           String
+  tipoItem        TipoItemPlaybook @default(CHECKBOX)
+  opcoes          String[]
+  placeholder     String?
+  
+  // Pontuação
+  scorePontos     Int      @default(0)
+  
+  // Integração com Lead
+  atualizaCampo   String?
+  obrigatorio     Boolean  @default(false)
+  
+  // IA: Extração automática
+  aiExtrairPadrao String?
+  aiPreencherAuto Boolean  @default(false)
+  
+  // Ordenação
+  ordem           Int      @default(0)
+  
+  // Relação reversa para LeadPlaybookResponse
+  leadResponses   LeadPlaybookResponse[]
+  
+  criadoEm        DateTime @default(now())
+  
+  @@index([stageId, ordem])
+  @@map("playbook_items")
+}
+
+model PlaybookObjection {
+  id              String   @id @default(uuid())
+  stageId         String
+  stage           PlaybookStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  
+  gatilho         String   // Palavra-chave ou frase da objeção
+  resposta        String   @db.Text
+  
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+  
+  @@index([stageId])
+  @@map("playbook_objections")
+}
+
+model LeadPlaybookResponse {
+  id              String   @id @default(uuid())
+  
+  contatoId       String
+  contato         Contato  @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  
+  playbookId      String
+  playbook        Playbook @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+  
+  playbookItemId  String
+  playbookItem    PlaybookItem @relation(fields: [playbookItemId], references: [id], onDelete: Cascade)
+  
+  resposta        String   @db.Text
+  respostaOriginal String? @db.Text  // O que o lead disse exatamente
+  
+  scoreGerado     Int      @default(0)
+  
+  criadoEm        DateTime @default(now())
+  
+  @@index([contatoId])
+  @@index([playbookId])
+  @@index([playbookItemId])
+  @@map("lead_playbook_responses")
+}
+
+

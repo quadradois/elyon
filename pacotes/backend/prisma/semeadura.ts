@@ -60,7 +60,31 @@ async function main() {
   });
 
   console.log(`✅ Tenant Demo criado: ${tenantDemo.nome}`);
-  
+
+  // 4. Criar Configurações LLM padrão para tenants
+  // Usando chave do sistema (apiKeyCriptografada = null)
+  for (const tenant of [tenantQuadraDois, tenantDemo]) {
+    const configLLM = await prisma.configuracaoLLM.upsert({
+      where: {
+        tenantId_tipoProvider: {
+          tenantId: tenant.id,
+          tipoProvider: 'ANTHROPIC'
+        }
+      },
+      update: {},
+      create: {
+        tenantId: tenant.id,
+        tipoProvider: 'ANTHROPIC',
+        modeloPreferido: 'claude-haiku-4-5-20251001',
+        ativo: true,
+        priorizacao: 1,
+        // apiKeyCriptografada = null significa usar chave do sistema
+      }
+    });
+
+    console.log(`✅ Config LLM criada para ${tenant.nome}: ${configLLM.tipoProvider} (${configLLM.modeloPreferido})`);
+  }
+
   console.log('🌱 Semeadura concluída!');
 }
 
@@ -72,3 +96,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
