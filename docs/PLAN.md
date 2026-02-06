@@ -1,44 +1,72 @@
-# PLAN: Fix WebSocket & Network Connectivity Issues
+# PLAN: Conclusão Elyon 2.0 - BYOK & Agents
 
-> **Objective:** Restore stable WebSocket connections and fix "Network Error" on API calls.
+> **Objetivo**: Finalizar integração LiteLLM e limpeza de código legado
+> **Data**: 2026-02-06
 
-## 🎯 Context
-- **Symptoms:** 
-  - `wss://crm.elyon.ia.br/ws/?EIO=4` interrupted.
-  - `AxiosError: Network Error` on WhatsApp status check.
-- **Environment:** Docker, Traefik, Node.js Backend, React Frontend.
-- **Recent Changes:** Database recovery, Auth fix, BYOK update.
+---
 
-## 👥 Agent Role Allocation
-| Agent | Focus Area |
-|-------|------------|
-| **debugger** | Analyze docker logs (backend, traefik, socket_proxy) for error patterns. |
-| **devops-engineer** | Inspect Traefik middleware/labels and Docker network configuration. |
-| **frontend-specialist** | Verify Socket.io client version compatibility and CORS handling. |
+## 📊 Status Verificado
 
-## 📋 Execution Steps
+| Fase | Descrição | Status |
+|------|-----------|--------|
+| **1** | Setup LiteLLM + Prisma Migration | ✅ **FEITO** |
+| **2** | LLM Provider Factory | ✅ **FEITO** |
+| **3** | Adaptar Agentes para BYOK | ✅ **FEITO** |
+| **4** | Unificar Entry Points | ✅ **FEITO** |
+| **5** | Limpeza de Código Legado | ⬜ **PENDENTE** |
+| **6** | Testes e Validação | ⬜ **PENDENTE** |
 
-### Phase 1: Diagnosis (Debugger)
-- [ ] **Log Analysis**: Check `elyon_backend` logs for Socket.io connection attempts/rejects.
-- [ ] **Proxy Analysis**: Check `elyon_traefik` logs for 400/500 errors or dropped connections.
-- [ ] **Network Check**: Verify internal container communication (`backend` <-> `socket_proxy`).
+---
 
-### Phase 2: Configuration Review (DevOps)
-- [ ] **Traefik Labels**: Verify `docker-compose.yml` has correct WebSocket headers (`Upgrade`, `Connection`).
-- [ ] **CORS Config**: Ensure Backend Socket.io `cors` settings match the domain `crm.elyon.ia.br`.
-- [ ] **Port Mapping**: Confirm internal port 3000/backend matches proxy routing.
+## ✅ Evidências de Conclusão (Fases 1-4)
 
-### Phase 3: Client Fixes (Frontend)
-- [ ] **Socket Client**: Verify `socket.io-client` version matches backend (v4).
-- [ ] **Env Variables**: Check `VITE_API_URL` and `VITE_SOCKET_URL` consistency.
-- [ ] **Error Handling**: Add better error logging for Axios network errors.
+### Fase 1: Setup
+- `litellm: ^0.12.0` instalado em `package.json`
+- `ConfiguracaoLLM` model existe no Prisma
 
-### Phase 4: Verification (Test Engineer)
-- [ ] **Connectivity Test**: `wscat` or browser console test to default namespace.
-- [ ] **API Check**: Validate status endpoints return 200 OK.
-- [ ] **Security Scan**: Ensure no open proxy vulnerabilities.
+### Fase 2: Provider Factory
+- `llm-provider-factory.ts` (288 linhas) ✅
+- Suporta 8 providers: OpenAI, Anthropic, Groq, Mistral, Azure, Vertex, Together, DeepSeek
+- Criptografia AES-256 para API keys
+- Fallback automático para chave do sistema
 
-## 🛡️ Validation Criteria
-1. WebSocket connection status switches to `OPEN/CONNECTED`.
-2. No `Network Error` toasts in UI.
-3. Real-time updates (WhatsApp status) flow correctly.
+### Fase 3: Agentes
+- 7 agentes implementados com @openai/agents
+- `criarSdrAgent()` aceita modelo dinâmico
+
+### Fase 4: Entry Points
+- `lead-inbound-handler.ts` usa `orquestradorService` ✅
+- Comentário "Removida dependência do ElyonCore" confirma migração
+
+---
+
+## 📋 Tarefas Pendentes
+
+### Fase 5: Limpeza (Prioridade Alta)
+- [ ] **5.1** Verificar e limpar `_deprecated/`
+- [ ] **5.2** Remover arquivos `.bak` restantes
+- [ ] **5.3** Atualizar `task.md` com status final
+
+### Fase 6: Testes (Prioridade Média)
+- [ ] **6.1** Testar fluxo completo de mensagem (WhatsApp → Agent → Resposta)
+- [ ] **6.2** Testar BYOK (criar config, salvar, usar)
+- [ ] **6.3** Executar lint e type-check
+
+---
+
+## 👥 Agent Allocation
+
+| Fase | Agent | Ação |
+|------|-------|------|
+| 5 | `backend-specialist` | Limpar código deprecated |
+| 6 | `test-engineer` | Executar testes de integração |
+| 6 | `devops-engineer` | Verificar build e deploy |
+
+---
+
+## 🎯 Critérios de Aceite
+
+1. ✅ Nenhum arquivo `.bak` no repositório
+2. ✅ Pasta `_deprecated/` limpa ou removida
+3. ✅ Build passa sem erros
+4. ✅ Teste de fluxo WhatsApp funcional
