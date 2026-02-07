@@ -1,8 +1,9 @@
 import { AgenteConfiguracao, AgenteExecutavel, Especialista, Skill, Condicao } from '../agentes/types';
 import { Tool } from '@openai/agents';
-import { prisma } from '../lib/db'; // Placeholder para acesso a DB se necessário
+import { prisma } from '../lib/db';
 import fs from 'fs/promises';
 import path from 'path';
+import { gerarExemplosParaPrompt, gerarExemplosPorFase } from '../agentes/few-shot-examples';
 
 export class AgentBuilder {
     private specialistsPath = path.join(__dirname, '../templates/specialists');
@@ -293,6 +294,13 @@ export class AgentBuilder {
             }
 
             prompt += `\n## [${skill.nome.toUpperCase()}]\n${injection}\n`;
+        }
+
+        // 🆕 OTIMIZAÇÃO P0: Injetar Few-Shot Examples (+10-15% precisão)
+        const faseAtual = parametrosGlobais.faseLead || 'SAUDACAO';
+        const exemplosFase = gerarExemplosPorFase(faseAtual, 3);
+        if (exemplosFase) {
+            prompt += exemplosFase;
         }
 
         // Interpolar variáveis globais ({{nomeAgente}}, etc)

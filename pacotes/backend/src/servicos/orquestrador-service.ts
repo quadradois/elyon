@@ -6,6 +6,7 @@ import {
     ContextoConversa
 } from '../agentes/orchestrator';
 import { ragEmpreendimentos } from './rag-empreendimentos';
+import { conhecimentoCuradoService } from './conhecimento-curado';
 import { ContextManager } from '../utils/context-manager';
 
 export class OrquestradorService {
@@ -59,6 +60,46 @@ export class OrquestradorService {
             else {
                 // MVP: Se não tem empreendimento vinculado, não injeta contexto pesado para não confundir
                 // Futuro: Detectar intenção de busca de imóvel e buscar no RAG
+            }
+
+            // 🆕 OTIMIZAÇÃO P1: Buscar conhecimento curado (técnicas de venda)
+            const ultimaMensagem = mensagensHistorico[mensagensHistorico.length - 1]?.content || '';
+            try {
+                const conhecimentoHibrido = await conhecimentoCuradoService.buscarHibrido(
+                    ultimaMensagem,
+                    tenantId,
+                    { limiteCurado: 3, limiteTenant: 2 }
+                );
+
+                if (conhecimentoHibrido.curado.length > 0 || conhecimentoHibrido.tenant.length > 0) {
+                    baseConhecimento += '\n\n## TÉCNICAS DE VENDA RECOMENDADAS\n';
+                    conhecimentoHibrido.curado.forEach((c: any) => {
+                        baseConhecimento += `- [${c.categoria}] ${c.conteudo}\n`;
+                    });
+                    conhecimentoHibrido.tenant.forEach((c: any) => {
+                        baseConhecimento += `- [Específico] ${c.conteudo}\n`;
+                    });
+                    console.log(`[OrquestradorService] 📚 Conhecimento curado injetado: ${conhecimentoHibrido.curado.length + conhecimentoHibrido.tenant.length} itens`);
+                }
+            } catch (curadoError) {
+                console.warn('[OrquestradorService] ⚠️ Erro ao buscar conhecimento curado:', curadoError);
+            }
+
+            // 🆕 OTIMIZAÇÃO P2: Injetar contexto de playbook
+            try {
+                const playbookService = await import('./playbook-service').then(m => m.playbookService);
+                const playbookContexto = await playbookService.gerarContextoParaAgente(
+                    tenantId,
+                    'CAPTACAO', // TODO: detectar tipo dinamicamente
+                    {} // TODO: passar dados já coletados do lead
+                );
+
+                if (playbookContexto) {
+                    baseConhecimento += playbookContexto.promptInjection;
+                    console.log(`[OrquestradorService] 📋 Playbook injetado: etapa "${playbookContexto.etapaAtual}"`);
+                }
+            } catch (playbookError) {
+                console.warn('[OrquestradorService] ⚠️ Erro ao buscar playbook:', playbookError);
             }
 
             // 4. OTIMIZAR HISTÓRICO (Cost Optimization)

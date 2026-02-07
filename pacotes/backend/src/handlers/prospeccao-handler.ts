@@ -15,6 +15,7 @@ import { sdrAgentService, ConfiguracaoSdrAgent } from '../agentes/sdr-agent';
 import { orquestradorService } from '../servicos/orquestrador-service';
 import { ragConversasService } from '../servicos/rag-conversas';
 import { getWhatsAppService } from '../servicos/whatsapp';
+import { detectorIA } from '../servicos/detector-ia';
 // DEPRECATED: import { ConfiguracaoAgente } from '../agentes/workers/sdr-worker';
 // Usando tipos do sdr-agent.ts agora
 
@@ -163,6 +164,46 @@ export class ProspeccaoHandler {
                 role: m.direcao === 'ENTRADA' ? 'user' as const : 'assistant' as const,
                 content: m.conteudo
             }));
+
+            // 🆕 OTIMIZAÇÃO P1: Detectar se é IA respondendo (evita loops)
+            try {
+                const mensagensParaAnalise = historico.slice(-10).map(m => ({
+                    conteudo: m.conteudo,
+                    enviadaEm: m.dataHora,
+                    origem: m.direcao === 'ENTRADA' ? 'usuario' as const : 'agente' as const
+                }));
+
+                const resultadoDeteccao = await detectorIA.analisar(
+                    contatoProspeccao.leadId || contatoProspeccao.id,
+                    mensagensParaAnalise
+                );
+
+                if (resultadoDeteccao.acao === 'BLOQUEAR') {
+                    console.log(`[ProspeccaoHandler] 🤖🚫 Bot detectado (score: ${resultadoDeteccao.scoreSuspeita}). Bloqueando automação.`);
+                    await prisma.contato.update({
+                        where: { id: contatoProspeccao.id },
+                        data: { modoAtendimento: 'PAUSADO' } as any
+                    });
+                    return; // Não processa
+                }
+
+                if (resultadoDeteccao.acao === 'CAPTCHA' && resultadoDeteccao.mensagemCaptcha) {
+                    console.log(`[ProspeccaoHandler] 🤖❓ Suspeita de bot (score: ${resultadoDeteccao.scoreSuspeita}). Enviando CAPTCHA.`);
+                    const whatsappService = getWhatsAppService(instanceName);
+                    if (whatsappService) {
+                        await whatsappService.enviarMensagemTexto(telefone, resultadoDeteccao.mensagemCaptcha);
+                    }
+                    return; // Aguarda resposta do CAPTCHA
+                }
+
+                if (resultadoDeteccao.acao === 'PAUSAR') {
+                    console.log(`[ProspeccaoHandler] ⏸️ Pausando automação temporariamente (score: ${resultadoDeteccao.scoreSuspeita})`);
+                    return;
+                }
+            } catch (deteccaoError) {
+                console.warn('[ProspeccaoHandler] ⚠️ Erro na detecção de IA:', deteccaoError);
+                // Continua mesmo se falhar a detecção
+            }
 
             // D. Buscar Configuração (Tenant/Agente)
             const tenantId = contatoProspeccao.campanha?.tenantId;

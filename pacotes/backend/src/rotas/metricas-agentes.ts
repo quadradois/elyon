@@ -22,12 +22,12 @@ router.get('/resumo', async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { periodo = '7d' } = req.query;
-    
+
     // Calcular data inicial baseada no período
     const diasAtras = periodo === '30d' ? 30 : periodo === '24h' ? 1 : 7;
     const dataInicial = new Date();
     dataInicial.setDate(dataInicial.getDate() - diasAtras);
-    
+
     // Buscar métricas
     const [
       totalConversas,
@@ -45,7 +45,7 @@ router.get('/resumo', async (req: Request, res: Response) => {
           iniciadaEm: { gte: dataInicial }
         }
       }),
-      
+
       // Conversas ativas agora
       prisma.conversa.count({
         where: {
@@ -53,7 +53,7 @@ router.get('/resumo', async (req: Request, res: Response) => {
           estadoConversa: 'ativa'
         }
       }),
-      
+
       // Leads qualificados no período
       prisma.lead.count({
         where: {
@@ -62,7 +62,7 @@ router.get('/resumo', async (req: Request, res: Response) => {
           atualizadoEm: { gte: dataInicial }
         }
       }),
-      
+
       // Leads QUENTES
       prisma.lead.count({
         where: {
@@ -71,7 +71,7 @@ router.get('/resumo', async (req: Request, res: Response) => {
           atualizadoEm: { gte: dataInicial }
         }
       }),
-      
+
       // Leads MORNOS
       prisma.lead.count({
         where: {
@@ -80,7 +80,7 @@ router.get('/resumo', async (req: Request, res: Response) => {
           atualizadoEm: { gte: dataInicial }
         }
       }),
-      
+
       // Leads FRIOS
       prisma.lead.count({
         where: {
@@ -89,7 +89,7 @@ router.get('/resumo', async (req: Request, res: Response) => {
           atualizadoEm: { gte: dataInicial }
         }
       }),
-      
+
       // Total de mensagens processadas
       prisma.mensagem.count({
         where: {
@@ -100,17 +100,17 @@ router.get('/resumo', async (req: Request, res: Response) => {
         }
       })
     ]);
-    
+
     // Calcular taxa de conversão
-    const taxaConversao = totalConversas > 0 
-      ? Math.round((leadsQuentes / totalConversas) * 100) 
+    const taxaConversao = totalConversas > 0
+      ? Math.round((leadsQuentes / totalConversas) * 100)
       : 0;
-    
+
     // Calcular média de mensagens por conversa
     const mediaMensagensPorConversa = totalConversas > 0
       ? Math.round(totalMensagens / totalConversas)
       : 0;
-    
+
     res.json({
       periodo: `${diasAtras} dias`,
       resumo: {
@@ -132,7 +132,7 @@ router.get('/resumo', async (req: Request, res: Response) => {
         qualificados: '+8%'
       }
     });
-    
+
   } catch (error) {
     console.error('[Métricas] Erro ao buscar resumo:', error);
     res.status(500).json({ erro: 'Erro ao buscar métricas' });
@@ -147,18 +147,18 @@ router.get('/conversas-por-dia', async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { dias = 7 } = req.query;
-    
+
     const numDias = parseInt(dias as string);
     const resultado: { data: string; conversas: number; mensagens: number }[] = [];
-    
+
     for (let i = numDias - 1; i >= 0; i--) {
       const data = new Date();
       data.setDate(data.getDate() - i);
       data.setHours(0, 0, 0, 0);
-      
+
       const dataFim = new Date(data);
       dataFim.setHours(23, 59, 59, 999);
-      
+
       const [conversas, mensagens] = await Promise.all([
         prisma.conversa.count({
           where: {
@@ -173,16 +173,16 @@ router.get('/conversas-por-dia', async (req: Request, res: Response) => {
           }
         })
       ]);
-      
+
       resultado.push({
         data: data.toISOString().split('T')[0],
         conversas,
         mensagens
       });
     }
-    
+
     res.json({ dados: resultado });
-    
+
   } catch (error) {
     console.error('[Métricas] Erro ao buscar conversas por dia:', error);
     res.status(500).json({ erro: 'Erro ao buscar dados' });
@@ -196,7 +196,7 @@ router.get('/conversas-por-dia', async (req: Request, res: Response) => {
 router.get('/workers', async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    
+
     // Por enquanto retorna dados mockados
     // Futuramente: criar tabela de logs de workers
     res.json({
@@ -219,7 +219,7 @@ router.get('/workers', async (req: Request, res: Response) => {
         }
       ]
     });
-    
+
   } catch (error) {
     console.error('[Métricas] Erro ao buscar workers:', error);
     res.status(500).json({ erro: 'Erro ao buscar dados' });
@@ -233,7 +233,7 @@ router.get('/workers', async (req: Request, res: Response) => {
 router.get('/funil', async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    
+
     const [
       totalLeads,
       leadsContatados,
@@ -242,33 +242,33 @@ router.get('/funil', async (req: Request, res: Response) => {
       leadsConvertidos
     ] = await Promise.all([
       prisma.lead.count({ where: { tenantId } }),
-      prisma.lead.count({ 
-        where: { 
+      prisma.lead.count({
+        where: {
           tenantId,
           conversas: { some: {} }
-        } 
+        }
       }),
-      prisma.lead.count({ 
-        where: { 
+      prisma.lead.count({
+        where: {
           tenantId,
           NOT: { temperatura: undefined }
-        } 
+        }
       }),
-      prisma.lead.count({ 
-        where: { 
+      prisma.lead.count({
+        where: {
           tenantId,
           temperatura: 'QUENTE'
-        } 
+        }
       }),
       // Leads com status de conversão (placeholder)
-      prisma.lead.count({ 
-        where: { 
+      prisma.lead.count({
+        where: {
           tenantId,
           status: 'CONVERTIDO'
-        } 
+        }
       })
     ]);
-    
+
     res.json({
       funil: [
         { etapa: 'Total de Leads', valor: totalLeads, cor: '#64748b' },
@@ -278,18 +278,18 @@ router.get('/funil', async (req: Request, res: Response) => {
         { etapa: 'Convertidos', valor: leadsConvertidos, cor: '#22c55e' }
       ],
       taxas: {
-        contatoParaQualificado: leadsContatados > 0 
-          ? `${Math.round((leadsQualificados / leadsContatados) * 100)}%` 
+        contatoParaQualificado: leadsContatados > 0
+          ? `${Math.round((leadsQualificados / leadsContatados) * 100)}%`
           : '0%',
-        qualificadoParaQuente: leadsQualificados > 0 
-          ? `${Math.round((leadsQuentes / leadsQualificados) * 100)}%` 
+        qualificadoParaQuente: leadsQualificados > 0
+          ? `${Math.round((leadsQuentes / leadsQualificados) * 100)}%`
           : '0%',
-        quenteParaConvertido: leadsQuentes > 0 
-          ? `${Math.round((leadsConvertidos / leadsQuentes) * 100)}%` 
+        quenteParaConvertido: leadsQuentes > 0
+          ? `${Math.round((leadsConvertidos / leadsQuentes) * 100)}%`
           : '0%'
       }
     });
-    
+
   } catch (error) {
     console.error('[Métricas] Erro ao buscar funil:', error);
     res.status(500).json({ erro: 'Erro ao buscar dados' });
@@ -303,7 +303,7 @@ router.get('/funil', async (req: Request, res: Response) => {
 router.get('/atividade-recente', async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    
+
     // Buscar últimas mensagens dos agentes
     const mensagensRecentes = await prisma.mensagem.findMany({
       where: {
@@ -322,7 +322,7 @@ router.get('/atividade-recente', async (req: Request, res: Response) => {
         }
       }
     });
-    
+
     const atividades = mensagensRecentes.map(msg => ({
       tipo: 'mensagem_enviada',
       descricao: `Respondeu ${msg.conversa.lead.nome}`,
@@ -330,12 +330,78 @@ router.get('/atividade-recente', async (req: Request, res: Response) => {
       tempo: msg.enviadaEm,
       leadId: msg.conversa.leadId
     }));
-    
+
     res.json({ atividades });
-    
+
   } catch (error) {
     console.error('[Métricas] Erro ao buscar atividade:', error);
     res.status(500).json({ erro: 'Erro ao buscar dados' });
+  }
+});
+
+/**
+ * GET /api/metricas-agentes/qualidade-ia
+ * Retorna métricas de qualidade do agente IA (alucinações, validações, etc)
+ */
+router.get('/qualidade-ia', async (req: Request, res: Response) => {
+  try {
+    const tenantId = getTenantId(req);
+    const { periodo = '7d' } = req.query;
+
+    const dias = periodo === '30d' ? 30 : periodo === '24h' ? 1 : 7;
+
+    // Importar serviço dinamicamente
+    const { metricasQualidadeIAService } = await import('../servicos/metricas-qualidade-ia');
+    const estatisticas = await metricasQualidadeIAService.obterEstatisticas(tenantId, dias);
+
+    res.json({
+      periodo: estatisticas.periodo,
+      qualidade: {
+        taxaAlucinacao: `${estatisticas.taxaAlucinacao}%`,
+        scoreValidacaoMedio: estatisticas.scoreValidacaoMedio,
+        confiancaMedia: estatisticas.confiancaMedia,
+        tempoMedioMs: estatisticas.tempoMedioMs
+      },
+      acoes: {
+        taxaRefinamento: `${estatisticas.taxaRefinamento}%`,
+        taxaEscalacao: `${estatisticas.taxaEscalacao}%`,
+        taxaDeteccaoBot: `${estatisticas.taxaDeteccaoBot}%`
+      },
+      alertasPorTipo: estatisticas.alertasPorTipo,
+      totalMensagens: estatisticas.totalMensagens
+    });
+
+  } catch (error) {
+    console.error('[Métricas] Erro ao buscar qualidade IA:', error);
+    res.status(500).json({ erro: 'Erro ao buscar métricas de qualidade' });
+  }
+});
+
+/**
+ * GET /api/metricas-agentes/tendencia-qualidade
+ * Retorna tendência de qualidade comparando períodos
+ */
+router.get('/tendencia-qualidade', async (req: Request, res: Response) => {
+  try {
+    const tenantId = getTenantId(req);
+    const { dias = '7' } = req.query;
+
+    const { metricasQualidadeIAService } = await import('../servicos/metricas-qualidade-ia');
+    const tendencia = await metricasQualidadeIAService.obterTendencia(tenantId, parseInt(dias as string));
+
+    res.json({
+      atual: {
+        taxaAlucinacao: `${tendencia.atual.taxaAlucinacao}%`,
+        scoreValidacao: tendencia.atual.scoreValidacaoMedio,
+        confianca: tendencia.atual.confiancaMedia
+      },
+      melhorias: tendencia.melhorias,
+      periodo: `${dias}d vs período anterior`
+    });
+
+  } catch (error) {
+    console.error('[Métricas] Erro ao buscar tendência:', error);
+    res.status(500).json({ erro: 'Erro ao buscar tendência' });
   }
 });
 

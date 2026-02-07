@@ -17,6 +17,9 @@ import { executarGuardrails, GuardrailResult, MensagemContext } from './guardrai
 import { agentBuilder } from '../servicos/agent-builder';
 import { AgentConfigFactory } from '../servicos/agent-config-factory';
 import { llmProviderFactory } from '../servicos/llm-provider-factory';
+import { supervisor } from './supervisor';
+import { getSkillByTipo, gerarPromptSituacaoParaTipo, gerarPromptValorParaTipo } from './skills';
+import { outputValidator } from '../servicos/output-validator';
 // Importções antigas mantidas apenas se necessário (mas o objetivo é remover o uso delas)
 // import { criarOpenerAgent } from './opener-agent'; 
 // ...
@@ -134,10 +137,25 @@ export async function processarMensagemOrquestrada(
             console.log('[Orquestrador] ⚠️ Sem config BYOK, usando modelo padrão');
         }
 
+        // 🆕 OTIMIZAÇÃO P0: Injetar skill por tipo de imóvel
+        const tipoImovel = contexto.campanha?.tipo?.includes('APARTAMENTO') ? 'Apartamento' :
+            contexto.campanha?.tipo?.includes('CASA') ? 'Casa' :
+                contexto.campanha?.tipo?.includes('CHACARA') ? 'Chácara' : 'Apartamento';
+
+
+        const skillContexto = `\n\n# SKILL POR TIPO DE IMÓVEL (${tipoImovel})\n${gerarPromptSituacaoParaTipo(tipoImovel)}\n${gerarPromptValorParaTipo(tipoImovel)}`;
+        systemPrompt += skillContexto;
+
+        // 🆕 OTIMIZAÇÃO P0: Instrução anti-alucinação (recency effect)
+        systemPrompt += `\n\n# ⚠️ REGRAS ANTI-ALUCINAÇÃO (CRÍTICAS)
+- NUNCA invente preços, nomes ou dados que não estejam na BASE DE CONHECIMENTO
+- Se não souber, diga "vou verificar" ou pergunte ao lead
+- Para preços, use faixas em vez de valores exatos`;
+
         const agentInstance = new Agent({
             instructions: systemPrompt,
             name: agenteConfig.parametrosGlobais.nomeAgente || 'Agent',
-            model: modelToUse,  // Agora dinâmico via BYOK!
+            model: modelToUse,
             tools: agente.tools
         });
 
@@ -194,6 +212,60 @@ export async function processarMensagemOrquestrada(
                 textoResposta = "Desculpe, processei sua mensagem mas tive um erro interno ao gerar a resposta. Pode tentar novamente?";
             } else {
                 textoResposta = dump; // Último recurso: retorna o que tiver
+            }
+        }
+
+        // 🆕 OTIMIZAÇÃO P0: Supervisão antes de enviar (valida qualidade e detecta alucinações)
+        if (contexto.leadId && textoResposta) {
+            console.log('[Orquestrador] 🔍 Executando supervisão da resposta...');
+            try {
+                const supervisaoResult = await supervisor.supervisionar({
+                    leadId: contexto.leadId,
+                    mensagemUsuario: inputString,
+                    respostaWorker: textoResposta,
+                    workerOrigem: 'SDR',
+                    temperatura: contexto.statusLead
+                });
+
+                // Aplicar resultado da supervisão
+                if (supervisaoResult.acao === 'ESCALAR_HUMANO') {
+                    console.log('[Orquestrador] ⚠️ Supervisor solicitou escalação humana');
+                    textoResposta = supervisaoResult.respostaFinal;
+                } else if (supervisaoResult.acao === 'REFINAR') {
+                    console.log('[Orquestrador] ✏️ Supervisor refinou a resposta');
+                    textoResposta = supervisaoResult.respostaFinal;
+                } else {
+                    console.log(`[Orquestrador] ✅ Resposta aprovada (confiança: ${supervisaoResult.metricasQualidade.confianca}%)`);
+                }
+
+                // Alertar corretor se necessário
+                if (supervisaoResult.alertaCorretor) {
+                    console.log('[Orquestrador] 📢 Alerta enviado para corretor');
+                }
+            } catch (supervisaoError) {
+                console.error('[Orquestrador] ⚠️ Erro na supervisão (continuando sem):', supervisaoError);
+            }
+        }
+
+        // 🆕 OTIMIZAÇÃO P2: Validar resposta contra contexto RAG (anti-alucinação)
+        if (baseConhecimento && textoResposta) {
+            try {
+                const validacao = outputValidator.validar(textoResposta, {
+                    contextoRAG: baseConhecimento
+                    // faixas de preço serão extraídas automaticamente do contextoRAG
+                });
+
+                if (!validacao.valido) {
+                    console.log(`[Orquestrador] ⚠️ Alucinação detectada (score: ${validacao.score})`);
+                    validacao.alertas.forEach(a =>
+                        console.log(`  - [${a.severidade}] ${a.tipo}: ${a.mensagem}`)
+                    );
+                    textoResposta = validacao.resposta; // Usa versão corrigida
+                } else {
+                    console.log(`[Orquestrador] ✅ Resposta validada (score: ${validacao.score})`);
+                }
+            } catch (validacaoError) {
+                console.warn('[Orquestrador] ⚠️ Erro na validação (continuando):', validacaoError);
             }
         }
 
