@@ -23,7 +23,7 @@ const router = Router();
 
 const IniciarSandboxSchema = z.object({
   agenteId: z.string().uuid().optional(),
-  tipoAgente: z.enum(['SDR_VENDAS', 'SDR_LOCACAO', 'SDR_CAPTACAO', 'DOCUMENTOS', 'SDR_V2_BETA']).optional(),
+  tipoAgente: z.enum(['SDR_VENDAS', 'SDR_LOCACAO', 'SDR_CAPTACAO', 'DOCUMENTOS']).optional(),
   personalizacao: z.object({
     nome: z.string().min(2),
     nomeImobiliaria: z.string().min(2),
@@ -228,15 +228,7 @@ router.post('/mensagem', async (req: Request, res: Response) => {
     // Gerar resposta do agente
     let resposta: string;
 
-    if (sessao.tipoAgente === 'SDR_V2_BETA' as any) {
-      const { agenteV2 } = await import('../agentes/agente-v2');
-      resposta = await agenteV2.processarMensagem(
-        sessao.historico,
-        dados.mensagem,
-        sessao.systemPrompt // <--- Passando o prompt compilado (RAG + Prompt)
-      );
-    } else {
-      const mensagensOpenAI = [
+    const mensagensOpenAI = [
         { role: 'system' as const, content: sessao.systemPrompt },
         ...sessao.historico.map(h => ({
           role: h.role as 'user' | 'assistant',
@@ -245,7 +237,6 @@ router.post('/mensagem', async (req: Request, res: Response) => {
       ];
 
       resposta = await openaiService.gerarResposta(mensagensOpenAI);
-    }
 
     // Adicionar resposta ao histórico
     sessao.historico.push({ role: 'assistant', content: resposta });

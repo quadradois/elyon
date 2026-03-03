@@ -50,7 +50,7 @@ async function buscarNomeAgente(tenantId: string): Promise<string> {
   });
 
   // Usar nome do banco OU o config padrão do SDR Worker (Sofia)
-  const nome = agente?.nome || 'Sofia'; // Consistente com configPadrao do sdr-worker.ts
+  const nome = agente?.nome || 'Sofia';
 
   // Salvar no cache
   cacheNomeAgente.set(tenantId, {
