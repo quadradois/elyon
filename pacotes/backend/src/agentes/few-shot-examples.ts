@@ -10,7 +10,7 @@
  * @since 05/12/2025
  */
 
-export interface ExemploConversa {
+interface ExemploConversa {
   id: string;
   fase: string;
   contexto: string;
@@ -23,7 +23,7 @@ export interface ExemploConversa {
 /**
  * Exemplos de ABERTURA - Primeira resposta após prospecção
  */
-export const exemplosAbertura: ExemploConversa[] = [
+const exemplosAbertura: ExemploConversa[] = [
   {
     id: 'abertura_01',
     fase: 'SAUDACAO',
@@ -53,7 +53,7 @@ export const exemplosAbertura: ExemploConversa[] = [
 /**
  * Exemplos de QUALIFICAÇÃO - Coletando dados SPIN
  */
-export const exemplosQualificacao: ExemploConversa[] = [
+const exemplosQualificacao: ExemploConversa[] = [
   {
     id: 'qualificacao_01',
     fase: 'SITUACAO',
@@ -91,7 +91,7 @@ export const exemplosQualificacao: ExemploConversa[] = [
 /**
  * Exemplos de OBJEÇÕES - Contornando resistências
  */
-export const exemplosObjecoes: ExemploConversa[] = [
+const exemplosObjecoes: ExemploConversa[] = [
   {
     id: 'objecao_01',
     fase: 'PROBLEMA',
@@ -130,7 +130,7 @@ export const exemplosObjecoes: ExemploConversa[] = [
 /**
  * Exemplos de FECHAMENTO - Convertendo em lead/anúncio
  */
-export const exemplosFechamento: ExemploConversa[] = [
+const exemplosFechamento: ExemploConversa[] = [
   {
     id: 'fechamento_01',
     fase: 'SOLUCAO',
@@ -171,7 +171,7 @@ export const exemplosFechamento: ExemploConversa[] = [
 /**
  * Exemplos de OPT-OUT - Respeitando limites
  */
-export const exemplosOptout: ExemploConversa[] = [
+const exemplosOptout: ExemploConversa[] = [
   {
     id: 'optout_01',
     fase: 'SAUDACAO',
@@ -195,7 +195,7 @@ export const exemplosOptout: ExemploConversa[] = [
 /**
  * Exemplos de INDICAÇÃO - Lead não quer mas conhece alguém
  */
-export const exemplosIndicacao: ExemploConversa[] = [
+const exemplosIndicacao: ExemploConversa[] = [
   {
     id: 'indicacao_01',
     fase: 'SAUDACAO',
@@ -213,109 +213,6 @@ export const exemplosIndicacao: ExemploConversa[] = [
     porqueCorreto: 'Encerra positivamente, planta semente para futuro'
   }
 ];
-
-/**
- * Exemplos de ESPELHAMENTO — Usando a linguagem do lead
- */
-export const exemplosEspelhamento: ExemploConversa[] = [
-  {
-    id: 'espelhamento_01',
-    fase: 'SITUACAO',
-    contexto: 'Lead corrige o agente sobre como chama o imóvel',
-    mensagemLead: 'não estou vendendo modelo, estou querendo vender meu apartamento!',
-    respostaSDR: 'Tem toda razão, me desculpa! Quero te ajudar a vender seu apartamento. Você já tem um valor em mente?',
-    porqueCorreto: 'Agente adota imediatamente a palavra do lead ("apartamento"), sem insistir em terminologia interna'
-  },
-  {
-    id: 'espelhamento_02',
-    fase: 'SITUACAO',
-    contexto: 'Lead usa palavra específica — agente deve espelhar',
-    mensagemLead: 'quero vender minha casa',
-    respostaSDR: 'Que ótimo! E sua casa fica em qual região da cidade?',
-    porqueCorreto: 'Repete "sua casa" exatamente como o lead disse, sem substituir por "imóvel" ou "residência"'
-  }
-];
-
-/**
- * Exemplos de RETOMADA APÓS PAUSA
- */
-export const exemplosRetomadaPausa: ExemploConversa[] = [
-  {
-    id: 'pausa_01',
-    fase: 'SITUACAO',
-    contexto: 'Lead sumiu 15 minutos e voltou com mensagem vaga',
-    mensagemLead: 'que 59m²',
-    respostaSDR: 'Continuando aqui 😊 — você me disse que quer vender seu apartamento no Reserva Buriti, certo? Perguntei se você já tem algum valor em mente para a venda.',
-    porqueCorreto: 'Faz micro-recapitulação antes de continuar, não abandona contexto nem repete pergunta seca'
-  }
-];
-
-/**
- * Exemplos de RESET EMOCIONAL
- */
-export const exemplosResetEmocional: ExemploConversa[] = [
-  {
-    id: 'reset_01',
-    fase: 'PROBLEMA',
-    contexto: 'Lead ficou hostil e explodiu de frustração',
-    mensagemLead: 'você se perde no assunto fica falando coisa com coisa sem sentido!',
-    respostaSDR: 'Tem razão, me desculpa. Pode me dizer o que ficou confuso? Quero entender pra te responder melhor 😊',
-    porqueCorreto: 'Pede desculpa genuína + pergunta neutra de recalibração. NÃO volta ao pitch na mesma mensagem'
-  }
-];
-
-/**
- * Exemplos de VÍDEO INSTITUCIONAL
- */
-export const exemplosVideo: ExemploConversa[] = [
-  {
-    id: 'video_01',
-    fase: 'PROBLEMA',
-    contexto: 'Lead confirmou 2+ dores — momento de enviar o vídeo antes da solução',
-    mensagemLead: 'sim, acontece mesmo isso com os corretores',
-    respostaSDR: 'Antes de te mostrar como a gente resolve na prática, deixa eu te mandar um vídeo curto do nosso método? É mais fácil de visualizar assim 😊\nhttps://www.youtube.com/watch?v=4ItUhXf1sJw',
-    porqueCorreto: 'Vídeo enviado APENAS após 2+ dores confirmadas. Funciona como âncora visual antes da Etapa 3'
-  }
-];
-
-/**
- * Gera string formatada com todos os exemplos para o prompt
- */
-export function gerarExemplosParaPrompt(): string {
-  const todosExemplos = [
-    ...exemplosAbertura,
-    ...exemplosQualificacao,
-    ...exemplosObjecoes,
-    ...exemplosFechamento,
-    ...exemplosOptout,
-    ...exemplosIndicacao,
-  ];
-
-  let output = '\n\n# 🎯 EXEMPLOS DE CONVERSAS (Few-Shot Learning)\n\n';
-  output += 'Use estes exemplos como referência de tom, estilo e estratégia:\n\n';
-
-  // Agrupar por fase
-  const fases = ['SAUDACAO', 'SITUACAO', 'PROBLEMA', 'IMPLICACAO', 'NECESSIDADE', 'SOLUCAO'];
-
-  for (const fase of fases) {
-    const exemplosDaFase = todosExemplos.filter(e => e.fase === fase);
-    if (exemplosDaFase.length === 0) continue;
-
-    output += `## Fase: ${fase}\n\n`;
-
-    for (const ex of exemplosDaFase) {
-      output += `**[${ex.contexto}]**\n`;
-      output += `Lead: "${ex.mensagemLead}"\n`;
-      output += `Você: "${ex.respostaSDR}"\n`;
-      if (ex.toolUsada) {
-        output += `→ Tool: ${ex.toolUsada}\n`;
-      }
-      output += `✓ ${ex.porqueCorreto}\n\n`;
-    }
-  }
-
-  return output;
-}
 
 /**
  * Gera exemplos específicos para uma fase
@@ -345,16 +242,3 @@ export function gerarExemplosPorFase(fase: string, limite: number = 3): string {
   return output;
 }
 
-// Estatísticas
-export const estatisticasExemplos = {
-  total: 15,
-  porCategoria: {
-    abertura: 3,
-    qualificacao: 4,
-    objecoes: 4,
-    fechamento: 3,
-    optout: 2,
-    indicacao: 2,
-  },
-  impactoEsperado: '+10-15% precisão nas respostas',
-};

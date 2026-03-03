@@ -10,6 +10,40 @@
  */
 
 import type { PrismaClient } from '@prisma/client';
+import { OpenAIChatCompletionsModel } from '@openai/agents-openai';
+import { OpenAI } from 'openai';
+
+// ====================================
+// CONFIGURAÇÃO BYOK (Bring Your Own Key)
+// ====================================
+
+export interface ByokConfig {
+    model?: string;
+    apiKey?: string;
+    baseUrl?: string;
+}
+
+/**
+ * Cria instância de modelo OpenAI com suporte a BYOK.
+ * Se apiKey é fornecida, cria um client customizado.
+ * Caso contrário, usa o modelo padrão do ambiente.
+ */
+export function criarModeloBYOK(
+    config: ByokConfig,
+    defaultModel: string = 'gpt-4.1'
+): string | OpenAIChatCompletionsModel {
+    const modelName = config.model || defaultModel;
+
+    if (config.apiKey) {
+        const client = new OpenAI({
+            apiKey: config.apiKey,
+            baseURL: config.baseUrl
+        });
+        return new OpenAIChatCompletionsModel(client, modelName);
+    }
+
+    return modelName;
+}
 
 // ====================================
 // CONTEXTO PRINCIPAL

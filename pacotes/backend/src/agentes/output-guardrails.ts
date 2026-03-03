@@ -19,7 +19,7 @@ import type { OutputGuardrail } from '@openai/agents';
  * Mensagens longas no WhatsApp têm baixa taxa de leitura.
  * (5 era muito restritivo — bloqueava pitch + pergunta legítimos)
  */
-export const maxLinhasGuardrail: OutputGuardrail = {
+const maxLinhasGuardrail: OutputGuardrail = {
     name: 'WhatsApp Max Lines',
     execute: async ({ agentOutput }) => {
         const texto = typeof agentOutput === 'string' ? agentOutput : JSON.stringify(agentOutput);
@@ -41,7 +41,7 @@ export const maxLinhasGuardrail: OutputGuardrail = {
  * Garante que o agente faça no máximo 1 pergunta por mensagem.
  * Múltiplas perguntas confundem o lead no WhatsApp.
  */
-export const umaPerguntaGuardrail: OutputGuardrail = {
+const umaPerguntaGuardrail: OutputGuardrail = {
     name: 'Single Question',
     execute: async ({ agentOutput }) => {
         const texto = typeof agentOutput === 'string' ? agentOutput : JSON.stringify(agentOutput);
@@ -63,7 +63,7 @@ export const umaPerguntaGuardrail: OutputGuardrail = {
  * Impede que o agente se apresente novamente após handoff.
  * Frases como "Sou X da Y" ou "Meu nome é" quebram a ilusão.
  */
-export const antiReapresentacaoGuardrail: OutputGuardrail = {
+const antiReapresentacaoGuardrail: OutputGuardrail = {
     name: 'Anti Re-Introduction',
     execute: async ({ agentOutput }) => {
         const texto = typeof agentOutput === 'string' ? agentOutput : JSON.stringify(agentOutput);

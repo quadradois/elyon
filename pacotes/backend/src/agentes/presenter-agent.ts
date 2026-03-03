@@ -11,8 +11,7 @@
  */
 
 import { Agent, tool, handoff } from '@openai/agents';
-import { OpenAIChatCompletionsModel } from '@openai/agents-openai';
-import { OpenAI } from 'openai';
+import { criarModeloBYOK } from './elyon-context';
 import { ElyonContext } from './elyon-context';
 import { moverParaFaseTool, agendarFollowupTool, buscarTaticaCaptacaoTool, qualificarLeadTool, atualizarDadosLeadTool } from '../ferramentas/sdr-tools-agents';
 import { outputGuardrailsWhatsApp } from './output-guardrails';
@@ -23,7 +22,7 @@ import { getSharedBehavioralRules } from './shared-behavioral-guardrails';
 // GERAR SYSTEM PROMPT
 // ====================================
 
-export function gerarPromptPresenter(config: {
+function gerarPromptPresenter(config: {
   nomeAgente: string;
   genero: string;
   nomeImobiliaria: string;
@@ -331,19 +330,7 @@ export function criarPresenterAgent(config: {
   baseUrl?: string;
   tools?: any[];
 }): any {
-  // Configura modelo customizado se houver BYOK
-  let modelInstance: any = config.model || 'gpt-4.1';
-
-  if (config.apiKey) {
-    const client = new OpenAI({
-      apiKey: config.apiKey,
-      baseURL: config.baseUrl
-    });
-    modelInstance = new OpenAIChatCompletionsModel(
-      client,
-      config.model || 'gpt-4.1'
-    );
-  }
+  const modelInstance = criarModeloBYOK(config, 'gpt-4.1');
 
   return new Agent({
     name: 'presenter_agent_v4',

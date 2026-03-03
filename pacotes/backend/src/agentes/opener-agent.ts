@@ -9,9 +9,7 @@
  */
 
 import { Agent, tool, handoff } from '@openai/agents';
-import { OpenAIChatCompletionsModel } from '@openai/agents-openai';
-import { OpenAI } from 'openai';
-import { ElyonContext } from './elyon-context';
+import { ElyonContext, criarModeloBYOK } from './elyon-context';
 import { z } from 'zod';
 import {
     converterParaLeadTool,
@@ -26,7 +24,7 @@ import { outputGuardrailsWhatsApp } from './output-guardrails';
 import { gerarExemplosPorFase } from './few-shot-examples';
 import { getSharedBehavioralRules } from './shared-behavioral-guardrails';
 
-export function gerarPromptOpener(config: {
+function gerarPromptOpener(config: {
     nomeAgente: string;
     genero: string;
     nomeImobiliaria: string;
@@ -273,19 +271,7 @@ export function criarOpenerAgent(config: {
     baseUrl?: string;
     tools?: any[];
 }): any {
-    // Configura modelo customizado se houver BYOK
-    let modelInstance: any = config.model || 'gpt-4.1';
-
-    if (config.apiKey) {
-        const client = new OpenAI({
-            apiKey: config.apiKey,
-            baseURL: config.baseUrl
-        });
-        modelInstance = new OpenAIChatCompletionsModel(
-            client,
-            config.model || 'gpt-4.1'
-        );
-    }
+    const modelInstance = criarModeloBYOK(config, 'gpt-4.1');
 
     return new Agent({
         name: 'opener_agent_v11',

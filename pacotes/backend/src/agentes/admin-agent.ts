@@ -17,8 +17,7 @@
  */
 
 import { Agent, tool, handoff } from '@openai/agents';
-import { OpenAIChatCompletionsModel } from '@openai/agents-openai';
-import { OpenAI } from 'openai';
+import { criarModeloBYOK } from './elyon-context';
 import { ElyonContext } from './elyon-context';
 import { z } from 'zod';
 import {
@@ -80,7 +79,7 @@ const DADOS_IMOVEL_COLETAR = [
 // GERAR SYSTEM PROMPT
 // ====================================
 
-export function gerarPromptAdmin(config: {
+function gerarPromptAdmin(config: {
     nomeAgente: string;
     genero: string;
     nomeImobiliaria: string;
@@ -191,19 +190,7 @@ export function criarAdminAgent(config: {
     baseUrl?: string;
     tools?: any[];
 }): any {
-    // Configura modelo customizado se houver BYOK
-    let modelInstance: any = config.model || 'gpt-4.1-mini';
-
-    if (config.apiKey) {
-        const client = new OpenAI({
-            apiKey: config.apiKey,
-            baseURL: config.baseUrl
-        });
-        modelInstance = new OpenAIChatCompletionsModel(
-            client,
-            config.model || 'gpt-4.1-mini'
-        );
-    }
+    const modelInstance = criarModeloBYOK(config, 'gpt-4.1-mini');
 
     // O SDK aceita resultType em runtime, mas os generics de Agent não expõem
     // ZodObject como AgentOutputType válido na v0.5.x. Usamos cast seguro.

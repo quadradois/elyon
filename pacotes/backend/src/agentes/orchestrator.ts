@@ -1084,13 +1084,4 @@ export async function buscarContextoConversa(
     }
 }
 
-// ====================================
-// EXPORTAR
-// ====================================
 
-export {
-    determinarAgente,
-    criarAgente,
-    TipoAgente,
-    ElyonAgent
-};
