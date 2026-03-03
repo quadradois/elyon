@@ -4,8 +4,8 @@ import { prisma } from '../lib/db';
 async function main() {
     console.log('🧪 Testando recuperação de HTML do contrato...');
 
-    // Token da Ivonet (recuperado do passo anterior)
-    const token = '4e42c52005fdb692de229ca6b0f14b426da6f1e7bdf7f43f488e123be8845450';
+    // Token da Ivonet (use var de ambiente em relatórios)
+    const token = process.env.TEST_TOKEN || 'fallback_apenas_para_dev_local';
 
     // Simular lógica do endpoint GET /:token/html
     // buscarContratoPorToken está em contrato-service, vou simular query direta

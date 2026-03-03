@@ -29,9 +29,9 @@ router.get('/contatos/:id', async (req, res) => {
       where: { id },
       include: {
         campanha: {
-          select: { 
+          select: {
             id: true,
-            nome: true, 
+            nome: true,
             tenantId: true,
             empreendimento: { select: { nome: true } }
           }
@@ -142,38 +142,41 @@ router.post('/contatos/:id/mensagens', async (req, res) => {
       return res.status(400).json({ erro: 'Contato não possui telefone cadastrado' });
     }
 
-    const instanciaWhatsApp = process.env.EVOLUTION_INSTANCE_NAME || 'elyon_main';
+    // Descobrir o tenant correspondente à campanha do contato
+    const tenantId = contato.campanha.tenantId;
+
+    // Buscar a sessão WhatsApp ativa que pertence ao tenant da campanha
+    const sessao = await prisma.sessaoWhatsapp.findFirst({
+      where: {
+        tenantId: tenantId,
+        status: 'CONECTADO'
+      }
+    });
+
+    if (!sessao) {
+      console.log(`[Campanhas] Nenhuma sessão WhatsApp conectada para tenant ${tenantId}`);
+      return res.status(400).json({ erro: 'Nenhuma sessão do WhatsApp conectada. Acesse as configurações para conectar o WhatsApp.' });
+    }
 
     let telefoneFormatado = contato.telefone.replace(/\D/g, '');
     if (!telefoneFormatado.startsWith('55')) {
       telefoneFormatado = '55' + telefoneFormatado;
     }
 
-    const evolutionUrl = process.env.EVOLUTION_API_URL || 'http://localhost:8080';
-    const evolutionKey = process.env.EVOLUTION_API_KEY || '';
+    let messageId = null;
 
-    const responseEvolution = await fetch(
-      `${evolutionUrl}/message/sendText/${instanciaWhatsApp}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': evolutionKey,
-        },
-        body: JSON.stringify({
-          number: telefoneFormatado,
-          text: conteudo.trim(),
-        }),
-      }
-    );
+    try {
+      // Import dynamic service instance handler at top (if not already there, we use existing getWhatsAppService)
+      const { getWhatsAppService } = require('../../servicos/whatsapp');
+      const whatsappService = getWhatsAppService(sessao.instanceName);
 
-    if (!responseEvolution.ok) {
-      const erroEvolution = await responseEvolution.text();
-      console.error('[Campanhas] Erro ao enviar mensagem Evolution:', erroEvolution);
-      return res.status(500).json({ erro: 'Erro ao enviar mensagem pelo WhatsApp' });
+      // Enviar a mensagem para o telefone
+      const resultadoEvolution = await whatsappService.enviarMensagemTexto(telefoneFormatado, conteudo.trim());
+      messageId = resultadoEvolution.key?.id || null;
+    } catch (evoError: any) {
+      console.error('[Campanhas] Erro Evolution service:', evoError.message);
+      return res.status(500).json({ erro: 'Erro ao conectar com a API do WhatsApp. Verifique se sua sessão continua conectada.' });
     }
-
-    const resultadoEvolution = await responseEvolution.json() as { key?: { id?: string } };
 
     const mensagemSalva = await prisma.mensagemProspeccao.create({
       data: {
@@ -182,7 +185,7 @@ router.post('/contatos/:id/mensagens', async (req, res) => {
         tipo: 'TEXTO',
         conteudo: conteudo.trim(),
         telefone: telefoneFormatado,
-        messageId: resultadoEvolution.key?.id || null,
+        messageId: messageId,
         dataHora: new Date(),
       }
     });

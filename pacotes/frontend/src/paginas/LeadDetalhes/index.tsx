@@ -214,7 +214,7 @@ export default function LeadDetalhes() {
             />
 
             {/* CHECKLIST DE EXECUÇÃO */}
-            <FaseChecklist status={lead.status} />
+            <FaseChecklist lead={lead} />
 
 
 

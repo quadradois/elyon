@@ -15,7 +15,7 @@
  */
 
 import { prisma } from '../lib/db';
-import { whatsappService } from '../servicos/whatsapp';
+import { getWhatsAppService } from '../servicos/whatsapp';
 
 interface ResultadoRecontato {
   processados: number;
@@ -156,6 +156,29 @@ export async function processarRecontatos(): Promise<ResultadoRecontato> {
         // Gerar mensagem personalizada de follow-up
         const mensagemFollowUp = gerarMensagemRecontato(contato);
         console.log(`   💬 Mensagem: ${mensagemFollowUp.substring(0, 60)}...`);
+        
+        // Buscar sessão ativa do tenant da campanha
+        const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
+          where: { 
+            tenantId: contato.campanha.tenantId, 
+            status: 'CONECTADO' 
+          }
+        });
+
+        if (!sessaoWhatsapp || !sessaoWhatsapp.instanceName) {
+          console.log(`   ⚠️ Nenhuma sessão WhatsApp ativa encontrada para o tenant ${contato.campanha.tenantId}, pulando...`);
+          resultado.detalhes.push({
+            contatoId: contato.id,
+            nome: contato.nome,
+            status: 'erro',
+            mensagem: 'Nenhuma sessão WhatsApp ativa encontrada'
+          });
+          resultado.erros++;
+          continue;
+        }
+
+        // Usar a instância correta do tenant
+        const whatsappService = getWhatsAppService(sessaoWhatsapp.instanceName);
         
         // Enviar mensagem via WhatsApp
         await whatsappService.enviarMensagemTexto(contato.telefone, mensagemFollowUp);

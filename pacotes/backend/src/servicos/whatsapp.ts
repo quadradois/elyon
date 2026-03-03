@@ -61,7 +61,7 @@ export class WhatsAppService {
 
       // Auto-configurar webhook após criação
       const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.quadradois.com.br';
-      const webhookUrl = `${backendUrl}/api/webhooks/whatsapp`;
+      const webhookUrl = `${backendUrl}/api/webhooks/whatsapp?instance=${this.instanceName}`;
 
       try {
         await this.configurarWebhook(webhookUrl, true);
@@ -117,29 +117,50 @@ export class WhatsAppService {
   }
 
   async enviarMensagemTexto(numero: string, texto: string): Promise<any> {
+    // Formata número para 55DDXXXXXXXXX (apenas dígitos)
+    let numeroFormatado = numero.replace(/\D/g, '');
+
+    // Se tiver 10 ou 11 dígitos, assume que é BR e adiciona 55
+    if (numeroFormatado.length === 10 || numeroFormatado.length === 11) {
+      numeroFormatado = `55${numeroFormatado}`;
+    }
+
+    const payload = {
+      number: numeroFormatado,
+      text: texto,
+      delay: 1200,
+      linkPreview: false
+    };
+
+    console.log(`[WhatsApp] 🚀 Tentando enviar mensagem para ${numeroFormatado}. Texto: "${texto?.substring(0, 50)}...", Instance: ${this.instanceName}`);
+
     try {
-      // Formata número para 55DDXXXXXXXXX (apenas dígitos)
-      let numeroFormatado = numero.replace(/\D/g, '');
-
-      // Se tiver 10 ou 11 dígitos, assume que é BR e adiciona 55
-      if (numeroFormatado.length === 10 || numeroFormatado.length === 11) {
-        numeroFormatado = `55${numeroFormatado}`;
-      }
-
       // Evolution API v2.x espera apenas o número, sem @s.whatsapp.net
       const response = await axios.post(
         `${this.apiUrl}/message/sendText/${this.instanceName}`,
-        {
-          number: numeroFormatado,
-          text: texto,
-          delay: 1200,
-          linkPreview: false
-        },
+        payload,
         { headers: this.getHeaders() }
       );
       return response.data;
-    } catch (error) {
-      console.error('Erro ao enviar mensagem WhatsApp:', error);
+    } catch (error: any) {
+      // Se 404, a instância pode ter sido desconectada — tentar reconectar e reenviar
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        console.log(`[WhatsApp] ⚠️ Instância ${this.instanceName} não encontrada (404). Tentando reconectar...`);
+        try {
+          await this.conectarInstancia();
+          console.log(`[WhatsApp] ✅ Instância reconectada. Reenviando mensagem...`);
+          const retryResponse = await axios.post(
+            `${this.apiUrl}/message/sendText/${this.instanceName}`,
+            payload,
+            { headers: this.getHeaders() }
+          );
+          return retryResponse.data;
+        } catch (reconnectError) {
+          console.error(`[WhatsApp] ❌ Falha ao reconectar instância ${this.instanceName}:`, reconnectError);
+          throw reconnectError;
+        }
+      }
+      console.error('Erro ao enviar mensagem WhatsApp:', error.response?.data || error.message);
       throw error;
     }
   }
@@ -258,9 +279,6 @@ export function limparCacheWhatsApp(instanceName: string): void {
 }
 
 /**
- * @deprecated Use getWhatsAppService(instanceName) para multi-tenant
- * Mantido para compatibilidade - usa instância padrão do .env
+ * REMOVIDO: whatsappService global para evitar uso de instância padrão
+ * Use sempre getWhatsAppService(instanceName) para multi-tenant
  */
-export const whatsappService = new WhatsAppService(
-  process.env.EVOLUTION_INSTANCE_NAME || 'elyon_main'
-);

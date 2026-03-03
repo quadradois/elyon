@@ -5,6 +5,73 @@ const MAPA_API_URL = 'https://portalmapa.goiania.go.gov.br/servicogyn/rest/servi
 
 export class SincronizacaoMapaService {
 
+    async sincronizarTudo(origem: 'manual' | 'agendado' = 'manual') {
+        const inicio = Date.now();
+        const execucao = await prisma.sincronizacaoMapa.create({
+            data: {
+                origem,
+                status: 'EM_ANDAMENTO'
+            }
+        });
+
+        try {
+            console.log(`[Sync] Iniciando sincronização COMPLETA (${origem})...`);
+
+            const bairros = await this.sincronizarBairros();
+            const edificios = await this.sincronizarEdificios();
+            const unidades = await this.sincronizarUnidades();
+
+            const duracaoMs = Date.now() - inicio;
+
+            await prisma.sincronizacaoMapa.update({
+                where: { id: execucao.id },
+                data: {
+                    status: 'SUCESSO',
+                    concluidoEm: new Date(),
+                    duracaoMs,
+                    totalBairros: Number(bairros.total || 0),
+                    totalEdificios: Number(edificios.total || 0),
+                    totalUnidades: Number(unidades.total || 0),
+                    mensagem: 'Sincronização concluída com sucesso'
+                }
+            });
+
+            return {
+                id: execucao.id,
+                status: 'SUCESSO',
+                duracaoMs,
+                bairros: Number(bairros.total || 0),
+                edificios: Number(edificios.total || 0),
+                unidades: Number(unidades.total || 0)
+            };
+        } catch (error: any) {
+            const duracaoMs = Date.now() - inicio;
+
+            await prisma.sincronizacaoMapa.update({
+                where: { id: execucao.id },
+                data: {
+                    status: 'ERRO',
+                    concluidoEm: new Date(),
+                    duracaoMs,
+                    mensagem: error?.message || 'Erro desconhecido',
+                    detalhesErro: {
+                        name: error?.name,
+                        message: error?.message,
+                        stack: error?.stack
+                    }
+                }
+            });
+
+            throw error;
+        }
+    }
+
+    async obterUltimaExecucao() {
+        return prisma.sincronizacaoMapa.findFirst({
+            orderBy: { iniciadoEm: 'desc' }
+        });
+    }
+
     /**
      * Passo 1: Sincronizar Bairros
      * Busca todos os bairros da API e salva na tabela Bairro
@@ -34,7 +101,7 @@ export class SincronizacaoMapaService {
             const features = response.data.features || [];
             console.log(`[Sync] API retornou ${features.length} bairros.`);
 
-            let novos = 0;
+            const novos = 0;
             let atualizados = 0;
 
             // Processar em transação para garantir integridade

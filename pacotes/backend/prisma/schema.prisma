@@ -2,13 +2,15 @@
 // Reconstruído com suporte a RAG - 28/11/2025
 
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
 
 // ====================================
@@ -49,6 +51,14 @@ model Tenant {
   perfilLocacao    Json?        // { garantiasAceitas, taxaAdministracao, etc }
   perfilVenda      Json?        // { comissaoPadrao, anunciaPortais, etc }
   ragPerfilTexto   String?      @db.Text  // Texto RAG sintetizado
+
+  // ====================================
+  // BYOK - Bring Your Own Key (LLM)
+  // ====================================
+  llmProvedor              String?    // "openai", "anthropic", "openrouter"
+  llmModelo                String?    // "gpt-4.1", "claude-sonnet-4-20250514", etc.
+  llmApiKeyCriptografada   String?    // API Key criptografada com Fernet
+  llmBaseUrl               String?    // URL customizada (OpenRouter, proxy, etc.)
 
   // ====================================
   // BILLING (Créditos + Pagamentos)
@@ -416,9 +426,8 @@ model EmpreendimentoConhecimento {
   briefingEstruturado       Json
   confiabilidade            Decimal  @default(0)
   
-  // RAG: Embedding
-  embedding                 String?
-  embeddingModelo           String   @default("text-embedding-3-small")
+  // Embedding vectorial
+  embedding                 Unsupported("vector(1536)")? // PGVector nativo
   embeddingGeradoEm         DateTime?
   
   // Validação
@@ -1043,6 +1052,24 @@ model Edificio {
   @@map("edificios_geo")
 }
 
+model SincronizacaoMapa {
+  id             String   @id @default(uuid())
+  origem         String   @default("manual")
+  status         String   @default("EM_ANDAMENTO")
+  iniciadoEm     DateTime @default(now())
+  concluidoEm    DateTime?
+  duracaoMs      Int?
+  totalBairros   Int      @default(0)
+  totalEdificios Int      @default(0)
+  totalUnidades  Int      @default(0)
+  mensagem       String?
+  detalhesErro   Json?
+
+  @@index([status])
+  @@index([iniciadoEm])
+  @@map("sincronizacoes_mapa")
+}
+
 // ====================================
 // ATIVIDADES
 // ====================================
@@ -1167,7 +1194,7 @@ model ConversaEmbedding {
   metadados         Json?    // Dados adicionais (temperatura, resultado, etc)
   
   // Embedding
-  embedding         String   // Vetor serializado
+  embedding         Unsupported("vector(1536)")? // Vetor nativo PGVector
   embeddingModelo   String   @default("text-embedding-3-small")
   
   // Qualidade e relevância

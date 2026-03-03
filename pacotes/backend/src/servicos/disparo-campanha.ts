@@ -331,7 +331,8 @@ export class DisparoCampanhaService {
       where: {
         campanhaId,
         statusProspeccao: 'AGUARDANDO',
-        telefone: { not: null }
+        telefone: { not: null },
+        modoAtendimento: 'IA'
       },
       take: limite,
       orderBy: { criadoEm: 'asc' }
@@ -353,7 +354,8 @@ export class DisparoCampanhaService {
         respondeu: false,
         tentativasContato: { lt: maxTentativas },
         ultimaTentativa: { lt: dataLimite },
-        telefone: { not: null }
+        telefone: { not: null },
+        modoAtendimento: 'IA'
       },
       take: restante,
       orderBy: { ultimaTentativa: 'asc' }
@@ -380,6 +382,15 @@ export class DisparoCampanhaService {
       };
     }
 
+    if ((contato as any).modoAtendimento && (contato as any).modoAtendimento !== 'IA') {
+      return {
+        sucesso: false,
+        contatoId: contato.id,
+        telefone,
+        erro: 'Contato não elegível para atendimento por IA'
+      };
+    }
+
     // Verificar se telefone está na blacklist
     const tenantId = (campanha as any).tenantId;
     if (await blacklistService.estaBlacklist(telefone, tenantId)) {
@@ -400,6 +411,20 @@ export class DisparoCampanhaService {
     }
 
     try {
+      const agenteAtivo = await prisma.configuracaoAgente.findFirst({
+        where: { tenantId, estaAtivo: true, status: 'ATIVO' },
+        select: { id: true }
+      });
+
+      if (!agenteAtivo) {
+        return {
+          sucesso: false,
+          contatoId: contato.id,
+          telefone,
+          erro: 'Agente pausado ou inexistente para este tenant'
+        };
+      }
+
       // 🆕 Buscar sessão WhatsApp ativa do tenant
       const sessao = await prisma.sessaoWhatsapp.findFirst({
         where: {
@@ -422,8 +447,11 @@ export class DisparoCampanhaService {
       const tentativa = contato.tentativasContato + 1;
       let mensagem: string;
 
-      // Buscar nome do agente configurado para o tenant
+      // Buscar nome do agente e da imobiliária
       const nomeAgente = await buscarNomeAgente(tenantId);
+
+      // Buscar nome da imobiliária do tenant
+      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { nome: true } });
 
       // Dados para substituição de variáveis
       const dados: VariaveisTemplate = {
@@ -431,6 +459,7 @@ export class DisparoCampanhaService {
         agente: nomeAgente, // Nome dinâmico do agente
         empreendimento: contato.nomeEdificio || campanha.nomeEmpreendimento || 'região',
         bairro: contato.bairroImovel || campanha.localizacao || 'região',
+        imobiliaria: tenant?.nome || 'nossa imobiliária',
       };
 
       if (tentativa === 1) {

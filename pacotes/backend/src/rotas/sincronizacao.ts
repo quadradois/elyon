@@ -82,4 +82,43 @@ router.post('/unidades', checkAdmin, async (req, res) => {
     }
 });
 
+/**
+ * POST /sincronizar/completo
+ * Executa sincronização completa (bairros + edifícios + unidades)
+ */
+router.post('/completo', checkAdmin, async (_req, res) => {
+    try {
+        sincronizacaoService.sincronizarTudo('manual')
+            .then(resultado => {
+                console.log('[API] Sincronização completa concluída:', resultado);
+            })
+            .catch(erro => {
+                console.error('[API] Erro na sincronização completa:', erro);
+            });
+
+        return res.json({
+            mensagem: 'Sincronização completa iniciada em background',
+            status: 'PROCESSANDO'
+        });
+    } catch (error) {
+        return res.status(500).json({ erro: 'Erro ao iniciar sincronização completa' });
+    }
+});
+
+/**
+ * GET /sincronizar/status
+ * Retorna status da última execução de sincronização completa
+ */
+router.get('/status', checkAdmin, async (_req, res) => {
+    try {
+        const ultima = await sincronizacaoService.obterUltimaExecucao();
+
+        return res.json({
+            ultimaExecucao: ultima || null
+        });
+    } catch (error) {
+        return res.status(500).json({ erro: 'Erro ao consultar status da sincronização' });
+    }
+});
+
 export default router;

@@ -89,6 +89,41 @@ chmod +x scripts/deploy.sh
 
 ---
 
+## 🤖 Modo Outbound-Only (Orchestrator)
+
+O runtime oficial do ELYON está em modo **100% outbound com orchestrator**.
+
+No serviço `backend` (compose), mantenha:
+
+```yaml
+USAR_ORQUESTRADOR_4_AGENTES: true
+MODO_OUTBOUND_ONLY: true
+DESATIVAR_INBOUND: true
+```
+
+### Efeito operacional
+
+- Mensagens de prospecção ativa continuam no fluxo do orchestrator.
+- Fluxo inbound é ignorado globalmente (sem processamento IA de inbound).
+- Se `USAR_ORQUESTRADOR_4_AGENTES` estiver desligado, o backend não usa fallback legado de SDR no webhook.
+
+### Rollback controlado (temporário)
+
+Para reabrir inbound temporariamente, defina:
+
+```yaml
+MODO_OUTBOUND_ONLY: false
+DESATIVAR_INBOUND: false
+```
+
+Depois aplique restart:
+
+```bash
+./scripts/deploy.sh restart
+```
+
+---
+
 ## 💾 Backup e Recuperação
 
 O backup agora é **100% automatizado** via container dedicado. Não use scripts manuais via crontab.

@@ -1,9 +1,9 @@
 // Serviço de Integração com Supabase
 // Busca leads do site de vendas (lista VIP)
 
-// Configuração Supabase
-const SUPABASE_URL = 'https://qtlpkxbvrhgqmrwcmcfp.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF0bHBreGJ2cmhncW1yd2NtY2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUyODc2OTksImV4cCI6MjA4MDg2MzY5OX0.x4zez24C_dG94wWuSZRaHDbLk_X9eAjhkjcrbcoChcs';
+// Configuração Supabase (via variáveis de ambiente)
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://qtlpkxbvrhgqmrwcmcfp.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'fallback_apenas_para_dev_local';
 
 // ====================================
 // TIPOS
@@ -40,14 +40,14 @@ export async function listarLeadsVIP(opcoes?: {
   try {
     const limite = opcoes?.limite || 100;
     const offset = opcoes?.offset || 0;
-    
+
     let url = `${SUPABASE_URL}/rest/v1/leads_vip?select=*&order=created_at.desc&limit=${limite}&offset=${offset}`;
-    
+
     // Filtro por não atendidos
     if (opcoes?.apenasNaoAtendidos) {
       url += '&or=(atendido.is.null,atendido.eq.false)';
     }
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -56,14 +56,14 @@ export async function listarLeadsVIP(opcoes?: {
         'Content-Type': 'application/json'
       }
     });
-    
+
     if (!response.ok) {
       throw new Error(`Erro Supabase: ${response.status}`);
     }
-    
+
     const leads = await response.json() as LeadVIP[];
     console.log(`[Supabase] ✅ ${leads.length} leads VIP carregados`);
-    
+
     return leads;
   } catch (erro) {
     console.error('[Supabase] Erro ao listar leads VIP:', erro);
@@ -89,7 +89,7 @@ export async function contarLeadsVIP(): Promise<{ total: number; naoAtendidos: n
         }
       }
     );
-    
+
     // Não atendidos
     const responseNaoAtendidos = await fetch(
       `${SUPABASE_URL}/rest/v1/leads_vip?select=id&or=(atendido.is.null,atendido.eq.false)`,
@@ -103,10 +103,10 @@ export async function contarLeadsVIP(): Promise<{ total: number; naoAtendidos: n
         }
       }
     );
-    
+
     const total = parseInt(responseTotal.headers.get('content-range')?.split('/')[1] || '0');
     const naoAtendidos = parseInt(responseNaoAtendidos.headers.get('content-range')?.split('/')[1] || '0');
-    
+
     return { total, naoAtendidos };
   } catch (erro) {
     console.error('[Supabase] Erro ao contar leads:', erro);
@@ -136,11 +136,11 @@ export async function marcarComoAtendido(leadId: number, notas?: string): Promis
         })
       }
     );
-    
+
     if (!response.ok) {
       throw new Error(`Erro ao atualizar: ${response.status}`);
     }
-    
+
     console.log(`[Supabase] ✅ Lead ${leadId} marcado como atendido`);
     return true;
   } catch (erro) {
@@ -170,11 +170,11 @@ export async function atualizarStatusLead(leadId: number, status: string, notas?
         })
       }
     );
-    
+
     if (!response.ok) {
       throw new Error(`Erro ao atualizar: ${response.status}`);
     }
-    
+
     console.log(`[Supabase] ✅ Lead ${leadId} atualizado para ${status}`);
     return true;
   } catch (erro) {
@@ -199,11 +199,11 @@ export async function buscarLeadVIP(leadId: number): Promise<LeadVIP | null> {
         }
       }
     );
-    
+
     if (!response.ok) {
       throw new Error(`Erro: ${response.status}`);
     }
-    
+
     const leads = await response.json() as LeadVIP[];
     return leads[0] || null;
   } catch (erro) {

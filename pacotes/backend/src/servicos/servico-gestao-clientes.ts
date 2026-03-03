@@ -127,7 +127,7 @@ export async function criarCliente(dados: CriarClienteDTO) {
 
   // Gerar slug único
   let slug = dados.slug || gerarSlug(dados.nomeEmpresa);
-  let slugOriginal = slug;
+  const slugOriginal = slug;
   let tentativa = 0;
 
   while (true) {

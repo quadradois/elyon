@@ -18,6 +18,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       EVOLUTION_API_URL: ${EVOLUTION_API_URL}
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-elyon_3b5f4a6a_vendas}
       ASAAS_API_URL: ${ASAAS_API_URL:-https://api.asaas.com/v3}
       ASAAS_API_KEY: ${ASAAS_API_KEY}
       ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN}
@@ -33,6 +34,8 @@ services:
       BACKEND_URL: ${BACKEND_URL:-https://api.elyon.quadradois.com.br}
       # 🆕 Feature Flag para 4 Agentes de Captação
       USAR_ORQUESTRADOR_4_AGENTES: "true"
+      MODO_OUTBOUND_ONLY: "true"
+      DESATIVAR_INBOUND: "true"
     networks:
       - elyon_network
     labels:

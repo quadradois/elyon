@@ -13,7 +13,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Instalar dependências
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copiar código fonte
 COPY . .
@@ -38,15 +38,17 @@ ENV TZ=America/Sao_Paulo
 # Instalar apenas dependências para Prisma funcionar
 RUN apk add --no-cache openssl
 
-# Copiar artefatos do build
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/package*.json ./
-
-# Criar usuário não-root para segurança
+# Criar usuário não-root para segurança ANTES de copiar (melhora performance)
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
-RUN chown -R nodejs:nodejs /app
+
+# Copiar artefatos do build já com o dono correto (evita o lento chown -R)
+COPY --chown=nodejs:nodejs --from=builder /app/dist ./dist
+COPY --chown=nodejs:nodejs --from=builder /app/prisma ./prisma
+COPY --chown=nodejs:nodejs --from=builder /app/package*.json ./
+
+# Instalar apenas dependências de produção (sem devDependencies)
+RUN npm install --omit=dev --legacy-peer-deps
+
 USER nodejs
 
 # Expor porta

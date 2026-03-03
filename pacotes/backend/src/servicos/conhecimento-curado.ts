@@ -54,37 +54,44 @@ export interface ConhecimentoEncontrado {
 }
 
 class ConhecimentoCuradoService {
-  
+
   /**
    * Adiciona novo conhecimento curado
    */
   async adicionar(input: ConhecimentoCuradoInput): Promise<string> {
     console.log(`[CONHECIMENTO CURADO] Adicionando: ${input.titulo}`);
-    
-    // Gerar embedding do texto + contexto
+
     const textoParaEmbedding = `${input.titulo}. ${input.texto}. Usar quando: ${input.contextoUso}`;
     const embedding = await embeddingService.gerar(textoParaEmbedding);
-    
-    const conhecimento = await prisma.conhecimentoCurado.create({
-      data: {
-        categoria: input.categoria,
-        subcategoria: input.subcategoria,
-        titulo: input.titulo,
-        texto: input.texto,
-        contextoUso: input.contextoUso,
-        exemplo: input.exemplo,
-        tipoImovel: input.tipoImovel || [],
-        faixaPreco: input.faixaPreco,
-        tipoNegocio: input.tipoNegocio || [],
-        scoreEficacia: input.scoreEficacia || 80,
-        fonte: input.fonte || 'manual',
-        criadoPor: input.criadoPor,
-        embedding: JSON.stringify(embedding),
-      },
-    });
-    
-    console.log(`[CONHECIMENTO CURADO] ✅ Adicionado com ID: ${conhecimento.id}`);
-    return conhecimento.id;
+    const vetorString = `[${embedding.join(',')}]`;
+
+    const id = require('crypto').randomUUID();
+
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO conhecimento_curado (
+        id, categoria, subcategoria, titulo, texto, "contextoUso", exemplo, "tipoImovel", "faixaPreco", "tipoNegocio", "scoreEficacia", fonte, "criadoPor", embedding, "criadoEm", "atualizadoEm", ativo, ordem, "embeddingModelo"
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::vector, NOW(), NOW(), true, 0, 'text-embedding-3-small'
+      )
+    `,
+      id,
+      input.categoria,
+      input.subcategoria || null,
+      input.titulo,
+      input.texto,
+      input.contextoUso,
+      input.exemplo || null,
+      input.tipoImovel || [],
+      input.faixaPreco || null,
+      input.tipoNegocio || [],
+      input.scoreEficacia || 80,
+      input.fonte || 'manual',
+      input.criadoPor || null,
+      vetorString
+    );
+
+    console.log(`[CONHECIMENTO CURADO] ✅ Adicionado com ID: ${id}`);
+    return id;
   }
 
   /**
@@ -92,66 +99,58 @@ class ConhecimentoCuradoService {
    */
   async buscar(params: BuscaConhecimentoParams): Promise<ConhecimentoEncontrado[]> {
     const { query, categoria, tipoImovel, faixaPreco, tipoNegocio, limite = 5 } = params;
-    
-    // Gerar embedding da query
+
     const queryEmbedding = await embeddingService.gerar(query);
-    
-    // Buscar todos os conhecimentos ativos
-    const whereClause: any = { ativo: true };
-    if (categoria) whereClause.categoria = categoria;
-    
-    const conhecimentos = await prisma.conhecimentoCurado.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        categoria: true,
-        subcategoria: true,
-        titulo: true,
-        texto: true,
-        contextoUso: true,
-        exemplo: true,
-        tipoImovel: true,
-        faixaPreco: true,
-        tipoNegocio: true,
-        scoreEficacia: true,
-        embedding: true,
-      },
-    });
-    
-    // Calcular similaridade e filtrar
+    const vetorString = `[${queryEmbedding.join(',')}]`;
+
+    let sqlQuery = `
+      SELECT id, categoria, subcategoria, titulo, texto, "contextoUso", exemplo, "tipoImovel", "faixaPreco", "tipoNegocio", "scoreEficacia",
+      1 - (embedding <=> $1::vector) AS similaridade
+      FROM conhecimento_curado
+      WHERE ativo = true AND embedding IS NOT NULL
+    `;
+    const sqlParams: any[] = [vetorString];
+    let queryIndex = 2;
+
+    if (categoria) {
+      sqlQuery += ` AND categoria = $${queryIndex++}`;
+      sqlParams.push(categoria);
+    }
+    if (faixaPreco) {
+      sqlQuery += ` AND "faixaPreco" = $${queryIndex++}`;
+      sqlParams.push(faixaPreco);
+    }
+    // Para simplificar arrays do postgres (tipoImovel e tipoNegocio), a filtragem pode ser feita pós query 
+    // ou usaremos uma condição mais simples. Vamos filtrar similaridade nativamente:
+
+    sqlQuery += ` AND 1 - (embedding <=> $1::vector) > 0.3`;
+
+    const conhecimentos: any[] = await prisma.$queryRawUnsafe(sqlQuery, ...sqlParams);
+
+    // Calcular similaridade e filtrar na memória se existirem regras mais complexas de arrays
     const resultados: ConhecimentoEncontrado[] = [];
-    
+
     for (const conhecimento of conhecimentos) {
-      if (!conhecimento.embedding) continue;
-      
       // Verificar filtros de aplicabilidade
-      if (tipoImovel && conhecimento.tipoImovel.length > 0) {
+      if (tipoImovel && conhecimento.tipoImovel && conhecimento.tipoImovel.length > 0) {
         if (!conhecimento.tipoImovel.includes(tipoImovel)) continue;
       }
-      if (faixaPreco && conhecimento.faixaPreco) {
-        if (conhecimento.faixaPreco !== faixaPreco) continue;
-      }
-      if (tipoNegocio && conhecimento.tipoNegocio.length > 0) {
+      if (tipoNegocio && conhecimento.tipoNegocio && conhecimento.tipoNegocio.length > 0) {
         if (!conhecimento.tipoNegocio.includes(tipoNegocio)) continue;
       }
-      
-      const embedding = JSON.parse(conhecimento.embedding);
-      const similaridade = this.calcularSimilaridade(queryEmbedding, embedding);
-      
-      if (similaridade > 0.3) { // Threshold mínimo
-        resultados.push({
-          id: conhecimento.id,
-          categoria: conhecimento.categoria,
-          titulo: conhecimento.titulo,
-          texto: conhecimento.texto,
-          contextoUso: conhecimento.contextoUso,
-          exemplo: conhecimento.exemplo || undefined,
-          scoreEficacia: Number(conhecimento.scoreEficacia),
-          similaridade,
-        });
-      }
+
+      resultados.push({
+        id: conhecimento.id,
+        categoria: conhecimento.categoria,
+        titulo: conhecimento.titulo,
+        texto: conhecimento.texto,
+        contextoUso: conhecimento.contextoUso,
+        exemplo: conhecimento.exemplo || undefined,
+        scoreEficacia: Number(conhecimento.scoreEficacia),
+        similaridade: conhecimento.similaridade,
+      });
     }
-    
+
     // Ordenar por similaridade * eficácia e limitar
     return resultados
       .sort((a, b) => (b.similaridade * b.scoreEficacia) - (a.similaridade * a.scoreEficacia))
@@ -173,7 +172,7 @@ class ConhecimentoCuradoService {
       ],
       take: limite,
     });
-    
+
     return conhecimentos.map(c => ({
       id: c.id,
       categoria: c.categoria,
@@ -213,10 +212,10 @@ class ConhecimentoCuradoService {
       limiteCurado = 3,
       limiteTenant = 5,
     } = params || {};
-    
+
     // Gerar embedding da query uma vez
     const queryEmbedding = await embeddingService.gerar(query);
-    
+
     // Buscar conhecimento curado (global)
     const curado = await this.buscar({
       query,
@@ -226,14 +225,14 @@ class ConhecimentoCuradoService {
       tipoNegocio,
       limite: limiteCurado,
     });
-    
+
     // Buscar conhecimento do tenant (RAG)
     const tenant = await this.buscarConhecimentoTenant(
       queryEmbedding,
       tenantId,
       limiteTenant
     );
-    
+
     return { curado, tenant };
   }
 
@@ -245,41 +244,33 @@ class ConhecimentoCuradoService {
     tenantId: string,
     limite: number
   ): Promise<ConhecimentoEncontrado[]> {
-    const embeddings = await prisma.conversaEmbedding.findMany({
-      where: {
-        tenantId,
-        scoreQualidade: { gte: 70 }, // Só alta qualidade
-      },
-      select: {
-        id: true,
-        tipoConteudo: true,
-        textoOriginal: true,
-        metadados: true,
-        embedding: true,
-        scoreQualidade: true,
-      },
-    });
-    
+    const vetorString = `[${queryEmbedding.join(',')}]`;
+
+    const querySql = `
+      SELECT id, "tipoConteudo", "textoOriginal", metadados, "scoreQualidade",
+      1 - (embedding <=> $1::vector) AS similaridade
+      FROM conversas_embeddings
+      WHERE "tenantId" = $2 AND "scoreQualidade" >= 70 AND embedding IS NOT NULL
+      AND 1 - (embedding <=> $1::vector) > 0.4
+    `;
+
+    const embeddings: any[] = await prisma.$queryRawUnsafe(querySql, vetorString, tenantId);
+
     const resultados: ConhecimentoEncontrado[] = [];
-    
+
     for (const emb of embeddings) {
-      const embedding = JSON.parse(emb.embedding);
-      const similaridade = this.calcularSimilaridade(queryEmbedding, embedding);
-      
-      if (similaridade > 0.4) {
-        const metadados = emb.metadados as any || {};
-        resultados.push({
-          id: emb.id,
-          categoria: emb.tipoConteudo,
-          titulo: metadados.titulo || emb.tipoConteudo,
-          texto: emb.textoOriginal,
-          contextoUso: metadados.contexto || 'Aprendido de conversa real',
-          scoreEficacia: Number(emb.scoreQualidade),
-          similaridade,
-        });
-      }
+      const metadados = emb.metadados as any || {};
+      resultados.push({
+        id: emb.id,
+        categoria: emb.tipoConteudo,
+        titulo: metadados.titulo || emb.tipoConteudo,
+        texto: emb.textoOriginal,
+        contextoUso: metadados.contexto || 'Aprendido de conversa real',
+        scoreEficacia: Number(emb.scoreQualidade),
+        similaridade: emb.similaridade,
+      });
     }
-    
+
     return resultados
       .sort((a, b) => (b.similaridade * b.scoreEficacia) - (a.similaridade * a.scoreEficacia))
       .slice(0, limite);
@@ -290,17 +281,17 @@ class ConhecimentoCuradoService {
    */
   private calcularSimilaridade(vec1: number[], vec2: number[]): number {
     if (vec1.length !== vec2.length) return 0;
-    
+
     let dotProduct = 0;
     let norm1 = 0;
     let norm2 = 0;
-    
+
     for (let i = 0; i < vec1.length; i++) {
       dotProduct += vec1[i] * vec2[i];
       norm1 += vec1[i] * vec1[i];
       norm2 += vec2[i] * vec2[i];
     }
-    
+
     const magnitude = Math.sqrt(norm1) * Math.sqrt(norm2);
     return magnitude === 0 ? 0 : dotProduct / magnitude;
   }
@@ -314,7 +305,7 @@ class ConhecimentoCuradoService {
       where: { ativo: true },
       _count: { id: true },
     });
-    
+
     return result.map(r => ({
       categoria: r.categoria,
       total: r._count.id,
@@ -347,7 +338,7 @@ class ConhecimentoCuradoService {
         _avg: { scoreEficacia: true },
       }),
     ]);
-    
+
     return {
       totalConhecimentos: total,
       porCategoria: porCategoria.map(r => ({ categoria: r.categoria, total: r._count.id })),
@@ -361,26 +352,37 @@ class ConhecimentoCuradoService {
    */
   async atualizar(id: string, input: Partial<ConhecimentoCuradoInput>): Promise<void> {
     const updateData: any = { ...input };
-    
+
     // Se texto ou contexto mudou, regenerar embedding
     if (input.texto || input.contextoUso || input.titulo) {
       const atual = await prisma.conhecimentoCurado.findUnique({
         where: { id },
         select: { titulo: true, texto: true, contextoUso: true },
       });
-      
+
       if (atual) {
         const textoParaEmbedding = `${input.titulo || atual.titulo}. ${input.texto || atual.texto}. Usar quando: ${input.contextoUso || atual.contextoUso}`;
         const embedding = await embeddingService.gerar(textoParaEmbedding);
-        updateData.embedding = JSON.stringify(embedding);
+        const vetorString = `[${embedding.join(',')}]`;
+
+        await prisma.$executeRawUnsafe(`
+          UPDATE conhecimento_curado
+          SET embedding = $1::vector, "atualizadoEm" = NOW()
+          WHERE id = $2
+        `, vetorString, id);
       }
     }
-    
-    await prisma.conhecimentoCurado.update({
-      where: { id },
-      data: updateData,
-    });
-    
+
+    // Atualizar dados comuns, remove embedding para não esbarrar no erro de "Unsupported" do Prisma Client
+    delete updateData.embedding;
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.conhecimentoCurado.update({
+        where: { id },
+        data: updateData,
+      });
+    }
+
     console.log(`[CONHECIMENTO CURADO] ✅ Atualizado: ${id}`);
   }
 
@@ -392,7 +394,7 @@ class ConhecimentoCuradoService {
       where: { id },
       data: { ativo: false },
     });
-    
+
     console.log(`[CONHECIMENTO CURADO] ❌ Removido: ${id}`);
   }
 }

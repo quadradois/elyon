@@ -36,6 +36,24 @@ const getTenantId = (req: Request): string | null => {
   return null;
 };
 
+const normalizarTelefone = (telefone?: string): string | null => {
+  if (!telefone) return null;
+  const limpo = telefone.replace(/\D/g, '');
+  return limpo.length >= 8 ? limpo : null;
+};
+
+const normalizarEmail = (email?: string): string | null => {
+  if (!email) return null;
+  const limpo = email.trim().toLowerCase();
+  return limpo.length > 0 ? limpo : null;
+};
+
+const normalizarCpf = (cpf?: string): string | null => {
+  if (!cpf) return null;
+  const limpo = cpf.replace(/\D/g, '');
+  return limpo.length === 11 ? limpo : null;
+};
+
 // GET /api/leads - Retorna leads ativos (não arquivados) do tenant
 router.get('/', async (req, res) => {
   try {
@@ -129,10 +147,19 @@ router.post('/', async (req, res) => {
       return res.status(401).json({ erro: 'Não autorizado - tenant não identificado' });
     }
 
-    const { nome, telefone, email } = req.body;
+    const { nome, telefone, email, cpf } = req.body;
 
-    if (!nome) {
+    const nomeNormalizado = String(nome || '').trim();
+    const telefoneNormalizado = normalizarTelefone(telefone);
+    const emailNormalizado = normalizarEmail(email);
+    const cpfNormalizado = normalizarCpf(cpf);
+
+    if (!nomeNormalizado) {
       return res.status(400).json({ error: 'Nome é obrigatório' });
+    }
+
+    if (!telefoneNormalizado && !emailNormalizado) {
+      return res.status(400).json({ error: 'Informe ao menos telefone ou email para cadastro do lead' });
     }
 
     // Verificar se tenant existe
@@ -141,15 +168,50 @@ router.post('/', async (req, res) => {
       return res.status(404).json({ error: 'Tenant não encontrado' });
     }
 
-    // Gerar um CPF fictício para leads manuais se não fornecido
-    const cpfFicticio = `MANUAL-${Date.now()}`;
+    const condicoesDuplicidade: any[] = [];
+
+    if (cpfNormalizado) {
+      condicoesDuplicidade.push({ cpf: cpfNormalizado });
+    }
+
+    if (emailNormalizado) {
+      condicoesDuplicidade.push({ email: { equals: emailNormalizado, mode: 'insensitive' as const } });
+    }
+
+    if (telefoneNormalizado) {
+      condicoesDuplicidade.push({ telefone: { contains: telefoneNormalizado.slice(-8) } });
+    }
+
+    if (condicoesDuplicidade.length > 0) {
+      const leadExistente = await prisma.lead.findFirst({
+        where: {
+          tenantId,
+          OR: condicoesDuplicidade
+        },
+        select: {
+          id: true,
+          nome: true,
+          telefone: true,
+          email: true,
+          status: true,
+          temperatura: true
+        }
+      });
+
+      if (leadExistente) {
+        return res.status(409).json({
+          erro: 'Lead já cadastrado com dados semelhantes',
+          leadExistente
+        });
+      }
+    }
 
     const lead = await prisma.lead.create({
       data: {
-        nome,
-        telefone,
-        email,
-        cpf: cpfFicticio,
+        nome: nomeNormalizado,
+        telefone: telefoneNormalizado || undefined,
+        email: emailNormalizado || undefined,
+        cpf: cpfNormalizado || undefined,
         tenantId, // ✅ Usando tenantId do request
         status: 'NOVO',
         temperatura: 'FRIO',
@@ -1011,7 +1073,7 @@ router.post('/:id/atividades', async (req, res) => {
         statusAgendamento: atividade.statusAgendamento,
         tokenConfirmacao: atividade.tokenConfirmacao,
         linkConfirmacao: tokenConfirmacao
-          ? `${process.env.FRONTEND_URL || 'http://localhost:5173'}/confirmar/${atividade.id}/${tokenConfirmacao}`
+          ? `${process.env.FRONTEND_URL || 'http://localhost'}/confirmar/${atividade.id}/${tokenConfirmacao}`
           : null
       }
     });

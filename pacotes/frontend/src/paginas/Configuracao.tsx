@@ -19,6 +19,7 @@ import {
   Bell,
   Palette,
   Lock,
+  Brain,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -94,6 +95,15 @@ export function Configuracao() {
       path: "/dashboard/integracoes",
       badge: "Novo",
       badgeColor: "bg-green-100 text-green-700",
+    },
+    {
+      id: "byok-llm",
+      titulo: "Provedor de IA (BYOK)",
+      descricao: "Use sua própria API Key de OpenAI, Anthropic ou OpenRouter",
+      icon: Brain,
+      iconColor: "text-violet-600",
+      iconBg: "bg-violet-50",
+      path: "/dashboard/configuracao-llm",
     },
   ];
 

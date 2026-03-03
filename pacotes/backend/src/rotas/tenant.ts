@@ -45,60 +45,54 @@ const extrairTenantId = (req: Request): string | null => {
 
 // ====================================
 // HELPER: Sintetizar RAG do Perfil
+// Usa a versão COMPLETA do sintetizarPerfil.ts
 // ====================================
+import { sintetizarPerfilRAG as sintetizarPerfilCompleto } from '../utilitarios/sintetizarPerfil';
+
 function sintetizarPerfilRAG(tenant: any): string {
-  const partes: string[] = [];
+  // Adaptar formato flat do tenant para o formato PerfilImobiliaria
+  const perfilEstruturado = {
+    dadosGerais: {
+      nomeImobiliaria: tenant.nome || '',
+      diferenciais: (tenant.diferenciais as string[]) || [],
+      tempoMercado: tenant.tempoMercado,
+      atendeFinalDeSemana: tenant.atendeFinalDeSemana || false,
+      horarioAtendimento: tenant.horarioAtendimento,
+      trabalhaComLocacao: !!(tenant.perfilLocacao),
+      trabalhaComVenda: !!(tenant.perfilVenda),
+      endereco: tenant.endereco,
+      cidade: tenant.cidade,
+      telefone: tenant.telefone,
+      whatsapp: tenant.whatsapp,
+      email: tenant.email,
+      site: tenant.site,
+      instagram: tenant.instagram,
+      facebook: tenant.facebook,
+    },
+    locacao: tenant.perfilLocacao || {
+      garantiasAceitas: [],
+      taxaAdministracao: 10,
+      taxaPrimeiroAluguel: false,
+      prazoMinimoContrato: 30,
+      aceitaPet: false,
+      fazVistoriaEntrada: true,
+      fazVistoriaSaida: true,
+      tempoMedioContrato: 30,
+    },
+    venda: tenant.perfilVenda || {
+      comissaoPadrao: 6,
+      aceitaExclusividade: true,
+      tempoExclusividade: 180,
+      fazAvaliacaoGratuita: true,
+      fazFotoProfissional: true,
+      fazTourVirtual: false,
+      anunciaPortais: [],
+      temParcerias: true,
+      percentualParceria: 50,
+    },
+  };
 
-  // Dados gerais
-  partes.push(`IMOBILIÁRIA: ${tenant.nome}`);
-  if (tenant.cidade) partes.push(`Localização: ${tenant.cidade}`);
-  if (tenant.tempoMercado) partes.push(`${tenant.tempoMercado} anos no mercado`);
-  if (tenant.horarioAtendimento) partes.push(`Horário: ${tenant.horarioAtendimento}`);
-  if (tenant.atendeFinalDeSemana) partes.push('Atende final de semana');
-
-  // Diferenciais
-  const diferenciais = tenant.diferenciais as string[] | null;
-  if (diferenciais?.length) {
-    partes.push(`Diferenciais: ${diferenciais.join(', ')}`);
-  }
-
-  // Contato
-  const contatos: string[] = [];
-  if (tenant.telefone) contatos.push(`Tel: ${tenant.telefone}`);
-  if (tenant.whatsapp) contatos.push(`WhatsApp: ${tenant.whatsapp}`);
-  if (tenant.email) contatos.push(`Email: ${tenant.email}`);
-  if (contatos.length) partes.push(`Contato: ${contatos.join(' | ')}`);
-
-  // Perfil de Locação
-  const locacao = tenant.perfilLocacao as any;
-  if (locacao) {
-    const locParts: string[] = ['LOCAÇÃO:'];
-    if (locacao.garantiasAceitas?.length) {
-      locParts.push(`Garantias aceitas: ${locacao.garantiasAceitas.join(', ')}`);
-    }
-    if (locacao.taxaAdministracao) locParts.push(`Taxa adm: ${locacao.taxaAdministracao}%`);
-    if (locacao.taxaPrimeiroAluguel) locParts.push('Cobra primeiro aluguel');
-    if (locacao.prazoMinimoContrato) locParts.push(`Prazo mín: ${locacao.prazoMinimoContrato} meses`);
-    if (locacao.aceitaPet) locParts.push('Aceita pet');
-    partes.push(locParts.join(' | '));
-  }
-
-  // Perfil de Venda
-  const venda = tenant.perfilVenda as any;
-  if (venda) {
-    const vendaParts: string[] = ['VENDA:'];
-    if (venda.comissaoPadrao) vendaParts.push(`Comissão: ${venda.comissaoPadrao}%`);
-    if (venda.fazAvaliacaoGratuita) vendaParts.push('Avaliação gratuita');
-    if (venda.fazFotoProfissional) vendaParts.push('Fotos profissionais');
-    if (venda.fazTourVirtual) vendaParts.push('Tour virtual');
-    if (venda.anunciaPortais?.length) {
-      vendaParts.push(`Portais: ${venda.anunciaPortais.join(', ')}`);
-    }
-    if (venda.temParcerias) vendaParts.push(`Parcerias: ${venda.percentualParceria || 50}%`);
-    partes.push(vendaParts.join(' | '));
-  }
-
-  return partes.join('\n');
+  return sintetizarPerfilCompleto(perfilEstruturado);
 }
 
 // ====================================

@@ -13,6 +13,7 @@ import { ScrollArea } from "./scroll-area";
 export interface ComboboxOption {
   value: string;
   label: string;
+  render?: React.ReactNode;
 }
 
 interface ComboboxProps {
@@ -41,7 +42,7 @@ export function Combobox({
 
   const filteredOptions = React.useMemo(() => {
     if (!search.trim()) return options;
-    
+
     const searchLower = search.toLowerCase().trim();
     return options.filter((option) =>
       option.label.toLowerCase().includes(searchLower)
@@ -106,7 +107,9 @@ export function Combobox({
                       value === option.value ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  <span className="truncate">{option.label}</span>
+                  <div className="flex-1 truncate">
+                    {option.render || option.label}
+                  </div>
                 </div>
               ))}
             </div>

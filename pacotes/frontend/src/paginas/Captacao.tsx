@@ -103,8 +103,9 @@ export function Captacao() {
     useState<ResultadoBusca | null>(null);
   const [locaisSelecionados, setLocaisSelecionados] = useState<ResultadoBusca[]>([]);
   // Estado para aba de busca (local ou iptu)
-  const [modoBusca, setModoBusca] = useState<"local" | "iptu">("local");
+  const [modoBusca, setModoBusca] = useState<"local" | "codigo" | "iptu">("local");
   const [iptuBusca, setIptuBusca] = useState("");
+  const [codigoBusca, setCodigoBusca] = useState("");
 
   // Etapa 2: Seleção
   const [unidades, setUnidades] = useState<Unidade[]>([]);
@@ -180,6 +181,61 @@ export function Captacao() {
       console.error("Erro ao buscar:", error);
       setErro("Erro ao buscar imóveis");
       toast.error("Erro na busca");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const buscarPorCodigo = async () => {
+    const codigoLimpo = codigoBusca.trim();
+
+    if (!/^\d+$/.test(codigoLimpo) || codigoLimpo.length < 3) {
+      toast.info("Informe um código válido (apenas números, mínimo 3 dígitos)");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setErro("");
+      const response = await api.get(
+        `/mineracao/buscar-imoveis?codigo=${encodeURIComponent(codigoLimpo)}`
+      );
+
+      const resultados = response.data.resultados || [];
+      setResultadosBusca(resultados);
+
+      const total = resultados.length;
+      const qtdEdificios = response.data.edificios?.length || 0;
+      const qtdCondominios = response.data.condominios?.length || 0;
+
+      if (total === 0) {
+        const tentarPorNome = window.confirm(
+          `Código "${codigoLimpo}" não encontrado. Deseja tentar por nome do empreendimento?`
+        );
+
+        if (tentarPorNome) {
+          setModoBusca("local");
+          setTermoBusca("");
+          toast.info("Digite um nome para buscar empreendimentos");
+        }
+      } else {
+        const descricao = [
+          qtdEdificios > 0 ? `${qtdEdificios} edifício(s)` : "",
+          qtdCondominios > 0 ? `${qtdCondominios} condomínio(s)` : "",
+        ]
+          .filter(Boolean)
+          .join(" + ");
+
+        toast.success(`${total} resultado(s) encontrado(s)`, {
+          description: descricao || "Busca por código concluída",
+        });
+      }
+    } catch (error: any) {
+      console.error("Erro ao buscar por código:", error);
+      const mensagemErro =
+        error?.response?.data?.erro || "Erro ao buscar por código";
+      setErro(mensagemErro);
+      toast.error(mensagemErro);
     } finally {
       setLoading(false);
     }
@@ -745,9 +801,18 @@ export function Captacao() {
             </div>
 
             {/* Abas de Modo de Busca */}
-            <Tabs value={modoBusca} onValueChange={(v) => setModoBusca(v as "local" | "iptu")} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6 max-w-lg mx-auto">
+            <Tabs
+              value={modoBusca}
+              onValueChange={(v) => {
+                setModoBusca(v as "local" | "codigo" | "iptu");
+                setErro("");
+                setResultadosBusca([]);
+              }}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-3 mb-6 max-w-lg mx-auto">
                 <TabsTrigger value="local">Empreendimentos</TabsTrigger>
+                <TabsTrigger value="codigo">Por código</TabsTrigger>
                 <TabsTrigger value="iptu">Por IPTU</TabsTrigger>
               </TabsList>
 
@@ -761,6 +826,31 @@ export function Captacao() {
                     className="flex-1"
                   />
                   <Button onClick={buscarImoveis} disabled={loading}>
+                    {loading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                    Buscar
+                  </Button>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="codigo" className="space-y-6">
+                <div className="text-center mb-4">
+                  <p className="text-sm text-slate-500">
+                    Busque por código do empreendimento (`cdedificio`) ou do bairro (`cdbairro`).
+                  </p>
+                </div>
+                <div className="flex gap-2 max-w-lg mx-auto">
+                  <Input
+                    placeholder="Ex: 12345"
+                    value={codigoBusca}
+                    onChange={(e) => setCodigoBusca(e.target.value.replace(/\D/g, ""))}
+                    onKeyDown={(e) => e.key === "Enter" && buscarPorCodigo()}
+                    className="flex-1 font-mono"
+                  />
+                  <Button onClick={buscarPorCodigo} disabled={loading}>
                     {loading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
@@ -815,13 +905,16 @@ export function Captacao() {
 
             {/* Empty State */}
             {!loading &&
-              termoBusca &&
+              ((modoBusca === "local" && termoBusca) ||
+                (modoBusca === "codigo" && codigoBusca)) &&
               resultadosBusca.length === 0 &&
               !erro && (
                 <EmptyState
                   tipo="busca-sem-resultado"
                   titulo="Nenhum imóvel encontrado"
-                  descricao={`Não encontramos resultados para "${termoBusca}". Tente outro termo.`}
+                  descricao={`Não encontramos resultados para "${
+                    modoBusca === "codigo" ? codigoBusca : termoBusca
+                  }". ${modoBusca === "codigo" ? "Você pode tentar por nome." : "Tente outro termo."}`}
                 />
               )}
 
@@ -1640,6 +1733,9 @@ export function Captacao() {
                   setUnidades([]);
                   setSelecionados([]);
                   setTermoBusca("");
+                  setCodigoBusca("");
+                  setIptuBusca("");
+                  setModoBusca("local");
                   setLeadsGerados([]);
                   setListaId(null);
                 }}

@@ -1,8 +1,7 @@
 import { prisma } from '../lib/db';
-import { whatsappService } from '../servicos/whatsapp';
-import { sdrWorker, ConfiguracaoAgente, configPadrao } from './workers/sdr-worker';
-import { documentosWorker } from './workers/documentos-worker';
-import { supervisor, ContextoSupervisao } from './supervisor';
+import { getWhatsAppService } from '../servicos/whatsapp';
+import { ConfiguracaoAgente, configPadrao } from './workers/sdr-worker';
+import { buscarConfiguracaoTenant, processarMensagemOrquestrada } from './orchestrator';
 import { ragConversasService } from '../servicos/rag-conversas';
 import { metricasSDRService } from '../servicos/metricas-sdr';
 import { websocketService } from '../servicos/websocket';
@@ -304,41 +303,20 @@ export class ElyonCore {
         }
       }
 
-      // 2. Verificar se veio de campanha de prospecção e buscar dados do empreendimento
-      // @ts-ignore - campanhaOrigemId pode existir no lead
-      const campanhaId = lead.campanhaOrigemId;
-      let modoProspeccao = false;
-      let nomeEmpreendimento: string | undefined;
-
-      if (campanhaId) {
-        const campanha = await prisma.campanha.findUnique({
-          where: { id: campanhaId },
-          include: { empreendimento: true }
-        });
-
-        if (campanha) {
-          // Se tem campanha, é prospecção ativa
-          modoProspeccao = true;
-          // @ts-ignore
-          nomeEmpreendimento = campanha.empreendimento?.nome;
-          console.log(`[ELYON] 📣 Modo PROSPECÇÃO ATIVA - Empreendimento: ${nomeEmpreendimento || 'N/A'}`);
-        }
+      const campanhaId = (lead as any).campanhaOrigemId;
+      if (!campanhaId) {
+        console.log(`[ELYON] 🚫 Inbound desativado - lead ${leadId} ignorado`);
+        return;
       }
 
-      // 3. Converter configuração do agente COM flags de modo e política da imobiliária
-      const configAgente = this.converterConfiguracao(
-        configAgenteBanco,
-        lead.tenant, // Passar tenant completo para extrair perfilVenda/perfilLocacao
-        modoProspeccao,
-        nomeEmpreendimento
-      );
-      console.log(`[ELYON] 🤖 Agente: ${configAgente.nome} (tom: ${configAgente.personalidade.tom}, prospecção: ${modoProspeccao})`);
-      console.log(`[ELYON] 💰 Política: comissão=${configAgente.politica?.comissaoVenda || 6}%, taxaLocação=${configAgente.politica?.taxaLocacao || 10}%`);
+      const campanha = await prisma.campanha.findUnique({
+        where: { id: campanhaId },
+        include: { empreendimento: true }
+      });
 
-      // 3.1. Extrair RAG do perfil da imobiliária (política de trabalho)
-      const ragPerfil = this.extrairRagPerfil(configAgenteBanco);
+      const nomeEmpreendimento = campanha?.empreendimento?.nome || (campanha as any)?.nomeEmpreendimento;
+      const briefingEmpreendimento = campanha?.empreendimento?.briefingCompleto || (campanha as any)?.briefingCompleto;
 
-      // 4. Recuperar Histórico da Conversa
       const historicoDb = await prisma.mensagem.findMany({
         where: {
           conversa: {
@@ -347,177 +325,91 @@ export class ElyonCore {
           }
         },
         orderBy: { enviadaEm: 'desc' },
-        take: 10 // Últimas 10 mensagens para contexto
+        take: 10
       });
 
-      // Formatar histórico para OpenAI (ordem cronológica)
       const mensagensOpenAI = historicoDb.reverse().map((msg: any) => ({
         role: msg.remetente === 'usuario' ? 'user' : 'assistant',
         content: msg.conteudo
       }));
 
+      const ultimaMsg = mensagensOpenAI[mensagensOpenAI.length - 1];
+      if (!ultimaMsg || ultimaMsg.role !== 'user' || ultimaMsg.content !== mensagemUsuario) {
+        mensagensOpenAI.push({ role: 'user', content: mensagemUsuario });
+      }
+
       console.log(`[ELYON] 💬 Histórico carregado: ${mensagensOpenAI.length} mensagens`);
 
-      // 5. Buscar contexto RAG (perfil imobiliária + empreendimento + conversas anteriores)
-      const contextoRAG = await this.buscarContextoRAG(
-        lead.tenantId,
-        campanhaId,
-        mensagemUsuario, // Passar mensagem para buscar conversas similares
-        ragPerfil // RAG do perfil da imobiliária
+      const configOrq = await buscarConfiguracaoTenant(lead.tenantId);
+      if (!configOrq) {
+        console.warn(`[ELYON] ⚠️ Configuração do orquestrador não encontrada para tenant ${lead.tenantId}`);
+        return;
+      }
+
+      if (briefingEmpreendimento) {
+        configOrq.briefingEmpreendimento = briefingEmpreendimento;
+      }
+
+      const contextoOrq = {
+        telefone: lead.telefone || '',
+        contatoId: undefined,
+        leadId: lead.id,
+        statusLead: (lead as any).status,
+        doresIdentificadas: (lead as any).doresIdentificadas || [],
+        empreendimento: nomeEmpreendimento,
+        situacaoAtual: (lead as any).situacaoAtual || undefined,
+        tipoAutorizacao: (lead as any).tipoAutorizacao || undefined,
+        comissaoAcordada: (lead as any).comissaoAcordada || undefined,
+        prazoTrabalho: (lead as any).prazoTrabalho || undefined
+      };
+
+      const resultadoOrq = await processarMensagemOrquestrada(
+        mensagensOpenAI as any,
+        configOrq,
+        contextoOrq as any
       );
 
-      if (contextoRAG) {
-        console.log(`[ELYON] 📚 Contexto RAG carregado (${contextoRAG.length} caracteres)`);
+      if (!resultadoOrq.sucesso || !resultadoOrq.resposta) {
+        console.warn(`[ELYON] ⚠️ Orquestrador não retornou resposta válida para lead ${leadId}`);
+        return;
       }
 
-      // 5. DELEGAÇÃO: Determinar qual worker usar
-      // Lógica de seleção baseada no estágio do lead
-      const workerSelecionado = this.selecionarWorker(lead, mensagemUsuario);
+      const respostaTexto = resultadoOrq.resposta;
 
-      console.log(`[ELYON] 🤖 Delegando para worker: ${workerSelecionado}`);
+      if (lead.telefone) {
+        const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
+          where: { tenantId: lead.tenantId, status: 'CONECTADO' }
+        });
 
-      // 6. Executar Worker com configuração e contexto
-      let respostaWorker: string;
-      let workerAtual = workerSelecionado;
-      let tentativas = 0;
-      const maxTentativas = 2;
-
-      while (tentativas < maxTentativas) {
-        tentativas++;
-
-        if (workerAtual === 'DOCUMENTOS') {
-          respostaWorker = await documentosWorker.processar(
-            mensagensOpenAI as any,
-            leadId,
-            configAgente,
-            {
-              tipoOperacao: (lead as any).interesse || undefined,
-              documentosPendentes: [] // Futuramente: buscar do banco
-            }
-          );
-        } else {
-          // Default: SDR Worker
-          respostaWorker = await sdrWorker.processar(
-            mensagensOpenAI as any,
-            leadId,
-            configAgente,
-            contextoRAG
-          );
-        }
-
-        console.log(`[ELYON] 📝 Resposta do ${workerAtual}: "${respostaWorker.substring(0, 80)}..."`);
-
-        // 7. SUPERVISÃO: Analisar qualidade antes de enviar
-        const contextoSupervisao: ContextoSupervisao = {
-          leadId,
-          mensagemUsuario,
-          respostaWorker,
-          workerOrigem: workerAtual as any,
-          historicoRecente: mensagensOpenAI as any,
-          temperatura: (lead as any).temperatura
-        };
-
-        const resultadoSupervisao = await supervisor.supervisionar(contextoSupervisao);
-
-        console.log(`[ELYON] 🔍 Supervisão: ${resultadoSupervisao.acao} (confiança: ${resultadoSupervisao.metricasQualidade.confianca}%)`);
-
-        // Se supervisor sugerir mudar de worker, tentar novamente
-        if (resultadoSupervisao.acao === 'MUDAR_WORKER' && resultadoSupervisao.novoWorker) {
-          console.log(`[ELYON] 🔄 Mudando para worker ${resultadoSupervisao.novoWorker}`);
-          workerAtual = resultadoSupervisao.novoWorker as any;
-          continue;
-        }
-
-        // Usar resposta final do supervisor (pode ser original, refinada ou de escalação)
-        const respostaTexto = resultadoSupervisao.respostaFinal;
-
-        // 8. Enviar Resposta no WhatsApp
-        if (lead.telefone) {
+        if (sessaoWhatsapp && sessaoWhatsapp.instanceName) {
+          const whatsappService = getWhatsAppService(sessaoWhatsapp.instanceName);
           await whatsappService.enviarMensagemTexto(lead.telefone, respostaTexto);
-          console.log(`[ELYON] 📤 Resposta enviada para ${lead.telefone}`);
+          console.log(`[ELYON] 📤 Resposta enviada para ${lead.telefone} usando instância ${sessaoWhatsapp.instanceName}`);
         } else {
-          console.warn(`[ELYON] ⚠️  Lead sem telefone cadastrado, resposta não enviada`);
+          console.warn(`[ELYON] ⚠️  Sessão WhatsApp não encontrada ou desconectada para tenant ${lead.tenantId}`);
         }
-
-        // 9. Salvar Resposta no Banco de Dados
-        const conversaId = historicoDb[0]?.conversaId;
-
-        if (conversaId) {
-          await prisma.mensagem.create({
-            data: {
-              conversaId: conversaId,
-              remetente: 'assistente',
-              conteudo: respostaTexto,
-              tipo: 'texto',
-              enviadaEm: new Date()
-            }
-          });
-          console.log(`[ELYON] 💾 Resposta salva no banco`);
-
-          // 10. REGISTRAR MÉTRICAS DE QUALIDADE
-          try {
-            await metricasSDRService.registrarMetrica({
-              conversaId,
-              leadId,
-              tenantId: lead.tenantId,
-              mensagemUsuario,
-              respostaGerada: respostaTexto,
-              workerUsado: workerAtual as any,
-              modoOperacao: modoProspeccao ? 'PROSPECCAO' : 'PASSIVO',
-              confianca: resultadoSupervisao.metricasQualidade.confianca,
-              relevancia: resultadoSupervisao.metricasQualidade.relevancia,
-              tom: resultadoSupervisao.metricasQualidade.tom as any,
-              riscoEscalacao: resultadoSupervisao.metricasQualidade.riscoEscalacao,
-              acaoSupervisor: resultadoSupervisao.acao as any,
-              foiRefinada: resultadoSupervisao.acao === 'REFINAR',
-              foiEscalada: resultadoSupervisao.acao === 'ESCALAR_HUMANO',
-              alertaCorretor: resultadoSupervisao.alertaCorretor || false,
-              temperaturaLead: (lead as any).temperatura
-            });
-            console.log(`[ELYON] 📊 Métricas registradas`);
-          } catch (metricaError) {
-            console.error('[ELYON] Erro ao registrar métricas (não crítico):', metricaError);
-          }
-        } else {
-          console.warn(`[ELYON] ⚠️  Conversa não encontrada, mensagem não salva`);
-        }
-
-        // 11. Se houve alerta para corretor, CRIAR ALERTA NO BANCO
-        if (resultadoSupervisao.alertaCorretor) {
-          try {
-            const tipoAlerta = resultadoSupervisao.acao === 'ESCALAR_HUMANO' ? 'ESCALACAO' : 'LEAD_QUENTE';
-            const prioridade = resultadoSupervisao.metricasQualidade.riscoEscalacao > 70 ? 'ALTA' : 'MEDIA';
-
-            await metricasSDRService.criarAlerta({
-              tenantId: lead.tenantId,
-              leadId,
-              conversaId: historicoDb[0]?.conversaId,
-              tipo: tipoAlerta,
-              prioridade,
-              titulo: tipoAlerta === 'ESCALACAO'
-                ? `Lead ${lead.nome} precisa de atenção humana`
-                : `Lead ${lead.nome} está aquecendo`,
-              descricao: `Risco de escalação: ${resultadoSupervisao.metricasQualidade.riscoEscalacao}%\n` +
-                `Motivo: ${resultadoSupervisao.motivo || 'Análise automática'}\n` +
-                `Última mensagem: "${mensagemUsuario.substring(0, 100)}..."`,
-              contexto: {
-                mensagemUsuario,
-                respostaGerada: respostaTexto,
-                metricas: resultadoSupervisao.metricasQualidade,
-                worker: workerAtual
-              }
-            });
-            console.log(`[ELYON] 🚨 Alerta criado para corretor (${tipoAlerta} - ${prioridade})`);
-          } catch (alertaError) {
-            console.error('[ELYON] Erro ao criar alerta (não crítico):', alertaError);
-          }
-        }
-
-        console.log(`[ELYON] ✨ Processamento completo com sucesso`);
-        return; // Sucesso, sair do loop
+      } else {
+        console.warn(`[ELYON] ⚠️  Lead sem telefone cadastrado, resposta não enviada`);
       }
 
-      console.warn(`[ELYON] ⚠️  Máximo de tentativas atingido`);
+      const conversaId = historicoDb[0]?.conversaId;
+      if (conversaId) {
+        await prisma.mensagem.create({
+          data: {
+            conversaId: conversaId,
+            remetente: 'assistente',
+            conteudo: respostaTexto,
+            tipo: 'texto',
+            enviadaEm: new Date()
+          }
+        });
+        console.log(`[ELYON] 💾 Resposta salva no banco`);
+      } else {
+        console.warn(`[ELYON] ⚠️  Conversa não encontrada, mensagem não salva`);
+      }
+
+      console.log(`[ELYON] ✨ Processamento completo com sucesso`);
+      return;
 
     } catch (error) {
       console.error('[ELYON] 💥 Erro ao processar mensagem:', error);

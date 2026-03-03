@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { whatsappService } from '../servicos/whatsapp';
+import { getWhatsAppService } from '../servicos/whatsapp';
 import axios from 'axios';
 import { prisma } from '../lib/db';
 
@@ -8,6 +8,27 @@ const router = Router();
 // GET /api/whatsapp/status
 router.get('/status', async (req, res) => {
   try {
+    // Obter tenantId do header ou query parameter
+    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+    
+    if (!tenantId) {
+      return res.status(400).json({ error: 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.' });
+    }
+
+    // Buscar sessão ativa do tenant
+    const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
+      where: { 
+        tenantId, 
+        status: 'CONECTADO' 
+      }
+    });
+
+    if (!sessaoWhatsapp || !sessaoWhatsapp.instanceName) {
+      return res.status(400).json({ error: 'Nenhuma sessão WhatsApp ativa encontrada para este tenant.' });
+    }
+
+    // Usar a instância correta do tenant
+    const whatsappService = getWhatsAppService(sessaoWhatsapp.instanceName);
     const status = await whatsappService.verificarStatus();
     console.log('Status verificado (GET /status):', JSON.stringify(status, null, 2));
     
@@ -27,6 +48,32 @@ router.get('/status', async (req, res) => {
 // POST /api/whatsapp/conectar
 router.post('/conectar', async (req, res) => {
   try {
+    // Obter tenantId do header ou query parameter
+    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+    
+    if (!tenantId) {
+      return res.status(400).json({ error: 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.' });
+    }
+
+    // Buscar sessão ativa do tenant ou criar uma nova
+    let sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
+      where: { 
+        tenantId, 
+        status: 'CONECTADO' 
+      }
+    });
+
+    let instanceName: string;
+    
+    if (!sessaoWhatsapp || !sessaoWhatsapp.instanceName) {
+      // Se não houver sessão ativa, usar a instância padrão do tenant
+      instanceName = `elyon_${tenantId.substring(0, 8)}_vendas`;
+    } else {
+      instanceName = sessaoWhatsapp.instanceName;
+    }
+
+    // Usar a instância correta do tenant
+    const whatsappService = getWhatsAppService(instanceName);
     const resultado = await whatsappService.conectarInstancia();
     
     console.log('Resultado da conexão Evolution:', JSON.stringify(resultado, null, 2));
@@ -121,15 +168,34 @@ router.post('/enviar', async (req, res) => {
       return res.status(400).json({ error: 'Telefone e mensagem são obrigatórios.' });
     }
 
+    // Busca Lead para obter o tenantId
+    const lead = await prisma.lead.findFirst({
+      where: { telefone: { contains: telefone.slice(-8) } }
+    });
+
+    if (!lead) {
+      return res.status(404).json({ error: 'Lead não encontrado para o telefone fornecido.' });
+    }
+
+    // Busca sessão ativa do tenant
+    const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
+      where: { 
+        tenantId: lead.tenantId, 
+        status: 'CONECTADO' 
+      }
+    });
+
+    if (!sessaoWhatsapp || !sessaoWhatsapp.instanceName) {
+      return res.status(400).json({ error: 'Nenhuma sessão WhatsApp ativa encontrada para este tenant.' });
+    }
+
+    // Usa a instância correta do tenant
+    const whatsappService = getWhatsAppService(sessaoWhatsapp.instanceName);
     const resultado = await whatsappService.enviarMensagemTexto(telefone, mensagem);
 
     // Persistir mensagem enviada
     try {
-      // Busca Lead (tenta match exato ou parcial)
-      const lead = await prisma.lead.findFirst({
-        where: { telefone: { contains: telefone.slice(-8) } }
-      });
-
+      // Lead já foi encontrado anteriormente, usar ele
       if (lead) {
         let conversa = await prisma.conversa.findFirst({
           where: { leadId: lead.id, canal: 'WHATSAPP', estadoConversa: 'ativa' }
@@ -175,6 +241,27 @@ router.post('/enviar', async (req, res) => {
 // GET /api/whatsapp/configurar
 router.get('/configurar', async (req, res) => {
   try {
+    // Obter tenantId do header ou query parameter
+    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+    
+    if (!tenantId) {
+      return res.status(400).json({ error: 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.' });
+    }
+
+    // Buscar sessão ativa do tenant
+    const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
+      where: { 
+        tenantId, 
+        status: 'CONECTADO' 
+      }
+    });
+
+    if (!sessaoWhatsapp || !sessaoWhatsapp.instanceName) {
+      return res.status(400).json({ error: 'Nenhuma sessão WhatsApp ativa encontrada para este tenant.' });
+    }
+
+    // Usar a instância correta do tenant
+    const whatsappService = getWhatsAppService(sessaoWhatsapp.instanceName);
     const configuracao = await whatsappService.buscarConfiguracao();
     res.json(configuracao);
   } catch (error: any) {
@@ -192,6 +279,27 @@ router.post('/configurar', async (req, res) => {
       return res.status(400).json({ error: 'Parâmetro ignorarGrupos deve ser booleano.' });
     }
 
+    // Obter tenantId do header ou query parameter
+    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+    
+    if (!tenantId) {
+      return res.status(400).json({ error: 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.' });
+    }
+
+    // Buscar sessão ativa do tenant
+    const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
+      where: { 
+        tenantId, 
+        status: 'CONECTADO' 
+      }
+    });
+
+    if (!sessaoWhatsapp || !sessaoWhatsapp.instanceName) {
+      return res.status(400).json({ error: 'Nenhuma sessão WhatsApp ativa encontrada para este tenant.' });
+    }
+
+    // Usar a instância correta do tenant
+    const whatsappService = getWhatsAppService(sessaoWhatsapp.instanceName);
     const resultado = await whatsappService.atualizarConfiguracao(ignorarGrupos);
     res.json({ status: 'CONFIGURADO', resultado });
   } catch (error: any) {
@@ -213,6 +321,27 @@ router.post('/configurar-webhook', async (req, res) => {
       return res.status(400).json({ error: 'URL do webhook é obrigatória.' });
     }
 
+    // Obter tenantId do header ou query parameter
+    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+    
+    if (!tenantId) {
+      return res.status(400).json({ error: 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.' });
+    }
+
+    // Buscar sessão ativa do tenant
+    const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
+      where: { 
+        tenantId, 
+        status: 'CONECTADO' 
+      }
+    });
+
+    if (!sessaoWhatsapp || !sessaoWhatsapp.instanceName) {
+      return res.status(400).json({ error: 'Nenhuma sessão WhatsApp ativa encontrada para este tenant.' });
+    }
+
+    // Usar a instância correta do tenant
+    const whatsappService = getWhatsAppService(sessaoWhatsapp.instanceName);
     const resultado = await whatsappService.configurarWebhook(url, enabled);
     res.json({ status: 'CONFIGURADO', resultado });
   } catch (error: any) {

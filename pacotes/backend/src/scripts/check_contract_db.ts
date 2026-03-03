@@ -4,8 +4,8 @@ import { prisma } from '../lib/db';
 async function main() {
     console.log('🔎 Verificando contrato da Ivonet (campos internos)...');
 
-    // Token da Ivonet
-    const token = '4e42c52005fdb692de229ca6b0f14b426da6f1e7bdf7f43f488e123be8845450';
+    // Token da Ivonet (use via env vars para não subir hardcoded)
+    const token = process.env.TEST_TOKEN || 'fallback_apenas_para_dev_local';
 
     const contrato = await (prisma as any).contrato.findFirst({
         where: { tokenAceite: token }

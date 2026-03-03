@@ -121,6 +121,7 @@ export interface Conversa {
     id: string;
     canal: string;
     estado: string;
+    faseSPIN?: string | null;
     iniciadaEm: string;
     ultimaMensagemEm: string | null;
     mensagens: any[];

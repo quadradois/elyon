@@ -15,6 +15,65 @@ import { buscarConfiguracaoTenant } from '../agentes/orchestrator';
 import ContratoService from '../contratos/contrato-service';
 import { ragConversasService } from '../servicos/rag-conversas';
 import { randomUUID } from 'crypto';
+import {
+    ConverterParaLeadUseCase,
+    AgendarAvaliacaoUseCase,
+    MoverParaFaseUseCase,
+    SalvarDadosImovelUseCase,
+    AgendarFollowupUseCase,
+    BuscarImovelUseCase,
+    EncaminharCorretorUseCase,
+    AtualizarDadosLeadUseCase,
+    QualificarLeadUseCase,
+    RegistrarOptoutUseCase,
+    BuscarEstrategiaCaptacaoUseCase
+} from '../casos-de-uso/agentes';
+
+async function registrarExecucaoTool(params: {
+    leadId?: string;
+    toolName: string;
+    sucesso: boolean;
+    detalhes?: string;
+}) {
+    if (!params.leadId) return;
+
+    try {
+        await prisma.atividade.create({
+            data: {
+                leadId: params.leadId,
+                tipo: 'NOTA',
+                titulo: `TOOL_EXEC:${params.toolName}`,
+                descricao: `${params.sucesso ? 'SUCCESS' : 'FAILED'}${params.detalhes ? ` | ${params.detalhes}` : ''}`,
+                criadoPor: 'ai_agent',
+                completadoEm: new Date()
+            }
+        });
+    } catch (error) {
+        console.warn(`[TOOL_EXEC] Falha ao registrar ${params.toolName}:`, error);
+    }
+}
+
+function temTexto(valor?: string): boolean {
+    return typeof valor === 'string' && valor.trim().length > 0;
+}
+
+function coletarCamposQualificacaoPresentes(input: any): string[] {
+    const campos: string[] = [];
+
+    if (temTexto(input.tipoImovel)) campos.push('tipoImovel');
+    if (temTexto(input.areaImovel)) campos.push('areaImovel');
+    if (input.quartosImovel !== undefined && input.quartosImovel !== null) campos.push('quartosImovel');
+    if (temTexto(input.valorPretendido)) campos.push('valorPretendido');
+    if (temTexto(input.ocupacaoImovel)) campos.push('ocupacaoImovel');
+
+    if (Array.isArray(input.doresIdentificadas) && input.doresIdentificadas.length > 0) campos.push('doresIdentificadas');
+    if (temTexto(input.situacaoAtual)) campos.push('situacaoAtual');
+    if (temTexto(input.motivacaoVenda)) campos.push('motivacaoVenda');
+    if (temTexto(input.consequencias)) campos.push('consequencias');
+    if (temTexto(input.custosAtuais)) campos.push('custosAtuais');
+
+    return campos;
+}
 
 // ====================================
 // TOOL 1: Qualificar Lead
@@ -27,111 +86,95 @@ export const qualificarLeadTool = tool({
 Classifique como:
 - QUENTE: urgência alta + timeline ≤ 3 meses + sem corretor
 - MORNO: interesse genuíno mas sem urgência imediata
-- FRIO: sem interesse real ou timeline muito longo (>6 meses)`,
+- FRIO: sem interesse real ou timeline muito longo (>6 meses)
 
-    parameters: z.object({
-        contatoId: z.string().describe('ID do contato no banco'),
-        temperatura: z.enum(['FRIO', 'MORNO', 'QUENTE']).describe('Temperatura do lead'),
-        interesse: z.string().describe('O que quer: VENDER, ALUGAR, ou AMBOS'),
-        timeline: z.string().describe('Quando pretende: "1-2 meses", "urgente", "6 meses+"'),
-        observacoes: z.string().describe('Detalhes adicionais como tipo de imóvel, quartos, valor pretendido, motivação')
-    }),
+IMPORTANTE: Passe TODOS os dados que o lead mencionou na conversa (dores, motivação, tipo de imóvel, quartos, valor). Esses dados são salvos automaticamente no cadastro do lead no kanban.`,
 
+    strict: false,
+    parameters: {
+        type: 'object',
+        properties: {
+            contatoId: { type: 'string', description: 'ID do contato no banco' },
+            temperatura: { type: 'string', enum: ['FRIO', 'MORNO', 'QUENTE'], description: 'Temperatura do lead' },
+            interesse: { type: 'string', description: 'O que quer: VENDER, ALUGAR, ou AMBOS' },
+            timeline: { type: 'string', description: 'Quando pretende: "1-2 meses", "urgente", "6 meses+"' },
+            observacoes: { type: 'string', description: 'Detalhes adicionais gerais' },
+            // Dados SPIN coletados na conversa
+            doresIdentificadas: { type: 'string', description: 'Dores (separe por vírgula): "sem visitantes, propostas baixas"' },
+            motivacaoVenda: { type: 'string', description: 'Por que quer vender/alugar: "mudança de cidade"' },
+            situacaoAtual: { type: 'string', description: 'Situação: "vazio há 6 meses"' },
+            consequencias: { type: 'string', description: 'Consequências de não resolver' },
+            custosAtuais: { type: 'string', description: 'Custos atuais' },
+            expectativaServico: { type: 'string', description: 'O que espera do corretor' },
+            comCorretorAtualmente: { type: 'boolean', description: 'true se já tem corretor' },
+            tentativasAnteriores: { type: 'string', description: 'Tentativas anteriores' },
+            // Dados do imóvel
+            enderecoImovel: { type: 'string', description: 'Endereço do imóvel' },
+            tipoImovel: { type: 'string', description: 'apartamento, casa, comercial, terreno' },
+            areaImovel: { type: 'string', description: 'Área em m²' },
+            quartosImovel: { description: 'Número de quartos' },
+            vagasImovel: { description: 'Vagas de garagem' },
+            valorPretendido: { type: 'string', description: 'Valor pretendido' },
+            ocupacaoImovel: { type: 'string', description: '"ocupado", "vazio" ou "alugado"' }
+        },
+        required: ['contatoId', 'temperatura', 'interesse', 'timeline']
+    } as any,
 
-    execute: async (args) => {
-        try {
-            const db: any = prisma;
-
-            let leadId = undefined;
-            let leadCriado = false;
-
-            // Buscar contato
-            const contato = await db.contato.findUnique({
-                where: { id: args.contatoId },
-                include: { campanha: true }
-            });
-
-            if (!contato) {
-                return JSON.stringify({ success: false, error: 'Contato não encontrado' });
-            }
-
-            // Se contato já tem Lead, usar esse ID
-            if (contato.leadId) {
-                leadId = contato.leadId;
-            } else {
-                // Criar novo Lead
-                const novoLead = await db.lead.create({
-                    data: {
-                        tenantId: contato.campanha.tenantId,
-                        nome: contato.nome,
-                        telefone: contato.telefone,
-                        email: contato.email,
-                        cpf: contato.cpf,
-                        enderecoPrincipal: contato.enderecoImovel || contato.endereco,
-                        origem: 'prospeccao_ativa',
-                        campanhaOrigemId: contato.campanhaId,
-                        status: 'QUALIFICADO',
-                        temperatura: args.temperatura,
-                        estagio: 'qualificado_sdr',
-                        primeiroContato: contato.criadoEm,
-                        ultimaInteracao: new Date()
-                    }
-                });
-
-                leadId = novoLead.id;
-                leadCriado = true;
-
-                await db.contato.update({
-                    where: { id: args.contatoId },
-                    data: {
-                        virouLead: true,
-                        leadId: novoLead.id,
-                        virouLeadEm: new Date(),
-                        statusProspeccao: 'LEAD',
-                        manifestouInteresse: true
-                    }
-                });
-            }
-
-            // Atualizar lead
-            await db.lead.update({
-                where: { id: leadId },
-                data: {
-                    temperatura: args.temperatura,
-                    status: 'QUALIFICADO',
-                    ultimaInteracao: new Date(),
-                    interesseEm: args.interesse
-                }
-            });
-
-            // Registrar atividade
-            await db.atividade.create({
-                data: {
-                    leadId: leadId,
-                    tipo: 'NOTA',
-                    titulo: `Lead qualificado como ${args.temperatura}`,
-                    descricao: `Interesse: ${args.interesse}\nTimeline: ${args.timeline}${args.observacoes ? `\nObs: ${args.observacoes}` : ''}`,
-                    criadoPor: 'ai_agent',
-                    completadoEm: new Date()
-                }
-            });
-
-            console.log(`[TOOL] qualificar_lead - Lead ${args.temperatura} qualificado`);
-
-            return JSON.stringify({
-                success: true,
-                leadId,
-                leadCriado,
-                temperatura: args.temperatura,
-                message: `Lead ${leadCriado ? 'criado e ' : ''}qualificado como ${args.temperatura}`
-            });
-        } catch (error) {
-            console.error('[TOOL] qualificar_lead - Erro:', error);
-            return JSON.stringify({
-                success: false,
-                error: error instanceof Error ? error.message : 'Erro ao qualificar lead'
-            });
+    execute: async (args: any) => {
+        const useCase = new QualificarLeadUseCase();
+        const input: any = { ...args };
+        if (typeof args.doresIdentificadas === 'string') {
+            input.doresIdentificadas = args.doresIdentificadas.split(',').map((d: string) => d.trim()).filter((d: string) => d);
         }
+        // Tratar numbers vindos como strings dos LLMs
+        if (input.quartosImovel && typeof input.quartosImovel === 'string') input.quartosImovel = parseInt(input.quartosImovel, 10) || undefined;
+        if (input.vagasImovel && typeof input.vagasImovel === 'string') input.vagasImovel = parseInt(input.vagasImovel, 10) || undefined;
+
+        const camposPresentes = coletarCamposQualificacaoPresentes(input);
+        if (camposPresentes.length < 2) {
+            const resposta = {
+                success: false,
+                error: 'Dados insuficientes para qualificar com segurança.',
+                camposObrigatoriosMinimos: ['tipoImovel/areaImovel/ocupacaoImovel/valorPretendido', 'doresIdentificadas/situacaoAtual/motivacaoVenda'],
+                camposRecebidos: camposPresentes
+            };
+
+            await registrarExecucaoTool({
+                toolName: 'qualificar_lead',
+                sucesso: false,
+                detalhes: `Bloqueado por baixa completude (${camposPresentes.length} campos)`
+            });
+
+            return JSON.stringify(resposta);
+        }
+
+        const result = await useCase.execute(input);
+        await registrarExecucaoTool({
+            leadId: result?.leadId,
+            toolName: 'qualificar_lead',
+            sucesso: !!result?.success,
+            detalhes: result?.message || result?.error
+        });
+        return JSON.stringify(result);
+    }
+});
+
+// ====================================
+// TOOL 1.5: Buscar Tática de Captação (Objeções)
+// ====================================
+
+export const buscarTaticaCaptacaoTool = tool({
+    name: 'buscar_tatica_captacao',
+    description: `Use quando o proprietário apresentar uma objeção forte à captação (Ex: "Não dou exclusividade", "Acho a comissão cara", "Vou vender sozinho") e você precisar de um script curado dos top captadores da agência para contornar.`,
+    parameters: z.object({
+        objecaoOuTopico: z.string().describe('A objeção que precisa ser contornada (ex: "comissão", "exclusividade", "vender sozinho")')
+    }),
+    execute: async (args) => {
+        const useCase = new BuscarEstrategiaCaptacaoUseCase();
+        const result = await useCase.execute({
+            objecaoOuTopico: args.objecaoOuTopico
+        });
+        return JSON.stringify(result);
     }
 });
 
@@ -157,50 +200,12 @@ Gatilhos: "para", "não me ligue", "spam", "não quero"`,
     }),
 
     execute: async (args) => {
-        try {
-            console.log(`[TOOL] registrar_optout - Contato ${args.contatoId}`);
-
-            // Tentar como Contato
-            try {
-                await prisma.contato.update({
-                    where: { id: args.contatoId },
-                    data: {
-                        statusProspeccao: 'OPTOUT',
-                        motivoDesinteresse: args.motivo,
-                        observacoes: `Opt-out: ${args.motivo}`,
-                        atualizadoEm: new Date()
-                    }
-                });
-            } catch {
-                // Tentar como Lead
-                await prisma.lead.update({
-                    where: { id: args.contatoId },
-                    data: {
-                        status: 'PERDIDO',
-                        ultimaInteracao: new Date()
-                    }
-                });
-            }
-
-            // Encerrar conversa ativa
-            await prisma.conversa.updateMany({
-                where: { leadId: args.contatoId, estadoConversa: 'ativa' },
-                data: { estadoConversa: 'concluida', finalizadaEm: new Date() }
-            });
-
-            console.log(`[TOOL] registrar_optout - Sucesso!`);
-
-            return JSON.stringify({
-                success: true,
-                message: 'Opt-out registrado. O contato não receberá mais mensagens.'
-            });
-        } catch (error) {
-            console.error('[TOOL] registrar_optout - Erro:', error);
-            return JSON.stringify({
-                success: false,
-                error: error instanceof Error ? error.message : 'Erro ao registrar opt-out'
-            });
-        }
+        const useCase = new RegistrarOptoutUseCase();
+        const result = await useCase.execute({
+            contatoId: args.contatoId,
+            motivo: args.motivo
+        });
+        return JSON.stringify(result);
     }
 });
 
@@ -211,111 +216,53 @@ Gatilhos: "para", "não me ligue", "spam", "não quero"`,
 export const converterParaLeadTool = tool({
     name: 'converter_para_lead',
     description: `Use quando o proprietário demonstrar interesse REAL em vender ou alugar.
-Deve ter coletado: tipo de interesse, timeline, dados básicos.`,
+Deve ter coletado: tipo de interesse, timeline, dados básicos.
 
-    parameters: z.object({
-        contatoId: z.string().describe('ID do contato que será convertido'),
-        temperatura: z.enum(['MORNO', 'QUENTE']).describe('QUENTE: urgência, MORNO: interesse sem pressa'),
-        tipoInteresse: z.enum(['VENDA', 'LOCACAO', 'AMBOS']).describe('O que quer fazer'),
-        timeline: z.string().describe('Quando: "1 mês", "urgente", "sem pressa"')
-    }),
+IMPORTANTE: Passe TODOS os dados coletados na conversa! Tipo de imóvel, quartos, metragem, valor, motivação, situação atual. Tudo será salvo automaticamente no lead do kanban.`,
 
-    execute: async (args) => {
-        try {
-            console.log(`[TOOL] converter_para_lead - Contato ${args.contatoId}`);
+    strict: false,
+    parameters: {
+        type: 'object',
+        properties: {
+            contatoId: { type: 'string', description: 'ID do contato que será convertido' },
+            temperatura: { type: 'string', enum: ['MORNO', 'QUENTE'], description: 'QUENTE: urgência, MORNO: interesse sem pressa' },
+            tipoInteresse: { type: 'string', enum: ['VENDA', 'LOCACAO', 'AMBOS'], description: 'O que quer fazer' },
+            timeline: { type: 'string', description: 'Quando: "1 mês", "urgente", "sem pressa"' },
+            // Dados do imóvel coletados na conversa
+            enderecoImovel: { type: 'string', description: 'Endereço do imóvel' },
+            tipoImovel: { type: 'string', description: 'apartamento, casa, terreno' },
+            areaImovel: { type: 'string', description: 'Área m²' },
+            quartosImovel: { description: 'Número de quartos' },
+            vagasImovel: { description: 'Vagas de garagem' },
+            valorPretendido: { type: 'string', description: 'Valor pretendido' },
+            ocupacaoImovel: { type: 'string', description: '"ocupado", "vazio", "alugado"' },
+            // Qualificação SPIN
+            motivacaoVenda: { type: 'string', description: 'Motivação' },
+            situacaoAtual: { type: 'string', description: 'Situação atual' },
+            prazoDesejado: { type: 'string', description: 'Prazo para venda' },
+            doresIdentificadas: { type: 'string', description: 'Dores (separadas por vírgula)' }
+        },
+        required: ['contatoId', 'temperatura', 'tipoInteresse', 'timeline']
+    } as any,
 
-            const contato = await prisma.contato.findUnique({
-                where: { id: args.contatoId },
-                include: { campanha: true }
-            });
-
-            if (!contato) {
-                return JSON.stringify({ success: false, error: 'Contato não encontrado' });
-            }
-
-            if (contato.virouLead) {
-                return JSON.stringify({ success: false, error: 'Contato já é lead', leadId: contato.leadId });
-            }
-
-            // Criar Lead
-            const novoLead = await prisma.lead.create({
-                data: {
-                    tenantId: contato.campanha.tenantId,
-                    nome: contato.nome,
-                    telefone: contato.telefone,
-                    email: contato.email,
-                    cpf: contato.cpf,
-                    enderecoPrincipal: contato.endereco,
-                    origem: 'prospeccao_ativa',
-                    campanhaOrigemId: contato.campanhaId,
-                    status: 'NOVO',
-                    temperatura: args.temperatura,
-                    estagio: 'qualificado_sdr',
-                    primeiroContato: contato.criadoEm,
-                    ultimaInteracao: new Date()
-                }
-            });
-
-            // Atualizar Contato
-            await prisma.contato.update({
-                where: { id: args.contatoId },
-                data: {
-                    virouLead: true,
-                    leadId: novoLead.id,
-                    virouLeadEm: new Date(),
-                    statusProspeccao: 'LEAD',
-                    manifestouInteresse: true
-                }
-            });
-
-            // Registrar atividade
-            await prisma.atividade.create({
-                data: {
-                    leadId: novoLead.id,
-                    tipo: 'NOTA',
-                    titulo: '🎯 Lead qualificado via prospecção ativa',
-                    descricao: `Interesse: ${args.tipoInteresse}\nTimeline: ${args.timeline}\nTemperatura: ${args.temperatura}`,
-                    criadoPor: 'sdr_ia',
-                    completadoEm: new Date()
-                }
-            });
-
-            // Se QUENTE, criar tarefa urgente
-            if (args.temperatura === 'QUENTE') {
-                await prisma.atividade.create({
-                    data: {
-                        leadId: novoLead.id,
-                        tipo: 'TAREFA',
-                        titulo: '🔥 URGENTE: Contato com lead quente!',
-                        descricao: `Timeline: ${args.timeline}\nEntrar em contato o mais rápido possível!`,
-                        criadoPor: 'sdr_ia'
-                    }
-                });
-            }
-
-            // RAG (background)
-            ragConversasService.processarConversaoProspeccao({
-                contatoId: args.contatoId,
-                tenantId: contato.campanha.tenantId,
-                tipoConversao: 'LEAD',
-                empreendimento: contato.nomeEdificio || undefined
-            }).catch(err => console.error('[RAG] Erro:', err));
-
-            console.log(`[TOOL] converter_para_lead - Lead ${novoLead.id} criado`);
-
-            return JSON.stringify({
-                success: true,
-                leadId: novoLead.id,
-                temperatura: args.temperatura,
-                message: `Proprietário convertido em lead ${args.temperatura}!`
-            });
-        } catch (error) {
-            console.error('[TOOL] converter_para_lead - Erro:', error);
-            return JSON.stringify({
-                success: false,
-                error: error instanceof Error ? error.message : 'Erro ao converter'
-            });
+    execute: async (args: any) => {
+        const useCase = new ConverterParaLeadUseCase();
+        const input: any = { ...args };
+        if (typeof args.doresIdentificadas === 'string') {
+            input.doresIdentificadas = args.doresIdentificadas.split(',').map((d: string) => d.trim()).filter((d: string) => d);
         }
+        // Tratar numbers vindos como strings
+        if (input.quartosImovel && typeof input.quartosImovel === 'string') input.quartosImovel = parseInt(input.quartosImovel, 10) || undefined;
+        if (input.vagasImovel && typeof input.vagasImovel === 'string') input.vagasImovel = parseInt(input.vagasImovel, 10) || undefined;
+
+        const result = await useCase.execute(input);
+        await registrarExecucaoTool({
+            leadId: result?.leadId,
+            toolName: 'converter_para_lead',
+            sucesso: !!result?.success,
+            detalhes: result?.message || result?.error
+        });
+        return JSON.stringify(result);
     }
 });
 
@@ -334,143 +281,20 @@ A data/hora DEVE ser confirmada na conversa ANTES de usar!`,
     }),
 
     execute: async (args) => {
-        try {
-            console.log(`[TOOL] agendar_avaliacao - ID: ${args.contatoId}`);
+        const useCase = new AgendarAvaliacaoUseCase();
+        const result = await useCase.execute({
+            contatoId: args.contatoId,
+            dataAvaliacao: args.dataAvaliacao
+        });
 
-            // Tentar buscar como Contato primeiro
-            let contato = await prisma.contato.findUnique({
-                where: { id: args.contatoId },
-                include: { campanha: true }
-            });
+        await registrarExecucaoTool({
+            leadId: result?.leadId,
+            toolName: 'agendar_avaliacao',
+            sucesso: !!result?.success,
+            detalhes: result?.message || result?.error
+        });
 
-            // Se não encontrar como contato, pode ser um leadId - buscar contato pelo leadId
-            if (!contato) {
-                console.log(`[TOOL] agendar_avaliacao - Não é contato, buscando por leadId...`);
-                contato = await prisma.contato.findFirst({
-                    where: { leadId: args.contatoId },
-                    include: { campanha: true }
-                });
-            }
-
-            if (!contato) {
-                console.log(`[TOOL] agendar_avaliacao - ERRO: Contato não encontrado para ID ${args.contatoId}`);
-                return JSON.stringify({ success: false, error: 'Contato não encontrado' });
-            }
-
-            // Parsear data - aceita formatos variados
-            let dataAgendamento: Date;
-            const dataStr = args.dataAvaliacao.toLowerCase();
-
-            // Detectar "amanhã" ou "hoje"
-            const hoje = new Date();
-            if (dataStr.includes('amanhã') || dataStr.includes('amanha')) {
-                dataAgendamento = new Date(hoje);
-                dataAgendamento.setDate(dataAgendamento.getDate() + 1);
-                // Extrair hora se presente (ex: "amanhã às 10:00")
-                const horaMatch = dataStr.match(/(\d{1,2})[:\s]*(\d{2})?/);
-                if (horaMatch) {
-                    dataAgendamento.setHours(parseInt(horaMatch[1]), parseInt(horaMatch[2] || '0'), 0, 0);
-                } else {
-                    dataAgendamento.setHours(10, 0, 0, 0); // Default 10:00
-                }
-            } else if (dataStr.includes('hoje')) {
-                dataAgendamento = new Date(hoje);
-                const horaMatch = dataStr.match(/(\d{1,2})[:\s]*(\d{2})?/);
-                if (horaMatch) {
-                    dataAgendamento.setHours(parseInt(horaMatch[1]), parseInt(horaMatch[2] || '0'), 0, 0);
-                } else {
-                    dataAgendamento.setHours(14, 0, 0, 0); // Default 14:00
-                }
-            } else {
-                // Formato DD/MM/YYYY HH:mm
-                const [dataParte, horaParte] = args.dataAvaliacao.split(' ');
-                const [dia, mes, ano] = dataParte.split('/').map(Number);
-                const [hora, minuto] = (horaParte || '10:00').split(':').map(Number);
-                dataAgendamento = new Date(ano || hoje.getFullYear(), (mes || hoje.getMonth() + 1) - 1, dia || hoje.getDate(), hora || 10, minuto || 0);
-            }
-
-            if (isNaN(dataAgendamento.getTime())) {
-                console.log(`[TOOL] agendar_avaliacao - ERRO: Data inválida: ${args.dataAvaliacao}`);
-                return JSON.stringify({ success: false, error: 'Data inválida. Use DD/MM/YYYY HH:mm ou "amanhã às 10:00"' });
-            }
-
-            const tenantId = contato.campanha?.tenantId;
-            if (!tenantId) {
-                return JSON.stringify({ success: false, error: 'Campanha sem tenant' });
-            }
-
-            let leadId = contato.leadId;
-
-            // Converter para Lead se necessário
-            if (!contato.virouLead || !leadId) {
-                const novoLead = await prisma.lead.create({
-                    data: {
-                        nome: contato.nome,
-                        telefone: contato.telefone,
-                        status: 'QUALIFICADO',
-                        temperatura: 'QUENTE',
-                        origem: 'PROSPECCAO_ATIVA',
-                        tenantId,
-                        cpf: contato.cpf
-                    }
-                });
-
-                leadId = novoLead.id;
-
-                await prisma.contato.update({
-                    where: { id: args.contatoId },
-                    data: { virouLead: true, leadId: novoLead.id, statusProspeccao: 'LEAD' }
-                });
-            }
-
-            const db: any = prisma;
-            const tokenConfirmacao = randomUUID();
-
-            // Criar atividade de avaliação
-            const atividade = await db.atividade.create({
-                data: {
-                    leadId: leadId!,
-                    tipo: 'AVALIACAO',
-                    titulo: `🏠 AVALIAÇÃO - ${contato.nome}`,
-                    descricao: `📅 ${args.dataAvaliacao}\n📍 ${contato.enderecoImovel || 'Confirmar'}\n📞 ${contato.telefone}`,
-                    criadoPor: 'sdr_agent',
-                    agendadoPara: dataAgendamento,
-                    statusAgendamento: 'PENDENTE',
-                    tokenConfirmacao,
-                    confirmacoesEnviadas: 0
-                }
-            });
-
-            // Atualizar contato
-            await prisma.contato.update({
-                where: { id: args.contatoId },
-                data: { statusProspeccao: 'INTERESSADO', observacoes: `Avaliação: ${args.dataAvaliacao}` }
-            });
-
-            // RAG (background)
-            ragConversasService.processarConversaoProspeccao({
-                contatoId: args.contatoId,
-                tenantId,
-                tipoConversao: 'AGENDAMENTO',
-                empreendimento: contato.nomeEdificio || undefined
-            }).catch(err => console.error('[RAG] Erro:', err));
-
-            console.log(`[TOOL] agendar_avaliacao - Agendado para ${args.dataAvaliacao}`);
-
-            return JSON.stringify({
-                success: true,
-                message: `Avaliação agendada para ${args.dataAvaliacao}`,
-                leadId,
-                atividadeId: atividade.id,
-                dataAgendamento: dataAgendamento.toISOString()
-            });
-        } catch (error) {
-            console.error('[TOOL] agendar_avaliacao - Erro:', error);
-            return JSON.stringify({
-                success: false,
-                error: error instanceof Error ? error.message : 'Erro ao agendar'
-            });
-        }
+        return JSON.stringify(result);
     }
 });
 
@@ -490,40 +314,13 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
     }),
 
     execute: async (args) => {
-        try {
-            console.log(`[TOOL] agendar_followup - Contato ${args.contatoId}`);
-
-            const [dia, mes, ano] = args.dataRecontato.split('/').map(Number);
-            const dataAgendamento = new Date(ano, mes - 1, dia, 9, 0);
-
-            if (isNaN(dataAgendamento.getTime())) {
-                return JSON.stringify({ success: false, error: 'Data inválida. Use DD/MM/YYYY' });
-            }
-
-            await prisma.contato.update({
-                where: { id: args.contatoId },
-                data: {
-                    statusProspeccao: 'MORNO_FUTURO',
-                    dataRecontato: dataAgendamento,
-                    motivoRecontato: args.motivo,
-                    observacoes: `Futuro: ${args.motivo}`
-                }
-            });
-
-            console.log(`[TOOL] agendar_followup - Recontato em ${args.dataRecontato}`);
-
-            return JSON.stringify({
-                success: true,
-                message: `Recontato agendado para ${args.dataRecontato}`,
-                dataRecontato: dataAgendamento.toISOString()
-            });
-        } catch (error) {
-            console.error('[TOOL] agendar_followup - Erro:', error);
-            return JSON.stringify({
-                success: false,
-                error: error instanceof Error ? error.message : 'Erro ao agendar follow-up'
-            });
-        }
+        const useCase = new AgendarFollowupUseCase();
+        const result = await useCase.execute({
+            contatoId: args.contatoId,
+            dataRecontato: args.dataRecontato,
+            motivo: args.motivo
+        });
+        return JSON.stringify(result);
     }
 });
 
@@ -540,53 +337,11 @@ export const buscarImovelTool = tool({
     }),
 
     execute: async (args) => {
-        try {
-            console.log(`[TOOL] buscar_imovel - Lead ${args.leadId}`);
-
-            const imoveis = await prisma.imovel.findMany({
-                where: { leadId: args.leadId },
-                select: {
-                    id: true,
-                    logradouro: true,
-                    numero: true,
-                    bairro: true,
-                    nomeEdificio: true,
-                    areaTerreno: true,
-                    areaEdificada: true,
-                    statusCaptacao: true,
-                    interesse: true
-                },
-                orderBy: { criadoEm: 'desc' }
-            });
-
-            if (imoveis.length === 0) {
-                return JSON.stringify({
-                    success: false,
-                    message: 'Nenhum imóvel cadastrado para este lead.',
-                    imoveis: []
-                });
-            }
-
-            const imoveisFormatados = imoveis.map(i => ({
-                endereco: `${i.logradouro}${i.numero ? `, ${i.numero}` : ''} - ${i.bairro}`,
-                edificio: i.nomeEdificio,
-                area: i.areaEdificada ? `${i.areaEdificada}m²` : null,
-                status: i.statusCaptacao,
-                interesse: i.interesse
-            }));
-
-            return JSON.stringify({
-                success: true,
-                totalImoveis: imoveis.length,
-                imoveis: imoveisFormatados
-            });
-        } catch (error) {
-            console.error('[TOOL] buscar_imovel - Erro:', error);
-            return JSON.stringify({
-                success: false,
-                error: error instanceof Error ? error.message : 'Erro ao buscar imóveis'
-            });
-        }
+        const useCase = new BuscarImovelUseCase();
+        const result = await useCase.execute({
+            leadId: args.leadId
+        });
+        return JSON.stringify(result);
     }
 });
 
@@ -607,73 +362,14 @@ NÃO use para perguntas sobre valor - responda você mesmo!`,
     }),
 
     execute: async (args) => {
-        try {
-            console.log(`[TOOL] encaminhar_corretor - Contato ${args.contatoId}`);
-
-            const contato = await prisma.contato.findUnique({
-                where: { id: args.contatoId },
-                include: { campanha: true }
-            });
-
-            if (!contato) {
-                return JSON.stringify({ success: false, error: 'Contato não encontrado' });
-            }
-
-            let leadId = contato.leadId;
-
-            // Converter se necessário
-            if (!contato.virouLead) {
-                const novoLead = await prisma.lead.create({
-                    data: {
-                        tenantId: contato.campanha.tenantId,
-                        nome: contato.nome,
-                        telefone: contato.telefone,
-                        email: contato.email,
-                        cpf: contato.cpf,
-                        enderecoPrincipal: contato.endereco,
-                        origem: 'prospeccao_ativa',
-                        campanhaOrigemId: contato.campanhaId,
-                        status: 'NOVO',
-                        temperatura: args.urgencia === 'ALTA' ? 'QUENTE' : 'MORNO',
-                        estagio: 'encaminhado_corretor',
-                        primeiroContato: contato.criadoEm,
-                        ultimaInteracao: new Date()
-                    }
-                });
-
-                leadId = novoLead.id;
-
-                await prisma.contato.update({
-                    where: { id: args.contatoId },
-                    data: { virouLead: true, leadId: novoLead.id, virouLeadEm: new Date(), statusProspeccao: 'LEAD' }
-                });
-            }
-
-            // Criar tarefa
-            await prisma.atividade.create({
-                data: {
-                    leadId: leadId!,
-                    tipo: 'TAREFA',
-                    titulo: `${args.urgencia === 'ALTA' ? '🔥 URGENTE: ' : '📞 '}Proprietário solicitou contato`,
-                    descricao: `Motivo: ${args.motivo}\n\nContexto:\n${args.contextoConversa}`,
-                    criadoPor: 'sdr_ia'
-                }
-            });
-
-            console.log(`[TOOL] encaminhar_corretor - Tarefa criada para lead ${leadId}`);
-
-            return JSON.stringify({
-                success: true,
-                leadId,
-                message: `Corretor será notificado ${args.urgencia === 'ALTA' ? 'imediatamente' : 'em breve'}!`
-            });
-        } catch (error) {
-            console.error('[TOOL] encaminhar_corretor - Erro:', error);
-            return JSON.stringify({
-                success: false,
-                error: error instanceof Error ? error.message : 'Erro ao encaminhar'
-            });
-        }
+        const useCase = new EncaminharCorretorUseCase();
+        const result = await useCase.execute({
+            contatoId: args.contatoId,
+            motivo: args.motivo,
+            contextoConversa: args.contextoConversa,
+            urgencia: args.urgencia
+        });
+        return JSON.stringify(result);
     }
 });
 
@@ -725,99 +421,22 @@ Use quando:
     }),
 
     execute: async (args) => {
-        try {
-            const db: any = prisma;
+        const useCase = new MoverParaFaseUseCase();
+        const result = await useCase.execute({
+            leadId: args.leadId,
+            faseDestino: args.faseDestino,
+            motivo: args.motivo,
+            dadosAdicionais: args.dadosAdicionais
+        });
 
-            console.log(`[TOOL] mover_para_fase - Lead ${args.leadId} → ${args.faseDestino}`);
+        await registrarExecucaoTool({
+            leadId: args.leadId,
+            toolName: 'mover_para_fase',
+            sucesso: !!result?.success,
+            detalhes: result?.motivo || result?.error
+        });
 
-            // Mapear fase para status
-            const faseParaStatus: Record<string, string> = {
-                'FASE1': 'NOVO',
-                'FASE2': 'TENTATIVA_AGENDAMENTO',
-                'FASE3': 'DOCUMENTACAO',
-                'FASE4': 'ONBOARDING',
-                'CAPTADO': 'CAPTADO'
-            };
-
-            const novoStatus = faseParaStatus[args.faseDestino];
-
-            if (!novoStatus) {
-                return JSON.stringify({ success: false, error: 'Fase inválida' });
-            }
-
-            // Preparar dados de atualização
-            const updateData: any = {
-                status: novoStatus,
-                ultimaInteracao: new Date(),
-                ultimaAcaoIA: `Movido para ${args.faseDestino}: ${args.motivo}`,
-                ultimaAcaoIAEm: new Date()
-            };
-
-            // Se tiver dados adicionais (contrato), salvar no Lead
-            if (args.dadosAdicionais) {
-                if (args.dadosAdicionais.tipoAutorizacao) updateData.tipoAutorizacao = args.dadosAdicionais.tipoAutorizacao;
-                if (args.dadosAdicionais.prazoTrabalho) updateData.prazoTrabalho = args.dadosAdicionais.prazoTrabalho;
-                if (args.dadosAdicionais.comissaoAcordada) updateData.comissaoAcordada = args.dadosAdicionais.comissaoAcordada;
-            }
-
-            // Atualizar lead
-            await db.lead.update({
-                where: { id: args.leadId },
-                data: updateData
-            });
-
-            // Se o lead foi convertido em CAPTADO, criar registro na tabela Cliente
-            if (novoStatus === 'CAPTADO') {
-                try {
-                    // Verificar se já existe cliente para este lead
-                    const clienteExistente = await db.cliente.findUnique({
-                        where: { origemLeadId: args.leadId }
-                    });
-
-                    if (!clienteExistente) {
-                        // Buscar dados completos do lead para copiar
-                        const leadCompleto = await db.lead.findUnique({
-                            where: { id: args.leadId }
-                        });
-
-                        if (leadCompleto) {
-                            await db.cliente.create({
-                                data: {
-                                    tenantId: leadCompleto.tenantId,
-                                    nome: leadCompleto.nome,
-                                    cpf: leadCompleto.cpf,
-                                    email: leadCompleto.email,
-                                    telefone: leadCompleto.telefone,
-                                    endereco: leadCompleto.enderecoPrincipal,
-                                    origemLeadId: leadCompleto.id,
-                                    status: 'ATIVO'
-                                }
-                            });
-                            console.log(`[TOOL] mover_para_fase - Cliente criado com sucesso para o lead ${args.leadId}`);
-                        }
-                    }
-                } catch (err: any) {
-                    console.error('[TOOL] Erro ao criar registro de Cliente:', err);
-                    // Não falhar a ação principal, apenas logar erro
-                }
-            }
-
-            console.log(`[TOOL] mover_para_fase - Sucesso: ${args.leadId} agora em ${novoStatus}`);
-
-            return JSON.stringify({
-                success: true,
-                faseAnterior: args.faseDestino,
-                novoStatus,
-                motivo: args.motivo
-            });
-
-        } catch (error: any) {
-            console.error(`[TOOL] mover_para_fase - Erro:`, error);
-            return JSON.stringify({
-                success: false,
-                error: error.message || 'Erro ao mover lead'
-            });
-        }
+        return JSON.stringify(result);
     }
 });
 
@@ -849,6 +468,13 @@ export const gerarLinkContratoTool = tool({
                 tipoContrato: args.tipoContrato
             });
 
+            await registrarExecucaoTool({
+                leadId: args.leadId,
+                toolName: 'gerar_link_contrato',
+                sucesso: true,
+                detalhes: 'Link de contrato gerado'
+            });
+
             return JSON.stringify({
                 success: true,
                 link: contrato.linkAceite,
@@ -857,6 +483,12 @@ export const gerarLinkContratoTool = tool({
 
         } catch (error: any) {
             console.error('[TOOL] Erro ao gerar contrato:', error);
+            await registrarExecucaoTool({
+                leadId: args.leadId,
+                toolName: 'gerar_link_contrato',
+                sucesso: false,
+                detalhes: error?.message || 'Erro ao gerar link'
+            });
             // Se já existir, tentar recuperar (lógica simplificada: retornar erro e pedir para usar o existente)
             // Mas o create do ContratoService lança erro se pendente.
             // Idealmente retornaríamos o link existente se o erro for "pendente".
@@ -874,40 +506,29 @@ export const atualizarDadosLeadTool = tool({
     description: 'Atualiza dados cadastrais do lead (CPF, endereço, email, etc). Use sempre que o lead fornecer essas informações.',
     parameters: z.object({
         leadId: z.string().describe('ID do lead'),
-        cpf: z.string().optional().describe('CPF do cliente (apenas números)'),
-        email: z.string().email().optional().describe('Email do cliente'),
-        endereco: z.string().optional().describe('Endereço completo do imóvel'),
-        nome: z.string().optional().describe('Nome completo do cliente')
+        cpf: z.string().nullable().describe('CPF do cliente (apenas números)'),
+        email: z.string().email().nullable().describe('Email do cliente'),
+        endereco: z.string().nullable().describe('Endereço completo do imóvel'),
+        nome: z.string().nullable().describe('Nome completo do cliente')
     }),
     execute: async (args) => {
-        try {
-            console.log(`[TOOL] atualizar_dados_lead - Lead ${args.leadId}`);
+        const useCase = new AtualizarDadosLeadUseCase();
+        const result = await useCase.execute({
+            leadId: args.leadId,
+            cpf: args.cpf,
+            email: args.email,
+            endereco: args.endereco,
+            nome: args.nome
+        });
 
-            const data: any = {};
-            if (args.cpf) data.cpf = args.cpf.replace(/\D/g, '');
-            if (args.email) data.email = args.email;
-            if (args.endereco) data.enderecoPrincipal = args.endereco;
-            if (args.nome) data.nome = args.nome;
+        await registrarExecucaoTool({
+            leadId: args.leadId,
+            toolName: 'atualizar_dados_lead',
+            sucesso: !!result?.success,
+            detalhes: result?.mensagem || result?.error
+        });
 
-            if (Object.keys(data).length === 0) {
-                return JSON.stringify({ success: false, error: 'Nenhum dado fornecido para atualização' });
-            }
-
-            data.ultimaInteracao = new Date();
-
-            await prisma.lead.update({
-                where: { id: args.leadId },
-                data
-            });
-
-            return JSON.stringify({
-                success: true,
-                mensagem: "Dados atualizados com sucesso"
-            });
-        } catch (error: any) {
-            console.error('[TOOL] Erro ao atualizar lead:', error);
-            return JSON.stringify({ success: false, error: 'Erro ao atualizar dados' });
-        }
+        return JSON.stringify(result);
     }
 });
 
@@ -923,76 +544,35 @@ CRITICAL: Use esta tool para cada grupo de dados recebido.`,
 
     parameters: z.object({
         leadId: z.string().describe('ID do lead'),
-        tipo: z.string().optional().describe('Tipo: apartamento, casa, comercial, terreno'),
-        quartos: z.number().optional().describe('Número de quartos'),
-        suites: z.number().optional().describe('Número de suítes'),
-        banheiros: z.number().optional().describe('Número de banheiros'),
-        vagas: z.number().optional().describe('Vagas de garagem'),
-        areaUtil: z.number().optional().describe('Área útil em m²'),
-        areaTotal: z.number().optional().describe('Área total em m²'),
-        andar: z.number().optional().describe('Andar do apartamento'),
-        valorVenda: z.number().optional().describe('Valor de venda em reais'),
-        valorLocacao: z.number().optional().describe('Valor de locação mensal'),
-        valorCondominio: z.number().optional().describe('Valor do condomínio'),
-        valorIPTU: z.number().optional().describe('Valor anual do IPTU'),
-        caracteristicas: z.array(z.string()).optional().describe('Lista de características: armários, varanda, churrasqueira, etc'),
-        descricao: z.string().optional().describe('Descrição detalhada do imóvel'),
-        fotos: z.array(z.string()).optional().describe('URLs das fotos enviadas')
+        tipo: z.string().nullable().describe('Tipo: apartamento, casa, comercial, terreno'),
+        quartos: z.number().nullable().describe('Número de quartos'),
+        suites: z.number().nullable().describe('Número de suítes'),
+        banheiros: z.number().nullable().describe('Número de banheiros'),
+        vagas: z.number().nullable().describe('Vagas de garagem'),
+        areaUtil: z.number().nullable().describe('Área útil em m²'),
+        areaTotal: z.number().nullable().describe('Área total em m²'),
+        andar: z.number().nullable().describe('Andar do apartamento'),
+        valorVenda: z.number().nullable().describe('Valor de venda em reais'),
+        valorLocacao: z.number().nullable().describe('Valor de locação mensal'),
+        valorCondominio: z.number().nullable().describe('Valor do condomínio'),
+        valorIPTU: z.number().nullable().describe('Valor anual do IPTU'),
+        caracteristicas: z.array(z.string()).nullable().describe('Lista de características: armários, varanda, churrasqueira, etc'),
+        descricao: z.string().nullable().describe('Descrição detalhada do imóvel'),
+        fotos: z.array(z.string()).nullable().describe('URLs das fotos enviadas')
     }),
 
     execute: async (args) => {
-        try {
-            console.log(`[TOOL] salvar_dados_imovel - Lead ${args.leadId}`);
+        const useCase = new SalvarDadosImovelUseCase();
+        const result = await useCase.execute(args);
 
-            const updateData: any = {};
+        await registrarExecucaoTool({
+            leadId: args.leadId,
+            toolName: 'salvar_dados_imovel',
+            sucesso: !!result?.success,
+            detalhes: result?.message || result?.error
+        });
 
-            if (args.tipo) updateData.tipoImovel = args.tipo;
-            if (args.quartos !== undefined) updateData.quartosImovel = args.quartos;
-            if (args.suites !== undefined) updateData.imovelSuites = args.suites;
-            if (args.banheiros !== undefined) updateData.imovelBanheiros = args.banheiros;
-            if (args.vagas !== undefined) updateData.vagasImovel = args.vagas;
-            if (args.areaUtil !== undefined) updateData.imovelAreaTotal = args.areaUtil;
-            if (args.areaTotal !== undefined) updateData.imovelAreaTotal = args.areaTotal;
-            if (args.andar !== undefined) updateData.imovelAndar = args.andar;
-            if (args.valorVenda !== undefined) updateData.valorPretendido = `R$ ${args.valorVenda.toLocaleString('pt-BR')}`;
-            if (args.valorLocacao !== undefined) updateData.imovelValorLocacao = args.valorLocacao;
-            if (args.valorCondominio !== undefined) updateData.imovelValorCondominio = args.valorCondominio;
-            if (args.valorIPTU !== undefined) updateData.imovelValorIPTU = args.valorIPTU;
-            if (args.caracteristicas) updateData.imovelCaracteristicas = args.caracteristicas;
-            if (args.descricao) updateData.imovelDescricao = args.descricao;
-            if (args.fotos) updateData.imovelFotos = args.fotos;
-
-            updateData.dadosImovelColetadosEm = new Date();
-            updateData.ultimaInteracao = new Date();
-
-            if (Object.keys(updateData).length <= 2) {
-                return JSON.stringify({
-                    success: false,
-                    error: 'Nenhum dado do imóvel fornecido'
-                });
-            }
-
-            await prisma.lead.update({
-                where: { id: args.leadId },
-                data: updateData
-            });
-
-            const camposSalvos = Object.keys(updateData).filter(k => !['dadosImovelColetadosEm', 'ultimaInteracao'].includes(k));
-            console.log(`[TOOL] salvar_dados_imovel - Campos salvos: ${camposSalvos.join(', ')}`);
-
-            return JSON.stringify({
-                success: true,
-                camposSalvos,
-                message: `✓ Dados salvos: ${camposSalvos.length} campos`
-            });
-
-        } catch (error: any) {
-            console.error('[TOOL] salvar_dados_imovel - Erro:', error);
-            return JSON.stringify({
-                success: false,
-                error: error.message || 'Erro ao salvar dados do imóvel'
-            });
-        }
+        return JSON.stringify(result);
     }
 });
 
@@ -1074,6 +654,88 @@ O CRM criará o Proprietário + Property para publicação nos portais.`,
 });
 
 // ====================================
+// TOOL 15: Registrar Indicação de Terceiro
+// ====================================
+
+export const registrarIndicacaoTool = tool({
+    name: 'registrar_indicacao',
+    description: `Use quando o contato INDICAR outra pessoa que quer vender ou alugar imóvel.
+Exemplos: "meu vizinho quer vender", "uma amiga tá vendendo", "conheço alguém".
+OBRIGATÓRIO coletar: nome e telefone do indicado.`,
+
+    parameters: z.object({
+        contatoOrigemId: z.string().describe('ID do contato que fez a indicação'),
+        campanhaId: z.string().describe('ID da campanha atual'),
+        nomeIndicado: z.string().describe('Nome da pessoa indicada'),
+        telefoneIndicado: z.string().describe('Telefone da pessoa indicada'),
+        parentesco: z.string().describe('Relação: vizinho, amigo, familiar, colega, outro'),
+        observacoes: z.string().default('').describe('Detalhes extras: tipo de imóvel, urgência, etc.')
+    }),
+
+    execute: async (args) => {
+        try {
+            console.log(`[TOOL] registrar_indicacao - Origem: ${args.contatoOrigemId} → Indicado: ${args.nomeIndicado} (${args.telefoneIndicado})`);
+
+            // Buscar dados do contato que indicou
+            const contatoOrigem = await prisma.contato.findUnique({
+                where: { id: args.contatoOrigemId },
+                select: { nome: true, campanhaId: true }
+            });
+
+            const campanhaId = args.campanhaId || contatoOrigem?.campanhaId;
+            if (!campanhaId) {
+                return JSON.stringify({ success: false, error: 'Campanha não encontrada' });
+            }
+
+            // Limpar telefone
+            const telefone = args.telefoneIndicado.replace(/\D/g, '');
+
+            // Verificar se já existe contato com esse telefone na campanha
+            const existente = await prisma.contato.findFirst({
+                where: { campanhaId, telefone: { contains: telefone.slice(-8) } }
+            });
+
+            if (existente) {
+                return JSON.stringify({
+                    success: true,
+                    jaExistia: true,
+                    contatoId: existente.id,
+                    mensagem: `Contato já existe na campanha: ${existente.nome}`
+                });
+            }
+
+            // Criar novo contato
+            const novoContato = await prisma.contato.create({
+                data: {
+                    campanhaId,
+                    nome: args.nomeIndicado,
+                    telefone: telefone,
+                    temWhatsapp: true,
+                    quantidadeWhatsapp: 1,
+                    statusProspeccao: 'AGUARDANDO',
+                    observacoes: `📌 INDICAÇÃO de ${contatoOrigem?.nome || 'contato'} (${args.parentesco}). ${args.observacoes || ''}`
+                }
+            });
+
+            console.log(`[TOOL] registrar_indicacao - Novo contato criado: ${novoContato.id}`);
+
+            return JSON.stringify({
+                success: true,
+                jaExistia: false,
+                contatoId: novoContato.id,
+                nomeIndicado: args.nomeIndicado,
+                indicadoPor: contatoOrigem?.nome,
+                mensagem: `Indicação registrada! ${args.nomeIndicado} será contatado na próxima rodada de disparos.`
+            });
+
+        } catch (error: any) {
+            console.error('[TOOL] registrar_indicacao - Erro:', error);
+            return JSON.stringify({ success: false, error: error.message });
+        }
+    }
+});
+
+// ====================================
 // Exportar todas as tools
 // ====================================
 
@@ -1089,7 +751,10 @@ export const todasToolsSDR = [
     moverParaFaseTool,
     atualizarDadosLeadTool,
     gerarLinkContratoTool,
-    salvarDadosImovelTool,  // 🆕 Coleta de dados do imóvel
-    enviarParaCrmTool       // 🆕 Envio para CRM
+    salvarDadosImovelTool,
+    enviarParaCrmTool,
+    buscarTaticaCaptacaoTool,
+    registrarIndicacaoTool      // 🆕 Indicação de terceiros
 ];
+
 

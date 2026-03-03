@@ -134,20 +134,28 @@ export const exemplosFechamento: ExemploConversa[] = [
   {
     id: 'fechamento_01',
     fase: 'SOLUCAO',
-    contexto: 'Lead aceita anunciar',
-    mensagemLead: 'ok pode anunciar',
-    respostaSDR: 'Perfeito, {nome}! Fechado! 🎯\n\nMe manda agora:\n1️⃣ Fotos dos cômodos + fachada\n2️⃣ Valor que quer anunciar: R$ ___\n3️⃣ Seu email pra contrato: ___\n\nAssim já começo HOJE! 🚀',
-    toolUsada: 'converter_para_lead',
-    porqueCorreto: 'Pede 3 coisas específicas, cria urgência com "HOJE"'
+    contexto: 'Lead aceita formalizar o contrato de consultoria',
+    mensagemLead: 'ok pode avançar',
+    respostaSDR: 'Perfeito, {nome}! Antes de formalizar, prefere que eu te explique rapidamente as cláusulas principais, ou já avançamos direto? 😊',
+    toolUsada: undefined,
+    porqueCorreto: 'Micro-compromisso antes de pedir dados pessoais. Não solicita fotos antes do contrato (sequência correta: contrato → assinatura → avaliação)'
+  },
+  {
+    id: 'fechamento_01b',
+    fase: 'SOLUCAO',
+    contexto: 'Lead quer avançar direto após micro-compromisso',
+    mensagemLead: 'já avança',
+    respostaSDR: 'Perfeito! Me passa seu e-mail pra eu solicitar o envio do contrato? 😊',
+    toolUsada: 'atualizar_dados_lead',
+    porqueCorreto: 'Inicia coleta sequencial pelo e-mail (menos invasivo), não pede CPF+endereço ao mesmo tempo'
   },
   {
     id: 'fechamento_02',
     fase: 'SOLUCAO',
-    contexto: 'Lead quer avaliação presencial',
+    contexto: 'Lead quer avaliação presencial antes de assinar',
     mensagemLead: 'quero que vocês vejam o apto primeiro',
-    respostaSDR: 'Combinado! 📝 Vamos agendar a avaliação.\n\nQual dia fica bom pra você? Tenho horários:\n• Amanhã 14h ou 16h\n• Sexta 10h ou 15h\n\nQual prefere?',
-    toolUsada: 'agendar_avaliacao',
-    porqueCorreto: 'Oferece opções limitadas (técnica de alternativa)'
+    respostaSDR: 'Com certeza! Assim que formalizarmos o contrato, já agendamos a avaliação no mesmo dia. Me passa seu e-mail que encaminho o modelo pra dar andamento? 😊',
+    porqueCorreto: 'Mantém a sequência correta (contrato antes da avaliação), pede e-mail primeiro'
   },
   {
     id: 'fechamento_03',
@@ -207,6 +215,70 @@ export const exemplosIndicacao: ExemploConversa[] = [
 ];
 
 /**
+ * Exemplos de ESPELHAMENTO — Usando a linguagem do lead
+ */
+export const exemplosEspelhamento: ExemploConversa[] = [
+  {
+    id: 'espelhamento_01',
+    fase: 'SITUACAO',
+    contexto: 'Lead corrige o agente sobre como chama o imóvel',
+    mensagemLead: 'não estou vendendo modelo, estou querendo vender meu apartamento!',
+    respostaSDR: 'Tem toda razão, me desculpa! Quero te ajudar a vender seu apartamento. Você já tem um valor em mente?',
+    porqueCorreto: 'Agente adota imediatamente a palavra do lead ("apartamento"), sem insistir em terminologia interna'
+  },
+  {
+    id: 'espelhamento_02',
+    fase: 'SITUACAO',
+    contexto: 'Lead usa palavra específica — agente deve espelhar',
+    mensagemLead: 'quero vender minha casa',
+    respostaSDR: 'Que ótimo! E sua casa fica em qual região da cidade?',
+    porqueCorreto: 'Repete "sua casa" exatamente como o lead disse, sem substituir por "imóvel" ou "residência"'
+  }
+];
+
+/**
+ * Exemplos de RETOMADA APÓS PAUSA
+ */
+export const exemplosRetomadaPausa: ExemploConversa[] = [
+  {
+    id: 'pausa_01',
+    fase: 'SITUACAO',
+    contexto: 'Lead sumiu 15 minutos e voltou com mensagem vaga',
+    mensagemLead: 'que 59m²',
+    respostaSDR: 'Continuando aqui 😊 — você me disse que quer vender seu apartamento no Reserva Buriti, certo? Perguntei se você já tem algum valor em mente para a venda.',
+    porqueCorreto: 'Faz micro-recapitulação antes de continuar, não abandona contexto nem repete pergunta seca'
+  }
+];
+
+/**
+ * Exemplos de RESET EMOCIONAL
+ */
+export const exemplosResetEmocional: ExemploConversa[] = [
+  {
+    id: 'reset_01',
+    fase: 'PROBLEMA',
+    contexto: 'Lead ficou hostil e explodiu de frustração',
+    mensagemLead: 'você se perde no assunto fica falando coisa com coisa sem sentido!',
+    respostaSDR: 'Tem razão, me desculpa. Pode me dizer o que ficou confuso? Quero entender pra te responder melhor 😊',
+    porqueCorreto: 'Pede desculpa genuína + pergunta neutra de recalibração. NÃO volta ao pitch na mesma mensagem'
+  }
+];
+
+/**
+ * Exemplos de VÍDEO INSTITUCIONAL
+ */
+export const exemplosVideo: ExemploConversa[] = [
+  {
+    id: 'video_01',
+    fase: 'PROBLEMA',
+    contexto: 'Lead confirmou 2+ dores — momento de enviar o vídeo antes da solução',
+    mensagemLead: 'sim, acontece mesmo isso com os corretores',
+    respostaSDR: 'Antes de te mostrar como a gente resolve na prática, deixa eu te mandar um vídeo curto do nosso método? É mais fácil de visualizar assim 😊\nhttps://www.youtube.com/watch?v=4ItUhXf1sJw',
+    porqueCorreto: 'Vídeo enviado APENAS após 2+ dores confirmadas. Funciona como âncora visual antes da Etapa 3'
+  }
+];
+
+/**
  * Gera string formatada com todos os exemplos para o prompt
  */
 export function gerarExemplosParaPrompt(): string {
@@ -224,13 +296,13 @@ export function gerarExemplosParaPrompt(): string {
 
   // Agrupar por fase
   const fases = ['SAUDACAO', 'SITUACAO', 'PROBLEMA', 'IMPLICACAO', 'NECESSIDADE', 'SOLUCAO'];
-  
+
   for (const fase of fases) {
     const exemplosDaFase = todosExemplos.filter(e => e.fase === fase);
     if (exemplosDaFase.length === 0) continue;
 
     output += `## Fase: ${fase}\n\n`;
-    
+
     for (const ex of exemplosDaFase) {
       output += `**[${ex.contexto}]**\n`;
       output += `Lead: "${ex.mensagemLead}"\n`;
@@ -265,7 +337,7 @@ export function gerarExemplosPorFase(fase: string, limite: number = 3): string {
   if (exemplosDaFase.length === 0) return '';
 
   let output = `\n💡 EXEMPLOS PARA ESTA FASE (${fase}):\n`;
-  
+
   for (const ex of exemplosDaFase) {
     output += `• "${ex.mensagemLead}" → "${ex.respostaSDR.split('\n')[0]}..."\n`;
   }

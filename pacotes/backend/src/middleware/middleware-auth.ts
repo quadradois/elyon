@@ -5,6 +5,27 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/db';
 import { verificarToken } from '../utilitarios/token';
 
+const extrairToken = (req: Request): string | null => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.split(' ')[1];
+  }
+
+  const headerToken = req.headers['x-access-token'] || req.headers['x-auth-token'];
+  if (typeof headerToken === 'string' && headerToken.trim()) {
+    return headerToken;
+  }
+  if (Array.isArray(headerToken) && headerToken[0]) {
+    return headerToken[0];
+  }
+
+  if (req.query.token) {
+    return String(req.query.token);
+  }
+
+  return null;
+};
+
 // Extender Request para incluir dados do usuário
 declare global {
   namespace Express {
@@ -30,12 +51,10 @@ export const verificarSuperAdmin = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Verificar token
-    const authHeader = req.headers.authorization;
+    const token = extrairToken(req);
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       console.warn('[Auth] Token não fornecido no header Authorization');
-      // console.log('Headers recebidos:', req.headers); // Debug
       res.status(401).json({
         erro: 'Não autorizado',
         mensagem: 'Token não fornecido'
@@ -43,7 +62,6 @@ export const verificarSuperAdmin = async (
       return;
     }
 
-    const token = authHeader.split(' ')[1];
     const payload = verificarToken(token);
 
     if (!payload) {
@@ -111,14 +129,13 @@ export const verificarAdmin = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
+    const token = extrairToken(req);
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       res.status(401).json({ erro: 'Token não fornecido' });
       return;
     }
 
-    const token = authHeader.split(' ')[1];
     const payload = verificarToken(token);
 
     if (!payload) {
@@ -169,15 +186,14 @@ export const verificarAutenticacao = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
+    const token = extrairToken(req);
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       console.warn('[Auth] Token não fornecido (verificarAutenticacao). Headers:', req.headers);
       res.status(401).json({ erro: 'Token não fornecido' });
       return;
     }
 
-    const token = authHeader.split(' ')[1];
     const payload = verificarToken(token);
 
     if (!payload) {

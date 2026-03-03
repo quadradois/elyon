@@ -16,7 +16,10 @@
  * @date 22/12/2025
  */
 
-import { Agent } from '@openai/agents';
+import { Agent, tool, handoff } from '@openai/agents';
+import { OpenAIChatCompletionsModel } from '@openai/agents-openai';
+import { OpenAI } from 'openai';
+import { ElyonContext } from './elyon-context';
 import { z } from 'zod';
 import {
     moverParaFaseTool,
@@ -27,7 +30,7 @@ import {
     salvarDadosImovelTool,
     enviarParaCrmTool
 } from '../ferramentas/sdr-tools-agents';
-import { prisma } from '../lib/db';
+// prisma removido — não utilizado diretamente neste módulo
 
 
 
@@ -86,7 +89,6 @@ export function gerarPromptAdmin(config: {
     prazoTrabalho?: number;
     comissaoAcordada?: string;
 }): string {
-    const generoSufixo = config.genero === 'feminino' ? 'a' : 'o';
     const tipoContrato = config.tipoAutorizacao === 'exclusiva' ? 'AUTORIZAÇÃO EXCLUSIVA' : 'AUTORIZAÇÃO DE VENDA';
     const prazo = config.prazoTrabalho || 90;
     const comissao = config.comissaoAcordada || 'padrao';
@@ -157,8 +159,24 @@ Quando tudo estiver completo:
 }
 
 // ====================================
-// CRIAR AGENTE ADMIN
+// ESQUEMA DE SAÍDA ESTRUTURADA (Fase 8.2)
 // ====================================
+
+const AdminOutputSchema = z.object({
+    respostaParaOCliente: z.string().describe('Mensagem textual que será enviada ao proprietário via WhatsApp.'),
+    dadosColetados: z.object({
+        cpf: z.string().regex(/^\d{11}$/).nullable().optional().describe('CPF do cliente (apenas 11 dígitos numéricos, sem pontos ou traços)'),
+        email: z.string().email().nullable().optional(),
+        endereco: z.string().nullable().optional(),
+        tipoImovel: z.string().nullable().optional(),
+        quartos: z.number().nullable().optional(),
+        area: z.number().nullable().optional(),
+        valorPretendido: z.number().nullable().optional()
+    }).describe('Estado atual dos dados coletados durante esta interação.'),
+    proximoPasso: z.enum(['COLETAR_DOCS', 'GERAR_CONTRATO', 'AGENDAR_VISITA', 'COLETAR_DADOS_IMOVEL', 'FINALIZAR']).describe('Qual a próxima etapa lógica do fluxo.')
+});
+
+export type AdminOutput = z.infer<typeof AdminOutputSchema>;
 
 export function criarAdminAgent(config: {
     nomeAgente: string;
@@ -168,31 +186,66 @@ export function criarAdminAgent(config: {
     tipoAutorizacao?: string;
     prazoTrabalho?: number;
     comissaoAcordada?: string;
-}): Agent {
-    const prompt = gerarPromptAdmin({
-        nomeAgente: config.nomeAgente,
-        genero: config.genero || 'feminino',
-        nomeImobiliaria: config.nomeImobiliaria,
-        emailContrato: config.emailContrato,
-        tipoAutorizacao: config.tipoAutorizacao,
-        prazoTrabalho: config.prazoTrabalho,
-        comissaoAcordada: config.comissaoAcordada
-    });
+    model?: string;
+    apiKey?: string;
+    baseUrl?: string;
+    tools?: any[];
+}): any {
+    // Configura modelo customizado se houver BYOK
+    let modelInstance: any = config.model || 'gpt-4.1-mini';
 
+    if (config.apiKey) {
+        const client = new OpenAI({
+            apiKey: config.apiKey,
+            baseURL: config.baseUrl
+        });
+        modelInstance = new OpenAIChatCompletionsModel(
+            client,
+            config.model || 'gpt-4.1-mini'
+        );
+    }
+
+    // O SDK aceita resultType em runtime, mas os generics de Agent não expõem
+    // ZodObject como AgentOutputType válido na v0.5.x. Usamos cast seguro.
     return new Agent({
-        name: 'admin_agent',
-        model: 'gpt-4o',
-        instructions: prompt,
+        name: 'admin_agent_v4',
+        model: modelInstance,
+        resultType: AdminOutputSchema,
+        instructions: (context: any) => {
+            let basePrompt = gerarPromptAdmin({
+                nomeAgente: config.nomeAgente,
+                genero: config.genero || 'feminino',
+                nomeImobiliaria: config.nomeImobiliaria,
+                emailContrato: config.emailContrato,
+                tipoAutorizacao: config.tipoAutorizacao,
+                prazoTrabalho: config.prazoTrabalho,
+                comissaoAcordada: config.comissaoAcordada
+            });
+
+            if (context?.ultimaInteracao) {
+                basePrompt += `\n\n[CONTEXTO DA ÚLTIMA INTERAÇÃO]: ${context.ultimaInteracao}`;
+            }
+
+            basePrompt += `\n\n# ⚠️ INSTRUÇÃO DE SAÍDA ESTRUTURADA (MANDATÓRIA):
+Você DEVE preencher o campo 'respostaParaOCliente' com o que você diria ao lead.
+Os campos em 'dadosColetados' devem refletir o que você acabou de ouvir ou o que já sabe.
+Mantenha o tom de voz casual no campo 'respostaParaOCliente'.`;
+
+            return basePrompt;
+        },
         tools: [
             moverParaFaseTool,
             agendarAvaliacaoTool,
             encaminharCorretorTool,
             gerarLinkContratoTool,
             atualizarDadosLeadTool,
-            salvarDadosImovelTool,   // 🆕 Coleta dados do imóvel
-            enviarParaCrmTool        // 🆕 Envia para CRM
+            salvarDadosImovelTool,
+            enviarParaCrmTool,
+            ...(config.tools || [])
         ]
-    });
+        // ⚠️ outputGuardrails removidos: incompatíveis com resultType (Structured Output).
+        // A validação é garantida pelo schema Zod do resultType.
+    } as any);
 }
 
 // ====================================

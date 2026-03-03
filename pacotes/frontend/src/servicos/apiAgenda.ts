@@ -1,25 +1,8 @@
-import axios from 'axios';
+import { api } from './api';
 
-// Configuração base (assumindo que já existe ou usando axios direto)
-// Se houver uma instância configurada do axios (com interceptors de auth), use-a.
-// Por padrão, vamos tentar pegar o token do localStorage.
+// Usa a mesma instância axios do api.ts (baseURL: '/api')
+// NÃO criar instância separada — causa CORS com VITE_API_URL
 
-const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
-});
-
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('elyon_token');
-    const tenantId = JSON.parse(localStorage.getItem('elyon_tenant') || '{}')?.id;
-
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    if (tenantId) {
-        config.headers['x-tenant-id'] = tenantId;
-    }
-    return config;
-});
 
 export interface EventoAgenda {
     id: string;

@@ -2,6 +2,7 @@ import axios from 'axios';
 import { prisma } from '../lib/db';
 
 const MAPA_API_URL = 'https://portalmapa.goiania.go.gov.br/servicogyn/rest/services/MapaServer/Feature_BaseTeste/FeatureServer/3/query';
+const MODO_BASE_LOCAL_ONLY = process.env.MINERACAO_LOCAL_ONLY !== 'false';
 
 interface BuscaParams {
   nmedificio?: string;
@@ -46,6 +47,26 @@ export class MapaService {
     console.log('[MapaService] Listando bairros...');
 
     try {
+      const bairrosLocais = await prisma.bairro.findMany({
+        select: { codigo: true, nome: true },
+        orderBy: { nome: 'asc' }
+      });
+
+      if (bairrosLocais.length > 0) {
+        return bairrosLocais;
+      }
+
+      if (MODO_BASE_LOCAL_ONLY) {
+        return [];
+      }
+    } catch (error) {
+      console.error('[MapaService] Erro ao listar bairros na base local:', error);
+      if (MODO_BASE_LOCAL_ONLY) {
+        return [];
+      }
+    }
+
+    try {
       const response = await axios.get(MAPA_API_URL, {
         params: {
           where: '1=1',
@@ -86,6 +107,37 @@ export class MapaService {
    */
   async listarEdificiosPorBairro(cdbairro: number): Promise<Edificio[]> {
     console.log(`[MapaService] Listando edifícios do bairro ${cdbairro}...`);
+
+    try {
+      const edificiosLocais = await prisma.edificio.findMany({
+        where: { codigoBairro: cdbairro },
+        select: {
+          codigo: true,
+          nome: true,
+          logradouro: true,
+          totalUnidades: true
+        },
+        orderBy: { nome: 'asc' }
+      });
+
+      if (edificiosLocais.length > 0) {
+        return edificiosLocais.map((ed) => ({
+          codigo: ed.codigo,
+          nome: ed.nome,
+          logradouro: ed.logradouro || '',
+          totalUnidades: ed.totalUnidades || 0
+        }));
+      }
+
+      if (MODO_BASE_LOCAL_ONLY) {
+        return [];
+      }
+    } catch (error) {
+      console.error('[MapaService] Erro ao listar edifícios na base local:', error);
+      if (MODO_BASE_LOCAL_ONLY) {
+        return [];
+      }
+    }
 
     // 1. Tentar cache primeiro
     const doCache = await this.buscarEdificiosDoBairroNoCache(cdbairro);
@@ -167,6 +219,56 @@ export class MapaService {
     nomeEdificio?: string // Novo parâmetro opcional para buscar por nome
   ): Promise<{ unidades: UnidadeImovel[]; total: number; hasMore: boolean }> {
     console.log(`[MapaService] Buscando unidades do edifício ${cdedificio} (offset: ${offset}, limit: ${limit})...`);
+
+    try {
+      const whereLocal: any = {
+        codigoEdificio: cdedificio
+      };
+
+      if ((!cdedificio || cdedificio <= 0) && nomeEdificio) {
+        whereLocal.codigoEdificio = undefined;
+        whereLocal.nomeEdificio = {
+          contains: nomeEdificio,
+          mode: 'insensitive'
+        };
+      }
+
+      const totalLocal = await prisma.imovel.count({ where: whereLocal });
+
+      if (totalLocal > 0) {
+        const imoveis = await prisma.imovel.findMany({
+          where: whereLocal,
+          skip: offset,
+          take: limit,
+          orderBy: [
+            { complemento: 'asc' },
+            { inscricaoIptu: 'asc' }
+          ]
+        });
+
+        const unidades = imoveis.map((i) => ({
+          nrinscr: i.inscricaoIptu,
+          nmedificio: i.nomeEdificio || '',
+          incompl: i.complemento || i.numero || '',
+          nmlogradou: i.logradouro || '',
+          nmbairro: i.bairro || '',
+          areaedif: i.areaEdificada || undefined,
+          cdedificio: i.codigoEdificio || undefined
+        }));
+
+        const hasMore = (offset + unidades.length) < totalLocal;
+        return { unidades, total: totalLocal, hasMore };
+      }
+
+      if (MODO_BASE_LOCAL_ONLY) {
+        return { unidades: [], total: 0, hasMore: false };
+      }
+    } catch (error) {
+      console.error('[MapaService] Erro ao buscar unidades na base local:', error);
+      if (MODO_BASE_LOCAL_ONLY) {
+        return { unidades: [], total: 0, hasMore: false };
+      }
+    }
 
     // 1. PRIMEIRO: Se temos nome do edifício, tentar buscar no cache local
     if (nomeEdificio) {
@@ -306,6 +408,75 @@ export class MapaService {
   async buscarEdificiosPorNome(termo: string, limite: number = 20): Promise<Edificio[]> {
     console.log(`[MapaService] Buscando edifícios por nome: "${termo}"...`);
 
+    try {
+      const termoUpper = termo.toUpperCase();
+
+      const [edificios, imoveisComEdificio] = await Promise.all([
+        prisma.edificio.findMany({
+          where: {
+            nome: {
+              contains: termoUpper,
+              mode: 'insensitive'
+            }
+          },
+          include: { bairro: true },
+          orderBy: { nome: 'asc' },
+          take: limite
+        }),
+        prisma.imovel.findMany({
+          where: {
+            nomeEdificio: {
+              contains: termoUpper,
+              mode: 'insensitive'
+            }
+          },
+          select: {
+            nomeEdificio: true,
+            codigoEdificio: true,
+            logradouro: true,
+            bairro: true
+          },
+          distinct: ['nomeEdificio'],
+          take: limite
+        })
+      ]);
+
+      const mapaEdificios = new Map<number, Edificio>();
+
+      for (const ed of edificios) {
+        mapaEdificios.set(ed.codigo, {
+          codigo: ed.codigo,
+          nome: ed.nome,
+          logradouro: ed.logradouro || ed.bairro?.nome || ''
+        });
+      }
+
+      for (const im of imoveisComEdificio) {
+        if (!im.nomeEdificio || !im.codigoEdificio) continue;
+        if (mapaEdificios.has(im.codigoEdificio)) continue;
+
+        mapaEdificios.set(im.codigoEdificio, {
+          codigo: im.codigoEdificio,
+          nome: im.nomeEdificio,
+          logradouro: `${im.logradouro || ''} - ${im.bairro || ''}`
+        });
+      }
+
+      const locais = Array.from(mapaEdificios.values()).slice(0, limite);
+      if (locais.length > 0) {
+        return locais;
+      }
+
+      if (MODO_BASE_LOCAL_ONLY) {
+        return [];
+      }
+    } catch (error) {
+      console.error('[MapaService] Erro ao buscar edifícios na base local:', error);
+      if (MODO_BASE_LOCAL_ONLY) {
+        return [];
+      }
+    }
+
     // 1. PRIMEIRO: Tentar buscar no cache local
     const doCache = await this.buscarEdificiosNoCache(termo, limite);
     if (doCache.length > 0) {
@@ -369,6 +540,251 @@ export class MapaService {
       // 3. Fallback Final: Mock de edifícios conhecidos
       return this.mockEdificiosPorNome(termo);
     }
+  }
+
+  /**
+   * Busca imóveis por código exato.
+   * - `cdedificio` para empreendimentos verticais
+   * - `cdbairro` para condomínios horizontais
+   */
+  async buscarImoveisPorCodigo(codigo: number): Promise<{ edificios: Edificio[]; condominios: Bairro[] }> {
+    console.log(`[MapaService] Buscando imóveis por código: ${codigo}...`);
+
+    const [edificiosCache, condominiosCache] = await Promise.all([
+      this.buscarEdificioNoCachePorCodigo(codigo),
+      this.buscarCondominioNoCachePorCodigo(codigo)
+    ]);
+
+    if (edificiosCache.length > 0 || condominiosCache.length > 0) {
+      console.log(`[MapaService] ✅ Resultado por código no cache: ${edificiosCache.length} edifício(s), ${condominiosCache.length} condomínio(s)`);
+      return { edificios: edificiosCache, condominios: condominiosCache };
+    }
+
+    if (MODO_BASE_LOCAL_ONLY) {
+      return { edificios: [], condominios: [] };
+    }
+
+    const [resultadoEdificio, resultadoCondominio] = await Promise.allSettled([
+      this.buscarEdificioNaApiPorCodigo(codigo),
+      this.buscarCondominioNaApiPorCodigo(codigo)
+    ]);
+
+    let edificiosApi: Edificio[] = [];
+    let condominiosApi: Bairro[] = [];
+
+    if (resultadoEdificio.status === 'fulfilled') {
+      edificiosApi = resultadoEdificio.value;
+    } else {
+      console.warn('[MapaService] ⚠️ Falha parcial na busca por código (edifício):', resultadoEdificio.reason);
+    }
+
+    if (resultadoCondominio.status === 'fulfilled') {
+      condominiosApi = resultadoCondominio.value;
+    } else {
+      console.warn('[MapaService] ⚠️ Falha parcial na busca por código (bairro):', resultadoCondominio.reason);
+    }
+
+    console.log(`[MapaService] ✅ Resultado por código na API: ${edificiosApi.length} edifício(s), ${condominiosApi.length} bairro(s)`);
+    return { edificios: edificiosApi, condominios: condominiosApi };
+  }
+
+  private async buscarEdificioNoCachePorCodigo(codigo: number): Promise<Edificio[]> {
+    try {
+      const edificio = await prisma.edificio.findUnique({
+        where: { codigo },
+        include: { bairro: true }
+      });
+
+      if (edificio) {
+        return [{
+          codigo: edificio.codigo,
+          nome: edificio.nome,
+          logradouro: edificio.logradouro || edificio.bairro?.nome || ''
+        }];
+      }
+
+      const imovel = await prisma.imovel.findFirst({
+        where: { codigoEdificio: codigo },
+        select: {
+          nomeEdificio: true,
+          logradouro: true,
+          bairro: true
+        }
+      });
+
+      if (imovel?.nomeEdificio) {
+        return [{
+          codigo,
+          nome: imovel.nomeEdificio,
+          logradouro: `${imovel.logradouro || ''} - ${imovel.bairro || ''}`
+        }];
+      }
+
+      return [];
+    } catch (error) {
+      console.error('[MapaService] Erro ao buscar edifício no cache por código:', error);
+      return [];
+    }
+  }
+
+  private async buscarCondominioNoCachePorCodigo(codigo: number): Promise<Bairro[]> {
+    try {
+      const bairro = await prisma.bairro.findUnique({
+        where: { codigo },
+        select: {
+          codigo: true,
+          nome: true,
+          ehCondominio: true
+        }
+      });
+
+      if (bairro) {
+        return [{
+          codigo: bairro.codigo,
+          nome: bairro.nome
+        }];
+      }
+
+      const imovel = await prisma.imovel.findFirst({
+        where: { codigoBairro: codigo },
+        select: { bairro: true }
+      });
+
+      if (imovel?.bairro) {
+        return [{
+          codigo,
+          nome: imovel.bairro
+        }];
+      }
+
+      return [];
+    } catch (error) {
+      console.error('[MapaService] Erro ao buscar condomínio no cache por código:', error);
+      return [];
+    }
+  }
+
+  private async buscarEdificioNaApiPorCodigo(codigo: number): Promise<Edificio[]> {
+    let response: any;
+
+    response = await axios.get(MAPA_API_URL, {
+      params: {
+        where: `cdedificio = ${codigo}`,
+        outFields: 'cdedificio,nmedificio,nmlogradou,nmbairro',
+        returnDistinctValues: true,
+        resultRecordCount: 5,
+        returnGeometry: false,
+        f: 'json'
+      },
+      timeout: 15000
+    });
+
+    if (response.data?.error) {
+      response = await axios.get(MAPA_API_URL, {
+        params: {
+          where: `cdedificio = ${codigo}`,
+          outFields: 'cdedificio,nmedificio,nmlogradou,nmbairro',
+          resultRecordCount: 5,
+          returnGeometry: false,
+          f: 'json'
+        },
+        timeout: 15000
+      });
+    }
+
+    if (response.data?.error) {
+      throw new Error(`Erro na API (edifício por código): ${response.data.error.message}`);
+    }
+
+    const features = response.data?.features || [];
+    if (!features.length) return [];
+
+    const unicos = new Map<number, Edificio>();
+    for (const f of features) {
+      const codigoEdificio = f.attributes.cdedificio;
+      if (!codigoEdificio || unicos.has(codigoEdificio)) continue;
+
+      unicos.set(codigoEdificio, {
+        codigo: codigoEdificio,
+        nome: f.attributes.nmedificio || '',
+        logradouro: `${f.attributes.nmlogradou || ''} - ${f.attributes.nmbairro || ''}`
+      });
+    }
+
+    return Array.from(unicos.values());
+  }
+
+  private async buscarCondominioNaApiPorCodigo(codigo: number): Promise<Bairro[]> {
+    let response: any;
+
+    response = await axios.get(MAPA_API_URL, {
+      params: {
+        where: `cdbairro = ${codigo}`,
+        outFields: 'cdbairro,nmbairro',
+        returnDistinctValues: true,
+        resultRecordCount: 5,
+        returnGeometry: false,
+        f: 'json'
+      },
+      timeout: 15000
+    });
+
+    if (response.data?.error) {
+      response = await axios.get(MAPA_API_URL, {
+        params: {
+          where: `cdbairro = ${codigo}`,
+          outFields: 'cdbairro,nmbairro',
+          resultRecordCount: 5,
+          returnGeometry: false,
+          f: 'json'
+        },
+        timeout: 15000
+      });
+    }
+
+    if (response.data?.error) {
+      throw new Error(`Erro na API (bairro por código): ${response.data.error.message}`);
+    }
+
+    const features = response.data?.features || [];
+    if (!features.length) return [];
+
+    const resultados = new Map<string, Bairro>();
+    for (const f of features) {
+      const codigoBairro = f.attributes.cdbairro;
+      const nomeBairro = (f.attributes.nmbairro || '').trim();
+      if (!codigoBairro || !nomeBairro) continue;
+
+      const chave = `${codigoBairro}:${nomeBairro.toUpperCase()}`;
+      if (!resultados.has(chave)) {
+        resultados.set(chave, { codigo: codigoBairro, nome: nomeBairro });
+      }
+    }
+
+    return Array.from(resultados.values());
+  }
+
+  private ehCondominioHorizontal(nome: string): boolean {
+    const nomeUpper = (nome || '').trim().toUpperCase();
+
+    const padroesCondominio = [
+      'JARDINS', 'JARDIM', 'JD ', 'JD.',
+      'ALPHAVILLE', 'ALDEIA', 'PORTAL',
+      'RESIDENCIAL', 'RES ', 'RES.',
+      'COND ', 'COND.', 'CONDOMINIO', 'CONDOMÍNIO',
+      'VILLAGE', 'RESERVA', 'GRANVILLE',
+      'GOIANIA GOLF', 'GOIÂNIA GOLF',
+      'ALTO DA BOA VISTA', 'PARQUE'
+    ];
+
+    const bairrosTradicionais = [
+      'SETOR', 'CENTRO', 'VILA', 'BAIRRO', 'CONJUNTO', 'NUCLEO'
+    ];
+
+    const ehBairroTradicional = bairrosTradicionais.some(p => nomeUpper.startsWith(p));
+    const pareceCondominio = padroesCondominio.some(p => nomeUpper.includes(p));
+
+    return pareceCondominio && !ehBairroTradicional;
   }
 
   /**
@@ -502,6 +918,39 @@ export class MapaService {
     console.log(`[MapaService] Buscando condomínios horizontais: "${termo}" (limite: ${limite})...`);
 
     try {
+      const termoUpper = termo.toUpperCase().trim();
+
+      const bairrosLocais = await prisma.bairro.findMany({
+        where: {
+          nome: {
+            contains: termoUpper,
+            mode: 'insensitive'
+          }
+        },
+        orderBy: { nome: 'asc' },
+        take: limite * 2
+      });
+
+      const condominios = bairrosLocais
+        .filter((bairro) => bairro.ehCondominio || this.ehCondominioHorizontal(bairro.nome) || bairro.nome.toUpperCase().startsWith(termoUpper))
+        .slice(0, limite)
+        .map((bairro) => ({ codigo: bairro.codigo, nome: bairro.nome }));
+
+      if (condominios.length > 0) {
+        return condominios;
+      }
+
+      if (MODO_BASE_LOCAL_ONLY) {
+        return [];
+      }
+    } catch (error) {
+      console.error('[MapaService] Erro ao buscar condomínios na base local:', error);
+      if (MODO_BASE_LOCAL_ONLY) {
+        return [];
+      }
+    }
+
+    try {
       // Buscar bairros que contêm o termo - sem limite na API para pegar todos
       const response = await axios.get(MAPA_API_URL, {
         params: {
@@ -526,38 +975,16 @@ export class MapaService {
       // Remover duplicatas
       const bairrosMap = new Map<number, Bairro>();
 
-      // Prefixos/padrões comuns de condomínios horizontais
-      const padroesCondominio = [
-        'JARDINS', 'JARDIM', 'JD ', 'JD.',
-        'ALPHAVILLE', 'ALDEIA', 'PORTAL',
-        'RESIDENCIAL', 'RES ', 'RES.',
-        'COND ', 'COND.', 'CONDOMINIO', 'CONDOMÍNIO',
-        'VILLAGE', 'RESERVA', 'GRANVILLE',
-        'GOIANIA GOLF', 'GOIÂNIA GOLF',
-        'ALTO DA BOA VISTA', 'PARQUE'
-      ];
-
-      // Bairros tradicionais que NÃO são condomínios horizontais
-      const bairrosTradicionais = [
-        'SETOR', 'CENTRO', 'VILA', 'BAIRRO', 'CONJUNTO', 'NUCLEO'
-      ];
-
       for (const f of features) {
         const codigo = f.attributes.cdbairro;
         const nome = f.attributes.nmbairro?.trim()?.toUpperCase() || '';
 
         if (!codigo || bairrosMap.has(codigo)) continue;
 
-        // Verificar se é bairro tradicional (NÃO incluir)
-        const ehBairroTradicional = bairrosTradicionais.some(p => nome.startsWith(p));
-
-        // Verificar se parece ser um condomínio horizontal
-        const pareceCondominio = padroesCondominio.some(p => nome.includes(p));
-
         // Incluir se:
         // 1. Parece condomínio E não é bairro tradicional
         // 2. OU nome começa exatamente com o termo buscado (ex: buscar "florença" → "FLORENÇA RESIDENCE")
-        if ((pareceCondominio && !ehBairroTradicional) || nome.startsWith(termo.toUpperCase())) {
+        if (this.ehCondominioHorizontal(nome) || nome.startsWith(termo.toUpperCase())) {
           bairrosMap.set(codigo, {
             codigo,
             nome: f.attributes.nmbairro?.trim() || ''
@@ -594,6 +1021,45 @@ export class MapaService {
    */
   async listarTodasCasasPorCondominio(cdbairro: number): Promise<{ casas: any[]; total: number }> {
     console.log(`[MapaService] Buscando TODAS as casas do condomínio ${cdbairro}...`);
+
+    try {
+      const imoveis = await prisma.imovel.findMany({
+        where: {
+          codigoBairro: cdbairro,
+          OR: [
+            { codigoEdificio: null },
+            { nomeEdificio: null },
+            { nomeEdificio: '' }
+          ]
+        },
+        orderBy: [
+          { quadra: 'asc' },
+          { lote: 'asc' },
+          { inscricaoIptu: 'asc' }
+        ]
+      });
+
+      const casas = imoveis.map((imovel) => ({
+        nrinscr: imovel.inscricaoIptu,
+        nmedificio: '',
+        incompl: imovel.numero || imovel.complemento || '',
+        nmlogradou: imovel.logradouro?.trim() || '',
+        nmbairro: imovel.bairro?.trim() || '',
+        areaedif: imovel.areaEdificada || 0,
+        areaterr: imovel.areaTerreno || 0,
+        nrquadra: imovel.quadra?.trim() || '',
+        nrlote: imovel.lote?.trim() || ''
+      }));
+
+      if (casas.length > 0 || MODO_BASE_LOCAL_ONLY) {
+        return { casas, total: casas.length };
+      }
+    } catch (error) {
+      console.error('[MapaService] Erro ao listar casas na base local:', error);
+      if (MODO_BASE_LOCAL_ONLY) {
+        return { casas: [], total: 0 };
+      }
+    }
 
     try {
       // Primeiro, contar total de registros
@@ -687,6 +1153,50 @@ export class MapaService {
     console.log(`[MapaService] Listando casas do condomínio ${cdbairro} (offset: ${offset}, limit: ${limit})...`);
 
     try {
+      const whereLocal = {
+        codigoBairro: cdbairro,
+        OR: [
+          { codigoEdificio: null },
+          { nomeEdificio: null },
+          { nomeEdificio: '' }
+        ]
+      };
+
+      const total = await prisma.imovel.count({ where: whereLocal });
+      const imoveis = await prisma.imovel.findMany({
+        where: whereLocal,
+        skip: offset,
+        take: limit,
+        orderBy: [
+          { quadra: 'asc' },
+          { lote: 'asc' },
+          { inscricaoIptu: 'asc' }
+        ]
+      });
+
+      const casas = imoveis.map((imovel) => ({
+        nrinscr: imovel.inscricaoIptu,
+        nmedificio: '',
+        incompl: imovel.numero || imovel.complemento || '',
+        nmlogradou: imovel.logradouro?.trim() || '',
+        nmbairro: imovel.bairro?.trim() || '',
+        areaedif: imovel.areaEdificada || 0,
+        areaterr: imovel.areaTerreno || 0,
+        nrquadra: imovel.quadra?.trim() || '',
+        nrlote: imovel.lote?.trim() || ''
+      }));
+
+      if (casas.length > 0 || MODO_BASE_LOCAL_ONLY) {
+        return { casas, total, hasMore: (offset + casas.length) < total };
+      }
+    } catch (error) {
+      console.error('[MapaService] Erro ao listar casas paginadas na base local:', error);
+      if (MODO_BASE_LOCAL_ONLY) {
+        return { casas: [], total: 0, hasMore: false };
+      }
+    }
+
+    try {
       // Primeiro, contar total de registros
       const countResponse = await axios.get(MAPA_API_URL, {
         params: {
@@ -763,6 +1273,64 @@ export class MapaService {
     limite: number = 50
   ): Promise<any[]> {
     console.log(`[MapaService] Buscando por endereço: "${endereco}" ${numero ? `Nº ${numero}` : ''}...`);
+
+    try {
+      const enderecoUpper = endereco.toUpperCase().trim();
+      const whereLocal: any = {
+        logradouro: {
+          contains: enderecoUpper,
+          mode: 'insensitive'
+        }
+      };
+
+      if (numero) {
+        whereLocal.OR = [
+          {
+            numero: {
+              contains: numero,
+              mode: 'insensitive'
+            }
+          },
+          {
+            complemento: {
+              contains: numero,
+              mode: 'insensitive'
+            }
+          }
+        ];
+      }
+
+      const imoveisLocais = await prisma.imovel.findMany({
+        where: whereLocal,
+        take: limite,
+        orderBy: [
+          { logradouro: 'asc' },
+          { numero: 'asc' }
+        ]
+      });
+
+      const imoveis = imoveisLocais.map((i) => ({
+        nrinscr: i.inscricaoIptu,
+        nmedificio: i.nomeEdificio?.trim() || '',
+        incompl: i.complemento?.trim() || '',
+        nmlogradou: i.logradouro?.trim() || '',
+        nrimovel: i.numero?.trim() || '',
+        nmbairro: i.bairro?.trim() || '',
+        areaedif: i.areaEdificada || 0,
+        areaterr: i.areaTerreno || 0,
+        cdedificio: i.codigoEdificio || null,
+        tipo: i.nomeEdificio ? 'apartamento' : 'casa'
+      }));
+
+      if (imoveis.length > 0 || MODO_BASE_LOCAL_ONLY) {
+        return imoveis;
+      }
+    } catch (error) {
+      console.error('[MapaService] Erro ao buscar por endereço na base local:', error);
+      if (MODO_BASE_LOCAL_ONLY) {
+        return [];
+      }
+    }
 
     try {
       // Construir cláusula WHERE

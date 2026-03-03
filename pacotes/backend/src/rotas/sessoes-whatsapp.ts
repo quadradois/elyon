@@ -20,8 +20,12 @@ import { StatusConexao } from '@prisma/client';
 import { getWhatsAppService, limparCacheWhatsApp } from '../servicos/whatsapp';
 import axios from 'axios';
 import { z } from 'zod';
+import { verificarAutenticacao } from '../middleware/middleware-auth';
 
 const router = Router();
+
+// Protege todas as rotas deste arquivo
+router.use(verificarAutenticacao);
 
 // ============================================
 // HELPERS
@@ -406,6 +410,36 @@ router.post('/:id/conectar', async (req, res) => {
     // Verificar se já está conectado
     const status = await service.verificarStatus();
     if (status?.instance?.state === 'open') {
+      // Configurar webhook automaticamente quando conectado
+      try {
+        const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.quadradois.com.br';
+        const webhookUrl = `${backendUrl}/api/webhooks/whatsapp?instance=${sessao.instanceName}`;
+        const apiUrl = process.env.EVOLUTION_API_URL || 'http://evolution:8080';
+        
+        await axios.post(
+          `${apiUrl}/webhook/set/${sessao.instanceName}`,
+          {
+            webhook: {
+              url: webhookUrl,
+              webhook_by_events: true,
+              events: [
+                'MESSAGES_UPSERT',
+                'MESSAGES_UPDATE',
+                'MESSAGES_DELETE',
+                'SEND_MESSAGE',
+                'CONNECTION_UPDATE'
+              ],
+              base64: false
+            }
+          }
+        );
+        
+        console.log(`[SessoesWhatsapp] ✅ Webhook configurado automaticamente para ${sessao.instanceName}`);
+      } catch (webhookError: any) {
+        console.error('[SessoesWhatsapp] ⚠️ Erro ao configurar webhook automaticamente:', webhookError.message);
+        // Não falha a conexão se o webhook não conseguir ser configurado
+      }
+      
       await prisma.sessaoWhatsapp.update({
         where: { id },
         data: { status: 'CONECTADO', ultimoStatus: new Date() }
@@ -668,7 +702,7 @@ router.post('/:id/configurar', async (req, res) => {
     // Se foi passado webhookBase64, atualiza o webhook
     if (typeof webhookBase64 === 'boolean') {
       const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.quadradois.com.br';
-      const webhookUrl = `${backendUrl}/api/webhooks/whatsapp`;
+      const webhookUrl = `${backendUrl}/api/webhooks/whatsapp?instance=${sessao.instanceName}`;
 
       const apiUrl = process.env.EVOLUTION_API_URL || '';
       const apiKey = process.env.EVOLUTION_API_KEY || '';

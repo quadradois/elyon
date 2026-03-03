@@ -181,20 +181,29 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
       const embeddingString = embeddingService.serializar(vetorEmbedding);
 
       // Salvar no banco
-      await prisma.conversaEmbedding.create({
-        data: {
-          tenantId,
-          conversaId,
-          leadId,
-          textoOriginal: chunk.texto,
-          tipoConteudo: chunk.tipo,
-          metadados: chunk.metadados,
-          embedding: embeddingString,
-          scoreQualidade: chunk.metadados.scoreQualidade || 0
-        }
-      });
+      // Usando queryRawUnsafe para lidar com o tipo Unsupported("vector")
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO conversas_embeddings (
+          id, "tenantId", "conversaId", "leadId", "textoOriginal", "tipoConteudo", metadados, embedding, "embeddingModelo", "scoreQualidade", "vezesUtilizado", "feedbackPositivo", "feedbackNegativo", "criadoEm", "atualizadoEm"
+        ) VALUES (
+          gen_random_uuid(), $1, $2, $3, $4, $5, $6::jsonb, $7::vector, 'text-embedding-3-small', $8, 0, 0, 0, NOW(), NOW()
+        )
+      `,
+        tenantId,
+        conversaId,
+        leadId,
+        chunk.texto,
+        chunk.tipo,
+        JSON.stringify(chunk.metadados),
+        `[${vetorEmbedding.join(',')}]`,
+        chunk.metadados.scoreQualidade || 0
+      );
 
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message && error.message.includes('type "vector" does not exist')) {
+        console.warn('[RAG] ⚠️ Erro pgvector ao TENTAR SALVAR. Ignorando silenciosamente.');
+        return;
+      }
       console.error('[RAG] Erro ao salvar chunk:', error);
     }
   }
@@ -213,39 +222,44 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
       // 1. Gerar embedding da mensagem atual
       const textoPreparado = embeddingService.prepararTexto(mensagemAtual);
       const vetorBusca = await embeddingService.gerar(textoPreparado);
+      const vetorString = `[${vetorBusca.join(',')}]`;
 
-      // 2. Buscar chunks do tenant
-      const whereClause: any = { tenantId };
+      // 2. Buscar chunks do tenant usando similaridade de cosseno do pgvector (<=>)
+      // O operador <=> retorna a distância do cosseno (1 - similaridade). 
+      // Cast explícito para vector é necessário pois Prisma passa como text
+      let querySql = `
+        SELECT *, 1 - (embedding::vector <=> $1::vector) AS similaridade 
+        FROM conversas_embeddings 
+        WHERE "tenantId" = $2
+      `;
+      const params: any[] = [vetorString, tenantId];
+
       if (tiposDesejados && tiposDesejados.length > 0) {
-        whereClause.tipoConteudo = { in: tiposDesejados };
+        querySql += ` AND "tipoConteudo" = ANY($3)`;
+        params.push(tiposDesejados);
       }
 
-      const chunksDb = await prisma.conversaEmbedding.findMany({
-        where: whereClause,
-        orderBy: { scoreQualidade: 'desc' },
-        take: 50 // Pegar os melhores 50 para filtrar por similaridade
-      });
+      querySql += ` AND 1 - (embedding::vector <=> $1::vector) >= $${params.length + 1}`;
+      params.push(this.LIMIAR_SIMILARIDADE);
 
-      if (chunksDb.length === 0) {
+      querySql += ` ORDER BY similaridade DESC LIMIT $${params.length + 1}`;
+      params.push(this.MAX_CHUNKS_RETORNADOS);
+
+      let chunksRelevantes: any[] = [];
+      try {
+        chunksRelevantes = await prisma.$queryRawUnsafe(querySql, ...params);
+      } catch (dbError: any) {
+        // Ignorar erro se pgvector não estiver instalado (Erro 42704)
+        if (dbError.message && dbError.message.includes('type "vector" does not exist')) {
+          console.warn('[RAG] ⚠️ Extensão pgvector não instalada. RAG de histórico desativado temporariamente.');
+          return { chunks: [], contextoFormatado: '' };
+        }
+        throw dbError; // Repassar outros erros
+      }
+
+      if (chunksRelevantes.length === 0) {
         return { chunks: [], contextoFormatado: '' };
       }
-
-      // 3. Calcular similaridade e ordenar
-      type ChunkComSimilaridade = typeof chunksDb[0] & { similaridade: number };
-      const chunksComSimilaridade: ChunkComSimilaridade[] = chunksDb.map((chunk: any) => {
-        const vetorChunk = embeddingService.desserializar(chunk.embedding);
-        const similaridade = embeddingService.calcularSimilaridade(vetorBusca, vetorChunk);
-        return {
-          ...chunk,
-          similaridade
-        };
-      });
-
-      // 4. Filtrar por limiar e pegar os melhores
-      const chunksRelevantes = chunksComSimilaridade
-        .filter((c: ChunkComSimilaridade) => c.similaridade >= this.LIMIAR_SIMILARIDADE)
-        .sort((a: ChunkComSimilaridade, b: ChunkComSimilaridade) => b.similaridade - a.similaridade)
-        .slice(0, this.MAX_CHUNKS_RETORNADOS);
 
       // 5. Atualizar contador de uso
       for (const chunk of chunksRelevantes) {
@@ -510,74 +524,80 @@ IMPORTANTE:
 
     try {
       const resposta = await openaiService.gerarResposta(
-          [
-            { role: 'system', content: 'Você é um especialista em vendas imobiliárias. Responda apenas com um JSON válido.' },
-            { role: 'user', content: prompt }
-          ],
-          {
-            model: 'gpt-4o',
-            maxTokens: 1000,
-            temperature: 0.3,
-            json: true
-          }
-        );
-
-        // Limpar blocos de código markdown
-        const limpo = resposta.replace(/```json/g, '').replace(/```/g, '').trim();
-
-        // Extrair JSON da resposta
-        const jsonMatch = limpo.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) {
-          return [];
+        [
+          { role: 'system', content: 'Você é um especialista em vendas imobiliárias. Responda apenas com um JSON válido.' },
+          { role: 'user', content: prompt }
+        ],
+        {
+          model: 'gpt-4o',
+          maxTokens: 1000,
+          temperature: 0.3,
+          json: true
         }
+      );
 
-        const chunksRaw = JSON.parse(jsonMatch[0]);
+      // Limpar blocos de código markdown
+      const limpo = resposta.replace(/```json/g, '').replace(/```/g, '').trim();
 
-        return chunksRaw
-          .filter((c: any) => c.scoreQualidade >= 70) // Filtro mais alto para prospecção
-          .map((c: any) => ({
-            texto: `[${c.tipo.toUpperCase()}] ${c.texto}${c.contexto ? ` (Usar quando: ${c.contexto})` : ''}`,
-            tipo: c.tipo as any,
-            metadados: {
-              resultado: tipoConversao,
-              empreendimento,
-              scoreQualidade: c.scoreQualidade,
-              fonte: 'prospeccao_ativa'
-            }
-          }));
-
-      } catch (error) {
-        console.error('[RAG-Prospecção] Erro ao extrair chunks:', error);
+      // Extrair JSON da resposta
+      const jsonMatch = limpo.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
         return [];
       }
+
+      const chunksRaw = JSON.parse(jsonMatch[0]);
+
+      return chunksRaw
+        .filter((c: any) => c.scoreQualidade >= 70) // Filtro mais alto para prospecção
+        .map((c: any) => ({
+          texto: `[${c.tipo.toUpperCase()}] ${c.texto}${c.contexto ? ` (Usar quando: ${c.contexto})` : ''}`,
+          tipo: c.tipo as any,
+          metadados: {
+            resultado: tipoConversao,
+            empreendimento,
+            scoreQualidade: c.scoreQualidade,
+            fonte: 'prospeccao_ativa'
+          }
+        }));
+
+    } catch (error) {
+      console.error('[RAG-Prospecção] Erro ao extrair chunks:', error);
+      return [];
     }
+  }
 
   /**
    * Salva chunk de prospecção com embedding
    */
   private async salvarChunkProspeccao(
-      chunk: ChunkConversa,
-      tenantId: string,
-      contatoId: string
-    ): Promise<void> {
+    chunk: ChunkConversa,
+    tenantId: string,
+    contatoId: string
+  ): Promise<void> {
     try {
       // Gerar embedding
       const textoPreparado = embeddingService.prepararTexto(chunk.texto);
       const vetorEmbedding = await embeddingService.gerar(textoPreparado);
-      const embeddingString = embeddingService.serializar(vetorEmbedding);
+      // Formatando para input native postgres vector
+      const vetorString = `[${vetorEmbedding.join(',')}]`;
 
       // Salvar no banco (usando conversaId para guardar contatoId)
-      await prisma.conversaEmbedding.create({
-        data: {
-          tenantId,
-          conversaId: contatoId, // Reutilizando campo para contatoId
-          textoOriginal: chunk.texto,
-          tipoConteudo: chunk.tipo,
-          metadados: chunk.metadados,
-          embedding: embeddingString,
-          scoreQualidade: chunk.metadados.scoreQualidade || 0
-        }
-      });
+      // Como o campo de embedding é do tipo Unsupported("vector") no Prisma, fazemos via raw query
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO conversas_embeddings (
+          id, "tenantId", "conversaId", "textoOriginal", "tipoConteudo", metadados, embedding, "embeddingModelo", "scoreQualidade", "vezesUtilizado", "feedbackPositivo", "feedbackNegativo", "criadoEm", "atualizadoEm"
+        ) VALUES (
+          gen_random_uuid(), $1, $2, $3, $4, $5::jsonb, $6::vector, 'text-embedding-3-small', $7, 0, 0, 0, NOW(), NOW()
+        )
+      `,
+        tenantId,
+        contatoId,
+        chunk.texto,
+        chunk.tipo,
+        JSON.stringify(chunk.metadados),
+        vetorString,
+        chunk.metadados?.scoreQualidade || 0
+      );
 
     } catch (error) {
       console.error('[RAG-Prospecção] Erro ao salvar chunk:', error);

@@ -20,7 +20,7 @@ services:
   # BANCO DE DADOS
   # ==========================================
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:0.8.0-pg15
     container_name: elyon_postgres
     restart: unless-stopped
     environment:
@@ -81,6 +81,9 @@ services:
       ASSERTIVA_API_URL: ${ASSERTIVA_API_URL:-https://api.assertivasolucoes.com.br}
       FRONTEND_URL: ${FRONTEND_URL:-https://elyon.quadradois.com.br}
       BACKEND_URL: ${BACKEND_URL:-https://api.elyon.quadradois.com.br}
+      USAR_ORQUESTRADOR_4_AGENTES: ${USAR_ORQUESTRADOR_4_AGENTES:-true}
+      MODO_OUTBOUND_ONLY: ${MODO_OUTBOUND_ONLY:-true}
+      DESATIVAR_INBOUND: ${DESATIVAR_INBOUND:-true}
 
     networks:
       - elyon_network
@@ -135,21 +138,22 @@ services:
   # ==========================================
   # ADMIN BILLING DASHBOARD
   # ==========================================
-  admin:
-    build:
-      context: ./site-quadradois/admin
-      dockerfile: Dockerfile
-    container_name: elyon_admin
-    restart: unless-stopped
-    networks:
-      - elyon_network
-      - crm_quadradois_net
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.admin.rule=Host(`admin.quadradois.com.br`)"
-      - "traefik.http.routers.admin.entrypoints=websecure"
-      - "traefik.http.routers.admin.tls.certresolver=letsencrypt"
-      - "traefik.http.services.admin.loadbalancer.server.port=80"
+  # ADMIN BILLING DASHBOARD — DESABILITADO (diretório ./site-quadradois/admin não existe)
+  # admin:
+  #   build:
+  #     context: ./site-quadradois/admin
+  #     dockerfile: Dockerfile
+  #   container_name: elyon_admin
+  #   restart: unless-stopped
+  #   networks:
+  #     - elyon_network
+  #     - crm_quadradois_net
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.admin.rule=Host(`admin.quadradois.com.br`)"
+  #     - "traefik.http.routers.admin.entrypoints=websecure"
+  #     - "traefik.http.routers.admin.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.admin.loadbalancer.server.port=80"
 
   # ==========================================
   # REVERSE PROXY (Traefik)

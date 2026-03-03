@@ -67,12 +67,12 @@ const KANBAN_COLUMNS = [
     },
     {
         id: "FASE3",
-        label: "3. Negociação",
+        label: "3. Documentação",
         status: "DOCUMENTACAO",
         color: "bg-purple-50 border-purple-200",
         text: "text-purple-700",
-        description: "Closer: Contrato e objeções",
-        agente: "CLOSER"
+        description: "Humano: Contrato e formalização",
+        agente: "HUMANO"
     },
     {
         id: "FASE4",
@@ -129,7 +129,7 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
         }
     };
 
-    // Mapeamento de status para colunas (alinhado aos 4 Agentes)
+    // Mapeamento de status para colunas (Opener + Presenter + Humano + Admin)
     const getColumnId = (status: string): string | null => {
         // Fase 1: Opener (Qualificação)
         if (['NOVO', 'QUALIFICADO'].includes(status)) return "FASE1";
@@ -137,7 +137,7 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
         // Fase 2: Presenter (Apresentação)
         if (['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA', 'CONTATANDO'].includes(status)) return "FASE2";
 
-        // Fase 3: Closer (Negociação)
+        // Fase 3: Humano (Documentação)
         if (['AVALIACAO_EM_ANDAMENTO', 'DOCUMENTACAO', 'EM_NEGOCIACAO'].includes(status)) return "FASE3";
 
         // Fase 4: Admin (Onboarding)

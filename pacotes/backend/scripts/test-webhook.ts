@@ -5,7 +5,7 @@ async function testWebhook() {
   
   const payload = {
     event: 'messages.upsert',
-    instance: 'elyon_main',
+    instance: 'elyon_3b5f4a6a_vendas',
     data: {
       messages: [
         {

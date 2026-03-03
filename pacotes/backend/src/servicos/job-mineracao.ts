@@ -208,7 +208,7 @@ async function processarJobEmBackground(jobId: string, tenantId: string): Promis
     await atualizarJob(jobId, { status: 'processando' });
 
     const dadosProprietarios: any[] = [];
-    let creditosConsumidos = 0;
+    const creditosConsumidos = 0;
     let sucessos = 0;
     let erros = 0;
 

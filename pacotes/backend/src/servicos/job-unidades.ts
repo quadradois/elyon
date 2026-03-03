@@ -1,8 +1,6 @@
 import { getRedisClient } from '../lib/redis';
 import { mapaService } from './mapa';
-import axios from 'axios'; // Importar axios para fazer chamadas diretas se necessário
-
-const MAPA_API_URL = 'https://portalmapa.goiania.go.gov.br/servicogyn/rest/services/MapaServer/Feature_BaseTeste/FeatureServer/3/query';
+import { prisma } from '../lib/db';
 
 export interface JobUnidades {
     id: string;
@@ -154,19 +152,16 @@ async function processarJobUnidades(jobId: string): Promise<void> {
             // ============================================
             // LÓGICA PARA CONDOMÍNIOS HORIZONTAIS
             // ============================================
-            // Implementação manual do loop para ter controle de progresso
+            const whereBairro = {
+                codigoBairro: job.codigo,
+                OR: [
+                    { codigoEdificio: null },
+                    { nomeEdificio: null },
+                    { nomeEdificio: '' }
+                ]
+            };
 
-            // 1. Contar total
-            const countResponse = await axios.get(MAPA_API_URL, {
-                params: {
-                    where: `cdbairro = ${job.codigo}`,
-                    returnCountOnly: true,
-                    f: 'json'
-                },
-                timeout: 30000
-            });
-
-            const total = countResponse.data.count || 0;
+            const total = await prisma.imovel.count({ where: whereBairro });
             await atualizarJob(jobId, { total });
 
             if (total > 0) {
@@ -174,31 +169,38 @@ async function processarJobUnidades(jobId: string): Promise<void> {
                 let offset = 0;
 
                 while (offset < total) {
-                    const response = await axios.get(MAPA_API_URL, {
-                        params: {
-                            where: `cdbairro = ${job.codigo}`,
-                            outFields: 'nrinscr,nmlogradou,nmbairro,areaterr,areaedif,incompl,nrimovel,nrquadra,nrlote',
-                            orderByFields: 'nrquadra ASC, nrlote ASC',
-                            resultOffset: offset,
-                            resultRecordCount: BATCH_SIZE,
-                            returnGeometry: false,
-                            f: 'json'
-                        },
-                        timeout: 60000
+                    const imoveis = await prisma.imovel.findMany({
+                        where: whereBairro,
+                        skip: offset,
+                        take: BATCH_SIZE,
+                        orderBy: [
+                            { quadra: 'asc' },
+                            { lote: 'asc' },
+                            { inscricaoIptu: 'asc' }
+                        ],
+                        select: {
+                            inscricaoIptu: true,
+                            numero: true,
+                            complemento: true,
+                            logradouro: true,
+                            bairro: true,
+                            areaEdificada: true,
+                            areaTerreno: true,
+                            quadra: true,
+                            lote: true
+                        }
                     });
 
-                    const features = response.data.features || [];
-
-                    const novasCasas = features.map((f: any) => ({
-                        nrinscr: f.attributes.nrinscr,
+                    const novasCasas = imoveis.map((imovel) => ({
+                        nrinscr: imovel.inscricaoIptu,
                         nmedificio: '',
-                        incompl: f.attributes.nrimovel || f.attributes.incompl || '',
-                        nmlogradou: f.attributes.nmlogradou?.trim() || '',
-                        nmbairro: f.attributes.nmbairro?.trim() || '',
-                        areaedif: f.attributes.areaedif || 0,
-                        areaterr: f.attributes.areaterr || 0,
-                        nrquadra: f.attributes.nrquadra?.trim() || '',
-                        nrlote: f.attributes.nrlote?.trim() || ''
+                        incompl: imovel.numero || imovel.complemento || '',
+                        nmlogradou: imovel.logradouro?.trim() || '',
+                        nmbairro: imovel.bairro?.trim() || '',
+                        areaedif: imovel.areaEdificada || 0,
+                        areaterr: imovel.areaTerreno || 0,
+                        nrquadra: imovel.quadra?.trim() || '',
+                        nrlote: imovel.lote?.trim() || ''
                     }));
 
                     todasUnidades = [...todasUnidades, ...novasCasas];
@@ -209,7 +211,7 @@ async function processarJobUnidades(jobId: string): Promise<void> {
 
                     offset += BATCH_SIZE;
 
-                    if (features.length < BATCH_SIZE) break;
+                    if (imoveis.length < BATCH_SIZE) break;
                     await new Promise(r => setTimeout(r, 200));
                 }
             }

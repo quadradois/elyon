@@ -35,6 +35,7 @@ import rotaJobsUnidades from './rotas/mineracao/unidades-jobs.rotas';
 import rotaContratos from './rotas/contratos';
 import rotaClientes from './rotas/clientes';
 import rotaConfiguracaoIntegracao from './rotas/configuracao-integracao';
+import rotaConfiguracaoLLM from './rotas/configuracao-llm';
 
 // Importar Prisma do módulo central (evita dependência circular)
 import { prisma } from './lib/db';
@@ -42,6 +43,7 @@ export { prisma };
 
 // Importar serviço WebSocket
 import { websocketService } from './servicos/websocket';
+import { schedulerSincronizacaoMapa } from './servicos/scheduler-sincronizacao-mapa';
 
 const app = express();
 const server = http.createServer(app);
@@ -122,6 +124,7 @@ app.use('/api/leads-vip', rotaLeadsVip);    // Leads do site de vendas (Supabase
 app.use('/api/contratos', rotaContratos);   // Geração de contratos digitais
 app.use('/api/clientes', rotaClientes);     // Clientes (Carteira)
 app.use('/api/configuracao/integracao', rotaConfiguracaoIntegracao); // Config integrações CRM
+app.use('/api/configuracao/llm', rotaConfiguracaoLLM);               // Config BYOK (LLM próprio)
 app.use('/webhooks', rotaWebhook);
 app.use('/webhooks', rotaWebhookManus);     // Webhooks do Manus (pesquisa IA)
 
@@ -147,19 +150,11 @@ if (require.main === module) {
     console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
     console.log(`🔌 WebSocket ativo para alertas em tempo real`);
     console.log(`🏥 Health check: http://localhost:${PORT}/api/saude`);
+    schedulerSincronizacaoMapa.iniciar();
 
-    // Autoconfiguração do Webhook em Produção
-    if (process.env.WEBHOOK_URL) {
-      try {
-        console.log('🔄 Configurando webhook automaticamente...');
-        // Importação dinâmica para evitar ciclo ou carregar antes da hora
-        const { whatsappService } = await import('./servicos/whatsapp');
-        await whatsappService.configurarWebhook(process.env.WEBHOOK_URL);
-        console.log('✅ Webhook configurado com sucesso no startup!');
-      } catch (error) {
-        console.error('⚠️ Falha ao configurar webhook no startup (pode ser ignorado se a Evolution não estiver pronta):', error);
-      }
-    }
+    // REMOVIDO: Autoconfiguração global de webhook
+    // Cada sessão WhatsApp configura seu próprio webhook individualmente
+    // Isso mantém o contexto multi-tenant e evita conflitos de instâncias
   });
 }
 

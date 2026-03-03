@@ -1319,7 +1319,28 @@ router.delete('/:id/contatos/:contatoId', async (req, res) => {
         // Deletar atividades
         await prisma.atividade.deleteMany({ where: { leadId: lead.id } });
 
-        // Deletar o lead
+        // Desvincular cliente
+        await prisma.cliente.updateMany({
+          where: { origemLeadId: lead.id },
+          data: { origemLeadId: null }
+        });
+
+        // Desvincular imóveis associados
+        await prisma.imovel.updateMany({
+          where: { leadId: lead.id },
+          data: { leadId: null }
+        });
+
+        // Deletar contratos associados
+        await prisma.contrato.deleteMany({ where: { leadId: lead.id } });
+
+        // Desvincular o contato do lead para evitar erro de foreign key
+        await prisma.contato.updateMany({
+          where: { leadId: lead.id },
+          data: { leadId: null }
+        });
+
+        // Deletar o lead (Cascades lidarão com Cliente, etc)
         await prisma.lead.delete({ where: { id: lead.id } });
       }
     }
@@ -1403,6 +1424,29 @@ router.delete('/:id/contatos', async (req, res) => {
         where: { leadId: { in: leadIds } }
       });
 
+      // Desvincular cliente
+      await prisma.cliente.updateMany({
+        where: { origemLeadId: { in: leadIds } },
+        data: { origemLeadId: null }
+      });
+
+      // Desvincular imóveis associados
+      await prisma.imovel.updateMany({
+        where: { leadId: { in: leadIds } },
+        data: { leadId: null }
+      });
+
+      // Deletar contratos associados
+      await prisma.contrato.deleteMany({
+        where: { leadId: { in: leadIds } }
+      });
+
+      // Desvincular o contato do lead para evitar erro de foreign key
+      await prisma.contato.updateMany({
+        where: { leadId: { in: leadIds } },
+        data: { leadId: null }
+      });
+
       // Deletar leads
       await prisma.lead.deleteMany({
         where: { id: { in: leadIds } }
@@ -1482,6 +1526,25 @@ router.delete('/:id/contatos/todos', async (req, res) => {
 
       await prisma.atividade.deleteMany({
         where: { leadId: { in: leadIds } }
+      });
+
+      await prisma.cliente.updateMany({
+        where: { origemLeadId: { in: leadIds } },
+        data: { origemLeadId: null }
+      });
+
+      await prisma.imovel.updateMany({
+        where: { leadId: { in: leadIds } },
+        data: { leadId: null }
+      });
+
+      await prisma.contrato.deleteMany({
+        where: { leadId: { in: leadIds } }
+      });
+
+      await prisma.contato.updateMany({
+        where: { leadId: { in: leadIds } },
+        data: { leadId: null }
       });
 
       await prisma.lead.deleteMany({

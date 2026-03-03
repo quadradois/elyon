@@ -133,6 +133,50 @@ router.get('/buscar-edificios', async (req, res) => {
 router.get('/buscar-imoveis', async (req, res) => {
   try {
     const termo = req.query.termo as string;
+    const codigo = req.query.codigo as string;
+
+    if (codigo !== undefined) {
+      const codigoLimpo = String(codigo).trim();
+
+      if (!/^\d+$/.test(codigoLimpo) || codigoLimpo.length < 3) {
+        return res.status(400).json({
+          erro: 'Código inválido. Informe apenas números (mínimo 3 dígitos)'
+        });
+      }
+
+      const codigoNumerico = parseInt(codigoLimpo, 10);
+      console.log(`[Mineracao] Busca unificada por código: ${codigoNumerico}...`);
+
+      const { edificios, condominios } = await mapaService.buscarImoveisPorCodigo(codigoNumerico);
+
+      const resultados = [
+        ...edificios.map(e => ({
+          codigo: e.codigo,
+          nome: e.nome,
+          bairro: e.logradouro || '',
+          tipo: 'edificio' as const,
+          icone: '🏢',
+          encontradoPor: 'codigo' as const
+        })),
+        ...condominios.map(c => ({
+          codigo: c.codigo,
+          nome: c.nome,
+          bairro: c.nome,
+          tipo: 'condominio' as const,
+          icone: '🏠',
+          encontradoPor: 'codigo' as const
+        }))
+      ];
+
+      return res.json({
+        total: resultados.length,
+        codigo: codigoNumerico,
+        modo: 'codigo',
+        edificios: resultados.filter(r => r.tipo === 'edificio'),
+        condominios: resultados.filter(r => r.tipo === 'condominio'),
+        resultados
+      });
+    }
     
     if (!termo || termo.length < 2) {
       return res.status(400).json({ erro: 'Termo de busca deve ter pelo menos 2 caracteres' });

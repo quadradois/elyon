@@ -28,6 +28,7 @@ import AceitarContrato from "./paginas/AceitarContrato";
 import { CarteiraClientes } from "./paginas/CarteiraClientes";
 import { Agenda } from "./paginas/Agenda";
 import { Integracoes } from "./paginas/Integracoes";
+import { ConfiguracaoLLM } from "./paginas/ConfiguracaoLLM";
 
 // Páginas Admin
 import { AdminClientes, AdminTransacoes, AdminLeadsVip, AdminPacotes, AdminPlanos } from "./paginas/admin";
@@ -366,6 +367,17 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <Integracoes />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/configuracao-llm"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <ConfiguracaoLLM />
               </LayoutDashboard>
             </RotaPrivada>
           }

@@ -282,8 +282,8 @@ export default function ContatoDetalhes() {
       setAlternandoModo(true);
 
       const endpoints: Record<string, string> = {
-        'IA': 'ativar-ia',
-        'HUMANO': 'ativar-humano',
+        'IA': 'devolver-ia',
+        'HUMANO': 'assumir-humano',
         'PAUSADO': 'pausar'
       };
 
@@ -320,7 +320,7 @@ export default function ContatoDetalhes() {
 
       // Redirecionar para o Lead recém criado
       setTimeout(() => {
-        navigate(`/leads/${response.data.leadId}`);
+        navigate(`/dashboard/leads/${response.data.leadId}`);
       }, 1500);
 
     } catch (err: any) {

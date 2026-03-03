@@ -22,44 +22,51 @@ export class RAGEmpreendimentos {
         ${dados.briefing.caracteristicas?.join(', ') || ''}
         ${dados.briefing.diferenciais?.join(', ') || ''}
       `.trim();
-      
+
       console.log(`[RAG] Gerando embedding para: ${dados.nome}`);
       const vetor = await embeddingService.gerar(textoParaEmbedding);
-      
-      return await prisma.empreendimentoConhecimento.create({
-        data: {
-          nome: dados.nome,
-          localizacao: dados.localizacao,
-          cep: dados.cep,
-          tipo: dados.tipo,
-          briefingCompleto: dados.briefing.resumo_sdr || JSON.stringify(dados.briefing),
-          briefingEstruturado: dados.briefing,
-          confiabilidade: dados.briefing.confiabilidade || 0,
-          embedding: embeddingService.serializar(vetor),
-          embeddingGeradoEm: new Date(),
-          tenantId: dados.tenantId, // Pode ser null
-          validado: false
-        },
-      });
+      // Serializando adequadamente para sintaxe de array vetorial nativa do Postgres
+      const vetorString = `[${vetor.join(',')}]`;
+
+      // Como o embedding é um campo nativo Unsupported("vector"), usamos $executeRawUnsafe
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO empreendimentos_conhecimento (
+          id, nome, localizacao, cep, tipo, "briefingCompleto", "briefingEstruturado", confiabilidade, embedding, "embeddingGeradoEm", "tenantId", validado, "criadoEm", "ultimaAtualizacao", versao
+        ) VALUES (
+          gen_random_uuid(), $1, $2, $3, $4, $5, $6::jsonb, $7, $8::vector, NOW(), $9, false, NOW(), NOW(), 1
+        )
+      `,
+        dados.nome,
+        dados.localizacao,
+        dados.cep || null,
+        dados.tipo,
+        dados.briefing.resumo_sdr || JSON.stringify(dados.briefing),
+        JSON.stringify(dados.briefing),
+        dados.briefing.confiabilidade || 0,
+        vetorString,
+        dados.tenantId || null
+      );
+
+      return true;
     } catch (error) {
       console.error('[RAG] Erro ao salvar conhecimento:', error);
       throw error;
     }
   }
-  
+
   /**
    * Busca por nome exato e localização (GLOBAL - ignora tenant)
    */
   async buscarPorNome(nome: string, localizacao: string) {
     return await prisma.empreendimentoConhecimento.findFirst({
-      where: { 
+      where: {
         nome: { equals: nome, mode: 'insensitive' },
         localizacao: { contains: localizacao, mode: 'insensitive' },
         // tenantId removido da busca!
       },
     });
   }
-  
+
   /**
    * Busca semântica (GLOBAL - ignora tenant)
    */
@@ -67,33 +74,22 @@ export class RAGEmpreendimentos {
     try {
       // Gerar embedding da query
       const queryVetor = await embeddingService.gerar(query);
-      
-      // Buscar todos os empreendimentos (GLOBAL) que têm embedding
-      const todos = await prisma.empreendimentoConhecimento.findMany({
-        where: { 
-          embedding: { not: null } 
-        },
-      });
-      
-      // Calcular similaridades
-      const comSimilaridade = todos.map(emp => {
-        try {
-          const vetor = embeddingService.desserializar(emp.embedding!);
-          return {
-            ...emp,
-            similaridade: embeddingService.calcularSimilaridade(queryVetor, vetor)
-          };
-        } catch (e) {
-          return { ...emp, similaridade: 0 };
-        }
-      });
-      
-      // Ordenar e limitar
-      return comSimilaridade
-        .filter(item => item.similaridade > 0.5) // Filtro mínimo de relevância (ajustado para 0.5)
-        .sort((a, b) => b.similaridade - a.similaridade)
-        .slice(0, limit);
-        
+      const vetorString = `[${queryVetor.join(',')}]`;
+
+      // Busca Semântica GLOBAL direta pelo DB usando pgvector (<=>)
+      // Limitando por um limiar de 0.5 (similaridade) e pegando os N melhores resultados
+      const sqlQuery = `
+        SELECT *, 1 - (embedding <=> $1::vector) AS similaridade 
+        FROM empreendimentos_conhecimento 
+        WHERE embedding IS NOT NULL 
+        AND 1 - (embedding <=> $1::vector) > 0.5 
+        ORDER BY similaridade DESC 
+        LIMIT $2
+      `;
+
+      const resultados: any[] = await prisma.$queryRawUnsafe(sqlQuery, vetorString, limit);
+
+      return resultados;
     } catch (error) {
       console.error('[RAG] Erro na busca semântica:', error);
       return [];

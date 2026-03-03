@@ -17,6 +17,7 @@ export interface VariaveisTemplate {
   agente: string;         // Nome do agente IA
   empreendimento: string; // Nome do empreendimento/condomínio
   bairro: string;         // Bairro do imóvel
+  imobiliaria?: string;   // Nome da imobiliária do tenant
 }
 
 export interface TemplateProspeccao {
@@ -30,91 +31,75 @@ export interface TemplateProspeccao {
 
 // ============================================
 // TEMPLATES DE PRIMEIRA MENSAGEM
+// Alinhados com estrategia.md — Roteiro WhatsApp
 // ============================================
 
 export const PRIMEIRA_MENSAGEM_STORYTELLING: TemplateProspeccao = {
-  id: 'pm_storytelling_v1',
-  nome: 'Storytelling - Cliente Buscando',
-  descricao: 'Abordagem pedindo ajuda para encontrar imóvel',
+  id: 'pm_storytelling_v3',
+  nome: 'Meio Campo — Mapeamento Natural',
+  descricao: 'Abordagem indireta: apresenta o motivo do contato e abre porta pra interesse ou indicação',
   tipo: 'PRIMEIRA_MENSAGEM',
-  variaveis: ['nome', 'agente', 'empreendimento', 'bairro'],
-  mensagem: `Oi {nome}! Tudo bem?
+  variaveis: ['nome', 'agente', 'empreendimento', 'imobiliaria'],
+  mensagem: `Oi {nome}, tudo bem? 😊
 
-Sou {agente}, corretor de imóveis aqui do {bairro}.
+Sou {agente}, da {imobiliaria}. Tô conversando com alguns proprietários do {empreendimento} porque tenho clientes buscando imóveis na região.
 
-Preciso da sua ajuda: tenho um cliente querendo comprar no {empreendimento}, mas tá difícil achar quem esteja vendendo.
-
-Você conhece alguém que possa estar pensando em vender?`
+Você conhece alguém com interesse em vender ou alugar, ou você mesmo teria? 🙏`
 };
 
 export const PRIMEIRA_MENSAGEM_DIRETA: TemplateProspeccao = {
-  id: 'pm_direta_v1',
-  nome: 'Direta - Cliente Interessado',
-  descricao: 'Abordagem mais direta pedindo indicação',
+  id: 'pm_direta_v3',
+  nome: 'Demanda Ativa — Perfil Procurado',
+  descricao: 'Abordagem com demanda real: mostra que tem compradores procurando',
   tipo: 'PRIMEIRA_MENSAGEM',
-  variaveis: ['nome', 'agente', 'empreendimento'],
+  variaveis: ['nome', 'agente', 'empreendimento', 'imobiliaria'],
   mensagem: `Oi {nome}! 😊
 
-Você conhece alguém vendendo apartamento no {empreendimento}?
+Sou {agente}, da {imobiliaria}. Tô com clientes procurando apartamento no {empreendimento} e o perfil de lá é exatamente o que eles querem.
 
-Tenho um cliente super interessado e não consigo achar nada disponível!
-
-Se souber de alguém (ou você mesmo tiver interesse), me avisa? 🙏
-
-Me chamo {agente}, trabalho com imóveis aqui na região.`
+Você teria interesse ou conhece alguém que possa ter? 🙏`
 };
 
 export const PRIMEIRA_MENSAGEM_ESCASSEZ: TemplateProspeccao = {
-  id: 'pm_escassez_v1',
-  nome: 'Escassez - Alta Demanda',
-  descricao: 'Destaca a dificuldade de encontrar imóveis',
+  id: 'pm_escassez_v3',
+  nome: 'Consultoria — Proprietários da Região',
+  descricao: 'Abordagem como consultor mapeando proprietários',
   tipo: 'PRIMEIRA_MENSAGEM',
-  variaveis: ['nome', 'agente', 'empreendimento'],
-  mensagem: `Oi {nome}! 🙏
+  variaveis: ['nome', 'agente', 'empreendimento', 'imobiliaria'],
+  mensagem: `Oi {nome}! 😊
 
-Me ajuda? 
+Aqui é {agente}, da {imobiliaria}. Trabalho com imóveis na região do {empreendimento} e tô mapeando proprietários que possam ter interesse em uma avaliação gratuita do imóvel.
 
-Tá super difícil encontrar apartamento à venda no {empreendimento}!
-
-Tenho clientes na fila esperando e não aparece nada...
-
-Você conhece alguém vendendo? (Ou se for você, melhor ainda! 😊)
-
-Sou {agente}, trabalho com imóveis na região.`
+Faz sentido pra você? Sem compromisso 🙏`
 };
 
 // ============================================
 // TEMPLATES DE FOLLOW-UP
+// Alinhados com estrategia.md — Cenário 4
 // ============================================
 
 export const FOLLOWUP_1: TemplateProspeccao = {
-  id: 'fu1_v1',
-  nome: 'Follow-up 24h',
-  descricao: 'Enviado 24h após primeira mensagem sem resposta',
+  id: 'fu1_v2',
+  nome: 'Follow-up 48h — Mensagem perdida',
+  descricao: 'Enviado 2-3 dias após primeira mensagem sem resposta',
   tipo: 'FOLLOWUP_1',
   variaveis: ['nome', 'empreendimento'],
-  mensagem: `Oi {nome}! 😊
+  mensagem: `Oi, {nome}! Tudo bem? 😊
 
-Só passando de novo sobre o {empreendimento}.
-
-Conseguiu lembrar de alguém que esteja pensando em vender?
-
-Agradeço qualquer dica! 🙏`
+Vi que minha mensagem pode ter se perdido. Só queria fazer uma pergunta rápida sobre seu imóvel no {empreendimento} — tem 1 minutinho?`
 };
 
 export const FOLLOWUP_2: TemplateProspeccao = {
-  id: 'fu2_v1',
-  nome: 'Follow-up Final 48h',
-  descricao: 'Última tentativa, 48h após follow-up 1',
+  id: 'fu2_v2',
+  nome: 'Follow-up Final — Encerramento cordial',
+  descricao: 'Última tentativa. Se ignorar, encerrar o contato.',
   tipo: 'FOLLOWUP_2',
   variaveis: ['nome', 'empreendimento'],
-  mensagem: `{nome}, última mensagem sobre isso! 😊
+  mensagem: `{nome}, só pra fechar por aqui! 😊
 
-Se souber de alguém vendendo no {empreendimento}, me avisa.
+Caso no futuro pense em vender ou alugar seu imóvel no {empreendimento}, pode me chamar sem compromisso.
 
-Se não, sem problemas! Não vou mais incomodar.
-
-Obrigado e boa semana! 🙏`
+Desejo uma ótima semana! 🙏`
 };
 
 // ============================================
