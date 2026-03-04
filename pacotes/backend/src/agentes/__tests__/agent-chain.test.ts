@@ -1,10 +1,17 @@
 // Mock dos módulos pesados antes do import
-jest.mock('@openai/agents', () => ({ handoff: jest.fn() }));
-jest.mock('../opener-agent', () => ({ criarOpenerAgent: jest.fn() }));
-jest.mock('../presenter-agent', () => ({ criarPresenterAgent: jest.fn() }));
-jest.mock('../admin-agent', () => ({ criarAdminAgent: jest.fn() }));
-jest.mock('../knowledge-agent', () => ({ criarKnowledgeAgent: jest.fn(() => ({ asTool: jest.fn() })) }));
-jest.mock('../handoff-filters', () => ({ filterHistoryByQuery: jest.fn() }));
+const mockOpenerAgent = { name: 'opener_agent_v11', handoffs: [] as any[], on: jest.fn() };
+const mockPresenterAgent = { name: 'presenter_agent_v4', handoffs: [] as any[], on: jest.fn() };
+const mockAdminAgent = { name: 'admin_agent_v4', handoffs: [] as any[], on: jest.fn() };
+const mockKnowledgeTool = jest.fn();
+const mockKnowledgeAgent = { asTool: jest.fn(() => mockKnowledgeTool) };
+const mockHandoffResult = { strictJsonSchema: false, inputJsonSchema: { additionalProperties: false } };
+
+jest.mock('@openai/agents', () => ({ handoff: jest.fn(() => ({ ...mockHandoffResult })) }));
+jest.mock('../opener-agent', () => ({ criarOpenerAgent: jest.fn(() => mockOpenerAgent) }));
+jest.mock('../presenter-agent', () => ({ criarPresenterAgent: jest.fn(() => mockPresenterAgent) }));
+jest.mock('../admin-agent', () => ({ criarAdminAgent: jest.fn(() => mockAdminAgent) }));
+jest.mock('../knowledge-agent', () => ({ criarKnowledgeAgent: jest.fn(() => mockKnowledgeAgent) }));
+jest.mock('../handoff-filters', () => ({ filterHistoryByQuery: jest.fn((h: any[]) => h) }));
 
 import {
   fasePorStatus,
@@ -12,8 +19,16 @@ import {
   ultimoAgentePorContato,
   STATUS_FASE_HUMANA,
   MAPA_NOMES_AGENTES,
+  criarCadeiaAgentes,
+  criarAgente,
   TipoAgente,
 } from '../agent-chain';
+
+import { criarOpenerAgent } from '../opener-agent';
+import { criarPresenterAgent } from '../presenter-agent';
+import { criarAdminAgent } from '../admin-agent';
+import { criarKnowledgeAgent } from '../knowledge-agent';
+import { handoff } from '@openai/agents';
 
 // ============================================
 // fasePorStatus
@@ -145,5 +160,157 @@ describe('MAPA_NOMES_AGENTES', () => {
 
   it('mapeia knowledge_agent → OPENER', () => {
     expect(MAPA_NOMES_AGENTES['knowledge_agent']).toBe('OPENER');
+  });
+});
+
+// ============================================
+// criarCadeiaAgentes
+// ============================================
+
+describe('criarCadeiaAgentes', () => {
+  const config = {
+    tenantId: 'tenant-001',
+    nomeAgente: 'Sofia',
+    genero: 'feminino',
+    nomeImobiliaria: 'Imob Teste',
+    cidade: 'São Paulo',
+    diferenciais: ['Tour 360'],
+    comissaoPadrao: '6%',
+    prazoContrato: 180,
+  };
+  const contexto = {
+    telefone: '5511999990001',
+    leadId: 'lead-001',
+    statusLead: 'NOVO',
+  };
+
+  beforeEach(() => {
+    // Reset handoff arrays para cada teste
+    mockOpenerAgent.handoffs = [];
+    mockPresenterAgent.handoffs = [];
+    jest.clearAllMocks();
+  });
+
+  it('retorna objeto com OPENER, PRESENTER e ADMIN', () => {
+    const cadeia = criarCadeiaAgentes(config as any, contexto);
+    expect(cadeia).toHaveProperty('OPENER');
+    expect(cadeia).toHaveProperty('PRESENTER');
+    expect(cadeia).toHaveProperty('ADMIN');
+  });
+
+  it('chama criarOpenerAgent com config correta', () => {
+    criarCadeiaAgentes(config as any, contexto);
+    expect(criarOpenerAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nomeAgente: 'Sofia',
+        genero: 'feminino',
+        nomeImobiliaria: 'Imob Teste',
+        cidade: 'São Paulo',
+        comissaoPadrao: '6%',
+        prazoContrato: 180,
+      }),
+    );
+  });
+
+  it('chama criarPresenterAgent com diferenciais e situação', () => {
+    criarCadeiaAgentes(config as any, { ...contexto, situacaoAtual: 'sozinho' });
+    expect(criarPresenterAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        diferenciais: ['Tour 360'],
+        situacaoAtual: 'sozinho',
+      }),
+    );
+  });
+
+  it('chama criarAdminAgent com dados de contrato', () => {
+    criarCadeiaAgentes(config as any, {
+      ...contexto,
+      tipoAutorizacao: 'exclusiva',
+      comissaoAcordada: '6%',
+      prazoTrabalho: 90,
+    });
+    expect(criarAdminAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tipoAutorizacao: 'exclusiva',
+        comissaoAcordada: '6%',
+        prazoTrabalho: 90,
+      }),
+    );
+  });
+
+  it('cria knowledge agent e injeta como tool', () => {
+    criarCadeiaAgentes(config as any, contexto);
+    expect(criarKnowledgeAgent).toHaveBeenCalled();
+    expect(mockKnowledgeAgent.asTool).toHaveBeenCalled();
+  });
+
+  it('configura handoffs bidirecionais no SDK', () => {
+    criarCadeiaAgentes(config as any, contexto);
+    // handoff() é chamado 3 vezes: opener→presenter, presenter→admin, presenter→opener (reverse)
+    expect(handoff).toHaveBeenCalledTimes(3);
+  });
+
+  it('registra lifecycle hooks (agent_start, agent_end) em todos os agentes', () => {
+    criarCadeiaAgentes(config as any, contexto);
+    // Cada agente deve ter 2 chamadas a .on() (agent_start + agent_end)
+    expect(mockOpenerAgent.on).toHaveBeenCalledWith('agent_start', expect.any(Function));
+    expect(mockOpenerAgent.on).toHaveBeenCalledWith('agent_end', expect.any(Function));
+    expect(mockPresenterAgent.on).toHaveBeenCalledWith('agent_start', expect.any(Function));
+    expect(mockAdminAgent.on).toHaveBeenCalledWith('agent_start', expect.any(Function));
+  });
+
+  it('usa BYOK quando configurado', () => {
+    const configBYOK = {
+      ...config,
+      llmModelo: 'deepseek-chat',
+      llmApiKey: 'sk-custom',
+      llmBaseUrl: 'https://api.deepseek.com/v1',
+    };
+    criarCadeiaAgentes(configBYOK as any, contexto);
+    expect(criarOpenerAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'deepseek-chat',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://api.deepseek.com/v1',
+      }),
+    );
+  });
+});
+
+// ============================================
+// criarAgente
+// ============================================
+
+describe('criarAgente', () => {
+  const config = {
+    tenantId: 'tenant-001',
+    nomeAgente: 'Sofia',
+    genero: 'feminino',
+    nomeImobiliaria: 'Imob Teste',
+  };
+  const contexto = { telefone: '5511999990001' };
+
+  beforeEach(() => {
+    mockOpenerAgent.handoffs = [];
+    mockPresenterAgent.handoffs = [];
+    jest.clearAllMocks();
+  });
+
+  it('retorna agente OPENER quando tipo=OPENER', () => {
+    const agente = criarAgente('OPENER', config as any, contexto);
+    expect(agente).toBeDefined();
+    expect(agente.name).toBe('opener_agent_v11');
+  });
+
+  it('retorna agente PRESENTER quando tipo=PRESENTER', () => {
+    const agente = criarAgente('PRESENTER', config as any, contexto);
+    expect(agente).toBeDefined();
+    expect(agente.name).toBe('presenter_agent_v4');
+  });
+
+  it('retorna agente ADMIN quando tipo=ADMIN', () => {
+    const agente = criarAgente('ADMIN', config as any, contexto);
+    expect(agente).toBeDefined();
+    expect(agente.name).toBe('admin_agent_v4');
   });
 });
