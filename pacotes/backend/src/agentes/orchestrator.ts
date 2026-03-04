@@ -13,7 +13,7 @@
 
 import { setTracingExportApiKey } from '@openai/agents';
 import { prisma } from '../lib/db';
-import { executarGuardrails, GuardrailResult, MensagemContext } from './guardrails';
+import { executarGuardrails, GuardrailResult } from './guardrails';
 import type { ElyonContext } from './elyon-context';
 import { getHistory, setHistory, getLastAgent, clearHistory } from './conversation-cache';
 import { gerarBriefingHandoff } from './handoff-filters';
@@ -25,6 +25,8 @@ import { executarAgenteComRetryReasoning } from './agent-runner';
 import { processarPosHandoff } from './post-handoff';
 import { logMetricaOrchestrator } from './orchestrator-metrics';
 import { resolverAgenteFinal, logAgenteResolvido } from './agent-resolution';
+import { executarGuardrailsEntrada } from './entry-guardrail';
+import { resolverAgentePersistido } from './persisted-agent';
 
 // Módulos extraídos
 import {
@@ -116,41 +118,37 @@ export async function processarMensagemOrquestrada(
         console.log(`[ORCHESTRATOR] Processando mensagem para ${contexto.telefone}`);
 
         // 1. EXECUTAR GUARDRAILS DE ENTRADA (opt-out, spam, blacklist, comprador)
-        const ultimaMensagem = mensagens.filter(m => m.role === 'user').pop();
-        if (ultimaMensagem) {
-            const guardrailCtx: MensagemContext = {
-                telefone: contexto.telefone,
-                conteudo: ultimaMensagem.content,
+        const guardrailEntrada = await executarGuardrailsEntrada({
+            mensagens,
+            tenantId: config.tenantId,
+            telefone: contexto.telefone,
+            contatoId: contexto.contatoId,
+            leadId: contexto.leadId,
+            executarGuardrailsFn: executarGuardrails,
+        });
+
+        if (guardrailEntrada.bloqueado && guardrailEntrada.guardrailResult) {
+            const guardrailResult = guardrailEntrada.guardrailResult;
+            console.log(`[ORCHESTRATOR] Guardrail acionado: ${guardrailResult.tipo} telefone=${contexto.telefone} acao=${guardrailResult.acao || 'N/A'}`);
+            logMetricaOrchestrator({
                 tenantId: config.tenantId,
+                telefone: contexto.telefone,
                 contatoId: contexto.contatoId,
                 leadId: contexto.leadId,
-                timestamp: new Date()
+                statusLead: contexto.statusLead,
+                faseFluxo: faseFluxoAtual,
+                toolCalls: 0,
+                handoffs: 0,
+                fallback: 'GUARDRAIL_BLOCK',
+                guardrail: guardrailResult.tipo,
+                duracaoMs: Date.now() - inicioTurno,
+                sucesso: true
+            });
+            return {
+                sucesso: true,
+                resposta: guardrailResult.mensagemFallback,
+                guardrailAcionado: guardrailResult
             };
-
-            const guardrailResult = await executarGuardrails(guardrailCtx);
-
-            if (!guardrailResult.permitido) {
-                console.log(`[ORCHESTRATOR] Guardrail acionado: ${guardrailResult.tipo} telefone=${contexto.telefone} acao=${guardrailResult.acao || 'N/A'}`);
-                logMetricaOrchestrator({
-                    tenantId: config.tenantId,
-                    telefone: contexto.telefone,
-                    contatoId: contexto.contatoId,
-                    leadId: contexto.leadId,
-                    statusLead: contexto.statusLead,
-                    faseFluxo: faseFluxoAtual,
-                    toolCalls: 0,
-                    handoffs: 0,
-                    fallback: 'GUARDRAIL_BLOCK',
-                    guardrail: guardrailResult.tipo,
-                    duracaoMs: Date.now() - inicioTurno,
-                    sucesso: true
-                });
-                return {
-                    sucesso: true,
-                    resposta: guardrailResult.mensagemFallback,
-                    guardrailAcionado: guardrailResult
-                };
-            }
         }
 
         if (contexto.statusLead && STATUS_FASE_HUMANA.has(contexto.statusLead)) {
@@ -159,18 +157,13 @@ export async function processarMensagemOrquestrada(
             // de forma contextual (pode ser dúvida, urgência, desistência, etc.)
         }
 
-        let agentePersistido: TipoAgente | undefined;
-        if (contexto.contatoId) {
-            const ultimoPersistido = await getLastAgent(contexto.contatoId);
-            if (ultimoPersistido === 'OPENER' || ultimoPersistido === 'PRESENTER' || ultimoPersistido === 'ADMIN') {
-                agentePersistido = ultimoPersistido;
-                ultimoAgentePorContato.set(contexto.contatoId, ultimoPersistido);
-            } else if (ultimoPersistido === 'CLOSER') {
-                agentePersistido = 'PRESENTER';
-                console.log('[ORCHESTRATOR] ♻️ Agente legado CLOSER encontrado no cache. Migrando para PRESENTER.');
-                ultimoAgentePorContato.set(contexto.contatoId, 'PRESENTER');
-            }
-        }
+        const agentePersistido = await resolverAgentePersistido({
+            contatoId: contexto.contatoId,
+            getLastAgentFn: getLastAgent,
+            atualizarUltimoAgente: (contatoId, agente) => {
+                ultimoAgentePorContato.set(contatoId, agente);
+            },
+        });
 
         // 2. DETERMINAR AGENTE INICIAL baseado no status do lead/cache persistido
         let tipoAgente = determinarAgente(contexto.statusLead, contexto.contatoId, agentePersistido);
