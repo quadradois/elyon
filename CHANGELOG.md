@@ -5,6 +5,23 @@ Todas as mudanças notáveis deste projeto serão documentadas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.2.1] - 2026-03-04
+
+### Adicionado
+- **11 novas suítes de testes** para casos de uso críticos dos agentes e para o módulo de manutenção `elyon-core`.
+- Cobertura de cenários de sucesso, validação, fallback e erro para os fluxos:
+  - `qualificar-lead`, `converter-para-lead`, `mover-para-fase`, `salvar-dados-imovel`
+  - `atualizar-dados-lead`, `agendar-avaliacao`, `agendar-followup`, `encaminhar-corretor`
+  - `registrar-optout`, `buscar-imovel`, `elyon-core`
+
+### Melhorado
+- Cobertura consolidada de módulos `agentes` + `casos-de-uso/agentes` para:
+  - **92.5%** statements
+  - **81.43%** branches
+  - **86.61%** functions
+  - **93.36%** lines
+- `elyon-core.ts` evoluiu de **0%** para **96.82% statements** e **96.77% lines**.
+
 ## [0.2.0] - 2026-03-04
 
 ### Adicionado
@@ -56,4 +73,5 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - Autenticação multi-tenant
 
 [0.2.0]: https://github.com/quadradois/elyon/compare/v0.1.0...v0.2.0
+[0.2.1]: https://github.com/quadradois/elyon/compare/v0.2.0...v0.2.1
 [0.1.0]: https://github.com/quadradois/elyon/releases/tag/v0.1.0
