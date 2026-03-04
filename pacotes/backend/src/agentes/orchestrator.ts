@@ -7,21 +7,36 @@
  * 3. Processar a mensagem com o agente correto
  * 4. Gerenciar handoffs silenciosos entre agentes
  * 
- * @version 1.0
+ * @version 2.0 — refatorado em módulos (04/03/2026)
  * @date 16/12/2025
  */
 
-import { Agent, run, setTracingExportApiKey, handoff } from '@openai/agents';
+import { run, setTracingExportApiKey } from '@openai/agents';
 import { prisma } from '../lib/db';
 import { executarGuardrails, GuardrailResult, MensagemContext } from './guardrails';
-import { criarOpenerAgent } from './opener-agent';
-import { criarPresenterAgent } from './presenter-agent';
-import { criarAdminAgent } from './admin-agent';
-import { knowledgeAgent } from './knowledge-agent';
 import type { ElyonContext } from './elyon-context';
 import { getHistory, setHistory, getCacheStats, getLastAgent, clearHistory } from './conversation-cache';
-import { filterHistoryByQuery, gerarBriefingHandoff, removeHandoffNarration, sliceHistoryPreservingSystem } from './handoff-filters';
-import { descriptografar } from '../lib/crypto';
+import { gerarBriefingHandoff, removeHandoffNarration, sliceHistoryPreservingSystem } from './handoff-filters';
+
+// Módulos extraídos
+import {
+    extrairEstadoConversa,
+    gerarFallbackContextual,
+    respostaRepetePerguntaCritica,
+    deveForcarTransicaoParaPresenter,
+} from './conversation-state';
+import {
+    TipoAgente,
+    STATUS_FASE_HUMANA,
+    fasePorStatus,
+    determinarAgente,
+    criarAgente,
+    ultimoAgentePorContato,
+    MAPA_NOMES_AGENTES,
+} from './agent-chain';
+
+// Re-exports para consumidores existentes (webhook.ts, sdr-tools-agents.ts)
+export { buscarConfiguracaoTenant, buscarContextoConversa } from './orchestrator-queries';
 
 // Ativar Tracing para o Dashboard OpenAI (platform.openai.com/traces)
 if (process.env.OPENAI_API_KEY) {
@@ -72,135 +87,12 @@ export interface ResultadoProcessamento {
 }
 
 // ====================================
-// MAPEAMENTO STATUS → AGENTE
+// HELPERS LOCAIS
 // ====================================
-
-type TipoAgente = 'OPENER' | 'PRESENTER' | 'ADMIN';
-
-const STATUS_FASE_HUMANA = new Set(['DOCUMENTACAO', 'EM_NEGOCIACAO']);
-
-function fasePorStatus(statusLead?: string): string {
-    if (!statusLead) return 'FASE1_QUALIFICACAO';
-    if (['NOVO', 'QUALIFICADO'].includes(statusLead)) return 'FASE1_QUALIFICACAO';
-    if (['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA', 'CONTATANDO', 'AVALIACAO_EM_ANDAMENTO'].includes(statusLead)) return 'FASE2_DIAGNOSTICO_SPIN';
-    if (['DOCUMENTACAO', 'EM_NEGOCIACAO'].includes(statusLead)) return 'FASE3_DOCUMENTACAO_HUMANA';
-    if (['ONBOARDING'].includes(statusLead)) return 'FASE4_ONBOARDING';
-    if (['CAPTADO'].includes(statusLead)) return 'CARTEIRA';
-    return 'DESCONHECIDA';
-}
 
 function shortId(valor?: string): string | null {
     if (!valor) return null;
     return valor.length > 8 ? `${valor.substring(0, 8)}...` : valor;
-}
-
-/**
- * Gera fallback contextual baseado no estado real da conversa.
- * NUNCA pergunta algo que o lead já respondeu.
- */
-function gerarFallbackContextual(
-    estado: ReturnType<typeof extrairEstadoConversa>,
-    agente: string
-): string {
-    const temIntencao = !!estado.intencao;
-    const temValor = !!estado.valorPretendido;
-    const temOcupacao = !!estado.ocupacao;
-    const temMetragem = !!estado.metragem;
-    const jaDecidiu = estado.jaRespondeuDecisao;
-
-    // Se já temos dados suficientes → empurrar para apresentação
-    if (temIntencao && (temValor || jaDecidiu)) {
-        return 'Entendi seu cenário completo! Posso te mostrar como a gente trabalha pra conseguir vender mais rápido?';
-    }
-
-    // Perguntar o que FALTA (ordem de prioridade)
-    if (!temIntencao) {
-        return 'Pra eu entender melhor: você tá pensando em vender ou alugar?';
-    }
-    if (!temOcupacao) {
-        return 'E sobre o imóvel: ele tá ocupado ou vazio no momento?';
-    }
-    if (!temValor) {
-        return 'Legal! E você tem algum valor em mente pra venda?';
-    }
-
-    // Caso geral com dados parciais
-    return 'Entendi! Posso te mostrar como a gente trabalha pra conseguir mais visitas qualificadas no seu imóvel?';
-}
-
-function extrairEstadoConversa(mensagens: Array<{ role: 'user' | 'assistant'; content: string }>) {
-    const textoUsuarios = mensagens
-        .filter((m) => m.role === 'user')
-        .map((m) => m.content || '')
-        .join(' \n ')
-        .toLowerCase();
-
-    const textoAssistente = mensagens
-        .filter((m) => m.role === 'assistant')
-        .map((m) => m.content || '')
-        .join(' \n ')
-        .toLowerCase();
-
-    const intencao = /\bvender\b/.test(textoUsuarios)
-        ? 'vender'
-        : /\balugar|loca(ç|c)(ã|a)o\b/.test(textoUsuarios)
-            ? 'alugar'
-            : null;
-
-    const metragemMatch = textoUsuarios.match(/\b(\d{2,3})\s?m2?|\b(\d{2,3})\s?m²/i);
-    const metragem = metragemMatch ? Number((metragemMatch[1] || metragemMatch[2])) : null;
-
-    const ocupacao = /desocupad|vazio/.test(textoUsuarios)
-        ? 'vazio'
-        : /morando|ocupad/.test(textoUsuarios)
-            ? 'ocupado'
-            : null;
-
-    const valorMatch = textoUsuarios.match(/(\d{3,4})\s?(k|mil)|r\$\s?([\d\.]{3,7})/i);
-    const valorPretendido = valorMatch ? valorMatch[0] : null;
-
-    const jaRespondeuDecisao =
-        /ja\s+estou\s+anunciando|ja\s+decidi|decidid[oa]\s+a\s+vend|estou\s+decidid[oa]\s+a\s+vend|esta\s+decido\s+a\s+vend|preciso\s+(de\s+)?vender|quero\s+vender|tenho\s+que\s+vender|necessidade\s+de\s+vender|tenho\s+interesse\s+em\s+vender|vender\s+mesmo|sim.*\bvend/.test(textoUsuarios);
-
-    const perguntasJaFeitas = {
-        prioridade: /posso\s+te\s+fazer\s+uma\s+pergunta\s+r[aá]pida/.test(textoAssistente),
-        decisaoVenda: /j[aá]\s+decidiu\s+vender|ainda\s+t[aá]\s+s[oó]\s+avaliando/.test(textoAssistente),
-        valor: /j[aá]\s+tem\s+algum\s+valor\s+em\s+mente/.test(textoAssistente)
-    };
-
-    return {
-        intencao,
-        metragem,
-        ocupacao,
-        valorPretendido,
-        jaRespondeuDecisao,
-        perguntasJaFeitas
-    };
-}
-
-function respostaRepetePerguntaCritica(
-    resposta: string,
-    mensagens: Array<{ role: 'user' | 'assistant'; content: string }>
-): boolean {
-    const respostaNorm = normalizarTexto(resposta);
-    if (!respostaNorm) return false;
-
-    const ultimasAssistente = mensagens
-        .filter((m) => m.role === 'assistant')
-        .slice(-6)
-        .map((m) => normalizarTexto(m.content));
-
-    const repetiuMesmoTexto = ultimasAssistente.includes(respostaNorm);
-
-    const repetiuPerguntaPrioridade =
-        /posso te fazer uma pergunta rapida/.test(respostaNorm) &&
-        ultimasAssistente.some((t) => /posso te fazer uma pergunta rapida/.test(t));
-
-    const repetiuPerguntaDecisao =
-        /ja decidiu vender|ainda ta so avaliando/.test(respostaNorm) &&
-        ultimasAssistente.some((t) => /ja decidiu vender|ainda ta so avaliando/.test(t));
-
-    return repetiuMesmoTexto || repetiuPerguntaPrioridade || repetiuPerguntaDecisao;
 }
 
 function logMetricaOrchestrator(params: {
@@ -240,247 +132,6 @@ function logMetricaOrchestrator(params: {
     };
 
     console.log(`[ORCH-METRICS] ${JSON.stringify(payload)}`);
-}
-
-// 🔑 Cache em memória: último agente que respondeu por contato
-// Resolve o problema de statusLead nunca ser atualizado no BD
-const ultimoAgentePorContato = new Map<string, TipoAgente>();
-
-function normalizarTexto(texto?: string): string {
-    return (texto || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .trim();
-}
-
-function respostaPositivaCurta(texto?: string): boolean {
-    const t = normalizarTexto(texto);
-    if (!t) return false;
-
-    if (/\b(nao|agora nao|depois|talvez)\b/.test(t)) return false;
-
-    return /^(sim|pode|pode sim|pode ser|claro|ok|okay|beleza|bora|vamos|fechado|quero|com certeza|manda)(\b|$)/.test(t);
-}
-
-function deveForcarTransicaoParaPresenter(mensagens: Array<{ role: 'user' | 'assistant'; content: string }>): boolean {
-    if (!mensagens || mensagens.length < 2) return false;
-
-    let idxUltimaUser = -1;
-    for (let i = mensagens.length - 1; i >= 0; i--) {
-        if (mensagens[i].role === 'user') {
-            idxUltimaUser = i;
-            break;
-        }
-    }
-
-    if (idxUltimaUser <= 0) return false;
-
-    let ultimaAssistente = '';
-    for (let i = idxUltimaUser - 1; i >= 0; i--) {
-        if (mensagens[i].role === 'assistant') {
-            ultimaAssistente = mensagens[i].content;
-            break;
-        }
-    }
-
-    if (!ultimaAssistente) return false;
-
-    const perguntaTransicao = normalizarTexto(ultimaAssistente);
-    const ehPerguntaPrioridade =
-        /posso te fazer uma pergunta rapida/.test(perguntaTransicao) ||
-        /entender sua prioridade/.test(perguntaTransicao) ||
-        /prioridade agora/.test(perguntaTransicao);
-
-    if (!ehPerguntaPrioridade) return false;
-
-    return respostaPositivaCurta(mensagens[idxUltimaUser].content);
-}
-
-function determinarAgente(statusLead?: string, contatoId?: string, agentePersistido?: TipoAgente): TipoAgente {
-    if (agentePersistido) {
-        console.log(`[ORCHESTRATOR] 🔐 Usando agente persistido no cache Redis: ${agentePersistido}`);
-        return agentePersistido;
-    }
-
-    // Prioridade 1: Cache do último agente que respondeu (handoff persistido em memória)
-    if (contatoId && ultimoAgentePorContato.has(contatoId)) {
-        const cached = ultimoAgentePorContato.get(contatoId)!;
-        console.log(`[ORCHESTRATOR] 🔑 Usando agente do cache: ${cached} (contatoId: ${contatoId.substring(0, 8)}...)`);
-        return cached;
-    }
-
-    // Prioridade 2: Status do lead no BD
-    if (!statusLead) return 'OPENER';
-
-    const mapa: Record<string, TipoAgente> = {
-        // Fase 1
-        'NOVO': 'OPENER',
-        'QUALIFICADO': 'PRESENTER',
-
-        // Fase 2
-        'TENTATIVA_AGENDAMENTO': 'PRESENTER',
-        'VISITA_AGENDADA': 'PRESENTER',
-        'CONTATANDO': 'PRESENTER',
-
-        // Fase 3
-        'AVALIACAO_EM_ANDAMENTO': 'PRESENTER',
-        'DOCUMENTACAO': 'ADMIN',
-        'EM_NEGOCIACAO': 'ADMIN',
-
-        // Fase 4
-        'ONBOARDING': 'ADMIN',
-
-        // Pós-assinatura / carteira
-        'CAPTADO': 'ADMIN'
-    };
-
-    return mapa[statusLead] || 'OPENER';
-}
-
-/**
- * Tipo base para agentes no sistema Elyon, permitindo outputs variados.
- */
-type ElyonAgent = any;
-
-// ====================================
-// CRIAR AGENTE COM HANDOFFS NATIVOS
-// ====================================
-
-/**
- * Cria a cadeia completa de agentes com handoffs nativos do SDK.
- * Retorna o agente RAIZ (baseado no status do lead).
- * 
- * Cadeia: Opener → Presenter → Admin
- * O SDK gerencia as transferências via tools transfer_to_*.
- */
-function criarCadeiaAgentes(
-    config: ConfiguracaoOrquestrador,
-    contexto: ContextoConversa
-): Record<TipoAgente, any> {
-    const baseConfig = {
-        nomeAgente: config.nomeAgente,
-        genero: config.genero,
-        nomeImobiliaria: config.nomeImobiliaria
-    };
-
-    // BYOK: resolver modelo para cada agente (menor para admin, maior para os demais)
-    // Se NãO houver BYOK, usa os modelos padrão originais
-    const modeloPrincipal = config.llmModelo || 'gpt-4.1';
-    const modeloAdmin = config.llmModelo || 'gpt-4.1-mini'; // Admin pode usar modelo menor
-
-    // Build bottom-up: Admin → Presenter → Opener
-    const adminAgent = criarAdminAgent({
-        ...baseConfig,
-        tipoAutorizacao: contexto.tipoAutorizacao,
-        comissaoAcordada: contexto.comissaoAcordada,
-        prazoTrabalho: contexto.prazoTrabalho,
-        model: modeloAdmin,
-        apiKey: config.llmApiKey,
-        baseUrl: config.llmBaseUrl,
-    });
-
-    const presenterAgent = criarPresenterAgent({
-        ...baseConfig,
-        diferenciais: config.diferenciais,
-        situacaoAtual: contexto.situacaoAtual,
-        model: modeloPrincipal,
-        apiKey: config.llmApiKey,
-        baseUrl: config.llmBaseUrl,
-        tools: [knowledgeAgent.asTool({
-            toolDescription: 'Consulte o estrategista de vendas quando o lead apresentar qualquer dúvida técnica ou objeção.'
-        })]
-    }) as any;
-    const h_presenter_to_admin = handoff(adminAgent as any, {
-        toolDescriptionOverride: 'Transferir para onboarding operacional quando houver necessidade de coleta cadastral e dados pós-assinatura.',
-        inputFilter: (data: any) => {
-            const history = Array.isArray(data.inputHistory) ? data.inputHistory : [];
-            const clean = filterHistoryByQuery(history, [
-                /transferindo|vou\s+te\s+passar|aguarde\s+um\s+instante|especialista/i
-            ], 'Presenter→Admin');
-            return { ...data, inputHistory: clean };
-        }
-    });
-    (h_presenter_to_admin as any).strictJsonSchema = false;
-    (h_presenter_to_admin as any).inputJsonSchema.additionalProperties = true;
-    presenterAgent.handoffs = [h_presenter_to_admin];
-
-    const openerAgent = criarOpenerAgent({
-        ...baseConfig,
-        cidade: config.cidade,
-        empreendimento: contexto.empreendimento,
-        comissaoPadrao: config.comissaoPadrao,
-        prazoContrato: config.prazoContrato,
-        model: modeloPrincipal,
-        apiKey: config.llmApiKey,
-        baseUrl: config.llmBaseUrl,
-        tools: [knowledgeAgent.asTool({
-            toolDescription: 'Consulte o estrategista de vendas quando o lead apresentar qualquer dúvida técnica ou objeção.'
-        })]
-    }) as any;
-    const h_opener_to_presenter = handoff(presenterAgent as any, {
-        toolDescriptionOverride: `TRANSFERIR_PARA_DIAGNOSTICO: Use esta função quando o proprietário demonstrar interesse real e estiver pronto para diagnóstico consultivo antes do fechamento.
-
-SINAIS CLAROS DE INTERESSE:
-- Respostas positivas como "sim", "pode", "faz sentido", "quero saber mais"
-- Perguntas sobre o processo: "como funciona?", "pode explicar?", "qual é o método?"
-- Demonstra curiosidade sobre o serviço
-- Aceita ouvir como funciona após coleta de dados básicos
-
-REQUISITOS ANTES DE TRANSFERIR:
-- Já coletou: tipo de imóvel, quartos, metragem (se possível)
-- Lead demonstrou interesse real (não apenas educado)
-- Contexto da conversa indica prontidão para próxima fase
-
-NÃO TRANSFERIR SE:
-- Lead ainda está desconfiado ou fazendo perguntas de segurança
-- Não coletou informações básicas do imóvel
-- Resposta foi vaga ou neutra`,
-        inputFilter: (data: any) => {
-            const history = Array.isArray(data.inputHistory) ? data.inputHistory : [];
-            // Preservar mais contexto - remover apenas ruídos específicos, manter histórico completo
-            const clean = filterHistoryByQuery(history, [
-                /quem\s+[eé]\s+voc[êe]|onde\s+voc[êe]\s+conseguiu|seu\s+nome\s+[ée]|quem\s+fala/i,
-                /como\s+voc[êe]\s+conseguiu|meu\s+número\s+de\s+telefone|empresa\s+[ée]|de\s+qual\s+empresa/i
-            ], 'Opener→Presenter');
-            return { ...data, inputHistory: clean };
-        }
-    });
-    (h_opener_to_presenter as any).strictJsonSchema = false;
-    (h_opener_to_presenter as any).inputJsonSchema.additionalProperties = true;
-    openerAgent.handoffs = [h_opener_to_presenter];
-
-    // Lifecycle Hooks — métricas e logging
-    const agentes: any[] = [openerAgent, presenterAgent, adminAgent];
-    for (const ag of agentes) {
-        const startTime = new Map<string, number>();
-        ag.on('agent_start', (_ctx: any, agent: any) => {
-            startTime.set(agent.name, Date.now());
-            console.log(`[LIFECYCLE] ▶️ ${agent.name} iniciou`);
-        });
-        ag.on('agent_end', (_ctx: any, output: any) => {
-            const elapsed = Date.now() - (startTime.get(ag.name) || Date.now());
-            const outputText = typeof output === 'string' ? output : JSON.stringify(output);
-            const linhas = outputText.split('\n').length;
-            console.log(`[LIFECYCLE] ⏹️ ${ag.name} finalizou (${elapsed}ms, ${linhas} linhas)`);
-        });
-    }
-
-    return {
-        OPENER: openerAgent,
-        PRESENTER: presenterAgent,
-        ADMIN: adminAgent
-    };
-}
-
-// Mantém retrocompatibilidade
-function criarAgente(
-    tipo: TipoAgente,
-    config: ConfiguracaoOrquestrador,
-    contexto: ContextoConversa
-): ElyonAgent {
-    const cadeia = criarCadeiaAgentes(config, contexto);
-    return cadeia[tipo];
 }
 
 // ====================================
@@ -805,16 +456,7 @@ Lembre-se: Extraia a intenção, faça o pitch de valor e peça para avaliar o i
 
         // Identificar qual agente respondeu (pode ser diferente do inicial se houve handoff)
         const nomeRealAgenteRespondeu = (result as any).lastAgent?.name;
-
-        const mapaAgentes: Record<string, TipoAgente> = {
-            'opener_agent_v11': 'OPENER',
-            'presenter_agent_v4': 'PRESENTER',
-            'closer_agent_v5': 'PRESENTER',
-            'admin_agent_v4': 'ADMIN',
-            'knowledge_agent': 'OPENER' // Redireciona para o inicial se por acaso ele responder por último
-        };
-
-        const agenteQueRespondeuFormatado = nomeRealAgenteRespondeu ? (mapaAgentes[nomeRealAgenteRespondeu] || 'OPENER') : tipoAgente;
+        const agenteQueRespondeuFormatado = nomeRealAgenteRespondeu ? (MAPA_NOMES_AGENTES[nomeRealAgenteRespondeu] || 'OPENER') : tipoAgente;
 
         console.log(`[ORCHESTRATOR] ✅ Resposta gerada por: ${nomeRealAgenteRespondeu || tipoAgente} (Mapeado: ${agenteQueRespondeuFormatado})`);
 
@@ -970,118 +612,3 @@ Lembre-se: Extraia a intenção, faça o pitch de valor e peça para avaliar o i
         };
     }
 }
-
-// ====================================
-// BUSCAR CONFIGURAÇÃO DO TENANT
-// ====================================
-
-export async function buscarConfiguracaoTenant(tenantId: string): Promise<ConfiguracaoOrquestrador | null> {
-    try {
-        const tenant = await prisma.tenant.findUnique({
-            where: { id: tenantId },
-            include: {
-                agentes: {
-                    where: { estaAtivo: true },
-                    take: 1
-                }
-            }
-        });
-
-        if (!tenant) return null;
-
-        const agente = tenant.agentes[0];
-        const diferenciais = tenant.diferenciais as string[] || [];
-
-        const perfilVenda = tenant.perfilVenda as any || {};
-
-        // RAG do perfil: prioriza o do agente (mais completo), fallback para o do tenant
-        const ragPerfilTexto = (agente as any)?.ragPerfilTexto || (tenant as any).ragPerfilTexto || undefined;
-
-        // BYOK: descriptografar API Key do tenant, se configurada
-        let llmApiKey: string | undefined;
-        if ((tenant as any).llmApiKeyCriptografada) {
-            try {
-                llmApiKey = descriptografar((tenant as any).llmApiKeyCriptografada);
-            } catch {
-                console.warn('[ORCHESTRATOR] ⚠️ Falha ao descriptografar llmApiKey do tenant — usando padrão');
-            }
-        }
-
-        return {
-            tenantId,
-            nomeAgente: agente?.nome || 'Sofia',
-            genero: agente?.genero || 'feminino',
-            nomeImobiliaria: tenant.nome,
-            cidade: tenant.cidade || undefined,
-            diferenciais: diferenciais.length > 0 ? diferenciais : undefined,
-            comissaoPadrao: perfilVenda.comissaoPadrao ? `${perfilVenda.comissaoPadrao}%`.replace('%%', '%') : '5%',
-            prazoContrato: perfilVenda.prazoContrato ? Number(perfilVenda.prazoContrato) : 180,
-            ragPerfilTexto,
-            llmModelo: (tenant as any).llmModelo || undefined,
-            llmBaseUrl: (tenant as any).llmBaseUrl || undefined,
-            llmApiKey,
-        };
-
-    } catch (error) {
-        console.error('[ORCHESTRATOR] Erro ao buscar config:', error);
-        return null;
-    }
-}
-
-// ====================================
-// BUSCAR CONTEXTO DA CONVERSA
-// ====================================
-
-export async function buscarContextoConversa(
-    telefone: string,
-    tenantId: string
-): Promise<ContextoConversa> {
-    try {
-        // Buscar lead existente pelo telefone
-        const lead = await prisma.lead.findFirst({
-            where: {
-                telefone: { contains: telefone.replace(/\D/g, '').slice(-11) },
-                tenantId
-            },
-            select: {
-                id: true,
-                status: true,
-                doresIdentificadas: true,
-                tipoAutorizacao: true,
-                comissaoAcordada: true,
-                prazoTrabalho: true,
-                campanhaOrigem: {
-                    select: { nomeEmpreendimento: true }
-                }
-            }
-        });
-
-        // Buscar contato se não tem lead
-        let contatoId: string | undefined;
-        if (!lead) {
-            const contato = await prisma.contato.findFirst({
-                where: {
-                    telefone: { contains: telefone.replace(/\D/g, '').slice(-11) },
-                    campanha: { tenantId }
-                },
-                select: { id: true }
-            });
-            contatoId = contato?.id;
-        }
-
-        return {
-            telefone,
-            contatoId,
-            leadId: lead?.id,
-            statusLead: lead?.status,
-            doresIdentificadas: lead?.doresIdentificadas || [],
-            empreendimento: lead?.campanhaOrigem?.nomeEmpreendimento || undefined
-        };
-
-    } catch (error) {
-        console.error('[ORCHESTRATOR] Erro ao buscar contexto:', error);
-        return { telefone };
-    }
-}
-
-
