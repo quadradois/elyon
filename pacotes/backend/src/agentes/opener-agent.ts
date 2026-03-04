@@ -17,7 +17,6 @@ import {
     registrarOptoutTool,
     agendarFollowupTool,
     moverParaFaseTool,
-    buscarTaticaCaptacaoTool,
     registrarIndicacaoTool
 } from '../ferramentas/sdr-tools-agents';
 import { outputGuardrailsWhatsApp } from './output-guardrails';

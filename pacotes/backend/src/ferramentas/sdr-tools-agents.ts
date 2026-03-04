@@ -24,8 +24,7 @@ import {
     EncaminharCorretorUseCase,
     AtualizarDadosLeadUseCase,
     QualificarLeadUseCase,
-    RegistrarOptoutUseCase,
-    BuscarEstrategiaCaptacaoUseCase
+    RegistrarOptoutUseCase
 } from '../casos-de-uso/agentes';
 
 async function registrarExecucaoTool(params: {
@@ -153,25 +152,6 @@ IMPORTANTE: Passe TODOS os dados que o lead mencionou na conversa (dores, motiva
             toolName: 'qualificar_lead',
             sucesso: !!result?.success,
             detalhes: result?.message || result?.error
-        });
-        return JSON.stringify(result);
-    }
-});
-
-// ====================================
-// TOOL 1.5: Buscar Tática de Captação (Objeções)
-// ====================================
-
-export const buscarTaticaCaptacaoTool = tool({
-    name: 'buscar_tatica_captacao',
-    description: `Use quando o proprietário apresentar uma objeção forte à captação (Ex: "Não dou exclusividade", "Acho a comissão cara", "Vou vender sozinho") e você precisar de um script curado dos top captadores da agência para contornar.`,
-    parameters: z.object({
-        objecaoOuTopico: z.string().describe('A objeção que precisa ser contornada (ex: "comissão", "exclusividade", "vender sozinho")')
-    }),
-    execute: async (args) => {
-        const useCase = new BuscarEstrategiaCaptacaoUseCase();
-        const result = await useCase.execute({
-            objecaoOuTopico: args.objecaoOuTopico
         });
         return JSON.stringify(result);
     }

@@ -8,4 +8,3 @@ export * from './encaminhar-corretor.usecase';
 export * from './atualizar-dados-lead.usecase';
 export * from './qualificar-lead.usecase';
 export * from './registrar-optout.usecase';
-export * from './buscar-estrategia-captacao.usecase';

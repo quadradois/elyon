@@ -13,7 +13,7 @@
 import { Agent, tool, handoff } from '@openai/agents';
 import { criarModeloBYOK } from './elyon-context';
 import { ElyonContext } from './elyon-context';
-import { moverParaFaseTool, agendarFollowupTool, buscarTaticaCaptacaoTool, qualificarLeadTool, atualizarDadosLeadTool } from '../ferramentas/sdr-tools-agents';
+import { moverParaFaseTool, agendarFollowupTool, qualificarLeadTool, atualizarDadosLeadTool } from '../ferramentas/sdr-tools-agents';
 import { outputGuardrailsWhatsApp } from './output-guardrails';
 import { gerarExemplosPorFase } from './few-shot-examples';
 import { getSharedBehavioralRules } from './shared-behavioral-guardrails';
