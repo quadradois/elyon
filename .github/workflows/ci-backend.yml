@@ -1,0 +1,57 @@
+name: CI Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pacotes/backend/**'
+      - '.github/workflows/ci-backend.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'pacotes/backend/**'
+      - '.github/workflows/ci-backend.yml'
+
+concurrency:
+  group: ci-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Testes & Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Prisma generate
+        working-directory: pacotes/backend
+        run: npx prisma generate
+
+      - name: Type check
+        working-directory: pacotes/backend
+        run: npx tsc --noEmit
+
+      - name: Testes unitários + coverage
+        run: node node_modules/jest/bin/jest.js --no-cache --config pacotes/backend/jest.config.js --coverage --collectCoverageFrom='src/agentes/**/*.ts' --collectCoverageFrom='!src/agentes/__tests__/**' --ci
+        env:
+          NODE_ENV: test
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7

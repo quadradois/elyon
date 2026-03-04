@@ -9,4 +9,13 @@ module.exports = {
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   // Timeout generoso para testes com mocks async
   testTimeout: 10000,
+  // Coverage threshold — impede regressão abaixo de 80%
+  coverageThreshold: {
+    global: {
+      statements: 80,
+      branches: 65,
+      functions: 70,
+      lines: 80,
+    },
+  },
 };
