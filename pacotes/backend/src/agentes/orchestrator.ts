@@ -11,7 +11,7 @@
  * @date 16/12/2025
  */
 
-import { run, setTracingExportApiKey } from '@openai/agents';
+import { setTracingExportApiKey } from '@openai/agents';
 import { prisma } from '../lib/db';
 import { executarGuardrails, GuardrailResult, MensagemContext } from './guardrails';
 import type { ElyonContext } from './elyon-context';
@@ -21,6 +21,7 @@ import { persistirHistoricoSdk } from './history-persistence';
 import { extrairRespostaECot } from './output-extraction';
 import { construirInputSdk } from './input-builder';
 import { construirElyonContext } from './context-builder';
+import { executarAgenteComRetryReasoning } from './agent-runner';
 
 // Módulos extraídos
 import {
@@ -266,37 +267,24 @@ export async function processarMensagemOrquestrada(
         // 6. EXECUTAR AGENTE (SDK gerencia handoffs automaticamente)
         let nomesToolsTurno: string[] = [];
         let result: any;
-        try {
-            result = await run(agente, inputSDK, {
-                context: elyonContext
-            });
-        } catch (runError: any) {
-            const mensagemErro = String(runError?.message || '');
-            const erroReasoningContent = /reasoning_content is missing/i.test(mensagemErro);
+        const runResult = await executarAgenteComRetryReasoning({
+            agente,
+            inputSDK,
+            elyonContext,
+            cachedHistory,
+            contatoId: contexto.contatoId,
+            mensagensLength: mensagens.length,
+            construirInputSemCache: () => construirInputSdk({
+                mensagens,
+                estadoConversaAtual,
+                config,
+                contexto,
+            }).inputSDK,
+            limparHistoricoContato: clearHistory,
+        });
 
-            if (erroReasoningContent && cachedHistory && cachedHistory.length > 0) {
-                console.warn('[ORCHESTRATOR] ⚠️ Histórico SDK incompatível com LLM atual (reasoning_content). Limpando cache e retry sem histórico SDK.');
-
-                if (contexto.contatoId) {
-                    await clearHistory(contexto.contatoId);
-                    console.log(`[ORCHESTRATOR] 🧹 Cache SDK limpo para ${contexto.contatoId.substring(0, 8)}...`);
-                }
-
-                inputSDK = construirInputSdk({
-                    mensagens,
-                    estadoConversaAtual,
-                    config,
-                    contexto,
-                }).inputSDK;
-                console.log(`[ORCHESTRATOR] 🔁 Retry sem cache SDK: ${inputSDK.length} itens (1 system + ${mensagens.length} mensagens)`);
-
-                result = await run(agente, inputSDK, {
-                    context: elyonContext
-                });
-            } else {
-                throw runError;
-            }
-        }
+        result = runResult.result;
+        inputSDK = runResult.inputSDKFinal;
 
         // 6.1 PERSISTIR HISTÓRICO SDK (preserva tool calls e handoffs para o próximo turno)
         if (contexto.contatoId) {
