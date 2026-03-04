@@ -5,6 +5,26 @@ Todas as mudanças notáveis deste projeto serão documentadas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.2.2] - 2026-03-04
+
+### Refatorado
+- Conclusão da refatoração incremental do `orchestrator` com extração de responsabilidades para módulos dedicados:
+  - `response-filters`, `history-persistence`, `output-extraction`
+  - `input-builder`, `context-builder`, `agent-runner`
+  - `post-handoff`, `orchestrator-metrics`, `agent-resolution`
+  - `entry-guardrail`, `persisted-agent`
+- `orchestrator.ts` ficou mais enxuto, com delegação explícita por etapa (guardrail, roteamento, execução, pós-processamento, métricas).
+
+### Adicionado
+- Novas suítes de testes unitários para os módulos extraídos:
+  - `response-filters`, `history-persistence`, `output-extraction`
+  - `input-builder`, `context-builder`, `agent-runner`
+  - `post-handoff`, `orchestrator-metrics`, `agent-resolution`
+  - `entry-guardrail`, `persisted-agent`
+
+### Validado
+- Execução consolidada de testes em `src/agentes/__tests__` com **27 suítes aprovadas** e **361 testes passando** ao final da refatoração.
+
 ## [0.2.1] - 2026-03-04
 
 ### Adicionado
@@ -74,4 +94,5 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 [0.2.0]: https://github.com/quadradois/elyon/compare/v0.1.0...v0.2.0
 [0.2.1]: https://github.com/quadradois/elyon/compare/v0.2.0...v0.2.1
+[0.2.2]: https://github.com/quadradois/elyon/compare/v0.2.1...v0.2.2
 [0.1.0]: https://github.com/quadradois/elyon/releases/tag/v0.1.0
