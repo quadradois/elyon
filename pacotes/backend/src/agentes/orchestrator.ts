@@ -24,6 +24,7 @@ import { construirElyonContext } from './context-builder';
 import { executarAgenteComRetryReasoning } from './agent-runner';
 import { processarPosHandoff } from './post-handoff';
 import { logMetricaOrchestrator } from './orchestrator-metrics';
+import { resolverAgenteFinal, logAgenteResolvido } from './agent-resolution';
 
 // Módulos extraídos
 import {
@@ -259,11 +260,15 @@ export async function processarMensagemOrquestrada(
             console.log(`[ORCHESTRATOR] 🧠 CoT: \n${cotLog}`);
         }
 
-        // Identificar qual agente respondeu (pode ser diferente do inicial se houve handoff)
         const nomeRealAgenteRespondeu = (result as any).lastAgent?.name;
-        const agenteQueRespondeuFormatado = nomeRealAgenteRespondeu ? (MAPA_NOMES_AGENTES[nomeRealAgenteRespondeu] || 'OPENER') : tipoAgente;
+        const resolucaoAgente = resolverAgenteFinal({
+            nomeRealAgenteRespondeu,
+            tipoAgenteInicial: tipoAgente,
+            mapaNomesAgentes: MAPA_NOMES_AGENTES,
+        });
+        const agenteQueRespondeuFormatado = resolucaoAgente.agenteQueRespondeuFormatado;
 
-        console.log(`[ORCHESTRATOR] ✅ Resposta gerada por: ${nomeRealAgenteRespondeu || tipoAgente} (Mapeado: ${agenteQueRespondeuFormatado})`);
+        logAgenteResolvido(resolucaoAgente.nomeAgenteResposta, agenteQueRespondeuFormatado);
 
         const { houveHandoff } = await processarPosHandoff({
             contatoId: contexto.contatoId,
