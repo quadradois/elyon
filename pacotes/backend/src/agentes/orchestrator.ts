@@ -193,27 +193,9 @@ export async function processarMensagemOrquestrada(
         }
 
         if (contexto.statusLead && STATUS_FASE_HUMANA.has(contexto.statusLead)) {
-            console.log(`[ORCHESTRATOR] 🤝 Lead em fase humana (${contexto.statusLead}). Resposta operacional sem negociação por IA.`);
-            logMetricaOrchestrator({
-                tenantId: config.tenantId,
-                telefone: contexto.telefone,
-                contatoId: contexto.contatoId,
-                leadId: contexto.leadId,
-                statusLead: contexto.statusLead,
-                faseFluxo: faseFluxoAtual,
-                agenteInicial: 'ADMIN',
-                agenteFinal: 'ADMIN',
-                toolCalls: 0,
-                handoffs: 0,
-                fallback: 'FASE_HUMANA_BYPASS',
-                duracaoMs: Date.now() - inicioTurno,
-                sucesso: true
-            });
-            return {
-                sucesso: true,
-                resposta: 'Perfeito! Você está na etapa de formalização com nosso time humano. Já sinalizei sua mensagem para continuidade por aqui, combinado?',
-                agenteUsado: 'ADMIN'
-            };
+            console.log(`[ORCHESTRATOR] 🤝 Lead em fase humana (${contexto.statusLead}). Roteando para ADMIN agent.`);
+            // Não mais retorna resposta fixa — deixa o Admin agent responder
+            // de forma contextual (pode ser dúvida, urgência, desistência, etc.)
         }
 
         let agentePersistido: TipoAgente | undefined;

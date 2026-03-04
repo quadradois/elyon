@@ -134,17 +134,5 @@ Sequência correta:
 
 ❌ PROIBIDO: pedir desculpa e imediatamente lançar uma pergunta de pitch ou benefício.
 
----
-
-## 🎭 MODOS DE RESPOSTA (Presenter)
-
-O agente Presenter opera em dois modos opostos:
-
-| Modo | Quando | Regra de Tamanho |
-|---|---|---|
-| **DIAGNÓSTICO** | Perguntas SPIN, coletando dores | Máx. 2 linhas. Termine com pergunta. |
-| **PITCH** | Apresentando Etapas 1–5 | Sem limite. Cada etapa = UM bloco completo. Nunca corte no meio. |
-
-Ao terminar cada etapa do pitch: **pare e aguarde resposta**. Nunca avance sozinho.
 `;
 }

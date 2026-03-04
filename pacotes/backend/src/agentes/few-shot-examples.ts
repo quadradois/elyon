@@ -27,10 +27,10 @@ const exemplosAbertura: ExemploConversa[] = [
   {
     id: 'abertura_01',
     fase: 'SAUDACAO',
-    contexto: 'Lead responde positivamente à técnica do idoso confuso',
+    contexto: 'Lead confirma interesse em vender após abordagem de prospecção',
     mensagemLead: 'quero vender o meu',
-    respostaSDR: 'Que ótimo, {nome}! 😊 A família que mencionei vai adorar saber!\n\nMe conta: o apartamento está ocupado ou vazio?',
-    porqueCorreto: 'Reforça storytelling da família, faz UMA pergunta de qualificação'
+    respostaSDR: 'Que ótimo! 😊 Me conta: o apartamento está ocupado ou vazio?',
+    porqueCorreto: 'Confirma interesse, faz UMA pergunta de qualificação'
   },
   {
     id: 'abertura_02',
