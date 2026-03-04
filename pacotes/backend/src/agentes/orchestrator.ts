@@ -23,6 +23,7 @@ import { construirInputSdk } from './input-builder';
 import { construirElyonContext } from './context-builder';
 import { executarAgenteComRetryReasoning } from './agent-runner';
 import { processarPosHandoff } from './post-handoff';
+import { logMetricaOrchestrator } from './orchestrator-metrics';
 
 // Módulos extraídos
 import {
@@ -91,54 +92,6 @@ export interface ResultadoProcessamento {
     agenteUsado?: string;
     guardrailAcionado?: GuardrailResult;
     erro?: string;
-}
-
-// ====================================
-// HELPERS LOCAIS
-// ====================================
-
-function shortId(valor?: string): string | null {
-    if (!valor) return null;
-    return valor.length > 8 ? `${valor.substring(0, 8)}...` : valor;
-}
-
-function logMetricaOrchestrator(params: {
-    tenantId: string;
-    telefone?: string;
-    contatoId?: string;
-    leadId?: string;
-    statusLead?: string;
-    faseFluxo: string;
-    agenteInicial?: TipoAgente;
-    agenteFinal?: TipoAgente;
-    toolCalls: number;
-    handoffs: number;
-    fallback: string;
-    guardrail?: string;
-    duracaoMs: number;
-    sucesso: boolean;
-    erro?: string;
-}) {
-    const payload = {
-        ts: new Date().toISOString(),
-        tenantId: params.tenantId,
-        telefone: params.telefone || null,
-        contatoId: shortId(params.contatoId),
-        leadId: shortId(params.leadId),
-        statusLead: params.statusLead || 'SEM_STATUS',
-        faseFluxo: params.faseFluxo,
-        agenteInicial: params.agenteInicial || null,
-        agenteFinal: params.agenteFinal || null,
-        toolCalls: params.toolCalls,
-        handoffs: params.handoffs,
-        fallback: params.fallback,
-        guardrail: params.guardrail || null,
-        duracaoMs: params.duracaoMs,
-        sucesso: params.sucesso,
-        erro: params.erro || null
-    };
-
-    console.log(`[ORCH-METRICS] ${JSON.stringify(payload)}`);
 }
 
 // ====================================
