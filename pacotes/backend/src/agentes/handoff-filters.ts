@@ -131,25 +131,23 @@ export async function gerarBriefingHandoff(
         for (const item of ultimasMensagens) {
             const itemAny = item as any;
             
-            if (itemAny.role === 'user') {
+            // Tool calls PRIMEIRO (podem ter role 'assistant' junto)
+            if (itemAny.type === 'tool_call_item') {
+                const toolName = itemAny.toolName || itemAny.name || 'tool_desconhecida';
+                const args = itemAny.args || itemAny.parameters || {};
+                mensagensFormatadas.push(`[TOOL EXECUTADA: ${toolName}] Parâmetros: ${JSON.stringify(args)}`);
+            } else if (itemAny.type === 'tool_call_output_item') {
+                const toolName = itemAny.toolName || itemAny.name || 'tool_desconhecida';
+                const output = itemAny.output || itemAny.result || {};
+                const outputResumido = typeof output === 'string' && output.length > 100 ? 
+                    output.substring(0, 100) + '...' : JSON.stringify(output);
+                mensagensFormatadas.push(`[RESULTADO TOOL: ${toolName}] ${outputResumido}`);
+            } else if (itemAny.role === 'user') {
                 const conteudo = typeof itemAny.content === 'string' ? itemAny.content : JSON.stringify(itemAny.content);
                 mensagensFormatadas.push(`PROPRIETÁRIO: ${conteudo}`);
             } else if (itemAny.role === 'assistant') {
                 const conteudo = typeof itemAny.content === 'string' ? itemAny.content : JSON.stringify(itemAny.content);
                 mensagensFormatadas.push(`AGENTE: ${conteudo}`);
-            } else if (itemAny.type === 'tool_call_item') {
-                // Incluir informações sobre tool calls executadas
-                const toolName = itemAny.toolName || itemAny.name || 'tool_desconhecida';
-                const args = itemAny.args || itemAny.parameters || {};
-                mensagensFormatadas.push(`[TOOL EXECUTADA: ${toolName}] Parâmetros: ${JSON.stringify(args)}`);
-            } else if (itemAny.type === 'tool_call_output_item') {
-                // Incluir resultados de tool calls
-                const toolName = itemAny.toolName || itemAny.name || 'tool_desconhecida';
-                const output = itemAny.output || itemAny.result || {};
-                // Limitar tamanho do output para não poluir o contexto
-                const outputResumido = typeof output === 'string' && output.length > 100 ? 
-                    output.substring(0, 100) + '...' : JSON.stringify(output);
-                mensagensFormatadas.push(`[RESULTADO TOOL: ${toolName}] ${outputResumido}`);
             }
         }
         
