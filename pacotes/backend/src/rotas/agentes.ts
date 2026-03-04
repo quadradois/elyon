@@ -197,14 +197,7 @@ const MudarStatusSchema = z.object({
 // MIDDLEWARE: Extrair Tenant do Token
 // ====================================
 
-// Por enquanto, simula extração do tenant do header
-// TODO: Integrar com middleware de autenticação real
-const extrairTenantId = (req: Request): string | null => {
-  if ((req as any).tenantId) return (req as any).tenantId;
-  if (req.headers['x-tenant-id']) return req.headers['x-tenant-id'] as string;
-  if (req.query.tenantId) return req.query.tenantId as string;
-  return null;
-};
+import { getTenantId as extrairTenantId } from '../utils/tenant';
 
 // ============================================
 // HELPERS

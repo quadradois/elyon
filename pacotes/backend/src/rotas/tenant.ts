@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/db';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { s3Client as s3 } from '../lib/s3';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
@@ -20,15 +21,6 @@ const upload = multer({
       cb(new Error('Tipo de arquivo não permitido. Use PNG, JPG, GIF ou WEBP.'));
     }
   }
-});
-
-// Configuração S3
-const s3 = new S3Client({
-  region: process.env.AWS_S3_REGION || 'us-east-2',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
 });
 
 // Bucket para logos - usa variável específica ou fallback para o bucket geral

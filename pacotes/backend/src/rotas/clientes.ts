@@ -1,31 +1,9 @@
 
 import { Router, Request } from 'express';
 import { prisma } from '../lib/db';
+import { getTenantId } from '../utils/tenant';
 
 const router = Router();
-
-// ====================================
-// HELPER PARA TENANT
-// ====================================
-
-const getTenantId = (req: Request): string | null => {
-    // 1. Do middleware de autenticação
-    if ((req as any).tenantId) {
-        return (req as any).tenantId;
-    }
-
-    // 2. Header x-tenant-id
-    if (req.headers['x-tenant-id']) {
-        return req.headers['x-tenant-id'] as string;
-    }
-
-    // 3. Query param (fallback)
-    if (req.query.tenantId) {
-        return req.query.tenantId as string;
-    }
-
-    return null;
-};
 
 // GET /api/clientes - Listar clientes do tenant
 router.get('/', async (req, res) => {

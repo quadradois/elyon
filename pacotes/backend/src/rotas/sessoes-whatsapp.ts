@@ -21,6 +21,7 @@ import { getWhatsAppService, limparCacheWhatsApp } from '../servicos/whatsapp';
 import axios from 'axios';
 import { z } from 'zod';
 import { verificarAutenticacao } from '../middleware/middleware-auth';
+import { getTenantId } from '../utils/tenant';
 
 const router = Router();
 
@@ -30,16 +31,6 @@ router.use(verificarAutenticacao);
 // ============================================
 // HELPERS
 // ============================================
-
-/**
- * Extrai tenantId do request
- */
-const getTenantId = (req: Request): string | null => {
-  if ((req as any).tenantId) return (req as any).tenantId;
-  if (req.headers['x-tenant-id']) return req.headers['x-tenant-id'] as string;
-  if (req.query.tenantId) return req.query.tenantId as string;
-  return null;
-};
 
 /**
  * Gera instanceName único para a sessão

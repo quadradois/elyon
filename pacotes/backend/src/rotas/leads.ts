@@ -1,6 +1,8 @@
 import { Router, Request } from 'express';
 import { prisma } from '../lib/db';
 import crypto from 'crypto';
+import { getTenantId } from '../utils/tenant';
+import { cascadeDeleteLeads } from '../utils/cascade-delete';
 
 const router = Router();
 
@@ -8,33 +10,6 @@ const router = Router();
 // Os campos existem no banco, mas TypeScript não reconhece ainda
 // TODO: Remover após rebuild completo
 const db = prisma as any;
-
-// ====================================
-// HELPER PARA TENANT
-// ====================================
-
-/**
- * Extrai o tenantId do request
- * Prioridade: req.tenantId (middleware) > header > query
- */
-const getTenantId = (req: Request): string | null => {
-  // 1. Do middleware de autenticação
-  if ((req as any).tenantId) {
-    return (req as any).tenantId;
-  }
-
-  // 2. Header x-tenant-id
-  if (req.headers['x-tenant-id']) {
-    return req.headers['x-tenant-id'] as string;
-  }
-
-  // 3. Query param (fallback)
-  if (req.query.tenantId) {
-    return req.query.tenantId as string;
-  }
-
-  return null;
-};
 
 const normalizarTelefone = (telefone?: string): string | null => {
   if (!telefone) return null;
@@ -713,39 +688,7 @@ router.delete('/:id', async (req, res) => {
     // ======= CASCADE DELETE =======
     console.log(`[Leads] Excluindo lead ${id} com ${totalVinculados} registros vinculados...`);
 
-    // 1. Deletar contratos
-    if (contratosCount > 0) {
-      await prisma.contrato.deleteMany({
-        where: { leadId: id }
-      });
-      console.log(`[Leads] - ${contratosCount} contratos excluídos`);
-    }
-
-    // 2. Deletar mensagens das conversas
-    await prisma.mensagem.deleteMany({
-      where: { conversa: { leadId: id } }
-    });
-
-    // 3. Deletar conversas
-    await prisma.conversa.deleteMany({
-      where: { leadId: id }
-    });
-
-    // 4. Deletar atividades
-    await prisma.atividade.deleteMany({
-      where: { leadId: id }
-    });
-
-    // 5. Desvincular imóveis (não deleta, apenas remove referência)
-    await prisma.imovel.updateMany({
-      where: { leadId: id },
-      data: { leadId: null }
-    });
-
-    // 6. Finalmente, deletar o lead
-    await prisma.lead.delete({
-      where: { id }
-    });
+    await cascadeDeleteLeads([id]);
 
     console.log(`[Leads] ✅ Lead ${id} e todos os dados vinculados excluídos com sucesso`);
     res.json({

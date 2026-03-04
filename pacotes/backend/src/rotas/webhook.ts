@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/db';
 import { getWhatsAppService } from '../servicos/whatsapp';
+import { normalizarTelefone } from '../utils/telefone';
 // 🆕 Orquestrador dos 4 Agentes de Captação
 import {
   processarMensagemOrquestrada,
@@ -221,21 +222,6 @@ async function buscarConfiguracaoAgentePorInstancia(instanceName: string, tenant
   });
 
   return { ...agente, tenant };
-}
-
-/**
- * Normaliza telefone removendo formatação e DDI
- */
-function normalizarTelefone(telefone: string): string {
-  // Remove tudo que não é dígito
-  const apenasDigitos = telefone.replace(/\D/g, '');
-
-  // Remove DDI 55 se presente
-  if (apenasDigitos.startsWith('55') && apenasDigitos.length > 11) {
-    return apenasDigitos.slice(2);
-  }
-
-  return apenasDigitos;
 }
 
 /**

@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { getTenantId } from '../utils/tenant';
 import {
     gerarContratoCaptacao,
     registrarAceiteContrato,
@@ -11,13 +12,6 @@ import {
 } from '../contratos/contrato-service';
 
 const router = Router();
-
-// Helper para extrair tenant
-const getTenantId = (req: Request): string | null => {
-    if ((req as any).tenantId) return (req as any).tenantId;
-    if (req.headers['x-tenant-id']) return req.headers['x-tenant-id'] as string;
-    return null;
-};
 
 // ============================================
 // POST /api/contratos/gerar - Gerar contrato para um lead

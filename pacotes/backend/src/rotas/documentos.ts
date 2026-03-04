@@ -8,7 +8,8 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import multer, { FileFilterCallback } from 'multer';
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { s3Client } from '../lib/s3';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 
@@ -20,15 +21,7 @@ const router = Router();
 // HELPER PARA TENANT
 // ============================================
 
-/**
- * Extrai o tenantId do request
- */
-const getTenantId = (req: Request): string | null => {
-  if ((req as any).tenantId) return (req as any).tenantId;
-  if (req.headers['x-tenant-id']) return req.headers['x-tenant-id'] as string;
-  if (req.query.tenantId) return req.query.tenantId as string;
-  return null;
-};
+import { getTenantId } from '../utils/tenant';
 
 /**
  * Verifica se o agente pertence ao tenant
@@ -42,15 +35,6 @@ const verificarAgenteTenant = async (agenteId: string, tenantId: string | null):
   
   return agente;
 };
-
-// ===== CONFIGURAÇÃO AWS S3 =====
-const s3Client = new S3Client({
-  region: process.env.AWS_S3_REGION || 'us-east-2',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
 
 const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || 'rag-eloyn';
 

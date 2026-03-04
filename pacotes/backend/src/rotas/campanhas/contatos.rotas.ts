@@ -14,22 +14,10 @@ import { z } from 'zod';
 import multer from 'multer';
 import Papa from 'papaparse';
 import { normalizarTelefone } from '../../utils/telefone';
+import { getTenantId } from '../../utils/tenant';
+import { cascadeDeleteLeads } from '../../utils/cascade-delete';
 
 const router = Router();
-
-// ============================================
-// HELPER PARA TENANT
-// ============================================
-
-/**
- * Extrai o tenantId do request
- */
-const getTenantId = (req: Request): string | null => {
-  if ((req as any).tenantId) return (req as any).tenantId;
-  if (req.headers['x-tenant-id']) return req.headers['x-tenant-id'] as string;
-  if (req.query.tenantId) return req.query.tenantId as string;
-  return null;
-};
 
 /**
  * Verifica se a campanha pertence ao tenant
@@ -1302,47 +1290,7 @@ router.delete('/:id/contatos/:contatoId', async (req, res) => {
 
     // Se o contato virou lead, também deletar o lead e suas dependências
     if (contato.leadId) {
-      const lead = await prisma.lead.findUnique({
-        where: { id: contato.leadId },
-        include: { conversas: true }
-      });
-
-      if (lead) {
-        // Deletar mensagens das conversas
-        for (const conversa of lead.conversas) {
-          await prisma.mensagem.deleteMany({ where: { conversaId: conversa.id } });
-        }
-
-        // Deletar conversas
-        await prisma.conversa.deleteMany({ where: { leadId: lead.id } });
-
-        // Deletar atividades
-        await prisma.atividade.deleteMany({ where: { leadId: lead.id } });
-
-        // Desvincular cliente
-        await prisma.cliente.updateMany({
-          where: { origemLeadId: lead.id },
-          data: { origemLeadId: null }
-        });
-
-        // Desvincular imóveis associados
-        await prisma.imovel.updateMany({
-          where: { leadId: lead.id },
-          data: { leadId: null }
-        });
-
-        // Deletar contratos associados
-        await prisma.contrato.deleteMany({ where: { leadId: lead.id } });
-
-        // Desvincular o contato do lead para evitar erro de foreign key
-        await prisma.contato.updateMany({
-          where: { leadId: lead.id },
-          data: { leadId: null }
-        });
-
-        // Deletar o lead (Cascades lidarão com Cliente, etc)
-        await prisma.lead.delete({ where: { id: lead.id } });
-      }
+      await cascadeDeleteLeads([contato.leadId]);
     }
 
     // Deletar o contato
@@ -1400,57 +1348,7 @@ router.delete('/:id/contatos', async (req, res) => {
 
     // Deletar leads e suas dependências
     if (leadIds.length > 0) {
-      // Buscar conversas dos leads
-      const conversas = await prisma.conversa.findMany({
-        where: { leadId: { in: leadIds } },
-        select: { id: true }
-      });
-      const conversaIds = conversas.map(c => c.id);
-
-      // Deletar mensagens das conversas
-      if (conversaIds.length > 0) {
-        await prisma.mensagem.deleteMany({
-          where: { conversaId: { in: conversaIds } }
-        });
-      }
-
-      // Deletar conversas
-      await prisma.conversa.deleteMany({
-        where: { leadId: { in: leadIds } }
-      });
-
-      // Deletar atividades
-      await prisma.atividade.deleteMany({
-        where: { leadId: { in: leadIds } }
-      });
-
-      // Desvincular cliente
-      await prisma.cliente.updateMany({
-        where: { origemLeadId: { in: leadIds } },
-        data: { origemLeadId: null }
-      });
-
-      // Desvincular imóveis associados
-      await prisma.imovel.updateMany({
-        where: { leadId: { in: leadIds } },
-        data: { leadId: null }
-      });
-
-      // Deletar contratos associados
-      await prisma.contrato.deleteMany({
-        where: { leadId: { in: leadIds } }
-      });
-
-      // Desvincular o contato do lead para evitar erro de foreign key
-      await prisma.contato.updateMany({
-        where: { leadId: { in: leadIds } },
-        data: { leadId: null }
-      });
-
-      // Deletar leads
-      await prisma.lead.deleteMany({
-        where: { id: { in: leadIds } }
-      });
+      await cascadeDeleteLeads(leadIds);
     }
 
     // Deletar contatos
@@ -1508,48 +1406,7 @@ router.delete('/:id/contatos/todos', async (req, res) => {
 
     // Deletar leads e suas dependências
     if (leadIds.length > 0) {
-      const conversas = await prisma.conversa.findMany({
-        where: { leadId: { in: leadIds } },
-        select: { id: true }
-      });
-      const conversaIds = conversas.map(c => c.id);
-
-      if (conversaIds.length > 0) {
-        await prisma.mensagem.deleteMany({
-          where: { conversaId: { in: conversaIds } }
-        });
-      }
-
-      await prisma.conversa.deleteMany({
-        where: { leadId: { in: leadIds } }
-      });
-
-      await prisma.atividade.deleteMany({
-        where: { leadId: { in: leadIds } }
-      });
-
-      await prisma.cliente.updateMany({
-        where: { origemLeadId: { in: leadIds } },
-        data: { origemLeadId: null }
-      });
-
-      await prisma.imovel.updateMany({
-        where: { leadId: { in: leadIds } },
-        data: { leadId: null }
-      });
-
-      await prisma.contrato.deleteMany({
-        where: { leadId: { in: leadIds } }
-      });
-
-      await prisma.contato.updateMany({
-        where: { leadId: { in: leadIds } },
-        data: { leadId: null }
-      });
-
-      await prisma.lead.deleteMany({
-        where: { id: { in: leadIds } }
-      });
+      await cascadeDeleteLeads(leadIds);
     }
 
     // Deletar todos os contatos
