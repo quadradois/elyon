@@ -21,7 +21,6 @@ import {
     MoverParaFaseUseCase,
     SalvarDadosImovelUseCase,
     AgendarFollowupUseCase,
-    BuscarImovelUseCase,
     EncaminharCorretorUseCase,
     AtualizarDadosLeadUseCase,
     QualificarLeadUseCase,
@@ -325,27 +324,6 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
 });
 
 // ====================================
-// TOOL 6: Buscar Imóvel
-// ====================================
-
-export const buscarImovelTool = tool({
-    name: 'buscar_imovel',
-    description: 'Busca informações dos imóveis cadastrados para este lead.',
-
-    parameters: z.object({
-        leadId: z.string().describe('ID do lead')
-    }),
-
-    execute: async (args) => {
-        const useCase = new BuscarImovelUseCase();
-        const result = await useCase.execute({
-            leadId: args.leadId
-        });
-        return JSON.stringify(result);
-    }
-});
-
-// ====================================
 // TOOL 7: Encaminhar para Corretor
 // ====================================
 
@@ -370,28 +348,6 @@ NÃO use para perguntas sobre valor - responda você mesmo!`,
             urgencia: args.urgencia
         });
         return JSON.stringify(result);
-    }
-});
-
-// ====================================
-// TOOL 8: Solicitar Humano (Desativado)
-// ====================================
-
-export const solicitarHumanoTool = tool({
-    name: 'solicitar_humano',
-    description: `⛔ PROIBIDO! Use encaminhar_corretor se proprietário pedir explicitamente.`,
-
-    parameters: z.object({
-        leadId: z.string().describe('ID do lead'),
-        motivo: z.string().describe('Motivo')
-    }),
-
-    execute: async (args) => {
-        console.log(`[TOOL] solicitar_humano - BLOQUEADO! Use encaminhar_corretor`);
-        return JSON.stringify({
-            success: false,
-            error: 'Use encaminhar_corretor se proprietário pedir para falar com humano'
-        });
     }
 });
 
@@ -734,27 +690,5 @@ OBRIGATÓRIO coletar: nome e telefone do indicado.`,
         }
     }
 });
-
-// ====================================
-// Exportar todas as tools
-// ====================================
-
-export const todasToolsSDR = [
-    qualificarLeadTool,
-    registrarOptoutTool,
-    converterParaLeadTool,
-    agendarAvaliacaoTool,
-    agendarFollowupTool,
-    buscarImovelTool,
-    encaminharCorretorTool,
-    solicitarHumanoTool,
-    moverParaFaseTool,
-    atualizarDadosLeadTool,
-    gerarLinkContratoTool,
-    salvarDadosImovelTool,
-    enviarParaCrmTool,
-    buscarTaticaCaptacaoTool,
-    registrarIndicacaoTool      // 🆕 Indicação de terceiros
-];
 
 
