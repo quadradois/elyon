@@ -20,6 +20,7 @@ import { Agent, tool, handoff } from '@openai/agents';
 import { criarModeloBYOK } from './elyon-context';
 import { ElyonContext } from './elyon-context';
 import { z } from 'zod';
+import { getSharedBehavioralRules } from './shared-behavioral-guardrails';
 import {
     moverParaFaseTool,
     agendarAvaliacaoTool,
@@ -208,6 +209,8 @@ export function criarAdminAgent(config: {
                 prazoTrabalho: config.prazoTrabalho,
                 comissaoAcordada: config.comissaoAcordada
             });
+
+            basePrompt += getSharedBehavioralRules();
 
             if (context?.ultimaInteracao) {
                 basePrompt += `\n\n[CONTEXTO DA ÚLTIMA INTERAÇÃO]: ${context.ultimaInteracao}`;

@@ -105,9 +105,9 @@ describe('extrairEstadoConversa', () => {
     expect(estado.valorPretendido).toContain('450.000');
   });
 
-  it('detecta decisão de venda', () => {
+  it('detecta decisão de venda (com acentos)', () => {
     const estado = extrairEstadoConversa([
-      { role: 'user', content: 'Ja decidi vender' },
+      { role: 'user', content: 'Já decidi vender' },
     ]);
     expect(estado.jaRespondeuDecisao).toBe(true);
   });

@@ -52,12 +52,16 @@ export function extrairEstadoConversa(
         .filter((m) => m.role === 'user')
         .map((m) => m.content || '')
         .join(' \n ')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase();
 
     const textoAssistente = mensagens
         .filter((m) => m.role === 'assistant')
         .map((m) => m.content || '')
         .join(' \n ')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase();
 
     const intencao = /\bvender\b/.test(textoUsuarios)
