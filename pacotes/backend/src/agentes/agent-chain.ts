@@ -171,7 +171,7 @@ export function criarCadeiaAgentes(
     });
     (h_presenter_to_admin as any).strictJsonSchema = false;
     (h_presenter_to_admin as any).inputJsonSchema.additionalProperties = true;
-    presenterAgent.handoffs = [h_presenter_to_admin];
+    // handoffs do Presenter serão atribuídos depois que Opener existir (reverse handoff)
 
     const openerAgent = criarOpenerAgent({
         ...baseConfig,
@@ -216,6 +216,34 @@ NÃO TRANSFERIR SE:
     (h_opener_to_presenter as any).strictJsonSchema = false;
     (h_opener_to_presenter as any).inputJsonSchema.additionalProperties = true;
     openerAgent.handoffs = [h_opener_to_presenter];
+
+    // Reverse handoff: Presenter → Opener (lead transferido prematuramente)
+    const h_presenter_to_opener = handoff(openerAgent as any, {
+        toolDescriptionOverride: `DEVOLVER_PARA_ABERTURA: Use APENAS quando o lead claramente não está pronto para diagnóstico.
+
+SINAIS DE TRANSFERÊNCIA PREMATURA:
+- Lead responde com desconfiança: "quem é você?", "como conseguiu meu número?"
+- Lead demonstra frieza ou hostilidade
+- Respostas monossilábicas sem engajamento
+- Lead pede para parar ou demonstra irritação
+
+NÃO DEVOLVER SE:
+- Lead fez apenas uma pergunta técnica (use knowledge tool)
+- Lead está engajado mas inseguro (continue o diagnóstico)
+- Lead pediu tempo para pensar (agende follow-up)`,
+        inputFilter: (data: any) => {
+            const history = Array.isArray(data.inputHistory) ? data.inputHistory : [];
+            const clean = filterHistoryByQuery(history, [
+                /transferindo|vou\s+te\s+passar|aguarde\s+um\s+instante|especialista/i
+            ], 'Presenter→Opener');
+            return { ...data, inputHistory: clean };
+        }
+    });
+    (h_presenter_to_opener as any).strictJsonSchema = false;
+    (h_presenter_to_opener as any).inputJsonSchema.additionalProperties = true;
+
+    // Atribuir todos os handoffs do Presenter (incluindo reverse)
+    presenterAgent.handoffs = [h_presenter_to_admin, h_presenter_to_opener];
 
     // Lifecycle Hooks — métricas e logging
     const agentes: any[] = [openerAgent, presenterAgent, adminAgent];
