@@ -3,7 +3,7 @@ jest.mock('@openai/agents', () => ({ handoff: jest.fn() }));
 jest.mock('../opener-agent', () => ({ criarOpenerAgent: jest.fn() }));
 jest.mock('../presenter-agent', () => ({ criarPresenterAgent: jest.fn() }));
 jest.mock('../admin-agent', () => ({ criarAdminAgent: jest.fn() }));
-jest.mock('../knowledge-agent', () => ({ knowledgeAgent: { asTool: jest.fn() } }));
+jest.mock('../knowledge-agent', () => ({ criarKnowledgeAgent: jest.fn(() => ({ asTool: jest.fn() })) }));
 jest.mock('../handoff-filters', () => ({ filterHistoryByQuery: jest.fn() }));
 
 import {

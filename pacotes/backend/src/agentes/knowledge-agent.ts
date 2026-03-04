@@ -1,13 +1,15 @@
 import { Agent, tool } from '@openai/agents';
 import { z } from 'zod';
 import { conhecimentoCuradoService } from '../servicos/conhecimento-curado';
-import { ElyonContext } from './elyon-context';
+import { ElyonContext, criarModeloBYOK } from './elyon-context';
 
 /**
  * AGENTE ESTRATEGISTA DE VENDAS (Sub-Agente de Conhecimento)
  * 
  * Especialista em psicologia de vendas, contorno de objeções e SPIN Selling.
  * Atua como um consultor interno para os agentes Opener, Presenter e Closer.
+ * 
+ * @version 2.0 — factory com BYOK (04/03/2026)
  */
 
 // Tool interna para busca semântica no pgvector
@@ -38,21 +40,37 @@ const buscarConhecimentoInternoTool = tool({
     }
 });
 
-export const knowledgeAgent: any = new Agent<ElyonContext>({
-    name: 'knowledge_agent',
-    instructions: (context) => `
-        Você é um **Estrategista de Vendas Sênior** com foco no mercado imobiliário.
-        Seu objetivo é auxiliar outros agentes a contornarem objeções e conduzirem o lead no funil de vendas.
+/**
+ * Cria uma instância do knowledge agent com BYOK do tenant.
+ * Usa gpt-4.1-mini por padrão (custo baixo — é um sub-agente).
+ */
+export function criarKnowledgeAgent(config?: {
+    model?: string;
+    apiKey?: string;
+    baseUrl?: string;
+}): any {
+    const modelInstance = config ? criarModeloBYOK(config, 'gpt-4.1-mini') : 'gpt-4.1-mini';
 
-        **SUA MISSÃO:**
-        1. Quando receber uma objeção, use a ferramenta 'buscar_conhecimento_interno'.
-        2. Analise os resultados e forneça uma RECOMENDAÇÃO EXECUTIVA para o agente que te consultou.
-        3. Não apenas repita o texto da base; explique POR QUE usar aquela abordagem e dê uma dica de TOM DE VOZ.
+    return new Agent<ElyonContext>({
+        name: 'knowledge_agent',
+        model: modelInstance,
+        instructions: (context) => `
+            Você é um **Estrategista de Vendas Sênior** com foco no mercado imobiliário.
+            Seu objetivo é auxiliar outros agentes a contornarem objeções e conduzirem o lead no funil de vendas.
 
-        **DIRETRIZES:**
-        - Seja direto e profissional ("Seja empático, use a técnica do 'sentir-sentiu-descobriu'").
-        - Se a base não tiver algo específico, use seu conhecimento geral de SPIN Selling e vendas.
-        - Foco total em converter a dúvida em interesse.
-    `,
-    tools: [buscarConhecimentoInternoTool]
-});
+            **SUA MISSÃO:**
+            1. Quando receber uma objeção, use a ferramenta 'buscar_conhecimento_interno'.
+            2. Analise os resultados e forneça uma RECOMENDAÇÃO EXECUTIVA para o agente que te consultou.
+            3. Não apenas repita o texto da base; explique POR QUE usar aquela abordagem e dê uma dica de TOM DE VOZ.
+
+            **DIRETRIZES:**
+            - Seja direto e profissional ("Seja empático, use a técnica do 'sentir-sentiu-descobriu'").
+            - Se a base não tiver algo específico, use seu conhecimento geral de SPIN Selling e vendas.
+            - Foco total em converter a dúvida em interesse.
+        `,
+        tools: [buscarConhecimentoInternoTool]
+    });
+}
+
+/** @deprecated Use criarKnowledgeAgent() — mantido para retrocompatibilidade */
+export const knowledgeAgent: any = criarKnowledgeAgent();

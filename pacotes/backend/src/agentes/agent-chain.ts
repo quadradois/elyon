@@ -15,7 +15,7 @@ import { handoff } from '@openai/agents';
 import { criarOpenerAgent } from './opener-agent';
 import { criarPresenterAgent } from './presenter-agent';
 import { criarAdminAgent } from './admin-agent';
-import { knowledgeAgent } from './knowledge-agent';
+import { criarKnowledgeAgent } from './knowledge-agent';
 import { filterHistoryByQuery } from './handoff-filters';
 import type { ConfiguracaoOrquestrador, ContextoConversa } from './orchestrator';
 
@@ -129,6 +129,13 @@ export function criarCadeiaAgentes(
     // BYOK: resolver modelo para cada agente (menor para admin, maior para os demais)
     const modeloPrincipal = config.llmModelo || 'gpt-4.1';
     const modeloAdmin = config.llmModelo || 'gpt-4.1-mini';
+
+    // Knowledge agent com BYOK do tenant
+    const knowledgeAgent = criarKnowledgeAgent({
+        model: config.llmModelo,
+        apiKey: config.llmApiKey,
+        baseUrl: config.llmBaseUrl,
+    });
 
     // Build bottom-up: Admin → Presenter → Opener
     const adminAgent = criarAdminAgent({
