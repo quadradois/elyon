@@ -20,6 +20,7 @@ import { gerarBriefingHandoff } from './handoff-filters';
 import { persistirHistoricoSdk } from './history-persistence';
 import { extrairRespostaECot } from './output-extraction';
 import { construirInputSdk } from './input-builder';
+import { construirElyonContext } from './context-builder';
 
 // Módulos extraídos
 import {
@@ -250,38 +251,17 @@ export async function processarMensagemOrquestrada(
             console.log(`[ORCHESTRATOR] 🆕 Primeiro turno SDK: ${inputSDK.length} itens (1 system + ${mensagens.length} mensagens)`);
         }
 
-        // Identificar se houve transferência (agente atual vem do cache)
-        let textoUltimaInteracao = undefined;
-        if (contexto.contatoId && ultimoAgentePorContato.has(contexto.contatoId)) {
-            const agenteCache = ultimoAgentePorContato.get(contexto.contatoId);
-            textoUltimaInteracao = `ATENÇÃO: Este lead acabou de ser transferido automaticamente para você (${agenteCache}). A conversa já está em andamento. Leia o histórico, NÃO SE APRESENTE NOVAMENTE e continue de onde parou de forma fluida.`;
-        }
+        const agenteCache = contexto.contatoId
+            ? ultimoAgentePorContato.get(contexto.contatoId)
+            : undefined;
 
         // 5. CONSTRUIR CONTEXTO TIPADO
-        const elyonContext: ElyonContext = {
-            tenantId: config.tenantId,
-            contatoId: contexto.contatoId,
-            leadId: contexto.leadId,
-            telefone: contexto.telefone,
-            statusLead: contexto.statusLead,
-            doresIdentificadas: contexto.doresIdentificadas,
-            empreendimento: contexto.empreendimento,
-            situacaoAtual: contexto.situacaoAtual,
-            nomeAgente: config.nomeAgente,
-            genero: config.genero,
-            nomeImobiliaria: config.nomeImobiliaria,
-            cidade: config.cidade,
-            diferenciais: config.diferenciais,
-            comissaoPadrao: config.comissaoPadrao,
-            prazoContrato: config.prazoContrato,
-            ragPerfilTexto: config.ragPerfilTexto,
-            briefingEmpreendimento: config.briefingEmpreendimento,
-            tipoAutorizacao: contexto.tipoAutorizacao,
-            comissaoAcordada: contexto.comissaoAcordada,
-            prazoTrabalho: contexto.prazoTrabalho,
-            ultimaInteracao: textoUltimaInteracao,
-            prisma
-        };
+        const elyonContext: ElyonContext = construirElyonContext({
+            config,
+            contexto,
+            agenteCache,
+            prismaClient: prisma,
+        });
 
         // 6. EXECUTAR AGENTE (SDK gerencia handoffs automaticamente)
         let nomesToolsTurno: string[] = [];
