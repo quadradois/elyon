@@ -22,6 +22,7 @@ import { extrairRespostaECot } from './output-extraction';
 import { construirInputSdk } from './input-builder';
 import { construirElyonContext } from './context-builder';
 import { executarAgenteComRetryReasoning } from './agent-runner';
+import { processarPosHandoff } from './post-handoff';
 
 // Módulos extraídos
 import {
@@ -311,31 +312,17 @@ export async function processarMensagemOrquestrada(
 
         console.log(`[ORCHESTRATOR] ✅ Resposta gerada por: ${nomeRealAgenteRespondeu || tipoAgente} (Mapeado: ${agenteQueRespondeuFormatado})`);
 
-        // 🔑 PERSISTIR AGENTE APÓS HANDOFF
-        // Se houve handoff, salvar o novo agente para que a próxima mensagem seja roteada corretamente
-        const houveHandoff = agenteQueRespondeuFormatado !== tipoAgente;
-
-        if (houveHandoff && contexto.contatoId) {
-            const novoTipo = agenteQueRespondeuFormatado;
-            ultimoAgentePorContato.set(contexto.contatoId, novoTipo);
-            console.log(`[ORCHESTRATOR] 🔄 Handoff detectado: ${tipoAgente} → ${novoTipo}. Salvo no cache para próxima mensagem.`);
-
-            // 🧠 BRIEFING LLM PÓS-HANDOFF: gerar resumo estratégico e injetar no cache
-            // O briefing fica disponível para o próximo turno do novo agente
-            try {
-                const cachedHist = await getHistory(contexto.contatoId);
-                if (cachedHist && cachedHist.length > 0) {
-                    const briefing = await gerarBriefingHandoff(cachedHist, tipoAgente, novoTipo);
-                    if (briefing) {
-                        // Prepend briefing no cache para o próximo turno
-                        await setHistory(contexto.contatoId, [briefing, ...cachedHist], agenteQueRespondeuFormatado);
-                        console.log(`[ORCHESTRATOR] 🧠 Briefing LLM injetado no cache para ${novoTipo}`);
-                    }
-                }
-            } catch (briefErr) {
-                console.warn('[ORCHESTRATOR] ⚠️ Erro ao gerar briefing pós-handoff (não-crítico):', briefErr);
-            }
-        }
+        const { houveHandoff } = await processarPosHandoff({
+            contatoId: contexto.contatoId,
+            tipoAgente,
+            agenteQueRespondeuFormatado,
+            atualizarUltimoAgente: (contatoId, agente) => {
+                ultimoAgentePorContato.set(contatoId, agente);
+            },
+            getHistoryContato: getHistory,
+            setHistoryContato: setHistory,
+            gerarBriefing: gerarBriefingHandoff,
+        });
 
         const filtroResposta = aplicarFiltrosRespostaOrchestrator({
             respostaFinal,
