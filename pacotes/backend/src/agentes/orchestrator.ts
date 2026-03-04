@@ -19,6 +19,7 @@ import { getHistory, setHistory, getLastAgent, clearHistory } from './conversati
 import { gerarBriefingHandoff } from './handoff-filters';
 import { persistirHistoricoSdk } from './history-persistence';
 import { extrairRespostaECot } from './output-extraction';
+import { construirInputSdk } from './input-builder';
 
 // Módulos extraídos
 import {
@@ -234,91 +235,18 @@ export async function processarMensagemOrquestrada(
 
         const estadoConversaAtual = extrairEstadoConversa(mensagens);
 
-        const construirInputPrimeiroTurno = (): any[] => {
-            // 🆕 PRIMEIRO TURNO: construir input com contexto completo
-            // Montar seção de contexto da imobiliária (RAG dinâmico ou fallback)
-            let secaoMetodoTrabalho: string;
-            if (config.ragPerfilTexto) {
-                secaoMetodoTrabalho = `PERFIL COMPLETO DA IMOBILIÁRIA (USE SEMPRE):\n${config.ragPerfilTexto}`;
-            } else {
-                secaoMetodoTrabalho = `NOSSO MÉTODO DE TRABALHO (USE NO PITCH SE A INTENÇÃO FOR VALIDADA):
-- Nossa comissão é de ${config.comissaoPadrao || '6%'}
-- Contrato de Consultoria de ${config.prazoContrato || 180} dias
-- Rede de Parceiros conectada: Imóvel ganha visibilidade de dezenas de corretores da cidade trabalhando de forma organizada
-- Apresentação Premium: Avaliação com IA, Fotos Profissionais, Vídeo e Tour 360º
-- Diferenciais: ${config.diferenciais?.join(', ') || 'Avaliação com IA, Material Profissional, Rede de Parceiros'}`;
-            }
+        const inputBuilderResult = construirInputSdk({
+            mensagens,
+            cachedHistory,
+            estadoConversaAtual,
+            config,
+            contexto,
+        });
+        let inputSDK: any = inputBuilderResult.inputSDK;
 
-            // Montar seção de briefing do empreendimento
-            let secaoBriefing = '';
-            if (config.briefingEmpreendimento) {
-                secaoBriefing = `\n\nCONHECIMENTO DO EMPREENDIMENTO: ${contexto.empreendimento || 'N/A'}\n${config.briefingEmpreendimento}\n⚠️ USE esses dados! NÃO pergunte coisas que você já sabe!`;
-            }
-
-            // Contexto semântico do lead
-            const contextoLead = `CONTEXTO DO LEAD (MEMÓRIA SEMÂNTICA):
-- ID: ${contexto.leadId || contexto.contatoId || 'N/A'}
-- Fila do Funil: ${contexto.statusLead || 'Novo contato frio'}
-- Dores/Objeções Anteriores: ${contexto.doresIdentificadas?.join(', ') || 'Nenhuma objeção mapeada ainda'}
-
-${secaoMetodoTrabalho}${secaoBriefing}
-
-ESTADO RESUMIDO (NÃO REPETIR PERGUNTAS JÁ RESPONDIDAS):
-- Intenção: ${estadoConversaAtual.intencao || 'não confirmada'}
-- Metragem: ${estadoConversaAtual.metragem || 'não confirmada'}
-- Ocupação: ${estadoConversaAtual.ocupacao || 'não confirmada'}
-- Valor pretendido: ${estadoConversaAtual.valorPretendido || 'não confirmado'}
-- Já respondeu decisão de venda: ${estadoConversaAtual.jaRespondeuDecisao ? 'SIM — NUNCA mais pergunte se já decidiu vender' : 'não'}
-${estadoConversaAtual.valorPretendido ? '⛔ O proprietário JÁ informou o valor. NÃO pergunte o valor novamente.' : ''}
-${estadoConversaAtual.intencao ? '⛔ A intenção JÁ foi confirmada como ' + estadoConversaAtual.intencao + '. NÃO pergunte se quer vender ou alugar.' : ''}
-
-📦 REGRA DE TOOL: Se você já coletou intenção + metragem + ocupação + valor, chame qualificar_lead IMEDIATAMENTE com todos os dados antes de responder.
-
-Lembre-se: Extraia a intenção, faça o pitch de valor e peça para avaliar o imóvel. Responda à última mensagem do proprietário.`;
-
-            // Construir array de AgentInputItem[]
-            const inputItems: any[] = [
-                // System context como primeira mensagem
-                { role: 'system' as const, content: contextoLead }
-            ];
-
-            // Adicionar histórico do BD como mensagens user/assistant
-            // IMPORTANTE: Responses API espera content como array de objetos, não string
-            for (const msg of mensagens) {
-                if (msg.role === 'user') {
-                    inputItems.push({
-                        role: 'user' as const,
-                        content: [{ type: 'input_text', text: msg.content }]
-                    });
-                } else if (msg.role === 'assistant') {
-                    inputItems.push({
-                        type: 'message',
-                        role: 'assistant' as const,
-                        content: [{ type: 'output_text', text: msg.content }],
-                        status: 'completed'
-                    });
-                }
-            }
-
-            return inputItems;
-        };
-
-        let inputSDK: any;
-
-        if (cachedHistory && cachedHistory.length > 0) {
-            // ✅ TURNO SUBSEQUENTE: usar histórico SDK + nova mensagem
-            const ultimaMsgUser = mensagens.filter(m => m.role === 'user').pop();
-            inputSDK = [
-                ...cachedHistory,
-                {
-                    role: 'system' as const,
-                    content: `ESTADO RESUMIDO (NÃO REPITA O QUE JÁ FOI RESPONDIDO): intenção=${estadoConversaAtual.intencao || 'n/a'}, metragem=${estadoConversaAtual.metragem || 'n/a'}, ocupação=${estadoConversaAtual.ocupacao || 'n/a'}, valor=${estadoConversaAtual.valorPretendido || 'n/a'}, decisão já respondida=${estadoConversaAtual.jaRespondeuDecisao ? 'SIM-NÃO PERGUNTE NOVAMENTE' : 'não'}. ${estadoConversaAtual.valorPretendido ? 'NÃO pergunte o valor novamente.' : ''} ${estadoConversaAtual.intencao ? 'NÃO pergunte se quer vender ou alugar.' : ''} Se tem intenção+metragem+ocupação+valor, chame qualificar_lead COM TODOS OS DADOS.`
-                },
-                { role: 'user' as const, content: ultimaMsgUser?.content || '' }
-            ];
-            console.log(`[ORCHESTRATOR] 📜 Usando cache SDK: ${cachedHistory.length} itens + nova mensagem`);
+        if (inputBuilderResult.origem === 'cache') {
+            console.log(`[ORCHESTRATOR] 📜 Usando cache SDK: ${inputBuilderResult.cachedHistoryLength} itens + nova mensagem`);
         } else {
-            inputSDK = construirInputPrimeiroTurno();
             console.log(`[ORCHESTRATOR] 🆕 Primeiro turno SDK: ${inputSDK.length} itens (1 system + ${mensagens.length} mensagens)`);
         }
 
@@ -374,7 +302,12 @@ Lembre-se: Extraia a intenção, faça o pitch de valor e peça para avaliar o i
                     console.log(`[ORCHESTRATOR] 🧹 Cache SDK limpo para ${contexto.contatoId.substring(0, 8)}...`);
                 }
 
-                inputSDK = construirInputPrimeiroTurno();
+                inputSDK = construirInputSdk({
+                    mensagens,
+                    estadoConversaAtual,
+                    config,
+                    contexto,
+                }).inputSDK;
                 console.log(`[ORCHESTRATOR] 🔁 Retry sem cache SDK: ${inputSDK.length} itens (1 system + ${mensagens.length} mensagens)`);
 
                 result = await run(agente, inputSDK, {
