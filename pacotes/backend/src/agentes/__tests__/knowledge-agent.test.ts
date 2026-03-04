@@ -52,6 +52,7 @@ jest.mock('../elyon-context', () => ({
 
 import { criarKnowledgeAgent, knowledgeAgent } from '../knowledge-agent';
 import { Agent } from '@openai/agents';
+import { conhecimentoCuradoService } from '../../servicos/conhecimento-curado';
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -149,5 +150,59 @@ describe('knowledgeAgent (legado)', () => {
     it('é uma instância criada pela factory', () => {
         expect(knowledgeAgent).toBeDefined();
         expect(knowledgeAgent.name).toBe('knowledge_agent');
+    });
+});
+
+// ====================================
+// TOOL EXECUTE
+// ====================================
+
+describe('buscar_conhecimento_interno tool', () => {
+    it('retorna fallback quando busca não encontra resultados', async () => {
+        (conhecimentoCuradoService.buscar as jest.Mock).mockResolvedValueOnce([]);
+
+        criarKnowledgeAgent();
+        const callArgs = (Agent as unknown as jest.Mock).mock.calls[0][0];
+        const tool = callArgs.tools[0];
+
+        const result = await tool.execute({
+            perguntaOuObjecao: 'Cliente disse que comissão está alta',
+            faseAtual: 'Presenter',
+        });
+
+        expect(conhecimentoCuradoService.buscar).toHaveBeenCalledWith({
+            query: 'Cliente disse que comissão está alta',
+            categoria: 'Presenter',
+            limite: 3,
+        });
+        expect(result).toContain('Nenhuma tática específica encontrada');
+    });
+
+    it('serializa resultados da base curada quando há matches', async () => {
+        (conhecimentoCuradoService.buscar as jest.Mock).mockResolvedValueOnce([
+            {
+                titulo: 'Sentir-Sentiu-Descobriu',
+                texto: 'Use prova social para reduzir objeção de preço.',
+                contextoUso: 'Objeção de comissão',
+                exemplo: 'Entendo, outros clientes também sentiram isso...',
+            },
+        ]);
+
+        criarKnowledgeAgent();
+        const callArgs = (Agent as unknown as jest.Mock).mock.calls[0][0];
+        const tool = callArgs.tools[0];
+
+        const result = await tool.execute({
+            perguntaOuObjecao: 'Comissão está cara',
+        });
+
+        expect(conhecimentoCuradoService.buscar).toHaveBeenCalledWith({
+            query: 'Comissão está cara',
+            categoria: 'Captacao_Outbound',
+            limite: 3,
+        });
+
+        expect(result).toContain('Sentir-Sentiu-Descobriu');
+        expect(result).toContain('Objeção de comissão');
     });
 });

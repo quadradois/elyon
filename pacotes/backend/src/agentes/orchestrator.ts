@@ -15,8 +15,10 @@ import { run, setTracingExportApiKey } from '@openai/agents';
 import { prisma } from '../lib/db';
 import { executarGuardrails, GuardrailResult, MensagemContext } from './guardrails';
 import type { ElyonContext } from './elyon-context';
-import { getHistory, setHistory, getCacheStats, getLastAgent, clearHistory } from './conversation-cache';
-import { gerarBriefingHandoff, removeHandoffNarration, sliceHistoryPreservingSystem } from './handoff-filters';
+import { getHistory, setHistory, getLastAgent, clearHistory } from './conversation-cache';
+import { gerarBriefingHandoff } from './handoff-filters';
+import { persistirHistoricoSdk } from './history-persistence';
+import { extrairRespostaECot } from './output-extraction';
 
 // Módulos extraídos
 import {
@@ -25,6 +27,7 @@ import {
     respostaRepetePerguntaCritica,
     deveForcarTransicaoParaPresenter,
 } from './conversation-state';
+import { aplicarFiltrosRespostaOrchestrator } from './response-filters';
 import {
     TipoAgente,
     STATUS_FASE_HUMANA,
@@ -384,55 +387,20 @@ Lembre-se: Extraia a intenção, faça o pitch de valor e peça para avaliar o i
 
         // 6.1 PERSISTIR HISTÓRICO SDK (preserva tool calls e handoffs para o próximo turno)
         if (contexto.contatoId) {
-            try {
-                const history = (result as any).history;
-                if (history && Array.isArray(history)) {
-                    const lastAgentName = (result as any).lastAgent?.name;
-                    const historySemNarracao = removeHandoffNarration(history as any);
-                    const historyFinal = sliceHistoryPreservingSystem(historySemNarracao as any, 20, 'Persistência Orchestrator');
-                    await setHistory(contexto.contatoId, historyFinal, lastAgentName);
-                    // Log de observabilidade: itens gerados neste turno
-                    const newItems = (result as any).newItems;
-                    if (newItems && Array.isArray(newItems)) {
-                        const toolCalls = newItems.filter((i: any) =>
-                            i.type === 'tool_call_item' ||
-                            i.type === 'tool_call_output_item' ||
-                            i.type === 'function_call' ||
-                            i.type === 'function_call_result'
-                        );
-                        const handoffs = newItems.filter((i: any) => i.type === 'handoff_call_item' || i.type === 'handoff_output_item');
-                        nomesToolsTurno = toolCalls
-                            .map((i: any) => i.name || i.tool_name)
-                            .filter((n: any) => typeof n === 'string' && n.length > 0);
-                        toolCallsTurno = toolCalls.length;
-                        handoffsTurno = handoffs.length;
-
-                        const stats = await getCacheStats();
-                        console.log(`[ORCHESTRATOR] 📊 Turno SDK: ${newItems.length} itens gerados (${toolCalls.length} tool calls, ${handoffs.length} handoffs). Cache: ${stats.redisKeys} Redis + ${stats.memoryKeys} memória.`);
-                    }
-                }
-            } catch (histErr) {
-                console.warn('[ORCHESTRATOR] ⚠️ Erro ao salvar history SDK (não-crítico):', histErr);
-            }
+            const persistenciaResult = await persistirHistoricoSdk(contexto.contatoId, result);
+            nomesToolsTurno = persistenciaResult.nomesToolsTurno;
+            toolCallsTurno = persistenciaResult.toolCallsTurno;
+            handoffsTurno = persistenciaResult.handoffsTurno;
         }
 
         // 6. EXTRAIR RESPOSTA
-        let respostaFinal: string;
-        if (typeof result.finalOutput === 'string') {
-            respostaFinal = result.finalOutput;
-        } else if (result.finalOutput && typeof result.finalOutput === 'object' && 'respostaParaOCliente' in result.finalOutput) {
-            respostaFinal = (result.finalOutput as any).respostaParaOCliente;
-            console.log(`[ORCHESTRATOR] 📦 Structured Output detectado. Próximo passo: ${(result.finalOutput as any).proximoPasso}`);
-        } else {
-            respostaFinal = JSON.stringify(result.finalOutput);
+        const outputExtraido = extrairRespostaECot(result);
+        let respostaFinal = outputExtraido.respostaFinal;
+        const cotLog = outputExtraido.cotLog;
+        if (outputExtraido.structuredOutputDetectado) {
+            console.log(`[ORCHESTRATOR] 📦 Structured Output detectado. Próximo passo: ${outputExtraido.proximoPasso}`);
         }
-
-        // Parse Chain-of-Thought (CoT) block gerado pelo agente
-        const cotMatch = respostaFinal.match(/<cot>[\s\S]*?<\/cot>/);
-        let cotLog = null;
-        if (cotMatch) {
-            cotLog = cotMatch[0];
-            respostaFinal = respostaFinal.replace(/<cot>[\s\S]*?<\/cot>\s*/, '').trim();
+        if (cotLog) {
             console.log(`[ORCHESTRATOR] 🧠 CoT: \n${cotLog}`);
         }
 
@@ -468,80 +436,19 @@ Lembre-se: Extraia a intenção, faça o pitch de valor e peça para avaliar o i
             }
         }
 
-        // 🔴 FILTRO ANTI-NARRAÇÃO DE HANDOFF (duas camadas)
-        // Camada 1: Regex para padrões conhecidos de narração
-        const padroesHandoff = [
-            /transferindo/i,
-            /transfer[eê]ncia/i,
-            /pr[oó]ximo\s+agente/i,
-            /aguard[ea]\s+(s[oó]\s+)?um\s+(instante|momento)/i,
-            /vou\s+te\s+passar/i,
-            /vou\s+transferir/i,
-            /s[oó]\s+um\s+instante/i,
-            /j[aá]\s+estou\s+aqui/i,
-            /pronto.*aqui/i,
-            /agente\s+(apresentador|closer|admin)/i,
-        ];
-
-        // Limpar linhas que são narração de handoff, preservar o resto
-        const linhas = respostaFinal.split('\n');
-        const linhasLimpas = linhas.filter(linha => {
-            const linhaTrimmed = linha.trim();
-            if (!linhaTrimmed) return true;
-            return !padroesHandoff.some(p => p.test(linhaTrimmed));
+        const filtroResposta = aplicarFiltrosRespostaOrchestrator({
+            respostaFinal,
+            houveHandoff,
+            tipoAgente,
+            agenteQueRespondeuFormatado,
+            estadoConversaAtual,
+            cotLog,
+            nomesToolsTurno,
+            fallbackAplicadoAtual: fallbackAplicado,
         });
-        let respostaLimpa = linhasLimpas.join('\n').trim();
 
-        // Camada 2: Heurística — se houve handoff real E a resposta é muito curta sem pergunta, é narração
-        if (houveHandoff && respostaLimpa.length > 0 && respostaLimpa.length < 60 && !respostaLimpa.includes('?')) {
-            console.log(`[ORCHESTRATOR] 🚫 Heurística: resposta curta sem pergunta após handoff, provavelmente narração: "${respostaLimpa}"`);
-            respostaLimpa = '';
-        }
-
-        // Camada 3: fallback contextual quando houve handoff e a resposta ficou vazia
-        if (!respostaLimpa && houveHandoff) {
-            console.warn('[ORCHESTRATOR] ⚠️ Resposta vazia após handoff. Aplicando fallback contextual por agente.');
-            fallbackAplicado = 'EMPTY_AFTER_HANDOFF';
-
-            if (agenteQueRespondeuFormatado === 'ADMIN') {
-                respostaLimpa = 'Ótimo! Pra eu seguir com seu onboarding, posso começar confirmando seu CPF e e-mail?';
-            } else {
-                respostaLimpa = gerarFallbackContextual(estadoConversaAtual, agenteQueRespondeuFormatado);
-            }
-        }
-
-        // Camada 4: Se o LLM alucinou apenas o CoT e não respondeu nem acionou a Tool
-        if (!respostaLimpa && !houveHandoff) {
-            const cotTexto = (cotLog || '').toLowerCase();
-            const indicioTransicaoPresenter =
-                tipoAgente === 'OPENER' &&
-                /(transferir\s+para\s+presenter|handoff|transi(ç|c)[aã]o|diagn[oó]stico)/i.test(cotTexto);
-
-            const presenterExecutouToolCritica =
-                agenteQueRespondeuFormatado === 'PRESENTER' &&
-                nomesToolsTurno.some(nome => /mover_para_fase|qualificar_lead/i.test(nome));
-
-            if (indicioTransicaoPresenter) {
-                console.warn('[ORCHESTRATOR] ⚠️ Falha na transição OPENER→PRESENTER detectada via CoT. Aplicando fallback consultivo.');
-                respostaLimpa = gerarFallbackContextual(estadoConversaAtual, 'PRESENTER');
-                fallbackAplicado = 'OPENER_PRESENTER_TRANSITION';
-            } else if (presenterExecutouToolCritica) {
-                console.warn('[ORCHESTRATOR] ⚠️ Presenter executou tool crítica, mas retornou resposta vazia. Aplicando fallback de continuidade comercial.');
-                respostaLimpa = 'Perfeito, faz total sentido. Posso te mostrar agora, em 1 minuto, como a nossa estratégia aumenta as visitas qualificadas no seu imóvel?';
-                fallbackAplicado = 'PRESENTER_TOOL_EMPTY_OUTPUT';
-            } else {
-                console.warn(`[ORCHESTRATOR] ⚠️ Alerta: O LLM falhou em gerar resposta ou tool call. Usando fallback.`);
-                respostaLimpa = "Desculpe, deu um pequeno erro aqui. Pode repetir por favor?";
-                fallbackAplicado = 'GENERIC_FALLBACK';
-            }
-        }
-
-        if (respostaLimpa !== respostaFinal.trim()) {
-            console.log(`[ORCHESTRATOR] 🧹 Filtro handoff aplicado. Original: "${respostaFinal.trim().substring(0, 80)}" → Limpo: "${respostaLimpa.substring(0, 80)}"`);
-            if (fallbackAplicado === 'NONE') {
-                fallbackAplicado = 'HANDOFF_NARRATION_FILTER';
-            }
-        }
+        let respostaLimpa = filtroResposta.respostaLimpa;
+        fallbackAplicado = filtroResposta.fallbackAplicado;
 
         if (respostaRepetePerguntaCritica(respostaLimpa, mensagens)) {
             console.warn('[ORCHESTRATOR] ⚠️ Guarda anti-repetição acionada. Resposta repetia pergunta crítica já feita.');
