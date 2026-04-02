@@ -1,0 +1,47 @@
+{
+  "name": "elyon",
+  "version": "0.2.2",
+  "description": "ELYON - Sistema de Captação Inteligente com IA",
+  "private": true,
+  "workspaces": [
+    "pacotes/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "limpar": "turbo run limpar",
+    "verificar": "turbo run verificar",
+    "migrar": "cd pacotes/backend && npx prisma migrate dev",
+    "migrar:deploy": "cd pacotes/backend && npx prisma migrate deploy",
+    "studio": "cd pacotes/backend && npx prisma studio",
+    "semear": "cd pacotes/backend && npx prisma db seed"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "autoprefixer": "^10.4.22",
+    "eslint": "^8.54.0",
+    "postcss": "^8.5.6",
+    "prettier": "^3.1.0",
+    "tailwindcss": "^4.1.17",
+    "turbo": "^1.11.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "author": "Quadra Dois",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0",
+    "@radix-ui/react-slot": "^1.2.4",
+    "axios": "^1.13.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.555.0",
+    "react-router-dom": "^7.9.6",
+    "tailwind-merge": "^3.4.0"
+  }
+}

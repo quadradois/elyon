@@ -1,0 +1,1659 @@
+// This is your Prisma schema file
+// Reconstruído com suporte a RAG - 28/11/2025
+
+generator client {
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ====================================
+// TENANTS
+// ====================================
+
+model Tenant {
+  id               String       @id @default(uuid())
+  nome             String
+  slug             String       @unique
+  status           StatusTenant @default(ATIVO)
+  plano            String       @default("SMALL_BUSINESS")
+  precoConsultaCpf Decimal      @default(2.00)
+  quotaMensal      Int          @default(100)
+  totalConsultas   Int          @default(0)
+  taxaCacheHit     Decimal      @default(0)
+
+  // Dados da Imobiliária (Perfil Empresarial)
+  cnpj      String?
+  endereco  String?
+  cidade    String? @default("Goiânia - GO")
+  telefone  String?
+  whatsapp  String?
+  email     String?
+  site      String?
+  instagram String?
+  facebook  String?
+  logoUrl   String?
+
+  // Perfil Comercial (JSON)
+  diferenciais        Json? // Array de strings com diferenciais
+  horarioAtendimento  String? @default("08:00 às 18:00")
+  atendeFinalDeSemana Boolean @default(false)
+  tempoMercado        Int? // Anos no mercado
+  expedienteSemanal   Json? // Configuração detalhada: { dias: [{ diaSemana: 0-6, ativo: bool, inicio: "HH:mm", fim: "HH:mm" }], almocoInicio: "HH:mm", almocoFim: "HH:mm" }
+
+  // Políticas de Locação e Venda (JSON)
+  perfilLocacao  Json? // { garantiasAceitas, taxaAdministracao, etc }
+  perfilVenda    Json? // { comissaoPadrao, anunciaPortais, etc }
+  ragPerfilTexto String? @db.Text // Texto RAG sintetizado
+
+  // ====================================
+  // BYOK - Bring Your Own Key (LLM)
+  // ====================================
+  llmProvedor            String? // "openai", "anthropic", "openrouter", "moonshot"
+  llmModelo              String? // "gpt-4.1", "kimi-k2.5", etc.
+  llmApiKeyCriptografada String? // API Key criptografada com Fernet
+  llmBaseUrl             String? // URL customizada (OpenRouter, proxy, etc.)
+
+  // BYOK Granular - Serviços Exclusivos OpenAI
+  openaiApiKeyCriptografada   String? // Chave secundária para Whisper/Embeddings
+  usarChavePrincipalParaAudio Boolean @default(true) // Herda a chave do llmApiKeyCriptografada
+  usarChavePrincipalParaRag   Boolean @default(true) // Herda a chave do llmApiKeyCriptografada
+
+  // ====================================
+  // BILLING (Créditos + Pagamentos)
+  // ====================================
+
+  // Créditos
+  creditosMensais  Int @default(0) // Do plano (expiram no fim do ciclo)
+  creditosPrepagos Int @default(0) // Comprados (nunca expiram)
+  creditosBonus    Int @default(0) // Promocionais
+  agentesExtras    Int @default(0) // Agentes extras contratados
+
+  // Plano e Renovação
+  planoTipo       PlanoTipo       @default(STARTER)
+  valorPlano      Decimal         @default(199.00)
+  dataRenovacao   DateTime? // Próxima data de renovação
+  statusPagamento StatusPagamento @default(PENDENTE)
+
+  // Asaas
+  asaasClienteId    String? // ID do cliente no Asaas
+  asaasAssinaturaId String? // ID da assinatura recorrente
+
+  // Relacionamentos Billing
+  transacoes    Transacao[]
+  renovacoesLog RenovacaoLog[]
+
+  usuarios           Usuario[]
+  leads              Lead[]
+  campanhas          Campanha[]
+  listas             Lista[]
+  empreendimentos    EmpreendimentoConhecimento[]
+  agentes            ConfiguracaoAgente[] // 1:N - Múltiplos agentes por tenant
+  sessoesWhatsapp    SessaoWhatsapp[] // 1:N - Múltiplas sessões por tenant
+  telefonesBlacklist TelefoneBlacklist[]
+  pesquisasManus     PesquisaManus[]
+  contratos          Contrato[]
+  clientes           Cliente[]
+  integracoes        ConfiguracaoIntegracao[]
+
+  criadoEm       DateTime         @default(now())
+  atualizadoEm   DateTime         @updatedAt
+  LogScraperIPTU LogScraperIPTU[]
+
+  @@index([slug])
+  @@index([status])
+  @@map("tenants")
+}
+
+enum StatusTenant {
+  ATIVO
+  SUSPENSO
+  CANCELADO
+}
+
+enum PlanoTipo {
+  STARTER // R$ 199/mês - 0 créditos - R$ 2,00/extra
+  GROWTH // R$ 299/mês - 100 créditos - R$ 1,50/extra
+  PRO // R$ 499/mês - 250 créditos - R$ 1,00/extra
+}
+
+enum StatusPagamento {
+  PENDENTE
+  PAGO
+  ATRASADO
+  CANCELADO
+}
+
+// ====================================
+// INTEGRAÇÕES EXTERNAS (CRM, etc.)
+// ====================================
+
+model ConfiguracaoIntegracao {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Tipo de integração
+  tipo TipoIntegracao @default(CRM_QUADRADOIS)
+  nome String         @default("CRM Principal")
+
+  // Credenciais (criptografadas)
+  apiUrl              String // URL base da API
+  apiKeyCriptografada String // API Key criptografada com Fernet
+
+  // Mapeamento de tenant no destino
+  tenantIdDestino Int? // ID do tenant no sistema destino
+
+  // Status e controle
+  ativo         Boolean   @default(true)
+  ultimoTesteEm DateTime? // Quando foi testado pela última vez
+  ultimoTesteOk Boolean? // Resultado do último teste
+  ultimoErro    String? // Mensagem de erro se falhou
+
+  // Estatísticas
+  totalEnvios   Int       @default(0)
+  totalSucessos Int       @default(0)
+  totalFalhas   Int       @default(0)
+  ultimoEnvioEm DateTime?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([tenantId, tipo])
+  @@index([tenantId])
+  @@index([tipo])
+  @@map("configuracoes_integracao")
+}
+
+enum TipoIntegracao {
+  CRM_QUADRADOIS // CRM Quadradois (principal)
+  CRM_OUTRO // Outro CRM
+  CANALPRO // API CanalPro/Gandalf
+  WEBHOOK_CUSTOM // Webhook personalizado
+}
+
+// ====================================
+// CONFIGURAÇÃO DO AGENTE IA
+// ====================================
+
+model ConfiguracaoAgente {
+  id       String @id @default(uuid())
+  tenantId String // Múltiplos agentes por tenant (sem @unique)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Vinculação com Sessão WhatsApp (opcional - agente pode não ter WhatsApp)
+  sessaoWhatsappId String?         @unique
+  sessaoWhatsapp   SessaoWhatsapp? @relation(fields: [sessaoWhatsappId], references: [id])
+
+  // Tipo e Modo de Criação
+  tipoAgente   TipoAgente  @default(SDR_CAPTACAO)
+  modoCreacao  ModoCriacao @default(PRE_TREINADO)
+  templateBase String? // Referência ao template usado
+
+  // Identidade
+  nome   String
+  avatar String?
+  genero String  @default("feminino")
+
+  // Personalização (JSON)
+  personalidade Json // { tom, usarEmojis, usarGirias }
+  expertise     Json // { bairros, tiposImovel, faixaPreco }
+  scripts       Json // { saudacao, despedida }
+  regrasNegocio Json // { horaEscalacao, corretorResponsavel }
+
+  // Perfil da Imobiliária (Quiz)
+  perfilImobiliaria Json? // { dadosGerais, locacao, venda, ragSintetizado }
+  ragPerfilTexto    String? @db.Text // Texto RAG sintetizado para injeção no prompt
+
+  // Modo Avançado (100% customizado)
+  promptCustomizado String? @db.Text
+  toolsCustomizadas Json?
+
+  // Documentos de conhecimento (RAG)
+  documentos DocumentoAgente[]
+
+  // Status do Agente
+  status    StatusAgente @default(RASCUNHO)
+  estaAtivo Boolean      @default(false)
+
+  // Termos de Uso
+  termosAceitos   Boolean   @default(false)
+  termosAceitosEm DateTime?
+  termosVersao    String?
+
+  // Timestamps
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("configuracoes_agente")
+}
+
+// Documentos de conhecimento para RAG do Agente
+model DocumentoAgente {
+  id       String             @id @default(uuid())
+  agenteId String
+  agente   ConfiguracaoAgente @relation(fields: [agenteId], references: [id], onDelete: Cascade)
+
+  // Metadados do arquivo
+  nomeOriginal String // Nome do arquivo original
+  nomeStorage  String // Nome no storage (UUID)
+  mimeType     String // application/pdf, text/plain, etc
+  tamanhoBytes Int // Tamanho em bytes
+
+  // Conteúdo extraído
+  textoExtraido   String? @db.Text // Texto extraído do documento
+  totalCaracteres Int? // Total de caracteres extraídos
+
+  // Status de processamento
+  status            StatusDocumento @default(PENDENTE)
+  erroProcessamento String?
+
+  // Timestamps
+  criadoEm     DateTime  @default(now())
+  processadoEm DateTime?
+
+  @@index([agenteId])
+  @@map("documentos_agente")
+}
+
+enum StatusDocumento {
+  PENDENTE
+  PROCESSANDO
+  SUCESSO
+  ERRO
+}
+
+enum TipoAgente {
+  SDR_CAPTACAO
+  PERSONALIZADO
+  // DEPRECATED - mantidos para compatibilidade
+  SDR_VENDAS
+  SDR_LOCACAO
+  DOCUMENTOS
+}
+
+enum ModoCriacao {
+  PRE_TREINADO
+  PERSONALIZADO
+}
+
+enum StatusAgente {
+  RASCUNHO
+  ATIVO
+  PAUSADO
+}
+
+// ====================================
+// SESSÕES WHATSAPP
+// ====================================
+
+model SessaoWhatsapp {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Identificação
+  nome         String // "Vendas", "Aluguel", "SAC"
+  descricao    String?
+  instanceName String  @unique // "elyon_${tenantId}_${slug}"
+
+  // Número WhatsApp (preenchido após conexão)
+  numeroWhatsapp String?
+  nomeWhatsapp   String? // Nome do perfil WhatsApp
+
+  // Status de Conexão
+  status       StatusConexao @default(DESCONECTADO)
+  ultimoStatus DateTime?
+
+  // Agente vinculado (1:1 - cada sessão tem no máximo 1 agente)
+  agente ConfiguracaoAgente?
+
+  // Configurações
+  webhookUrl    String?
+  ignorarGrupos Boolean @default(true)
+
+  // Timestamps
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([instanceName])
+  @@map("sessoes_whatsapp")
+}
+
+enum StatusConexao {
+  DESCONECTADO
+  CONECTANDO
+  CONECTADO
+  ERRO
+}
+
+// ====================================
+// USUÁRIOS
+// ====================================
+
+model Usuario {
+  id            String       @id @default(uuid())
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email         String
+  nome          String
+  senha         String
+  papel         PapelUsuario @default(CORRETOR)
+  avatar        String?
+  telefone      String?
+  estaAtivo     Boolean      @default(true)
+  criadoEm      DateTime     @default(now())
+  atualizadoEm  DateTime     @updatedAt
+  ultimoLoginEm DateTime?
+
+  @@unique([tenantId, email])
+  @@index([email])
+  @@map("usuarios")
+}
+
+enum PapelUsuario {
+  SUPER_ADMIN
+  ADMIN
+  CORRETOR
+  VISUALIZADOR
+}
+
+// ====================================
+// CACHE GLOBAL DE CPF
+// ====================================
+
+model CacheCpf {
+  id                  String        @id @default(uuid())
+  cpf                 String        @unique
+  dados               Json
+  fonte               String        @default("assertiva")
+  buscadoEm           DateTime      @default(now())
+  expiraEm            DateTime
+  contagemConsultas   Int           @default(1)
+  ultimoUsoEm         DateTime      @default(now())
+  primeiraConsultaPor String?
+  consultas           ConsultaCpf[]
+
+  @@index([cpf])
+  @@index([expiraEm])
+  @@map("cache_cpf")
+}
+
+// ====================================
+// CONSULTAS DE CPF
+// ====================================
+
+model ConsultaCpf {
+  id            String    @id @default(uuid())
+  tenantId      String
+  cpf           String
+  veioDoCache   Boolean   @default(false)
+  custoParaNos  Decimal   @default(0)
+  cobradoDe     Decimal
+  lucro         Decimal
+  consultadoEm  DateTime  @default(now())
+  consultadoPor String?
+  cacheId       String?
+  cache         CacheCpf? @relation(fields: [cacheId], references: [id])
+
+  @@index([tenantId])
+  @@index([cpf])
+  @@index([consultadoEm])
+  @@map("consultas_cpf")
+}
+
+// ====================================
+// RAG: CONHECIMENTO DE EMPREENDIMENTOS
+// ====================================
+
+model EmpreendimentoConhecimento {
+  id String @id @default(uuid())
+
+  // Contribuição (Opcional - se o tenant sair, o conhecimento fica!)
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  // Identificação
+  nome        String
+  localizacao String
+  cep         String?
+  tipo        String
+
+  // Conhecimento
+  briefingCompleto    String
+  briefingEstruturado Json
+  confiabilidade      Decimal @default(0)
+
+  // Embedding vectorial
+  embedding         Unsupported("vector(1536)")? // PGVector nativo
+  embeddingGeradoEm DateTime?
+
+  // Validação
+  validado    Boolean   @default(false)
+  validadoPor String?
+  validadoEm  DateTime?
+
+  // Versionamento
+  versao            Int      @default(1)
+  ultimaAtualizacao DateTime @default(now())
+
+  // Métricas
+  vezesReutilizado         Int       @default(0)
+  ultimoUso                DateTime?
+  totalCampanhasVinculadas Int       @default(0)
+
+  // Relacionamentos
+  campanhas      Campanha[]
+  pesquisasManus PesquisaManus[]
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  // UNIQUE GLOBAL: Nome + Localização (independente do tenant)
+  @@unique([nome, localizacao])
+  @@index([nome])
+  @@index([cep])
+  @@index([validado])
+  @@map("empreendimentos_conhecimento")
+}
+
+// ====================================
+// PESQUISAS MANUS (IA AUTÔNOMA)
+// ====================================
+
+model PesquisaManus {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Dados da Pesquisa
+  nomeEmpreendimento String
+  construtora        String?
+  endereco           String?
+  bairro             String?
+  cidade             String
+  estado             String?
+
+  // Manus Task
+  taskId   String  @unique // ID da tarefa no Manus
+  taskUrl  String? // URL para acompanhar no Manus
+  shareUrl String? // URL pública compartilhável
+
+  // Status
+  status String  @default("PENDENTE") // PENDENTE, PROCESSANDO, CONCLUIDO, ERRO
+  erro   String?
+
+  // Resultado
+  resultado      String? @db.Text // Texto completo da pesquisa
+  resultadoJson  Json? // Dados estruturados extraídos
+  creditosUsados Int?
+
+  // Associações
+  campanhaId       String?
+  campanha         Campanha?                   @relation(fields: [campanhaId], references: [id])
+  empreendimentoId String?
+  empreendimento   EmpreendimentoConhecimento? @relation(fields: [empreendimentoId], references: [id])
+
+  // Timestamps
+  iniciadaEm  DateTime  @default(now())
+  concluidaEm DateTime?
+
+  @@index([tenantId, status])
+  @@index([taskId])
+  @@index([campanhaId])
+  @@map("pesquisas_manus")
+}
+
+// ====================================
+// CAMPANHAS
+// ====================================
+
+model Campanha {
+  id              String  @id @default(uuid())
+  tenantId        String
+  tenant          Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome            String
+  descricao       String?
+  tipo            String  @default("MINERACAO")
+  parametrosBusca Json?
+
+  // RELAÇÃO RAG
+  empreendimentoId String?
+  empreendimento   EmpreendimentoConhecimento? @relation(fields: [empreendimentoId], references: [id])
+
+  // Dados do Empreendimento (DEPRECADO - usar empreendimento)
+  nomeEmpreendimento String?
+  tipoImovel         String?
+  localizacao        String? // Campo legado - usar campos separados abaixo
+  perfilImovel       String?
+
+  // Endereço do Empreendimento (campos separados)
+  cep         String?
+  logradouro  String? // Rua/Avenida
+  numero      String?
+  complemento String?
+  bairro      String?
+  cidade      String?
+  estado      String? // UF (2 letras)
+
+  // Briefing
+  briefingCompleto       String?
+  briefingEstruturado    Json?
+  briefingGeradoEm       DateTime?
+  briefingConfiabilidade Decimal?
+  briefingValidado       Boolean   @default(false)
+  validadoPor            String?
+  validadoEm             DateTime?
+  editadoPor             String?
+  editadoEm              DateTime?
+
+  // Métricas
+  totalContatos Int    @default(0)
+  totalLeads    Int    @default(0)
+  status        String @default("ATIVA")
+
+  // Configurações de Disparo de Prospecção Ativa
+  configDisparo Json? // { mensagensPorMinuto, atrasoEntreMensagens, maxTentativas, horarioInicio, horarioFim }
+
+  // Relacionamentos
+  contatos       Contato[]
+  leads          Lead[]          @relation("CampanhaOrigem")
+  pesquisasManus PesquisaManus[]
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([empreendimentoId])
+  @@map("campanhas")
+}
+
+// ====================================
+// CONTATOS
+// ====================================
+
+model Contato {
+  id         String   @id @default(uuid())
+  campanhaId String
+  campanha   Campanha @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
+
+  // Dados básicos
+  nome String
+  cpf  String?
+
+  // Telefones (da Assertiva) - até 5 telefones
+  telefone           String? // Telefone principal (celular com WhatsApp preferido)
+  telefone2          String? // Telefone secundário
+  telefone3          String? // Telefone terciário
+  telefone4          String? // Telefone 4
+  telefone5          String? // Telefone 5
+  telefonesJson      Json? // Array completo de telefones [{numero, tipo, whatsapp}]
+  temWhatsapp        Boolean @default(false)
+  quantidadeWhatsapp Int     @default(0) // Quantos telefones têm WhatsApp
+
+  // Emails (da Assertiva) - até 5 emails
+  email      String? // Email principal
+  email2     String? // Email secundário
+  email3     String? // Email terciário
+  email4     String? // Email 4
+  email5     String? // Email 5
+  emailsJson Json? // Array completo de emails
+
+  // Dados do Imóvel (da Mineração/IPTU)
+  inscricaoIptu   String?
+  enderecoImovel  String? // Endereço do imóvel minerado
+  bairroImovel    String?
+  nomeEdificio    String? // Nome do edifício/condomínio
+  apartamento     String? // Número do apartamento (ex: 806)
+  bloco           String? // Bloco do apartamento (ex: B)
+  unidade         String? // Unidade completa (ex: APTO806BL.B)
+  box             String? // Número do box/garagem (ex: 108)
+  quadra          String? // Quadra do imóvel
+  lote            String? // Lote do imóvel
+  areaTerreno     Decimal? // m² do terreno
+  areaConstruida  Decimal? // m² construído
+  tipoImovel      String? // Casa, Apartamento, Lote, etc.
+  valorVenal      Decimal? // Valor venal do IPTU
+  anoConstituicao Int? // Ano do imóvel
+
+  // Dados pessoais adicionais (da Assertiva)
+  dataNascimento    DateTime?
+  idade             Int?
+  sexo              String? // Masculino, Feminino
+  estadoCivil       String?
+  profissao         String? // cboDescricao
+  rendaEstimada     Decimal? // Valor numérico da renda
+  faixaSalarial     String? // "De 3 a 5 Salários Mínimos"
+  setor             String? // Setor de atuação
+  empresaAtual      String? // Nome da empresa onde trabalha
+  cnpjEmpresa       String? // CNPJ da empresa
+  nomeMae           String? // Nome da mãe (validação)
+  situacaoCadastral String? // REGULAR, etc
+  obitoProvavel     Boolean   @default(false)
+  ppe               Boolean   @default(false) // Pessoa Politicamente Exposta
+  signo             String?
+
+  // Participações em empresas (JSON)
+  participacoesEmpresas Json? // [{cnpj, razaoSocial, participacao}]
+
+  // Redes sociais (JSON)
+  redesSociais Json? // [{rede, url}]
+
+  // Score e qualificação
+  scoreAssertiva    Int? // Score de 0-100 da Assertiva
+  scoreQualificacao Int? // Score interno de qualificação
+  perfilInvestidor  Boolean @default(false) // Se possui múltiplos imóveis
+
+  // Endereço de correspondência
+  endereco String? // Endereço pessoal (diferente do imóvel)
+  cidade   String?
+  estado   String?
+  cep      String?
+
+  // Status de prospecção
+  statusProspeccao    String    @default("AGUARDANDO") // AGUARDANDO, CONTATANDO, RESPONDEU, SEM_INTERESSE, INTERESSADO, LEAD
+  tentativasContato   Int       @default(0)
+  ultimaTentativa     DateTime?
+  respondeu           Boolean   @default(false)
+  primeiraResposta    DateTime?
+  manifestouInteresse Boolean   @default(false)
+  motivoDesinteresse  String? // Se não tem interesse, por quê?
+  observacoes         String? // Notas do corretor
+
+  // Controle de atendimento (IA vs Humano)
+  modoAtendimento String    @default("IA") // IA, HUMANO, PAUSADO
+  atendidoPor     String? // Nome/ID do atendente humano
+  pausadoEm       DateTime? // Quando foi pausado/assumido por humano
+  motivoPausa     String? // Motivo da pausa
+
+  // Conversão
+  virouLead   Boolean   @default(false)
+  leadId      String?   @unique
+  lead        Lead?     @relation("ContatoOrigem", fields: [leadId], references: [id])
+  virouLeadEm DateTime?
+
+  // Follow-up e Recontato
+  dataRecontato   DateTime? // Data agendada para follow-up
+  motivoRecontato String? // Por que foi agendado
+
+  // Histórico de mensagens
+  mensagens MensagemProspeccao[]
+
+  // Origem dos dados
+  fonteEnriquecimento String? // "ASSERTIVA", "CACHE", "MANUAL"
+  enriquecidoEm       DateTime?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([campanhaId, telefone])
+  @@index([campanhaId])
+  @@index([campanhaId, cpf])
+  @@index([virouLead])
+  @@index([statusProspeccao])
+  @@index([dataRecontato])
+  @@map("contatos")
+}
+
+// ====================================
+// MENSAGENS DE PROSPECÇÃO
+// ====================================
+
+// Histórico completo de conversa com o proprietário
+model MensagemProspeccao {
+  id String @id @default(uuid())
+
+  // Vínculo com contato
+  contatoId String
+  contato   Contato @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+
+  // Dados da mensagem
+  direcao  String // 'ENTRADA' (proprietário) ou 'SAIDA' (SDR/Sistema)
+  conteudo String @db.Text
+  tipo     String @default("TEXTO") // TEXTO, AUDIO, IMAGEM, DOCUMENTO
+
+  // Metadados
+  telefone  String? // Telefone usado na conversa
+  messageId String? // ID da mensagem no WhatsApp (para referência)
+
+  // Processamento IA
+  processadaPorIA Boolean @default(false)
+  respostaGerada  String? @db.Text // Resposta que a IA gerou (se ENTRADA)
+  toolsChamadas   Json? // Ferramentas que a IA usou
+
+  // Timestamps
+  dataHora DateTime @default(now())
+
+  @@index([contatoId])
+  @@index([contatoId, dataHora])
+  @@index([direcao])
+  @@map("mensagens_prospeccao")
+}
+
+// ====================================
+// LEADS
+// ====================================
+
+model Lead {
+  id                 String      @id @default(uuid())
+  tenantId           String
+  tenant             Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cpf                String?
+  nome               String
+  email              String?
+  telefone           String?
+  telefoneVerificado Boolean     @default(false)
+  dataNascimento     DateTime?
+  enderecoPrincipal  String?
+  origem             String      @default("manual")
+  campanhaOrigemId   String?
+  campanhaOrigem     Campanha?   @relation("CampanhaOrigem", fields: [campanhaOrigemId], references: [id])
+  contatoOrigem      Contato?    @relation("ContatoOrigem")
+  primeiroContato    DateTime    @default(now())
+  ultimaInteracao    DateTime?
+  status             StatusLead  @default(NOVO)
+  estagio            String      @default("contato_inicial")
+  temperatura        Temperatura @default(FRIO)
+  imoveis            Imovel[]
+  atividades         Atividade[]
+  conversas          Conversa[]
+  contratos          Contrato[]
+  cliente            Cliente?
+  criadoEm           DateTime    @default(now())
+  atualizadoEm       DateTime    @updatedAt
+  deletadoEm         DateTime?
+
+  // ====================================
+  // DADOS DO IMÓVEL (proprietário quer vender/alugar)
+  // ====================================
+  enderecoImovel  String? // Endereço completo do imóvel
+  tipoImovel      String? // apartamento, casa, comercial, terreno
+  areaImovel      String? // "100m²", "grande"
+  quartosImovel   Int? // Número de quartos
+  vagasImovel     Int? // Vagas de garagem
+  valorPretendido String? // "R$ 650.000", "entre 600-700k"
+  ocupacaoImovel  String? // "ocupado", "vazio"
+  interesseEm     String? // "vender", "alugar", "ambos"
+
+  // estado de coleta de dados IA/SDR (JSON livre)
+  schemaState Json?
+
+  // ====================================
+  // QUALIFICAÇÃO SPIN (descoberta do SDR)
+  // ====================================
+
+  // S - SITUAÇÃO
+  situacaoAtual         String? // "Imóvel vazio há 6 meses"
+  tempoDecisao          String? // "Decidiu vender há 2 meses"
+  tentativasAnteriores  String? // "Tentou sozinho, sem sucesso"
+  comCorretorAtualmente Boolean? // Está com outro corretor?
+
+  // P - PROBLEMA
+  motivacaoVenda     String? // "Mudança de cidade por trabalho"
+  doresIdentificadas String[] // ["Sem visitantes", "Propostas baixas"]
+
+  // I - IMPLICAÇÃO
+  prazoDesejado String? // "Precisa vender em 3 meses"
+  urgencia      Urgencia? // BAIXA, MEDIA, ALTA
+  consequencias String? // "Perdendo aluguel todo mês"
+  custosAtuais  String? // "Pagando condomínio + IPTU = R$ 1.200/mês"
+  pressaoTempo  Boolean? // true/false
+
+  // N - NECESSIDADE DE SOLUÇÃO
+  expectativaServico String? // "Quer corretor que traga compradores"
+  objecoes           String[] // ["Preocupado com comissão"]
+  interesseAvaliacao Boolean? // Aceitou avaliação?
+
+  // Observações gerais do SPIN
+  observacoesSpin String? @db.Text
+
+  // ====================================
+  // DADOS ADICIONAIS DE QUALIFICAÇÃO (Fase 2)
+  // ====================================
+
+  // ====================================
+  // ====================================
+  situacaoFinanceira String? // "quitado", "financiado"
+  temDividas         Boolean? // Tem dívidas IPTU/Condomínio?
+  estadoConservacao  String? // "reforma", "bom", "excelente"
+
+  // ====================================
+  // NEGOCIAÇÃO COMERCIAL (Fase 3)
+  // ====================================
+  comissaoAcordada String? // "6%", "5% com exclusividade"
+  tipoAutorizacao  String? // "exclusiva", "simples"
+  prazoTrabalho    Int? // Dias de contrato (ex: 90)
+  autorizouAnuncio Boolean? // Confirmou que pode anunciar?
+
+  // ====================================
+  // CONTRATO (Fase 4)
+  // ====================================
+  contratoUrl    String? // URL do PDF assinado
+  dataAssinatura DateTime? // Quando assinou
+  vigenciaInicio DateTime? // Início do contrato
+  vigenciaFim    DateTime? // Fim do contrato
+
+  // ====================================
+  // TRACKING IA
+  // ====================================
+  ultimaAcaoIA   String? // "Enviou follow-up dia 15/12"
+  ultimaAcaoIAEm DateTime? // Timestamp da última ação
+
+  // ====================================
+  // DADOS COMPLETOS DO IMÓVEL (Coleta pós-contrato)
+  // ====================================
+  imovelSuites           Int? // Número de suítes
+  imovelBanheiros        Int? // Número de banheiros
+  imovelAreaTotal        Float? // Área total em m²
+  imovelAndar            Int? // Andar do apartamento
+  imovelCaracteristicas  String[] // ["Armários", "Varanda", "Churrasqueira"]
+  imovelDescricao        String?   @db.Text // Descrição detalhada
+  imovelFotos            String[] // URLs das fotos enviadas
+  imovelValorLocacao     Float? // Valor de locação (se aplicável)
+  imovelValorCondominio  Float? // Valor do condomínio
+  imovelValorIPTU        Float? // Valor do IPTU anual
+  dadosImovelColetadosEm DateTime? // Quando os dados foram coletados via IA
+
+  // ====================================
+  // INTEGRAÇÃO CRM
+  // ====================================
+  crmProprietarioId Int? // ID do Proprietário no CRM
+  crmPropertyId     Int? // ID do Property no CRM
+  crmPropertyCode   String? // Código do imóvel no CRM (ex: AP0001)
+  enviadoParaCrmEm  DateTime? // Quando foi enviado ao CRM
+  crmSyncStatus     String? // "pending", "synced", "error"
+  crmSyncError      String? // Mensagem de erro se falhou
+
+  // ====================================
+  // PERDA/ARQUIVAMENTO
+  // ====================================
+  motivoPerda String? // "Expectativa Irreal", "Concorrência", etc.
+
+  @@unique([tenantId, cpf])
+  @@index([tenantId])
+  @@index([cpf])
+  @@index([status])
+  @@index([telefone])
+  @@index([urgencia])
+  @@map("leads")
+}
+
+enum StatusLead {
+  NOVO // Fase 1: Opener (Qualificação)
+  TENTATIVA_AGENDAMENTO // Fase 2: Presenter (Apresentação)
+  VISITA_AGENDADA // Fase 2: Variação
+  AVALIACAO_EM_ANDAMENTO // Fase 3: Variação
+  DOCUMENTACAO // Fase 3: Closer (Negociação)
+  ONBOARDING // Fase 4: Admin (Onboarding) - 🆕
+  CAPTADO // Sucesso! Sai do Kanban → Carteira
+  PERDIDO
+  ARQUIVADO
+  // Deprecated (manter para compatibilidade)
+  CONTATANDO
+  QUALIFICADO
+  EM_NEGOCIACAO
+  CONVERTIDO
+  INATIVO
+}
+
+enum Temperatura {
+  FRIO
+  MORNO
+  QUENTE
+}
+
+enum Urgencia {
+  BAIXA
+  MEDIA
+  ALTA
+}
+
+// ====================================
+// CONTRATOS (Geração Automática)
+// ====================================
+
+model Contrato {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  leadId   String
+  lead     Lead   @relation(fields: [leadId], references: [id])
+
+  tipo   TipoContrato   @default(CAPTACAO)
+  status StatusContrato @default(PENDENTE)
+
+  // Documento
+  tokenAceite   String  @unique // Token único para link de aceite
+  hashDocumento String // Hash SHA256 para verificação
+  htmlConteudo  String  @db.Text // HTML do contrato renderizado
+  dadosSnapshot String? @db.Text // JSON com dados no momento da geração
+
+  // Datas
+  geradoEm    DateTime  @default(now())
+  enviadoEm   DateTime? // Quando foi enviado ao proprietário
+  aceiteEm    DateTime? // Quando foi aceito
+  canceladoEm DateTime? // Se foi cancelado
+
+  // Vigência
+  vigenciaInicio DateTime?
+  vigenciaFim    DateTime?
+
+  // Aceite Digital
+  aceiteIp        String? // IP do aceite
+  aceiteUserAgent String? // User agent do navegador
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([leadId])
+  @@index([tokenAceite])
+  @@index([status])
+  @@map("contratos")
+}
+
+enum TipoContrato {
+  CAPTACAO // Autorização de captação (venda/locação)
+  LOCACAO // Contrato de locação
+  VENDA // Contrato de compra e venda
+}
+
+enum StatusContrato {
+  PENDENTE // Gerado, aguardando envio
+  ENVIADO // Enviado ao proprietário
+  ACEITO // Aceito digitalmente
+  CANCELADO // Cancelado
+  EXPIRADO // Vigência encerrada
+}
+
+// ====================================
+// IMÓVEIS
+// ====================================
+
+model Imovel {
+  id            String  @id @default(uuid())
+  inscricaoIptu String  @unique
+  logradouro    String
+  numero        String?
+  complemento   String?
+  bairro        String
+  quadra        String?
+  lote          String?
+
+  // Novos campos para base local
+  codigoEdificio Int? // cdedificio da API
+  codigoBairro   Int? // cdbairro da API
+
+  nomeEdificio      String?
+  apartamento       String? // Número do apartamento (ex: 806)
+  bloco             String? // Bloco (ex: B)
+  unidade           String? // Unidade completa (ex: APTO806BL.B)
+  box               String? // Box/garagem (ex: 108)
+  tipoImovel        String? // PREDIAL, TERRITORIAL, etc
+
+  // === Geolocalização ===
+  latitude          Float?
+  longitude         Float?
+
+  // === Áreas (m²) ===
+  areaTerreno       Float?
+  areaEdificada     Float?
+
+  // === Cadastro Prefeitura ===
+  dataCadastroPref  DateTime? // dtinclusao
+  nomeEmpresa       String?   // Layer 9
+
+  // === VII - INFORMAÇÕES SOBRE A EDIFICAÇÃO (Layer 3 MUBDG) ===
+  numeroPavimentos   Int? // nrpaviment
+  numeroElevadores   Int? // nrelevador
+  vagasCobertas      Int? // nrvagascob
+  vagasDescobertas   Int? // nrvagasdes
+  numeroGaragens     Int? // nrgaragem
+  
+  // Códigos de Acabamento e Estrutura (Inteiros conforme a base cartográfica)
+  tipoEdificacao1    Int? // tpedif1 (Ex: 2 para Apartamento)
+  tipoEdificacao2    Int? // tpedif2
+  posicaoEdificacao  Int? // posicaoedf
+  estrutura          Int? // estrutura
+  esquadrias         Int? // esquadria
+  piso               Int? // piso
+  forro              Int? // forro
+  instEletrica       Int? // insteletri
+  instSanitaria      Int? // ininstsani
+  revestimentoInt    Int? // revinterno
+  acabamentoInt      Int? // acinterno
+  revestimentoExt    Int? // revexterno
+  acabamentoExt      Int? // acexterno
+  cobertura          Int? // cobertura
+  estadoConservacao  Int? // conserva
+
+  certidaoCache      Json?
+  certidaoBuscadaEm  DateTime?
+  leadId             String?
+  lead              Lead?     @relation(fields: [leadId], references: [id])
+  statusCaptacao    String    @default("IDENTIFICADO")
+  interesse         String?
+
+  // Relacionamentos Base Local
+  dadosEdificio Edificio? @relation(fields: [codigoEdificio], references: [codigo])
+  dadosBairro   Bairro?   @relation(fields: [codigoBairro], references: [codigo])
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([inscricaoIptu])
+  @@index([bairro])
+  @@index([codigoEdificio])
+  @@index([codigoBairro])
+  @@index([leadId])
+  @@map("imoveis")
+}
+
+model Bairro {
+  id           String  @id @default(uuid())
+  codigo       Int     @unique // cdbairro
+  nome         String
+  ehCondominio Boolean @default(false)
+
+  edificios Edificio[]
+  imoveis   Imovel[]
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([nome])
+  @@map("bairros_geo")
+}
+
+model Edificio {
+  id         String  @id @default(uuid())
+  codigo     Int     @unique // cdedificio
+  nome       String
+  logradouro String?
+
+  codigoBairro Int?
+  bairro       Bairro? @relation(fields: [codigoBairro], references: [codigo])
+
+  imoveis Imovel[]
+
+  totalUnidades Int @default(0)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([nome])
+  @@index([codigoBairro])
+  @@map("edificios_geo")
+}
+
+model SincronizacaoMapa {
+  id             String    @id @default(uuid())
+  origem         String    @default("manual")
+  status         String    @default("EM_ANDAMENTO")
+  iniciadoEm     DateTime  @default(now())
+  concluidoEm    DateTime?
+  duracaoMs      Int?
+  totalBairros   Int       @default(0)
+  totalEdificios Int       @default(0)
+  totalUnidades  Int       @default(0)
+  mensagem       String?
+  detalhesErro   Json?
+
+  @@index([status])
+  @@index([iniciadoEm])
+  @@map("sincronizacoes_mapa")
+}
+
+// ====================================
+// ATIVIDADES
+// ====================================
+
+model Atividade {
+  id           String        @id @default(uuid())
+  leadId       String
+  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tipo         TipoAtividade
+  canal        String?
+  titulo       String
+  descricao    String?
+  duracao      Int?
+  gravacao     String?
+  mensagem     String?
+  resultado    String?
+  agendadoPara DateTime?
+  completadoEm DateTime?
+  criadoPor    String?
+  criadoEm     DateTime      @default(now())
+
+  // ====================================
+  // CONFIRMAÇÃO DE AGENDAMENTO
+  // ====================================
+  statusAgendamento    StatusAgendamento? @default(PENDENTE)
+  tokenConfirmacao     String?            @unique // UUID para link público
+  confirmacoesEnviadas Int                @default(0)
+  confirmadoPor        String? // "proprietario", "corretor", "sistema"
+  confirmadoEm         DateTime?
+  canceladoPor         String?
+  canceladoEm          DateTime?
+  motivoCancelamento   String?
+
+  @@index([leadId])
+  @@index([tipo])
+  @@index([agendadoPara])
+  @@index([statusAgendamento])
+  @@index([tokenConfirmacao])
+  @@map("atividades")
+}
+
+enum TipoAtividade {
+  LIGACAO
+  EMAIL
+  WHATSAPP
+  REUNIAO
+  NOTA
+  TAREFA
+  AVALIACAO // 🆕 Visita de avaliação no imóvel
+  FOLLOW_UP // 🆕 Retomar contato
+}
+
+enum StatusAgendamento {
+  PENDENTE // Aguardando confirmação do proprietário
+  CONFIRMADO // Proprietário confirmou
+  CANCELADO // Cancelado (por qualquer parte)
+  REALIZADO // Avaliação concluída
+  NAO_COMPARECEU // No-show
+}
+
+// ====================================
+// CONVERSAS
+// ====================================
+
+model Conversa {
+  id               String     @id @default(uuid())
+  leadId           String
+  lead             Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  canal            String
+  numeroOrigem     String
+  estadoConversa   String     @default("ativa")
+  contexto         Json
+  mensagens        Mensagem[]
+  iniciadaEm       DateTime   @default(now())
+  ultimaMensagemEm DateTime   @default(now())
+  finalizadaEm     DateTime?
+
+  // FSM: Estado da qualificação SPIN Selling
+  faseSPIN           String? // SAUDACAO, SITUACAO, PROBLEMA, IMPLICACAO, NECESSIDADE, SOLUCAO, QUALIFICADO
+  dadosColetados     Json? // {quartos, ocupacao, motivacao, timeline, objecoes}
+  tentativasRecovery Int     @default(0) // Quantas vezes tentou recuperar lead frio
+  podeQualificar     Boolean @default(false) // Se coletou dados suficientes (4+)
+
+  @@index([leadId])
+  @@index([numeroOrigem])
+  @@index([estadoConversa])
+  @@index([faseSPIN])
+  @@map("conversas")
+}
+
+model Mensagem {
+  id         String    @id @default(uuid())
+  conversaId String
+  conversa   Conversa  @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  remetente  String
+  conteudo   String
+  tipo       String    @default("texto")
+  metadata   Json?
+  enviadaEm  DateTime  @default(now())
+  lidaEm     DateTime?
+
+  @@index([conversaId])
+  @@index([enviadaEm])
+  @@map("mensagens")
+}
+
+// ====================================
+// RAG: EMBEDDINGS DE CONVERSAS
+// ====================================
+
+model ConversaEmbedding {
+  id String @id @default(uuid())
+
+  // Referência à conversa ou chunk
+  conversaId String?
+  leadId     String?
+  tenantId   String
+
+  // Conteúdo e contexto
+  textoOriginal String // O chunk de texto que foi embedado
+  tipoConteudo  String // "resumo_conversa", "intencao_lead", "objecao_superada", "pergunta_frequente"
+  metadados     Json? // Dados adicionais (temperatura, resultado, etc)
+
+  // Embedding
+  embedding       Unsupported("vector(1536)")? // Vetor nativo PGVector
+  embeddingModelo String                       @default("text-embedding-3-small")
+
+  // Qualidade e relevância
+  scoreQualidade   Decimal @default(0) // Score de qualidade do chunk (0-100)
+  vezesUtilizado   Int     @default(0) // Quantas vezes foi retornado em buscas
+  feedbackPositivo Int     @default(0) // Feedback de utilidade
+  feedbackNegativo Int     @default(0)
+
+  // Timestamps
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([tipoConteudo])
+  @@index([conversaId])
+  @@index([leadId])
+  @@map("conversas_embeddings")
+}
+
+// ====================================
+// CONHECIMENTO CURADO (GLOBAL)
+// ====================================
+// Técnicas de vendas universais, curadas manualmente
+// Serve como base para todos os tenants
+
+model ConhecimentoCurado {
+  id String @id @default(uuid())
+
+  // Categorização
+  categoria    String // "script_abertura", "objecao", "fechamento", "rapport", "spin"
+  subcategoria String? // "preco", "exclusividade", "urgencia", etc
+
+  // Conteúdo
+  titulo      String // Nome curto para identificar
+  texto       String // O script/técnica em si
+  contextoUso String // Quando usar esta técnica
+  exemplo     String? // Exemplo de aplicação prática
+
+  // Aplicabilidade
+  tipoImovel  String[] // ["residencial", "comercial", "terreno"] ou vazio = todos
+  faixaPreco  String? // "popular", "medio", "alto_padrao" ou null = todos
+  tipoNegocio String[] // ["venda", "locacao", "captacao"] ou vazio = todos
+
+  // Qualidade e ordenação
+  scoreEficacia Decimal @default(80) // Score de eficácia (0-100)
+  ordem         Int     @default(0) // Ordem de exibição
+  ativo         Boolean @default(true)
+
+  // Embedding para busca semântica
+  embedding       String? // Vetor serializado
+  embeddingModelo String  @default("text-embedding-3-small")
+
+  // Auditoria
+  criadoPor String? // userId de quem criou
+  fonte     String? // "manual", "extraido_conversa", "literatura"
+
+  // Timestamps
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([categoria])
+  @@index([subcategoria])
+  @@index([ativo])
+  @@map("conhecimento_curado")
+}
+
+// ====================================
+// LISTAS DE CONTATOS (Mineração)
+// ====================================
+
+model Lista {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  nome         String // "Reserva Buriti - 01/12/2025"
+  nomeEdificio String // Nome exato do edifício pesquisado
+  localizacao  String? // Cidade/Bairro
+  cep          String?
+
+  // Estatísticas
+  totalContatos     Int @default(0)
+  totalEnriquecidos Int @default(0) // Quantos têm telefone
+  totalComWhatsapp  Int @default(0) // Quantos têm WhatsApp
+  totalUsados       Int @default(0) // Quantos já foram para campanhas
+
+  // Dados da pesquisa
+  dadosPesquisa Json? // Dados brutos do RAG/pesquisa
+
+  contatos ContatoLista[]
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([nomeEdificio])
+  @@map("listas")
+}
+
+model ContatoLista {
+  id      String @id @default(uuid())
+  listaId String
+  lista   Lista  @relation(fields: [listaId], references: [id], onDelete: Cascade)
+
+  // Dados da Prefeitura
+  nome           String
+  cpf            String?
+  inscricaoIptu  String?
+  unidade        String? // Apartamento
+  box            String? // Vaga/Box
+  enderecoImovel String?
+  bairroImovel   String?
+
+  // Dados Assertiva (enriquecimento)
+  telefone      String?
+  telefone2     String?
+  telefone3     String?
+  telefone4     String?
+  telefone5     String?
+  telefonesJson Json? // Array completo com flags WhatsApp
+
+  email      String?
+  email2     String?
+  email3     String?
+  email4     String?
+  email5     String?
+  emailsJson Json?
+
+  temWhatsapp        Boolean @default(false)
+  quantidadeWhatsapp Int     @default(0)
+
+  // Controle de uso
+  usadoEmCampanha Boolean @default(false) // Se já foi adicionado a alguma campanha
+  campanhaId      String? // ID da campanha onde foi usado (última)
+
+  criadoEm DateTime @default(now())
+
+  @@unique([listaId, cpf])
+  @@index([listaId])
+  @@index([usadoEmCampanha])
+  @@map("contatos_lista")
+}
+
+// ====================================
+// BLACKLIST DE TELEFONES
+// ====================================
+
+model TelefoneBlacklist {
+  id       String  @id @default(uuid())
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  telefone String // Telefone normalizado (apenas números)
+  motivo   String // OPTOUT, INVALIDO, RECLAMACAO, BLOQUEADO_WHATSAPP, MANUAL
+
+  // Dados adicionais
+  nomeContato    String? // Nome do contato (se conhecido)
+  campanhaOrigem String? // ID da campanha onde ocorreu o opt-out
+  observacoes    String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([tenantId, telefone])
+  @@index([telefone])
+  @@index([tenantId])
+  @@map("telefones_blacklist")
+}
+
+// ====================================
+// MÉTRICAS DE MENSAGENS (SDR Analytics)
+// ====================================
+
+model MetricaMensagem {
+  id String @id @default(uuid())
+
+  // Vínculos
+  mensagemId String? // ID da mensagem (se persistida)
+  conversaId String? // ID da conversa
+  leadId     String? // ID do lead
+  tenantId   String // ID do tenant (obrigatório)
+
+  // Contexto da mensagem
+  mensagemUsuario String? @db.Text // Mensagem do usuário
+  respostaGerada  String? @db.Text // Resposta do worker
+
+  // Worker e modo
+  workerUsado  String // SDR, DOCUMENTOS, FINANCEIRO
+  modoOperacao String @default("PASSIVO") // PROSPECCAO, PASSIVO
+
+  // Métricas de qualidade (do Supervisor)
+  confianca      Int    @default(0) // 0-100
+  relevancia     Int    @default(0) // 0-100
+  tom            String @default("ADEQUADO") // ADEQUADO, FORMAL_DEMAIS, INFORMAL_DEMAIS
+  riscoEscalacao Int    @default(0) // 0-100
+
+  // Ação do Supervisor
+  acaoSupervisor String  @default("ENVIAR") // ENVIAR, REFINAR, ESCALAR_HUMANO, MUDAR_WORKER
+  foiRefinada    Boolean @default(false)
+  foiEscalada    Boolean @default(false)
+  alertaCorretor Boolean @default(false)
+
+  // Performance
+  tempoProcessamentoMs Int? // Tempo em milissegundos
+  tokensUsados         Int? // Tokens consumidos
+  custoEstimado        Decimal? // Custo em USD
+
+  // Tools utilizadas
+  toolsChamadas Json? // Array de tools chamadas pelo worker
+
+  // Temperatura do lead no momento
+  temperaturaLead String? // FRIO, MORNO, QUENTE
+
+  // Timestamps
+  processadoEm DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([leadId])
+  @@index([conversaId])
+  @@index([workerUsado])
+  @@index([acaoSupervisor])
+  @@index([processadoEm])
+  @@map("metricas_mensagens")
+}
+
+// ====================================
+// ALERTAS DE CORRETOR
+// ====================================
+
+model AlertaCorretor {
+  id String @id @default(uuid())
+
+  // Vínculos
+  tenantId   String
+  leadId     String?
+  conversaId String?
+
+  // Tipo e prioridade
+  tipo       String // ESCALACAO, LEAD_QUENTE, OBJECAO, ERRO_SISTEMA, OPTOUT
+  prioridade String @default("MEDIA") // BAIXA, MEDIA, ALTA, CRITICA
+
+  // Conteúdo
+  titulo         String
+  descricao      String @db.Text
+  contexto       Json? // Dados adicionais (última mensagem, métricas, etc)
+  riscoEscalacao Int    @default(0) // 0-100
+
+  // Status
+  status        String    @default("PENDENTE") // PENDENTE, VISUALIZADO, ATENDIDO, IGNORADO
+  visualizadoEm DateTime?
+  atendidoEm    DateTime?
+  atendidoPor   String? // ID do usuário que atendeu
+
+  // Timestamps
+  criadoEm DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([prioridade])
+  @@index([criadoEm])
+  @@map("alertas_corretor")
+}
+
+// ====================================
+// BILLING: TRANSAÇÕES
+// ====================================
+
+model Transacao {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Tipo
+  tipo      TipoTransacao
+  descricao String?
+
+  // Valores
+  valor       Decimal
+  creditos    Int
+  tipoCredito TipoCredito
+
+  // Asaas
+  asaasPagamentoId  String?
+  asaasAssinaturaId String?
+  metodoPagamento   MetodoPagamento?
+
+  // Promoção
+  promocaoAplicada String? // "dia15", null
+  creditosBonus    Int     @default(0)
+
+  // Status
+  status StatusTransacao @default(PENDENTE)
+
+  criadoEm     DateTime  @default(now())
+  confirmadoEm DateTime?
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([criadoEm])
+  @@map("transacoes")
+}
+
+enum TipoTransacao {
+  ASSINATURA // Renovação mensal
+  RECARGA // Compra avulsa
+  BONUS // Crédito promocional
+  ESTORNO // Devolução
+}
+
+enum TipoCredito {
+  MENSAIS
+  PREPAGOS
+  BONUS
+}
+
+enum StatusTransacao {
+  PENDENTE
+  CONFIRMADO
+  CANCELADO
+  ESTORNADO
+}
+
+enum MetodoPagamento {
+  PIX
+  BOLETO
+  CARTAO_CREDITO
+  CARTAO_DEBITO
+}
+
+// ====================================
+// BILLING: PACOTES DE RECARGA
+// ====================================
+
+model Pacote {
+  id        String  @id @default(uuid())
+  nome      String // "Recarga 50", "Recarga 100", etc
+  slug      String  @unique
+  creditos  Int
+  valor     Decimal
+  ativo     Boolean @default(true)
+  descricao String?
+
+  criadoEm DateTime @default(now())
+
+  @@map("pacotes")
+}
+
+// ====================================
+// BILLING: LOG DE RENOVAÇÕES
+// ====================================
+
+model RenovacaoLog {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  planoAnterior     PlanoTipo
+  planoNovo         PlanoTipo
+  creditosExpirados Int // Créditos mensais que expiraram
+  creditosNovos     Int // Novos créditos concedidos
+
+  renovadoEm DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([renovadoEm])
+  @@map("renovacoes_log")
+}
+
+// ====================================
+// CLIENTES (Leads convertidos)
+// ====================================
+
+model Cliente {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Dados Pessoais
+  nome     String
+  cpf      String?
+  email    String?
+  telefone String?
+  endereco String?
+
+  // Link com a origem (Lead)
+  origemLeadId String? @unique
+  lead         Lead?   @relation(fields: [origemLeadId], references: [id])
+
+  // Status
+  status String @default("ATIVO") // ATIVO, INATIVO, SUSPENSO
+
+  // Timestamps
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([cpf])
+  @@index([email])
+  @@map("clientes")
+}
+
+// ====================================
+// LOGS DE SCRAPER IPTU (Monitoramento)
+// ====================================
+
+model LogScraperIPTU {
+  id            String   @id @default(uuid())
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  tenantId      String
+  inscricao     String
+  status        String // 'ERRO', 'SEM_DADOS', 'MASCARADO_LGPD' // Enum pode ser evitado pra simplificar migração
+  mensagemErro  String?  @db.Text
+  dataTentativa DateTime @default(now())
+  jobId         String? // Id do job de mineração (se aplicável)
+
+  @@index([tenantId])
+  @@index([inscricao])
+  @@index([status])
+  @@map("logs_scraper_iptu")
+}

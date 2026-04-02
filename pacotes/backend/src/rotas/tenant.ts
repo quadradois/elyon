@@ -1,0 +1,340 @@
+import { responderErro } from '../utilitarios/resposta';
+import { Router, Request, Response } from 'express';
+import { prisma } from '../lib/db';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { s3Client as s3 } from '../lib/s3';
+import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import { verificarSuperAdmin, verificarAutenticacao } from '../middleware/middleware-auth';
+
+const router = Router();
+
+// Configuração Multer para upload em memória
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (_req, file, cb) => {
+    const tiposPermitidos = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+    if (tiposPermitidos.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Tipo de arquivo não permitido. Use PNG, JPG, GIF ou WEBP.'));
+    }
+  }
+});
+
+// Bucket para logos - usa variável específica ou fallback para o bucket geral
+const S3_BUCKET_LOGOS = process.env.AWS_S3_BUCKET_LOGOS || process.env.AWS_S3_BUCKET_NAME || 'rag-eloyn';
+
+// Helper para extrair tenantId do request
+const extrairTenantId = (req: Request): string | null => {
+  // Tentar do header primeiro
+  if (req.headers['x-tenant-id']) return req.headers['x-tenant-id'] as string;
+  // Fallback para query
+  if (req.query.tenantId) return req.query.tenantId as string;
+  return null;
+};
+
+// ====================================
+// HELPER: Sintetizar RAG do Perfil
+// Usa a versão COMPLETA do sintetizarPerfil.ts
+// ====================================
+import { sintetizarPerfilRAG as sintetizarPerfilCompleto } from '../utilitarios/sintetizarPerfil';
+
+function sintetizarPerfilRAG(tenant: any): string {
+  // Adaptar formato flat do tenant para o formato PerfilImobiliaria
+  const perfilEstruturado = {
+    dadosGerais: {
+      nomeImobiliaria: tenant.nome || '',
+      diferenciais: (tenant.diferenciais as string[]) || [],
+      tempoMercado: tenant.tempoMercado,
+      atendeFinalDeSemana: tenant.atendeFinalDeSemana || false,
+      horarioAtendimento: tenant.horarioAtendimento,
+      trabalhaComLocacao: !!(tenant.perfilLocacao),
+      trabalhaComVenda: !!(tenant.perfilVenda),
+      endereco: tenant.endereco,
+      cidade: tenant.cidade,
+      telefone: tenant.telefone,
+      whatsapp: tenant.whatsapp,
+      email: tenant.email,
+      site: tenant.site,
+      instagram: tenant.instagram,
+      facebook: tenant.facebook,
+    },
+    locacao: tenant.perfilLocacao || {
+      garantiasAceitas: [],
+      taxaAdministracao: 10,
+      taxaPrimeiroAluguel: false,
+      prazoMinimoContrato: 30,
+      aceitaPet: false,
+      fazVistoriaEntrada: true,
+      fazVistoriaSaida: true,
+      tempoMedioContrato: 30,
+    },
+    venda: tenant.perfilVenda || {
+      comissaoPadrao: 6,
+      aceitaExclusividade: true,
+      tempoExclusividade: 180,
+      fazAvaliacaoGratuita: true,
+      fazFotoProfissional: true,
+      fazTourVirtual: false,
+      anunciaPortais: [],
+      temParcerias: true,
+      percentualParceria: 50,
+    },
+  };
+
+  return sintetizarPerfilCompleto(perfilEstruturado);
+}
+
+// ====================================
+// GET /api/tenant/meu - Buscar dados do tenant do usuário logado
+// ====================================
+router.get('/meu', verificarAutenticacao, async (req: Request, res: Response) => {
+  try {
+    const tenantId = req.usuario?.tenantId || req.tenantId;
+
+    if (!tenantId) {
+      return responderErro(res, 400, 'Usuário não vinculado a um tenant');
+    }
+
+    // Buscar tenant com dados completos (incluindo billing/plano)
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: {
+        // Incluir contaCreditos se fosse uma relação separada, mas aqui está no próprio tenant
+        // Se houver tabelas relacionadas importantes, inclua aqui
+      }
+    });
+
+    if (!tenant) {
+      return responderErro(res, 404, 'Tenant não encontrado');
+    }
+
+    // Estruturar resposta para compatibilidade com frontend
+    // O frontend espera: response.data.tenant.contaCreditos?.planoTipo OU response.data.tenant.plano
+
+    const resposta = {
+      tenant: {
+        ...tenant,
+        // Mock de contaCreditos para compatibilidade se necessário, mas já incluimos planoTipo no objeto raiz
+        contaCreditos: {
+          planoTipo: tenant.planoTipo,
+          creditosMensais: tenant.creditosMensais,
+          creditosPrepagos: tenant.creditosPrepagos,
+          creditosBonus: tenant.creditosBonus
+        }
+      }
+    };
+
+    res.json(resposta);
+  } catch (error) {
+    console.error('[Tenant] Erro ao buscar dados do tenant logado:', error);
+    responderErro(res, 500, 'Erro ao buscar dados do tenant');
+  }
+});
+
+router.get('/todos', verificarSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    const tenants = await prisma.tenant.findMany({
+      orderBy: { criadoEm: 'desc' },
+      select: {
+        id: true,
+        nome: true,
+        slug: true,
+        status: true,
+        plano: true,
+        // Campos de Billing
+        creditosMensais: true,
+        creditosPrepagos: true,
+        creditosBonus: true,
+        planoTipo: true,
+        valorPlano: true,
+        dataRenovacao: true,
+        statusPagamento: true,
+        asaasClienteId: true,
+        // Outros campos úteis
+        cidade: true,
+        email: true,
+        criadoEm: true,
+      }
+    });
+
+    res.json(tenants);
+  } catch (error) {
+    console.error('[Tenant] Erro ao listar todos:', error);
+    responderErro(res, 500, 'Erro ao listar tenants');
+  }
+});
+
+// ====================================
+// GET /api/tenant/perfil - Buscar perfil do tenant
+// ====================================
+router.get('/perfil', async (req: Request, res: Response) => {
+  try {
+    const tenantId = extrairTenantId(req);
+
+    if (!tenantId) {
+      return responderErro(res, 400, 'Tenant ID obrigatório');
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        id: true,
+        nome: true,
+        slug: true,
+        status: true,
+        plano: true,
+        cnpj: true,
+        endereco: true,
+        cidade: true,
+        telefone: true,
+        whatsapp: true,
+        email: true,
+        site: true,
+        instagram: true,
+        facebook: true,
+        logoUrl: true,
+        diferenciais: true,
+        horarioAtendimento: true,
+        atendeFinalDeSemana: true,
+        tempoMercado: true,
+        perfilLocacao: true,
+        perfilVenda: true,
+        ragPerfilTexto: true,
+        criadoEm: true,
+        atualizadoEm: true,
+      }
+    });
+
+    if (!tenant) {
+      return responderErro(res, 404, 'Tenant não encontrado');
+    }
+
+    res.json(tenant);
+  } catch (error) {
+    console.error('[Tenant] Erro ao buscar perfil:', error);
+    responderErro(res, 500, 'Erro ao buscar perfil');
+  }
+});
+
+// ====================================
+// PUT /api/tenant/perfil - Atualizar perfil do tenant
+// ====================================
+router.put('/perfil', async (req: Request, res: Response) => {
+  try {
+    const tenantId = extrairTenantId(req);
+    const dados = req.body;
+
+    if (!tenantId) {
+      return responderErro(res, 400, 'Tenant ID obrigatório');
+    }
+
+    console.log('[Tenant] Atualizando perfil:', tenantId);
+
+    // Atualizar tenant com todos os campos
+    const tenantAtualizado = await prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        nome: dados.nome,
+        cnpj: dados.cnpj,
+        endereco: dados.endereco,
+        cidade: dados.cidade,
+        telefone: dados.telefone,
+        whatsapp: dados.whatsapp,
+        email: dados.email,
+        site: dados.site,
+        instagram: dados.instagram,
+        facebook: dados.facebook,
+        logoUrl: dados.logoUrl,
+        diferenciais: dados.diferenciais,
+        horarioAtendimento: dados.horarioAtendimento,
+        atendeFinalDeSemana: dados.atendeFinalDeSemana,
+        tempoMercado: dados.tempoMercado,
+        perfilLocacao: dados.perfilLocacao,
+        perfilVenda: dados.perfilVenda,
+      }
+    });
+
+    // Gerar RAG sintetizado
+    const ragTexto = sintetizarPerfilRAG(tenantAtualizado);
+
+    // Salvar RAG no tenant
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { ragPerfilTexto: ragTexto }
+    });
+
+    console.log('[Tenant] ✅ Perfil atualizado com RAG:', ragTexto.substring(0, 100));
+
+    res.json({
+      success: true,
+      tenant: tenantAtualizado,
+      ragGerado: ragTexto
+    });
+  } catch (error) {
+    console.error('[Tenant] Erro ao atualizar perfil:', error);
+    responderErro(res, 500, 'Erro ao atualizar perfil');
+  }
+});
+
+// ====================================
+// POST /api/tenant/perfil/logo - Upload de logo para S3
+// ====================================
+router.post('/perfil/logo', upload.single('logo'), async (req: Request, res: Response) => {
+  try {
+    const tenantId = extrairTenantId(req);
+
+    if (!tenantId) {
+      return responderErro(res, 400, 'Tenant ID obrigatório');
+    }
+
+    if (!req.file) {
+      return responderErro(res, 400, 'Nenhum arquivo enviado');
+    }
+
+    console.log('[Tenant] 📤 Fazendo upload de logo para tenant:', tenantId);
+    console.log('[Tenant] 📦 Bucket S3:', S3_BUCKET_LOGOS);
+
+    // Gerar nome único para o arquivo
+    const extensao = path.extname(req.file.originalname) || '.png';
+    const nomeArquivo = `logos/${tenantId}/${uuidv4()}${extensao}`;
+
+    // Fazer upload para S3
+    const comando = new PutObjectCommand({
+      Bucket: S3_BUCKET_LOGOS,
+      Key: nomeArquivo,
+      Body: req.file.buffer,
+      ContentType: req.file.mimetype,
+      // Nota: ACL 'public-read' requer que o bucket tenha ACLs habilitadas
+      // Se não funcionar, remova a linha ACL e configure o bucket com políticas públicas
+    });
+
+    await s3.send(comando);
+
+    // Gerar URL pública
+    const logoUrl = `https://${S3_BUCKET_LOGOS}.s3.${process.env.AWS_S3_REGION || 'us-east-2'}.amazonaws.com/${nomeArquivo}`;
+
+    // Atualizar tenant com nova logo
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { logoUrl }
+    });
+
+    console.log('[Tenant] ✅ Logo atualizada:', logoUrl);
+
+    res.json({
+      success: true,
+      logoUrl,
+      message: 'Logo atualizada com sucesso'
+    });
+  } catch (error: any) {
+    console.error('[Tenant] ❌ Erro no upload de logo:', error.message);
+    console.error('[Tenant] Detalhes:', error);
+    responderErro(res, 500, 'Erro interno do servidor');
+  }
+});
+
+export default router;

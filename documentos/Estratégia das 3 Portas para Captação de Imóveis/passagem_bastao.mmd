@@ -1,0 +1,69 @@
+sequenceDiagram
+    participant L as Lead/Proprietário
+    participant A1 as Agente 1<br/>Caçador
+    participant A2 as Agente 2<br/>Especialista
+    participant A3 as Agente 3<br/>Closer
+    participant A4 as Agente 4<br/>Onboarding
+    participant S as Sistema/CRM
+
+    rect rgb(227, 242, 253)
+    Note over A1,L: FASE 1: Prospecção e Diagnóstico
+    A1->>L: Olá! Confirma interesse em vender/alugar?
+    L->>A1: Sim, tenho interesse
+    A1->>L: Há quanto tempo está vendendo?
+    L->>A1: 4 meses
+    A1->>L: Quantas visitas recebeu?
+    L->>A1: Apenas 3 visitas
+    A1->>L: As fotos são profissionais?
+    L->>A1: Não, tirei com celular
+    A1->>S: 📋 Registra Briefing:<br/>- 4 meses sem vender<br/>- Poucas visitas<br/>- Fotos amadoras
+    end
+
+    rect rgb(255, 243, 224)
+    Note over A1,A2: 🔄 PASSAGEM DE BASTÃO 1
+    A1->>A2: Lead qualificado com dores identificadas
+    A1->>L: Vou passar para nosso especialista!
+    end
+
+    rect rgb(255, 243, 224)
+    Note over A2,L: FASE 2: Apresentação de Soluções
+    A2->>S: 📖 Consulta Briefing
+    A2->>L: Olá! Sou o especialista em soluções
+    A2->>L: Vi que está há 4 meses sem resultado...<br/>Nossa solução: Anúncios direcionados
+    A2->>L: Fotos amadoras?<br/>Nossa solução: Produção profissional
+    A2->>L: Faz sentido dar um UPGRADE?<br/>Podemos continuar?
+    L->>A2: Sim, faz sentido!
+    end
+
+    rect rgb(243, 229, 245)
+    Note over A2,A3: 🔄 PASSAGEM DE BASTÃO 2
+    A2->>A3: Lead aceita upgrade, pronto para fechar
+    A2->>L: Vou passar para nosso especialista em contratos!
+    end
+
+    rect rgb(243, 229, 245)
+    Note over A3,L: FASE 3: Fechamento
+    A3->>L: Olá! Vou formalizar nossa parceria
+    A3->>L: Opções: Exclusivo vs Não-Exclusivo
+    A3->>L: Comissão = Investimento em marketing
+    A3->>L: Podemos avançar para documentação?
+    L->>A3: Sim, vamos em frente!
+    end
+
+    rect rgb(232, 245, 233)
+    Note over A3,A4: 🔄 PASSAGEM DE BASTÃO 3
+    A3->>A4: Lead fechado, iniciar onboarding
+    A3->>L: Vou passar para nosso coordenador!
+    end
+
+    rect rgb(232, 245, 233)
+    Note over A4,L: FASE 4: Onboarding
+    A4->>L: Olá! Vou cuidar da parte prática
+    A4->>L: Por favor, envie os documentos
+    L->>A4: 📎 Documentos enviados
+    A4->>S: 💾 Atualiza dados no sistema
+    A4->>L: 📝 Link para assinatura do contrato
+    L->>A4: ✅ Contrato assinado!
+    A4->>L: 📅 Visita agendada para produção
+    A4->>S: 🎉 CAPTAÇÃO CONCLUÍDA
+    end
