@@ -296,8 +296,19 @@ export function criarPresenterAgent(config: {
 
       basePrompt += getSharedBehavioralRules();
 
+      if (ctx?.knowledgeBase) {
+        basePrompt += `\n\n🔴 BRIEFING DO EMPREENDIMENTO/MERCADO:\nLeia o CONHECIMENTO DO EMPREENDIMENTO abaixo e ancore sua comunicação nisto. Se o cliente pedir avaliação de valores e os preços já constarem no briefing, apresente os valores diretamente em vez de prometer consultar.\n${ctx.knowledgeBase}`;
+      }
+
       if (ctx?.ultimaInteracao) {
         basePrompt += `\n\n[CONTEXTO DA ÚLTIMA INTERAÇÃO]: ${ctx.ultimaInteracao}`;
+        
+        // Injeção do RAG Comportamental
+        const { recuperarLicoesComportamentais } = require('../utilitarios/behavioralRAG');
+        const injecaoTatica = recuperarLicoesComportamentais(ctx.ultimaInteracao);
+        if (injecaoTatica) {
+          basePrompt += injecaoTatica;
+        }
       }
 
       if (ctx?.leadId) {
