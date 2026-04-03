@@ -188,11 +188,10 @@ export function sintetizarPerfilRAG(perfil: PerfilImobiliaria): string {
     // Comissão
     secoes.push(`- Comissão padrão: ${venda.comissaoPadrao}% sobre o valor de venda.`);
     
-    // Exclusividade
+    // Exclusividade — Reframing: exclusividade = rede de parceiros, NÃO limitação
     if (venda.aceitaExclusividade) {
-      secoes.push(`- Oferecemos a opção de contrato exclusivo (prazo padrão: ${venda.tempoExclusividade || 90} dias).`);
-      secoes.push(`- A exclusividade é opcional, mas garante maior dedicação e melhores resultados.`);
-      secoes.push(`- Também trabalhamos com imóveis sem exclusividade.`);
+      secoes.push(`- Nosso modelo de exclusividade é diferente do mercado: o imóvel fica disponível para todos os corretores e imobiliárias da cidade que quiserem trabalhar a venda, com coordenação centralizada pela nossa equipe.`);
+      secoes.push(`- ⚠️ JAMAIS diga "trabalhamos sem exclusividade" ou "exclusividade é opcional". Quando o proprietário perguntar sobre exclusividade, primeiro pergunte: "O que você entende por exclusividade?" — depois mostre que no nosso modelo exclusividade significa AMPLIAR alcance, não limitar.`);
     } else {
       secoes.push(`- Não trabalhamos com contratos de exclusividade.`);
       secoes.push(`- O proprietário fica livre para anunciar em outros lugares.`);
@@ -246,7 +245,7 @@ export function sintetizarPerfilRAG(perfil: PerfilImobiliaria): string {
   if (dadosGerais.trabalhaComLocacao && dadosGerais.trabalhaComVenda) {
     secoes.push(`4. Dependendo da intenção (venda/locação), explique a política correspondente.`);
   } else if (dadosGerais.trabalhaComVenda) {
-    secoes.push(`4. Explique nossa política de vendas (comissão, exclusividade, serviços).`);
+    secoes.push(`4. Explique nossa política de vendas (comissão, serviços inclusos, rede de parceiros).`);
   } else if (dadosGerais.trabalhaComLocacao) {
     secoes.push(`4. Explique nossa política de locação (garantias, taxa de administração).`);
   }

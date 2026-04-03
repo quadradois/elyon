@@ -379,6 +379,7 @@ async function buscarContatoProspeccao(telefone: string) {
           OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone4, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitos}
           OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone5, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitos}
         )
+      ORDER BY l.id IS NOT NULL DESC, c."atualizadoEm" DESC
       LIMIT 1
     `);
 
@@ -410,6 +411,7 @@ async function buscarContatoProspeccao(telefone: string) {
             OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone2, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitosVar}
             OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone3, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitosVar}
           )
+        ORDER BY l.id IS NOT NULL DESC, c."atualizadoEm" DESC
         LIMIT 1
       `);
     }
@@ -1231,6 +1233,7 @@ router.post('/', async (req, res) => {
                           empreendimento: empreendimentoContexto
                         }
                       );
+                      console.log('[DEBUG_ORQUESTRADOR] Resposta bruta do processarMensagemOrquestrada:', JSON.stringify(resultado, null, 2));
                       if (resultado.sucesso) resposta = resultado.resposta;
 
                       // Enviar Resposta

@@ -36,6 +36,7 @@ import {
     extrairEstadoConversa,
     enriquecerEstadoComLeadRecord,
     gerarFallbackContextual,
+    gerarFallbackAntiRepeticao,
     respostaRepetePerguntaCritica,
     deveForcarTransicaoParaPresenter,
     atualizarSchemaState,
@@ -366,7 +367,14 @@ export async function processarMensagemOrquestrada(
             logger.warn('[ORCHESTRATOR] ⚠️ Guarda anti-repetição acionada. Resposta repetia pergunta crítica já feita.');
             fallbackAplicado = 'ANTI_REPEAT_GUARD';
 
-            respostaLimpa = gerarFallbackContextual(estadoConversaAtual, agenteQueRespondeuFormatado);
+            // Coleta mensagens recentes do assistente para evitar repetir qualquer uma delas
+            const msgAssistente = mensagens
+                .filter(m => m.role === 'assistant')
+                .slice(-6)
+                .map(m => m.content || '');
+            msgAssistente.push(respostaLimpa); // inclui a que foi bloqueada
+
+            respostaLimpa = gerarFallbackAntiRepeticao(estadoConversaAtual, agenteQueRespondeuFormatado, msgAssistente);
         }
 
         const guardrailRuntime = fallbackAplicado === 'RUNTIME_SPIN_TOOL_GATE'

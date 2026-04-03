@@ -695,18 +695,18 @@ OBRIGATÓRIO coletar: nome e telefone do indicado.`,
 
 export const agendarReuniaoCloserTool = tool({
     name: 'agendar_reuniao_closer',
-    description: `Agenda reunião virtual (20 min) entre o proprietário e o Closer humano.
+    description: `🚨 CHAME ESTA TOOL IMEDIATAMENTE quando o lead mencionar qualquer data e horário para reunião.
 
-Use APENAS quando:
-1. O proprietário confirmou interesse real na solução ("faz sentido", "quero avançar", "pode ser")
-2. Você já perguntou e o lead confirmou data e horário disponível
+GATILHO OBRIGATÓRIO: Se o lead disse qualquer coisa como "pode ser dia X às YH", "dia X às Y horas", "03/04 às 17h", "amanhã às 14h" — CHAME ESTA TOOL AGORA antes de responder qualquer texto.
 
-FORMATO da data: "DD/MM/YYYY HH:mm" (ex: "15/03/2026 14:00")
+NÃO confirme a reunião em texto sem chamar esta tool primeiro. A confirmação textual só deve vir DEPOIS da tool retornar success=true.
 
-⚠️ NUNCA agende sem ter data e horário CONFIRMADOS pelo lead na conversa.`,
+FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano atual (2026).
+
+⚠️ NUNCA substitua a chamada desta tool por uma confirmação textual. Se não chamar a tool, o agendamento NÃO será registrado no sistema.`,
 
     parameters: z.object({
-        leadId: z.string().describe('ID do lead'),
+        contatoId: z.string().describe('ID do contato (mesmo usado nas outras tools)'),
         dataHora: z.string().describe('Data e hora confirmada: "DD/MM/YYYY HH:mm"'),
         modalidade: z.enum(['google_meet', 'whatsapp_video', 'zoom']).default('google_meet').describe('Tipo de reunião virtual'),
         observacoesCloser: z.string().optional().describe('Contexto da conversa para o Closer: dores identificadas, interesse, objeções')
@@ -714,21 +714,43 @@ FORMATO da data: "DD/MM/YYYY HH:mm" (ex: "15/03/2026 14:00")
 
     execute: async (args) => {
         try {
-            console.log(`[TOOL] agendar_reuniao_closer - Lead ${args.leadId} - ${args.dataHora}`);
+            console.log(`[TOOL] agendar_reuniao_closer - Contato ${args.contatoId} - ${args.dataHora}`);
 
-            // Verificar lead
-            const lead = await prisma.lead.findUnique({
-                where: { id: args.leadId },
-                include: { contatoOrigem: true }
+            // Resolver leadId a partir do contatoId (o LLM sempre conhece o contatoId)
+            const contato = await prisma.contato.findUnique({
+                where: { id: args.contatoId },
+                select: { id: true, leadId: true, nome: true }
             });
 
-            if (!lead) {
-                return JSON.stringify({ success: false, error: 'Lead não encontrado' });
+            if (!contato) {
+                return JSON.stringify({ success: false, error: 'Contato não encontrado' });
+            }
+
+            if (!contato.leadId) {
+                return JSON.stringify({ success: false, error: 'Contato ainda não convertido em lead. Use converter_para_lead antes de agendar.' });
+            }
+
+            const leadId = contato.leadId;
+            console.log(`[TOOL] agendar_reuniao_closer - LeadId resolvido: ${leadId}`);
+
+            // Parse data "DD/MM/YYYY HH:mm"
+            let agendadoPara: Date | null = null;
+            try {
+                const [dataParte, horaParte] = args.dataHora.split(' ');
+                if (dataParte) {
+                    const [dia, mes, ano] = dataParte.split('/').map(Number);
+                    if (dia && mes && ano) {
+                        const [hora, minuto] = (horaParte || '10:00').split(':').map(Number);
+                        agendadoPara = new Date(ano, mes - 1, dia, hora || 10, minuto || 0);
+                    }
+                }
+            } catch (e) {
+                console.warn('[TOOL] agendar_reuniao_closer - Erro no parse da data:', e);
             }
 
             // Gerar link simulável (MVP): usar Google Meet com código baseado no leadId
             // TODO: integrar com Google Calendar API ou Calendly webhook para link real
-            const meetCode = `elyon-${args.leadId.substring(0, 8)}`;
+            const meetCode = `elyon-${leadId.substring(0, 8)}`;
             const linkReuniao = args.modalidade === 'google_meet'
                 ? `https://meet.google.com/${meetCode}`
                 : args.modalidade === 'zoom'
@@ -738,7 +760,7 @@ FORMATO da data: "DD/MM/YYYY HH:mm" (ex: "15/03/2026 14:00")
             // Registrar como atividade no lead
             await prisma.atividade.create({
                 data: {
-                    leadId: args.leadId,
+                    leadId,
                     tipo: 'REUNIAO',
                     titulo: `Reunião com Closer — ${args.dataHora}`,
                     descricao: [
@@ -748,12 +770,13 @@ FORMATO da data: "DD/MM/YYYY HH:mm" (ex: "15/03/2026 14:00")
                         args.observacoesCloser ? `Contexto: ${args.observacoesCloser}` : ''
                     ].filter(Boolean).join(' | '),
                     criadoPor: 'ai_agent',
-                    completadoEm: new Date()
+                    agendadoPara: agendadoPara || undefined,
+                    statusAgendamento: agendadoPara ? 'PENDENTE' : undefined
                 }
             });
 
             await registrarExecucaoTool({
-                leadId: args.leadId,
+                leadId,
                 toolName: 'agendar_reuniao_closer',
                 sucesso: true,
                 detalhes: `Agendado para ${args.dataHora} via ${args.modalidade}`
@@ -765,7 +788,8 @@ FORMATO da data: "DD/MM/YYYY HH:mm" (ex: "15/03/2026 14:00")
 
             return JSON.stringify({
                 success: true,
-                leadId: args.leadId,
+                leadId,
+                contatoId: args.contatoId,
                 dataHora: args.dataHora,
                 modalidade: args.modalidade,
                 linkReuniao,
@@ -775,7 +799,6 @@ FORMATO da data: "DD/MM/YYYY HH:mm" (ex: "15/03/2026 14:00")
         } catch (error: any) {
             console.error('[TOOL] agendar_reuniao_closer - Erro:', error);
             await registrarExecucaoTool({
-                leadId: args.leadId,
                 toolName: 'agendar_reuniao_closer',
                 sucesso: false,
                 detalhes: error?.message || 'Erro ao agendar'
@@ -784,5 +807,7 @@ FORMATO da data: "DD/MM/YYYY HH:mm" (ex: "15/03/2026 14:00")
         }
     }
 });
+
+
 
 

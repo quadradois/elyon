@@ -590,7 +590,22 @@ export function ConfiguracaoLLM() {
                                     />
                                     <div>
                                         <Label htmlFor="ragFallback" className="font-semibold text-slate-800">Forçar RAG no Provedor Principal?</Label>
-                                        <p className="text-xs text-slate-500">Se o seu modelo não suportar a rota /v1/embeddings, ocorrerão erros nas transcrições diárias de histórico.</p>
+                                        <p className="text-xs text-slate-500">Se o seu modelo não suportar a rota /v1/embeddings, ocorrerão erros nas buscas de conhecimento do Agente.</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-4 border border-orange-200/60 p-3 rounded-lg bg-white/50">
+                                    <input 
+                                        type="checkbox" 
+                                        id="audioFallback" 
+                                        className="w-4 h-4 accent-orange-500 rounded"
+                                        checked={form.usarChavePrincipalParaAudio}
+                                        onChange={(e) => setForm(prev => ({...prev, usarChavePrincipalParaAudio: e.target.checked}))}
+                                        disabled={config?.temApiKey && !editando}
+                                    />
+                                    <div>
+                                        <Label htmlFor="audioFallback" className="font-semibold text-slate-800">Forçar Áudio no Provedor Principal?</Label>
+                                        <p className="text-xs text-slate-500">Se o seu modelo não suportar a rota /v1/audio/transcriptions, ocorrerão erros ao receber áudios.</p>
                                     </div>
                                 </div>
 

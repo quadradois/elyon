@@ -91,8 +91,8 @@ export function aplicarFiltrosRespostaOrchestrator(
       respostaLimpa = 'Perfeito, faz total sentido. Posso te mostrar agora, em 1 minuto, como a nossa estratégia aumenta as visitas qualificadas no seu imóvel?';
       fallbackAplicado = 'PRESENTER_TOOL_EMPTY_OUTPUT';
     } else {
-      logger.warn('[ORCHESTRATOR] ⚠️ Alerta: O LLM falhou em gerar resposta ou tool call. Usando fallback.');
-      respostaLimpa = 'Desculpe, deu um pequeno erro aqui. Pode repetir por favor?';
+      logger.warn('[ORCHESTRATOR] ⚠️ Alerta: O LLM falhou em gerar resposta ou tool call. Usando fallback contextual.');
+      respostaLimpa = gerarFallbackContextual(estadoConversaAtual, agenteQueRespondeuFormatado);
       fallbackAplicado = 'GENERIC_FALLBACK';
     }
   }

@@ -16,4 +16,14 @@ describe('getSharedBehavioralRules', () => {
     expect(rules).toContain('RESPOSTA OBRIGATÓRIA A PERGUNTAS DIRETAS');
     expect(rules).toContain('ESPELHAMENTO DE LINGUAGEM');
   });
+
+  it('inclui seção HANDOFF TRIGGER MATRIX com gatilhos PVAM', () => {
+    const rules = getSharedBehavioralRules();
+
+    expect(rules).toContain('HANDOFF TRIGGER MATRIX');
+    expect(rules).toContain('converter_para_lead');
+    expect(rules).toContain('PVAM-M');
+    expect(rules).toContain('PVAM-A');
+    expect(rules).toContain('registrar_optout');
+  });
 });

@@ -44,9 +44,11 @@ export async function executarAgenteComRetryReasoning(
   } catch (runError: any) {
     const mensagemErro = String(runError?.message || '');
     const erroReasoningContent = /reasoning_content is missing/i.test(mensagemErro);
+    const erroToolCallId = /tool_call_id.*is not found|is not found.*tool_call_id/i.test(mensagemErro)
+      || (runError?.status === 400 && /tool_call_id/i.test(mensagemErro));
 
+    // ── Tratamento: reasoning_content missing ──
     if (erroReasoningContent) {
-      // Limpar cache Redis se havia histórico cached
       if (cachedHistory && cachedHistory.length > 0 && contatoId) {
         await limparHistoricoContato(contatoId);
         logger.debug(`[ORCHESTRATOR] 🧹 Cache SDK limpo para ${contatoId.substring(0, 8)}...`);
@@ -67,11 +69,28 @@ export async function executarAgenteComRetryReasoning(
         }
       }
 
-      // Sem cachedHistory: logic de fallback — primeiro turno ainda falhou
-      // Isso indica incompatibilidade estrutural da entrada com o modelo thinking
       logger.error('[ORCHESTRATOR] ❌ reasoning_content error sem cachedHistory. Verifique a compatibilidade do modelo com o SDK @openai/agents.');
+    }
+
+    // ── Tratamento: tool_call_id not found (histórico SDK com IDs obsoletos) ──
+    if (erroToolCallId && contatoId) {
+      logger.warn(`[ORCHESTRATOR] ⚠️ tool_call_id obsoleto detectado para ${contatoId.substring(0, 8)}. Purgando histórico SDK e fazendo retry...`);
+      await limparHistoricoContato(contatoId);
+
+      inputSDKFinal = construirInputSemCache();
+      logger.debug(`[ORCHESTRATOR] 🔁 Retry sem cache (tool_call_id): ${inputSDKFinal.length} itens`);
+
+      try {
+        const result = await executarRun(agente, inputSDKFinal, { context: elyonContext });
+        logger.debug('[ORCHESTRATOR] ✅ Retry por tool_call_id bem-sucedido.');
+        return { result, inputSDKFinal };
+      } catch (retryError: any) {
+        logger.error('[ORCHESTRATOR] ❌ Retry após purge tool_call_id também falhou:', retryError?.message);
+        throw retryError;
+      }
     }
 
     throw runError;
   }
+
 }

@@ -342,3 +342,43 @@ export function gerarFallbackContextual(
     // Caso geral com dados parciais
     return 'Entendi! Posso te mostrar como a gente trabalha pra conseguir mais visitas qualificadas no seu imóvel?';
 }
+
+/**
+ * Fallback específico para quando a guarda anti-repetição é acionada.
+ * Garante que a mensagem é DIFERENTE da que foi bloqueada e avança a conversa.
+ */
+export function gerarFallbackAntiRepeticao(
+    estado: EstadoConversa,
+    agente: string,
+    mensagensBloqueadas: string[]
+): string {
+    const opcoes: string[] = [];
+
+    if (estado.estaAnunciando) {
+        opcoes.push(
+            'Pra agilizar: onde tá anunciando hoje e como tá o retorno até agora?',
+            'Me conta: o que mais tá te incomodando na venda até agora?',
+            'E as visitas, como tão? Tá recebendo bastante interesse?',
+        );
+    } else if (estado.timeline) {
+        opcoes.push(
+            `Com esse prazo, cada semana conta. Me conta: como tá a divulgação do seu imóvel hoje?`,
+            'Pra eu entender melhor sua situação: onde tá anunciando e como tá o retorno?',
+            'Legal! E como tá a divulgação do seu imóvel hoje? Tá tendo visitas?',
+        );
+    } else {
+        opcoes.push(
+            'Me conta: o que te fez pensar em vender agora?',
+            'E como tá a situação do imóvel hoje? Já chegou a anunciar ou ainda não?',
+            'Legal! E você tem algum prazo pra concluir a venda?',
+        );
+    }
+
+    // Filtra opções que já foram usadas
+    const normBloqueadas = mensagensBloqueadas.map(m => normalizarTexto(m));
+    const opcoesFiltradas = opcoes.filter(o => !normBloqueadas.includes(normalizarTexto(o)));
+
+    // Se sobrou alguma opção filtrada, usa; senão pega a primeira opção
+    return opcoesFiltradas.length > 0 ? opcoesFiltradas[0] : opcoes[0];
+}
+

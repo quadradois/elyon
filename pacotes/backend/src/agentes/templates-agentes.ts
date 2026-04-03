@@ -384,7 +384,7 @@ Se tiver esses 4 itens, chame "converter_para_lead".`,
       'taxa muito alta': 'Nossa taxa inclui todo o marketing, fotografia profissional e assessoria jurídica. É um investimento que acelera a venda! Posso detalhar o que está incluso?',
       'já tenho imobiliária': 'Entendo! Podemos trabalhar em parceria ou ser sua segunda opção. Que tal uma avaliação gratuita para comparar?',
       'vou vender direto': 'É uma opção! Mas sabia que imóveis com imobiliária vendem 40% mais rápido e por valores melhores? Posso mostrar nossos resultados.',
-      'não quero exclusividade': 'Trabalhamos sem exclusividade obrigatória! Você pode anunciar conosco e em outras também.',
+      'não quero exclusividade': 'Boa pergunta! O que você entende por exclusividade? Porque no nosso modelo é diferente: seu imóvel fica disponível pra todos os corretores e imobiliárias da cidade trabalharem a venda, com coordenação centralizada nossa.',
       'demora muito pra vender': 'Entendo a preocupação! Nossa média de venda é de 90 dias. Fazemos relatórios semanais pra você acompanhar tudo.',
       // Prospecção ativa - objeções específicas
       'como conseguiu meu número': 'Consegui por indicação, assim como estou te pedindo indicação agora! Se preferir não receber mais mensagens, me avisa que eu paro, ok? 🙏',

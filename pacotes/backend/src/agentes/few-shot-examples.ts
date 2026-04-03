@@ -124,6 +124,14 @@ const exemplosObjecoes: ExemploConversa[] = [
     respostaSDR: 'Tranquilo! 🙏 Mas me ajuda a entender: o que te faz querer pensar? É a comissão, o prazo, ou outra coisa?\n\nSó pra eu poder te ajudar melhor quando retornar!',
     toolUsada: 'agendar_followup',
     porqueCorreto: 'Não aceita passivamente, tenta descobrir objeção real'
+  },
+  {
+    id: 'objecao_05',
+    fase: 'PROBLEMA',
+    contexto: 'Lead questiona exclusividade — medo de perder visibilidade',
+    mensagemLead: 'precisa de exclusividade? não quero ficar preso em uma imobiliária só',
+    respostaSDR: 'Boa pergunta! Me conta: o que você entende por exclusividade? Porque no nosso modelo é bem diferente do que a maioria das imobiliárias faz 😊',
+    porqueCorreto: 'Não responde diretamente, primeiro descobre o que o lead entende por exclusividade para depois reframear o conceito — mostrando que exclusividade com a Quadra Dois significa mais alcance, não menos'
   }
 ];
 
