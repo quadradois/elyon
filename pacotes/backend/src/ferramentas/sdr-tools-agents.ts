@@ -435,7 +435,8 @@ export const gerarLinkContratoTool = tool({
                 mensagem: "Link gerado com sucesso. Envie para o cliente."
             });
 
-        } catch (error: any) {
+        } catch (e) {
+            const error = e as Error;
             console.error('[TOOL] Erro ao gerar contrato:', error);
             await registrarExecucaoTool({
                 leadId: args.leadId,
@@ -597,7 +598,8 @@ O CRM criará o Proprietário + Property para publicação nos portais.`,
                 });
             }
 
-        } catch (error: any) {
+        } catch (e) {
+            const error = e as Error;
             console.error('[TOOL] enviar_para_crm - Erro:', error);
             return JSON.stringify({
                 success: false,
@@ -682,7 +684,8 @@ OBRIGATÓRIO coletar: nome e telefone do indicado.`,
                 mensagem: `Indicação registrada! ${args.nomeIndicado} será contatado na próxima rodada de disparos.`
             });
 
-        } catch (error: any) {
+        } catch (e) {
+            const error = e as Error;
             console.error('[TOOL] registrar_indicacao - Erro:', error);
             return JSON.stringify({ success: false, error: error.message });
         }
@@ -796,7 +799,8 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                 mensagem
             });
 
-        } catch (error: any) {
+        } catch (e) {
+            const error = e as Error;
             console.error('[TOOL] agendar_reuniao_closer - Erro:', error);
             await registrarExecucaoTool({
                 toolName: 'agendar_reuniao_closer',

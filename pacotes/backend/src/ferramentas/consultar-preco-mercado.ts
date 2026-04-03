@@ -164,7 +164,8 @@ IMPORTANTE: Deixe claro ao lead que é uma estimativa e que uma avaliação pres
                 mensagem: `Com base nos dados disponíveis, o ${args.nomeEdificio} tem uma estimativa de mercado entre ${formatarValor(valorMinimo)} e ${formatarValor(valorMaximo)}${precoM2Medio > 0 ? ` (aprox. R$ ${precoM2Medio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}/m²)` : ''}. Recomende ao lead uma avaliação presencial para valor preciso.`
             });
 
-        } catch (error: any) {
+        } catch (e) {
+            const error = e as Error;
             console.error('[TOOL] consultar_preco_mercado — Erro:', error);
             return JSON.stringify({
                 success: false,
