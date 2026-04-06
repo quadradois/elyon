@@ -895,7 +895,7 @@ export function Captacao() {
       {/* Header */}
       <div className="text-center">
         <h1 className="text-2xl font-bold text-slate-900 flex items-center justify-center gap-2">
-          <Sparkles className="w-6 h-6 text-yellow-500" />
+          <Sparkles className="w-6 h-6 text-amber-500" />
           Wizard de Captação
         </h1>
         <p className="text-slate-500">
@@ -927,7 +927,7 @@ export function Captacao() {
                   href="https://portalmapa.goiania.go.gov.br/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 text-sm font-medium text-blue-700 bg-white hover:bg-blue-50 border border-blue-200 px-4 py-2 rounded-lg transition-colors shadow-sm"
+                  className="inline-flex items-center justify-center gap-2 text-sm font-medium text-brand bg-white hover:bg-indigo-50 border border-indigo-200 px-4 py-2 rounded-lg transition-colors shadow-sm"
                   title="Abre o Portal do Mapa de Goiânia em uma nova aba"
                 >
                   <MapIcon className="w-4 h-4" />
@@ -1029,7 +1029,7 @@ export function Captacao() {
 
             {/* Lista de Resultados */}
             {erro && (
-              <div className="text-center py-4 text-red-600 text-sm">
+              <div className="text-center py-4 text-danger text-sm">
                 {erro}
               </div>
             )}
@@ -1066,7 +1066,7 @@ export function Captacao() {
                     {resultadosBusca.length} resultado(s) encontrado(s)
                   </p>
                   {locaisSelecionados.length > 0 && (
-                    <span className="text-sm font-medium text-blue-600">
+                    <span className="text-sm font-medium text-brand">
                       {locaisSelecionados.length} selecionado(s)
                     </span>
                   )}
@@ -1080,8 +1080,8 @@ export function Captacao() {
                       <div
                         key={`${resultado.tipo}-${resultado.codigo}`}
                         className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${selecionado
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-slate-200 hover:border-blue-300 hover:bg-slate-50"
+                          ? "border-brand bg-indigo-50"
+                          : "border-slate-200 hover:border-indigo-300 hover:bg-slate-50"
                           }`}
                       >
                         {/* Checkbox */}
@@ -1090,7 +1090,7 @@ export function Captacao() {
                           className="shrink-0"
                         >
                           {selecionado ? (
-                            <CheckSquare className="w-5 h-5 text-blue-600" />
+                            <CheckSquare className="w-5 h-5 text-brand" />
                           ) : (
                             <Square className="w-5 h-5 text-slate-300 hover:text-slate-400" />
                           )}
@@ -1103,14 +1103,14 @@ export function Captacao() {
                         >
                           <div
                             className={`w-10 h-10 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105 ${resultado.tipo === "edificio"
-                              ? "bg-blue-100"
-                              : "bg-green-100"
+                              ? "bg-indigo-100"
+                              : "bg-emerald-100"
                               }`}
                           >
                             {resultado.tipo === "edificio" ? (
-                              <Building2 className="w-5 h-5 text-blue-600" />
+                              <Building2 className="w-5 h-5 text-brand" />
                             ) : (
-                              <Home className="w-5 h-5 text-green-600" />
+                              <Home className="w-5 h-5 text-emerald-600" />
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -1120,8 +1120,8 @@ export function Captacao() {
                               </p>
                               <span
                                 className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${resultado.tipo === "edificio"
-                                  ? "bg-blue-100 text-blue-700"
-                                  : "bg-green-100 text-green-700"
+                                  ? "bg-indigo-100 text-indigo-700"
+                                  : "bg-emerald-100 text-emerald-700"
                                   }`}
                               >
                                 {resultado.tipo === "edificio"
@@ -1189,14 +1189,14 @@ export function Captacao() {
                 {/* Toggle Modo Turbo */}
                 <label className="flex items-center gap-2 cursor-pointer">
                   <span
-                    className={`text-xs font-medium ${modoTurbo ? "text-yellow-700" : "text-slate-500"}`}
+                    className={`text-xs font-medium ${modoTurbo ? "text-amber-700" : "text-slate-500"}`}
                   >
                     Modo Turbo
                   </span>
                   <button
                     type="button"
                     onClick={() => setModoTurbo(!modoTurbo)}
-                    className={`relative w-9 h-5 rounded-full transition-colors ${modoTurbo ? "bg-yellow-500" : "bg-slate-300"
+                    className={`relative w-9 h-5 rounded-full transition-colors ${modoTurbo ? "bg-warning" : "bg-slate-300"
                       }`}
                   >
                     <span
@@ -1204,7 +1204,7 @@ export function Captacao() {
                         }`}
                     >
                       {modoTurbo && (
-                        <Zap className="w-2.5 h-2.5 text-yellow-500" />
+                        <Zap className="w-2.5 h-2.5 text-amber-500" />
                       )}
                     </span>
                   </button>
@@ -1310,7 +1310,7 @@ export function Captacao() {
                     ) : (
                       <>
                         Mostrando{" "}
-                        <span className="font-semibold text-blue-600">
+                        <span className="font-semibold text-brand">
                           {unidadesFiltradas.length}
                         </span>{" "}
                         de {unidades.length}{" "}
@@ -1360,7 +1360,7 @@ export function Captacao() {
                             unidadesFiltradas.every((u) =>
                               selecionados.includes(u.nrinscr)
                             ) ? (
-                            <CheckSquare className="w-5 h-5 text-blue-600" />
+                            <CheckSquare className="w-5 h-5 text-brand" />
                           ) : (
                             <Square className="w-5 h-5 text-slate-400" />
                           )}
@@ -1395,7 +1395,7 @@ export function Captacao() {
                           <p>Nenhuma unidade corresponde ao filtro</p>
                           <button
                             onClick={limparFiltros}
-                            className="text-blue-600 hover:underline text-sm mt-1"
+                            className="text-brand hover:underline text-sm mt-1"
                           >
                             Limpar filtros
                           </button>
@@ -1407,12 +1407,12 @@ export function Captacao() {
                         return (
                           <TableRow
                             key={`${item.nrinscr}-${index}`}
-                            className={`cursor-pointer hover:bg-blue-50 transition-colors ${isSelected ? "bg-blue-50/50" : ""}`}
+                            className={`cursor-pointer hover:bg-indigo-50 transition-colors ${isSelected ? "bg-indigo-50/50" : ""}`}
                             onClick={() => toggleSelecao(item.nrinscr)}
                           >
                             <TableCell>
                               {isSelected ? (
-                                <CheckSquare className="w-5 h-5 text-blue-600" />
+                                <CheckSquare className="w-5 h-5 text-brand" />
                               ) : (
                                 <Square className="w-5 h-5 text-slate-400" />
                               )}
@@ -1474,7 +1474,7 @@ export function Captacao() {
                   onClick={iniciarProcessamento}
                   disabled={selecionados.length === 0}
                   className={
-                    modoTurbo ? "bg-yellow-500 hover:bg-yellow-600" : ""
+                    modoTurbo ? "bg-warning hover:bg-amber-600" : ""
                   }
                 >
                   {modoTurbo && <Zap className="w-4 h-4 mr-2" />}
@@ -1494,7 +1494,7 @@ export function Captacao() {
             <div className="text-center">
               {processando ? (
                 <>
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100 text-blue-700 text-sm font-medium mb-4 animate-pulse">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-100 text-indigo-700 text-sm font-medium mb-4 animate-pulse">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Processando em segundo plano...
                   </div>
@@ -1518,7 +1518,7 @@ export function Captacao() {
                 </>
               ) : (
                 <>
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-100 text-green-700 text-sm font-medium mb-4">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 text-emerald-700 text-sm font-medium mb-4">
                     <CheckCircle2 className="w-4 h-4" />
                     Mineração concluída com sucesso!
                   </div>
@@ -1581,29 +1581,29 @@ export function Captacao() {
             {/* Cards de Métricas em Tempo Real */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {/* Card: Imóveis */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 border border-blue-200/50 transition-all duration-300 hover:scale-105 hover:shadow-lg">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 border border-indigo-200/50 transition-all duration-300 hover:scale-105 hover:shadow-lg">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="p-2 bg-blue-500/10 rounded-lg">
-                    <Building2 className="w-4 h-4 text-blue-600" />
+                  <div className="p-2 bg-indigo-500/10 rounded-lg">
+                    <Building2 className="w-4 h-4 text-brand" />
                   </div>
-                  <span className="text-xs font-medium text-blue-600 uppercase tracking-wide">Imóveis</span>
+                  <span className="text-xs font-medium text-brand uppercase tracking-wide">Imóveis</span>
                 </div>
-                <p className="text-2xl font-bold text-blue-900">{selecionados.length}</p>
-                <p className="text-xs text-blue-500">analisados</p>
+                <p className="text-2xl font-bold text-indigo-900">{selecionados.length}</p>
+                <p className="text-xs text-indigo-500">analisados</p>
               </div>
 
               {/* Card: Proprietários */}
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-xl p-4 border border-purple-200/50 transition-all duration-300 hover:scale-105 hover:shadow-lg">
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-xl p-4 border border-violet-200/50 transition-all duration-300 hover:scale-105 hover:shadow-lg">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="p-2 bg-purple-500/10 rounded-lg">
-                    <Users className="w-4 h-4 text-purple-600" />
+                  <div className="p-2 bg-violet-500/10 rounded-lg">
+                    <Users className="w-4 h-4 text-violet-600" />
                   </div>
-                  <span className="text-xs font-medium text-purple-600 uppercase tracking-wide">Proprietários</span>
+                  <span className="text-xs font-medium text-violet-600 uppercase tracking-wide">Proprietários</span>
                 </div>
-                <p className="text-2xl font-bold text-purple-900">
+                <p className="text-2xl font-bold text-violet-900">
                   {processando ? Math.round(selecionados.length * progresso / 100) : estatisticas.total}
                 </p>
-                <p className="text-xs text-purple-500">identificados</p>
+                <p className="text-xs text-violet-500">identificados</p>
               </div>
 
               {/* Card: Com Contato */}
@@ -1641,19 +1641,19 @@ export function Captacao() {
                 {/* Passo 1 */}
                 <div className="flex items-center gap-4">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${progresso >= 10
-                    ? "bg-green-500 text-white"
+                    ? "bg-success text-white"
                     : "bg-slate-200 text-slate-400"
                     }`}>
                     {progresso >= 10 ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-sm font-medium">1</span>}
                   </div>
                   <div className="flex-1">
-                    <p className={`font-medium ${progresso >= 10 ? "text-green-700" : "text-slate-500"}`}>
+                    <p className={`font-medium ${progresso >= 10 ? "text-emerald-700" : "text-slate-500"}`}>
                       Iniciando mineração
                     </p>
                     <p className="text-xs text-slate-400">Preparando processamento das unidades</p>
                   </div>
                   {progresso >= 10 && progresso < 50 && (
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                    <Loader2 className="w-4 h-4 animate-spin text-brand" />
                   )}
                 </div>
 
@@ -1663,21 +1663,21 @@ export function Captacao() {
                 {/* Passo 2 */}
                 <div className="flex items-center gap-4">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${progresso >= 50
-                    ? "bg-green-500 text-white"
+                    ? "bg-success text-white"
                     : progresso >= 10
-                      ? "bg-blue-500 text-white animate-pulse"
+                      ? "bg-brand text-white animate-pulse"
                       : "bg-slate-200 text-slate-400"
                     }`}>
                     {progresso >= 50 ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-sm font-medium">2</span>}
                   </div>
                   <div className="flex-1">
-                    <p className={`font-medium ${progresso >= 50 ? "text-green-700" : progresso >= 10 ? "text-blue-700" : "text-slate-500"}`}>
+                    <p className={`font-medium ${progresso >= 50 ? "text-emerald-700" : progresso >= 10 ? "text-indigo-700" : "text-slate-500"}`}>
                       Identificando proprietários
                     </p>
                     <p className="text-xs text-slate-400">Consultando base de dados do IPTU</p>
                   </div>
                   {progresso >= 10 && progresso < 50 && (
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                    <Loader2 className="w-4 h-4 animate-spin text-brand" />
                   )}
                 </div>
 
@@ -1687,21 +1687,21 @@ export function Captacao() {
                 {/* Passo 3 */}
                 <div className="flex items-center gap-4">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${progresso >= 90
-                    ? "bg-green-500 text-white"
+                    ? "bg-success text-white"
                     : progresso >= 50
-                      ? "bg-blue-500 text-white animate-pulse"
+                      ? "bg-brand text-white animate-pulse"
                       : "bg-slate-200 text-slate-400"
                     }`}>
                     {progresso >= 90 ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-sm font-medium">3</span>}
                   </div>
                   <div className="flex-1">
-                    <p className={`font-medium ${progresso >= 90 ? "text-green-700" : progresso >= 50 ? "text-blue-700" : "text-slate-500"}`}>
+                    <p className={`font-medium ${progresso >= 90 ? "text-emerald-700" : progresso >= 50 ? "text-indigo-700" : "text-slate-500"}`}>
                       Buscando informações de contato
                     </p>
                     <p className="text-xs text-slate-400">Telefones, WhatsApp e e-mails</p>
                   </div>
                   {progresso >= 50 && progresso < 90 && (
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                    <Loader2 className="w-4 h-4 animate-spin text-brand" />
                   )}
                 </div>
 
@@ -1711,21 +1711,21 @@ export function Captacao() {
                 {/* Passo 4 */}
                 <div className="flex items-center gap-4">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${progresso === 100
-                    ? "bg-green-500 text-white"
+                    ? "bg-success text-white"
                     : progresso >= 90
-                      ? "bg-blue-500 text-white animate-pulse"
+                      ? "bg-brand text-white animate-pulse"
                       : "bg-slate-200 text-slate-400"
                     }`}>
                     {progresso === 100 ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-sm font-medium">4</span>}
                   </div>
                   <div className="flex-1">
-                    <p className={`font-medium ${progresso === 100 ? "text-green-700" : progresso >= 90 ? "text-blue-700" : "text-slate-500"}`}>
+                    <p className={`font-medium ${progresso === 100 ? "text-emerald-700" : progresso >= 90 ? "text-indigo-700" : "text-slate-500"}`}>
                       Salvando leads qualificados
                     </p>
                     <p className="text-xs text-slate-400">Armazenando no banco de dados</p>
                   </div>
                   {progresso >= 90 && progresso < 100 && (
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                    <Loader2 className="w-4 h-4 animate-spin text-brand" />
                   )}
                 </div>
               </div>
@@ -1734,7 +1734,7 @@ export function Captacao() {
             {/* Erro no processamento */}
             {!processando && erroProcessamento && (
               <div className="text-center animate-in fade-in-50 slide-in-from-bottom-4 duration-500 mt-8">
-                <div className="inline-flex flex-col items-center gap-4 p-6 bg-red-50 rounded-2xl border border-red-200">
+                <div className="inline-flex flex-col items-center gap-4 p-6 bg-red-100 rounded-2xl border border-red-200">
                   <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
                     <AlertCircle className="w-8 h-8 text-red-500" />
                   </div>
@@ -1742,13 +1742,13 @@ export function Captacao() {
                     <h3 className="text-lg font-bold text-red-800">
                       Processamento Interrompido
                     </h3>
-                    <p className="text-sm text-red-600 mt-1 max-w-sm">
+                    <p className="text-sm text-danger mt-1 max-w-sm">
                       {erroProcessamento}
                     </p>
                   </div>
                   <Button
                     onClick={iniciarProcessamento}
-                    className="bg-red-600 hover:bg-red-700 text-white shadow-lg w-full max-w-xs"
+                    className="bg-danger hover:bg-red-700 text-white shadow-lg w-full max-w-xs"
                   >
                     <Zap className="w-5 h-5 mr-2" />
                     Tentar Novamente
@@ -1760,15 +1760,15 @@ export function Captacao() {
             {/* Botão de ação (após conclusão) */}
             {!processando && progresso === 100 && (
               <div className="text-center animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
-                <div className="inline-flex flex-col items-center gap-4 p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-200">
-                  <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30">
+                <div className="inline-flex flex-col items-center gap-4 p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-emerald-200">
+                  <div className="w-16 h-16 bg-success rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30">
                     <CheckCircle2 className="w-8 h-8 text-white" />
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-green-800">
+                    <p className="text-lg font-bold text-emerald-800">
                       {estatisticas.sucesso} leads prontos para campanha!
                     </p>
-                    <p className="text-sm text-green-600 mt-1">
+                    <p className="text-sm text-emerald-600 mt-1">
                       Tempo de processamento: {estatisticas.tempoTotal}s
                       {estatisticas.doCache > 0 && ` • ${estatisticas.doCache} do cache`}
                     </p>
@@ -1776,7 +1776,7 @@ export function Captacao() {
                   <Button
                     onClick={() => setEtapa(4)}
                     size="lg"
-                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25"
+                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg shadow-emerald-500/25"
                   >
                     <Target className="w-5 h-5 mr-2" />
                     Salvar Lista de Contatos
@@ -1794,8 +1794,8 @@ export function Captacao() {
             {modoTurbo ? (
               /* ⚡ MODO TURBO: Salva automaticamente */
               <div className="text-center py-8 space-y-6">
-                <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto animate-pulse">
-                  <Zap className="w-10 h-10 text-yellow-500" />
+                <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto animate-pulse">
+                  <Zap className="w-10 h-10 text-amber-500" />
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold text-slate-900">
@@ -1805,12 +1805,12 @@ export function Captacao() {
                     Salvando <strong>{nomeLista}</strong> automaticamente...
                   </p>
                 </div>
-                <div className="max-w-xs mx-auto bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800 flex flex-col gap-2">
+                <div className="max-w-xs mx-auto bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800 flex flex-col gap-2">
                   <p>📋 <strong>{estatisticas.sucesso}</strong> contatos serão salvos.</p>
                   {criarCampanha && (
                     <p>🎯 Uma campanha será criada automaticamente com estes leads.</p>
                   )}
-                  <p className="mt-2 text-xs text-yellow-600 font-medium">Aguarde 2 segundos...</p>
+                  <p className="mt-2 text-xs text-amber-600 font-medium">Aguarde 2 segundos...</p>
                 </div>
                 {salvandoLista && (
                   <div className="flex items-center justify-center gap-2 text-slate-500 text-sm">
@@ -1865,7 +1865,7 @@ export function Captacao() {
                         id="criarCampanhaToggle"
                         checked={criarCampanha}
                         onChange={(e) => setCriarCampanha(e.target.checked)}
-                        className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                        className="mt-1 w-4 h-4 text-brand rounded border-gray-300 focus:ring-brand cursor-pointer"
                       />
                       <label htmlFor="criarCampanhaToggle" className="cursor-pointer font-medium leading-tight">
                         Criar campanha automaticamente
@@ -1890,7 +1890,7 @@ export function Captacao() {
                     )}
                   </div>
 
-                  <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800">
+                  <div className="bg-indigo-50 p-4 rounded-lg text-sm text-indigo-800">
                     <p className="font-medium">📊 Esta lista terá:</p>
                     <ul className="mt-2 space-y-1">
                       <li>• {estatisticas.sucesso} contatos minerados</li>
@@ -1936,8 +1936,8 @@ export function Captacao() {
         {/* ETAPA 5: CONCLUSÃO */}
         {etapa === 5 && (
           <div className="space-y-6 text-center animate-in fade-in-50 zoom-in-95 duration-500">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto animate-in zoom-in-50 duration-700">
-              <CheckCircle2 className="w-10 h-10 text-green-600" />
+            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto animate-in zoom-in-50 duration-700">
+              <CheckCircle2 className="w-10 h-10 text-emerald-600" />
             </div>
 
             <div className="animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
@@ -1954,32 +1954,32 @@ export function Captacao() {
               <h3 className="font-semibold text-slate-900 mb-3">Resumo:</h3>
               <ul className="space-y-2 text-sm text-slate-600">
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   {leadsGerados.length > 0
                     ? leadsGerados.length
                     : estatisticas.sucesso}{" "}
                   contatos minerados
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   Lista "{nomeLista}" salva
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   Pronto para usar em campanhas
                 </li>
               </ul>
             </div>
 
             {/* Pesquisar informações do empreendimento via IA */}
-            <div className="bg-purple-50 rounded-lg p-6 max-w-md mx-auto animate-in fade-in-50 slide-in-from-bottom-7 duration-800">
+            <div className="bg-violet-50 rounded-lg p-6 max-w-md mx-auto animate-in fade-in-50 slide-in-from-bottom-7 duration-800">
               <div className="flex items-center gap-3 mb-3">
-                <Brain className="w-5 h-5 text-purple-600" />
-                <h3 className="font-semibold text-purple-900">
+                <Brain className="w-5 h-5 text-violet-600" />
+                <h3 className="font-semibold text-violet-900">
                   Pesquisa Inteligente
                 </h3>
               </div>
-              <p className="text-sm text-purple-700 mb-4">
+              <p className="text-sm text-violet-700 mb-4">
                 Quer que a IA pesquise informações detalhadas sobre o
                 empreendimento? Isso irá criar um briefing completo para usar
                 nas conversas.
@@ -2029,7 +2029,7 @@ export function Captacao() {
                   setLeadsGerados([]);
                   setListaId(null);
                 }}
-                className="text-blue-600 hover:underline text-sm transition-colors"
+                className="text-brand hover:underline text-sm transition-colors"
               >
                 Iniciar Nova Mineração
               </button>

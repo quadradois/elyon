@@ -66,8 +66,8 @@ export function EtapaRevisar({ dados }: EtapaRevisarProps) {
           <span className={cn(
             "inline-block text-xs font-bold px-2 py-1 rounded-full",
             dados.modoCreacao === 'PRE_TREINADO' 
-              ? "bg-blue-100 text-blue-700" 
-              : "bg-purple-100 text-purple-700"
+              ? "bg-indigo-100 text-indigo-700" 
+              : "bg-violet-100 text-violet-700"
           )}>
             {dados.modoCreacao === 'PRE_TREINADO' ? 'PRÉ-TREINADO' : 'PERSONALIZADO'}
           </span>
@@ -88,12 +88,12 @@ export function EtapaRevisar({ dados }: EtapaRevisarProps) {
         </div>
 
         {/* Card Termos */}
-        <div className="bg-green-50 p-5 rounded-xl space-y-2">
-          <h4 className="font-medium text-green-700 flex items-center gap-2">
+        <div className="bg-emerald-50 p-5 rounded-xl space-y-2">
+          <h4 className="font-medium text-emerald-700 flex items-center gap-2">
             <CheckCircle className="w-4 h-4" />
             Termos de Uso
           </h4>
-          <p className="text-sm text-green-600">
+          <p className="text-sm text-emerald-600">
             ✓ Aceitos em {new Date().toLocaleDateString('pt-BR')}
           </p>
         </div>
@@ -121,8 +121,8 @@ export function EtapaRevisar({ dados }: EtapaRevisarProps) {
             {/* Resumo Locação e Venda - apenas se selecionados */}
             <div className="flex flex-wrap gap-4 mt-2">
               {perfil.dadosGerais.trabalhaComLocacao && (
-                <div className="text-sm bg-green-50 px-3 py-2 rounded-lg border border-green-200">
-                  <span className="font-medium text-green-700">🔑 Locação:</span>
+                <div className="text-sm bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">
+                  <span className="font-medium text-emerald-700">🔑 Locação:</span>
                   <span className="text-slate-600 ml-2">
                     {perfil.locacao.taxaAdministracao}% adm
                   </span>
@@ -133,8 +133,8 @@ export function EtapaRevisar({ dados }: EtapaRevisarProps) {
                 </div>
               )}
               {perfil.dadosGerais.trabalhaComVenda && (
-                <div className="text-sm bg-purple-50 px-3 py-2 rounded-lg border border-purple-200">
-                  <span className="font-medium text-purple-700">🏠 Venda:</span>
+                <div className="text-sm bg-violet-50 px-3 py-2 rounded-lg border border-violet-200">
+                  <span className="font-medium text-violet-700">🏠 Venda:</span>
                   <span className="text-slate-600 ml-2">
                     {perfil.venda.comissaoPadrao}% comissão
                   </span>
@@ -157,7 +157,7 @@ export function EtapaRevisar({ dados }: EtapaRevisarProps) {
       {/* Preview de mensagem */}
       <div className="space-y-2">
         <h4 className="font-medium text-slate-700">Preview da primeira mensagem</h4>
-        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
           <div className="flex gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold flex-shrink-0">
               {dados.nome.charAt(0)}

@@ -94,7 +94,7 @@ export default function AceitarContrato() {
             <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
                 <Card className="w-full max-w-lg">
                     <CardContent className="py-12 text-center">
-                        <Loader2 className="w-12 h-12 mx-auto mb-4 text-blue-600 animate-spin" />
+                        <Loader2 className="w-12 h-12 mx-auto mb-4 text-brand animate-spin" />
                         <p className="text-slate-600">Carregando contrato...</p>
                     </CardContent>
                 </Card>
@@ -175,7 +175,7 @@ export default function AceitarContrato() {
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <FileText className="w-12 h-12 mx-auto mb-4 text-blue-600" />
+                    <FileText className="w-12 h-12 mx-auto mb-4 text-brand" />
                     <h1 className="text-2xl font-bold text-slate-800">
                         Contrato de Autorização de Captação
                     </h1>
@@ -204,7 +204,7 @@ export default function AceitarContrato() {
                 )}
 
                 {/* Accept section */}
-                <Card className="border-blue-200 bg-blue-50/50">
+                <Card className="border-indigo-200 bg-indigo-50/50">
                     <CardContent className="py-6">
                         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="text-center md:text-left">

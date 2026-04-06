@@ -218,7 +218,7 @@ export function Integracoes() {
                     className={cn(
                         'px-4 py-3 rounded-lg flex items-center gap-2 text-sm',
                         mensagem.tipo === 'sucesso'
-                            ? 'bg-green-50 text-green-700 border border-green-200'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : 'bg-red-50 text-red-700 border border-red-200'
                     )}
                 >
@@ -242,8 +242,8 @@ export function Integracoes() {
                         <CardHeader>
                             <div className="flex items-start justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-                                        <Building2 className="w-6 h-6 text-blue-600" />
+                                    <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center">
+                                        <Building2 className="w-6 h-6 text-brand" />
                                     </div>
                                     <div>
                                         <CardTitle className="text-lg">CRM Quadradois</CardTitle>
@@ -256,7 +256,7 @@ export function Integracoes() {
                                 {crmIntegracao && (
                                     <div className="flex items-center gap-2">
                                         {crmIntegracao.ultimoTesteOk ? (
-                                            <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                                            <span className="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
                                                 <CheckCircle2 className="w-3 h-3" />
                                                 Conectado
                                             </span>
@@ -284,7 +284,7 @@ export function Integracoes() {
                                         <p className="text-xs text-slate-500">Total Envios</p>
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-2xl font-bold text-green-600">{crmIntegracao.totalSucessos}</p>
+                                        <p className="text-2xl font-bold text-emerald-600">{crmIntegracao.totalSucessos}</p>
                                         <p className="text-xs text-slate-500">Sucessos</p>
                                     </div>
                                     <div className="text-center">
@@ -403,11 +403,11 @@ export function Integracoes() {
                     </Card>
 
                     {/* Info adicional */}
-                    <Card className="bg-blue-50 border-blue-100">
+                    <Card className="bg-indigo-50 border-indigo-100">
                         <CardContent className="py-4">
                             <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                    <ExternalLink className="w-4 h-4 text-blue-600" />
+                                <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                    <ExternalLink className="w-4 h-4 text-brand" />
                                 </div>
                                 <div>
                                     <h4 className="font-medium text-slate-900">Como funciona?</h4>

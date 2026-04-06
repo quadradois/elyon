@@ -519,6 +519,27 @@ router.get('/:id', async (req, res) => {
       profissao: l.profissao,
       setor: l.setor,
 
+      // Dados Pessoais (Assertiva — migrados do Contato na promoção)
+      idade: l.idade,
+      sexo: l.sexo,
+      rendaEstimada: l.rendaEstimada,
+      faixaSalarial: l.faixaSalarial,
+      scoreAssertiva: l.scoreAssertiva,
+
+      // Múltiplos contatos
+      telefone2: l.telefone2,
+      telefone3: l.telefone3,
+      email2: l.email2,
+
+      // Imóvel Assertiva
+      bairroImovel: l.bairroImovel,
+      nomeEdificio: l.nomeEdificio,
+      inscricaoIptu: l.inscricaoIptu,
+      valorVenal: l.valorVenal,
+
+      // Briefing IA (Dossiê do Closer gerado no handoff)
+      briefingCloser: l.briefingCloser,
+
       // Imóveis relacionados (da mineração)
       imoveisMineracao: l.imoveis.map((imovel: any) => ({
         id: imovel.id,

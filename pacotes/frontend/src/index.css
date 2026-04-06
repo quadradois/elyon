@@ -1,3 +1,9 @@
+/* =============================================
+   Elyon Design System — Token Layer FIRST
+   CSS vars must load before @tailwind resolves
+   ============================================= */
+@import './design-system/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -35,35 +41,21 @@
     --radius: 0.5rem;
 
     /* ========================================= */
-    /* Premium Plus Design System Variables     */
+    /* Legacy aliases → Design System Tokens     */
+    /* These bridge old class names to new tokens */
     /* ========================================= */
-
-    /* Gradientes Premium */
-    --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
-    --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    --gradient-info: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-    --gradient-premium-dark: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
-
-    /* Sombras Sofisticadas */
-    --shadow-soft: 0 2px 8px -2px rgba(0, 0, 0, 0.08), 0 1px 4px -1px rgba(0, 0, 0, 0.04);
-    --shadow-medium: 0 4px 12px -2px rgba(0, 0, 0, 0.1), 0 2px 6px -1px rgba(0, 0, 0, 0.06);
-    --shadow-premium: 0 8px 30px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08);
-    --shadow-glow-primary: 0 0 20px -2px rgba(99, 102, 241, 0.25);
-    --shadow-glow-success: 0 0 20px -2px rgba(16, 185, 129, 0.25);
-
-    /* Cores de Acento Premium */
-    --premium-indigo: #6366f1;
-    --premium-violet: #8b5cf6;
-    --premium-purple: #a855f7;
-    --premium-gold: #f59e0b;
-    --premium-emerald: #10b981;
-
-    /* Backgrounds Refinados */
-    --bg-subtle: #f8fafc;
-    --bg-muted: #f1f5f9;
-    --glass-bg: rgba(255, 255, 255, 0.8);
-    --glass-border: rgba(255, 255, 255, 0.18);
+    --gradient-premium-dark: var(--gradient-dark);
+    --shadow-glow-primary:   var(--glow-primary);
+    --shadow-glow-success:   var(--glow-success);
+    --premium-indigo:        var(--color-indigo-500);
+    --premium-violet:        var(--color-violet-500);
+    --premium-purple:        var(--color-purple-500);
+    --premium-gold:          var(--color-amber-500);
+    --premium-emerald:       var(--color-emerald-500);
+    --bg-subtle:             var(--surface-subtle);
+    --bg-muted:              var(--surface-muted);
+    --glass-bg:              var(--surface-glass);
+    --glass-border:          var(--surface-glass-border);
   }
 
   .dark {

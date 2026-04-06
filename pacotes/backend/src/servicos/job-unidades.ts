@@ -152,14 +152,45 @@ async function processarJobUnidades(jobId: string): Promise<void> {
             // ============================================
             // LÓGICA PARA CONDOMÍNIOS HORIZONTAIS
             // ============================================
-            const whereBairro = {
-                codigoBairro: job.codigo,
+            let whereBairro: any = {
                 OR: [
                     { codigoEdificio: null },
                     { nomeEdificio: null },
                     { nomeEdificio: '' }
                 ]
             };
+
+            // Hack de Resiliência: Muitas vezes a base da Prefeitura mapeia o Condomínio/Loteamento
+            // em um Zoneamento (codigoBairro) diferente do Cadastro Geográfico oficial.
+            // Para não retornar 0 casas, vamos tentar cruzar pelo código OU pelo nome textual do bairro.
+            if (job.nome) {
+                // Separa o loteamento da zona, se necessário, cruzando por texto
+                // Ex: "LOT ALPHAVILLE FLAMBOYANT"
+                const partesNome = job.nome.split(' ');
+                const primeiroNome = partesNome[0] || job.nome;
+                const ultimoNome = partesNome[partesNome.length - 1] || job.nome;
+
+                whereBairro = {
+                    ...whereBairro,
+                    AND: [
+                        {
+                            OR: [
+                                { codigoBairro: job.codigo },
+                                { bairro: { equals: job.nome, mode: 'insensitive' } },
+                                { 
+                                    bairro: { 
+                                        startsWith: primeiroNome, 
+                                        contains: ultimoNome, 
+                                        mode: 'insensitive' 
+                                    } 
+                                }
+                            ]
+                        }
+                    ]
+                };
+            } else {
+                whereBairro.codigoBairro = job.codigo;
+            }
 
             const total = await prisma.imovel.count({ where: whereBairro });
             await atualizarJob(jobId, { total });

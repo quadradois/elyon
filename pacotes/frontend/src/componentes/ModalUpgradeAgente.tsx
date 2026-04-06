@@ -53,7 +53,7 @@ export function ModalUpgradeAgente({
           {/* Efeitos de fundo */}
           <div className="absolute inset-0 opacity-20">
             <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-300 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-violet-300 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
           </div>
 
           <button
@@ -66,7 +66,7 @@ export function ModalUpgradeAgente({
           <div className="relative z-10 flex flex-col items-center text-center">
             <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 shadow-lg ring-1 ring-white/30">
               <Bot className="w-10 h-10 text-white" />
-              <div className="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+              <div className="absolute -top-2 -right-2 bg-amber-400 text-amber-900 text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
                 <Crown className="w-3 h-3" />
                 PRO
               </div>
@@ -75,7 +75,7 @@ export function ModalUpgradeAgente({
             <h2 className="text-2xl font-bold mb-1">
               Limite de Agentes Atingido
             </h2>
-            <p className="text-purple-100 text-sm max-w-[80%]">
+            <p className="text-violet-100 text-sm max-w-[80%]">
               Você já está usando seus {limiteAtual} agentes disponíveis.
             </p>
           </div>
@@ -85,14 +85,14 @@ export function ModalUpgradeAgente({
         <div className="p-6 bg-white">
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
-              <Rocket className="w-5 h-5 text-purple-600" />
+              <Rocket className="w-5 h-5 text-violet-600" />
               Expanda sua Operação
             </h3>
 
             <div className="space-y-3">
               <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100">
-                <div className="mt-1 bg-green-100 p-1 rounded-full">
-                  <Check className="w-3 h-3 text-green-600" />
+                <div className="mt-1 bg-emerald-100 p-1 rounded-full">
+                  <Check className="w-3 h-3 text-emerald-600" />
                 </div>
                 <div>
                   <p className="font-medium text-slate-700">
@@ -105,8 +105,8 @@ export function ModalUpgradeAgente({
               </div>
 
               <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100">
-                <div className="mt-1 bg-green-100 p-1 rounded-full">
-                  <Check className="w-3 h-3 text-green-600" />
+                <div className="mt-1 bg-emerald-100 p-1 rounded-full">
+                  <Check className="w-3 h-3 text-emerald-600" />
                 </div>
                 <div>
                   <p className="font-medium text-slate-700">
@@ -121,16 +121,16 @@ export function ModalUpgradeAgente({
           </div>
 
           {/* Oferta */}
-          <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-100 p-4 mb-6">
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-violet-100 p-4 mb-6">
             <div className="flex justify-between items-center mb-1">
-              <span className="text-sm font-medium text-purple-900">
+              <span className="text-sm font-medium text-violet-900">
                 Assinatura Mensal
               </span>
-              <span className="text-2xl font-bold text-purple-700">
+              <span className="text-2xl font-bold text-violet-700">
                 R$ 99,00
               </span>
             </div>
-            <p className="text-xs text-purple-600 text-right">
+            <p className="text-xs text-violet-600 text-right">
               Cobrado mensalmente no seu cartão
             </p>
           </div>

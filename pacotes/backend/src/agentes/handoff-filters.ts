@@ -174,18 +174,21 @@ export async function gerarBriefingHandoff(
             messages: [
                 {
                     role: 'system',
-                    content: `Você é um analista de vendas imobiliárias. Gere um BRIEFING ESTRATÉGICO conciso (máximo 5 linhas) para o próximo agente da cadeia de captação.
+                    content: `Você é um analista de vendas imobiliárias montando um DOSSIÊ TÁTICO do lead para o CORRETOR HUMANO que vai assumir agora.
+Seja EXTREMAMENTE objetivo — esse corretor não vai ter tempo de ler texto longo. Ele precisa entrar na conversa já sabendo tudo.
 
-O agente "${agenteOrigem}" está transferindo o lead para o agente "${agenteDestino}".
+Monte o dossiê EXATAMENTE neste formato (use cada seção, sem abreviações):
 
-Seu briefing deve conter:
-1. Resumo do perfil emocional do lead (receptivo/resistente/urgente)
-2. Dores ou objeções identificadas
-3. O que funcionou na conversa até agora
-4. O que evitar (pontos sensíveis)
-5. Próximo passo recomendado
+🏠 LEAD: [Nome/apelido se disponível] | [Tipo e metragem] | [Valor pretendido]
+📍 SITUAÇÃO: [Status atual: anunciando há X tempo / imóvel parado / 1ª tentativa]
+🔥 NÍVEL DE URGÊNCIA: [Alta / Média / Baixa — justifique em 1 linha]
+💢 DORES PRINCIPAIS: [Liste 2-3 pontos de dor já confirmados pelo lead]
+🛡️ OBJEÇÕES TRATADAS: [Quais foram levantadas e como o lead reagiu]
+✅ O QUE FUNCIONOU: [Argumento ou abordagem que gerou mais engajamento]
+⚠️ PONTOS SENSÍVEIS: [O que evitar, o que ainda não foi respondido]
+🎯 POR ONDE COMEÇAR: [Instrução direta ao corretor: qual pergunta ou afirmação abrir a conversa]
 
-Seja DIRETO e TÁTICO. Não use introduções. Comece direto com os fatos.`
+Base: conversa entre ${agenteOrigem} e o lead.`
                 },
                 {
                     role: 'user',
@@ -197,12 +200,12 @@ Seja DIRETO e TÁTICO. Não use introduções. Comece direto com os fatos.`
         const briefing = response.choices[0]?.message?.content;
         if (!briefing) return null;
 
-        logger.debug(`[HANDOFF-FILTER] 🧠 Briefing LLM gerado (${agenteOrigem} → ${agenteDestino}): ${briefing.substring(0, 80)}...`);
+        logger.debug(`[HANDOFF-FILTER] 🧠 Dossiê de Closer gerado (${agenteOrigem} → ${agenteDestino}): ${briefing.substring(0, 80)}...`);
 
-        // Retornar como mensagem developer para injetar no histórico
+        // Retornar como mensagem system para injetar no histórico do Closer
         return {
             role: 'system',
-            content: `BRIEFING ESTRATÉGICO (${agenteOrigem} → ${agenteDestino}):\n${briefing}`
+            content: `📋 DOSSIÊ DO LEAD (${agenteOrigem} → ${agenteDestino}):\n${briefing}\n\n⚡ INSTRUÇÃO: Assuma a conversa sem fazê-lo repetir dados. Comece pela instrução "Por onde Começar" acima.`
         } as any;
 
     } catch (err) {

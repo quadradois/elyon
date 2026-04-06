@@ -64,7 +64,7 @@ export function EtapaExpertise({ dados, setDados, bairrosInput, setBairrosInput 
                 className={cn(
                   "px-4 py-2 rounded-full text-sm font-medium transition-all",
                   dados.expertise.tiposImovel.includes(tipo)
-                    ? "bg-blue-600 text-white"
+                    ? "bg-brand text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 )}
               >

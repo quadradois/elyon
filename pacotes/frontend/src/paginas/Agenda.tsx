@@ -218,8 +218,8 @@ export function Agenda() {
 
     const getStatusBadge = (status: string | undefined) => {
         switch (status) {
-            case 'PENDENTE': return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300"><Clock className="w-3 h-3 mr-1" />Aguardando</Badge>;
-            case 'CONFIRMADO': return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300"><Check className="w-3 h-3 mr-1" />Confirmado</Badge>;
+            case 'PENDENTE': return <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300"><Clock className="w-3 h-3 mr-1" />Aguardando</Badge>;
+            case 'CONFIRMADO': return <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300"><Check className="w-3 h-3 mr-1" />Confirmado</Badge>;
             case 'CANCELADO': return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300"><Ban className="w-3 h-3 mr-1" />Cancelado</Badge>;
             default: return <Badge variant="outline">{status || 'N/A'}</Badge>;
         }
@@ -347,7 +347,7 @@ export function Agenda() {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setShowEventModal(false)}>Fechar</Button>
                         {selectedEvent?.extendedProps?.status === 'PENDENTE' && (
-                            <Button onClick={handleAprovar} disabled={approving} className="bg-green-600 hover:bg-green-700">
+                            <Button onClick={handleAprovar} disabled={approving} className="bg-success hover:bg-success-dark text-white">
                                 {approving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                                 Aprovar
                             </Button>
@@ -369,7 +369,7 @@ export function Agenda() {
                     ) : expediente ? (
                         <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
                             {expediente.dias.map((dia) => (
-                                <div key={dia.diaSemana} className={`flex items-center gap-4 p-3 rounded-lg border ${dia.ativo ? 'bg-green-50 dark:bg-green-950/20 border-green-200' : 'bg-gray-50 dark:bg-gray-900 border-gray-200'}`}>
+                                <div key={dia.diaSemana} className={`flex items-center gap-4 p-3 rounded-lg border ${dia.ativo ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200' : 'bg-gray-50 dark:bg-gray-900 border-gray-200'}`}>
                                     <input
                                         type="checkbox"
                                         checked={dia.ativo}

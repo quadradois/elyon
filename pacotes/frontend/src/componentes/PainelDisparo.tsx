@@ -272,7 +272,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
     return (
       <Card>
         <CardContent className="flex justify-center items-center h-48">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-brand" />
         </CardContent>
       </Card>
     );
@@ -292,7 +292,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
       )}
       
       {sucesso && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex items-center gap-2">
           <CheckCircle2 className="w-5 h-5" />
           {sucesso}
         </div>
@@ -303,21 +303,21 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-yellow-500" />
+              <Zap className="w-5 h-5 text-amber-500" />
               Controle de Disparo
             </CardTitle>
             
             {/* Status Badge */}
             <div className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 ${
               disparando 
-                ? 'bg-green-100 text-green-700' 
+                ? 'bg-emerald-100 text-emerald-700' 
                 : campanhaStatus === 'PAUSADA'
-                  ? 'bg-yellow-100 text-yellow-700'
+                  ? 'bg-amber-100 text-amber-700'
                   : 'bg-slate-100 text-slate-600'
             }`}>
               {disparando ? (
                 <>
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
                   Disparando
                 </>
               ) : campanhaStatus === 'PAUSADA' ? (
@@ -342,7 +342,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
               <Button
                 onClick={reativarDisparo}
                 disabled={processando}
-                className="gap-2 bg-green-600 hover:bg-green-700"
+                className="gap-2 bg-success hover:bg-success-dark"
               >
                 {processando ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -356,7 +356,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
                 <Button
                   onClick={() => iniciarDisparo('lote')}
                   disabled={processando || disparando || !status?.aguardando}
-                  className="gap-2 bg-blue-600 hover:bg-blue-700"
+                  className="gap-2 bg-brand hover:bg-brand-dark"
                 >
                   {processando ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -446,7 +446,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
                   <select
                     value={config.mensagensPorMinuto}
                     onChange={(e) => setConfig({...config, mensagensPorMinuto: Number(e.target.value)})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand"
                     title="Quantidade de mensagens enviadas por minuto"
                   >
                     <option value={10}>10 msgs/min (Seguro)</option>
@@ -463,7 +463,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
                   <select
                     value={config.atrasoEntreMensagens}
                     onChange={(e) => setConfig({...config, atrasoEntreMensagens: Number(e.target.value)})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand"
                     title="Tempo de espera entre cada mensagem enviada"
                   >
                     <option value={2000}>2 segundos</option>
@@ -480,7 +480,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
                   <select
                     value={config.maxTentativas}
                     onChange={(e) => setConfig({...config, maxTentativas: Number(e.target.value)})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand"
                     title="Número máximo de tentativas de contato por lead"
                   >
                     <option value={1}>1 tentativa</option>
@@ -501,7 +501,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
                       type="time"
                       value={config.horarioInicio}
                       onChange={(e) => setConfig({...config, horarioInicio: e.target.value})}
-                      className="px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                      className="px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand"
                       title="Horário de início dos disparos"
                     />
                     <span className="text-slate-500">até</span>
@@ -509,7 +509,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
                       type="time"
                       value={config.horarioFim}
                       onChange={(e) => setConfig({...config, horarioFim: e.target.value})}
-                      className="px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                      className="px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand"
                       title="Horário de término dos disparos"
                     />
                   </div>
@@ -527,7 +527,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
                         onClick={() => toggleDia(index)}
                         className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${
                           isDiaSelecionado(index)
-                            ? 'bg-blue-600 text-white'
+                            ? 'bg-brand text-white'
                             : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
                         }`}
                         title={['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][index]}
@@ -574,22 +574,22 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
               <span className="text-2xl font-bold text-slate-900">{status?.aguardando || 0}</span>
             </div>
             
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="flex items-center gap-2 text-blue-600 mb-1">
+            <div className="bg-indigo-50 p-4 rounded-lg">
+              <div className="flex items-center gap-2 text-brand mb-1">
                 <MessageSquare className="w-4 h-4" />
                 <span className="text-sm">Contatando</span>
               </div>
-              <span className="text-2xl font-bold text-blue-900">{status?.contatando || 0}</span>
+              <span className="text-2xl font-bold text-indigo-900">{status?.contatando || 0}</span>
             </div>
             
-            <div className="bg-green-50 p-4 rounded-lg">
-              <div className="flex items-center gap-2 text-green-600 mb-1">
+            <div className="bg-emerald-50 p-4 rounded-lg">
+              <div className="flex items-center gap-2 text-emerald-600 mb-1">
                 <UserCheck className="w-4 h-4" />
                 <span className="text-sm">Interessados</span>
               </div>
-              <span className="text-2xl font-bold text-green-900">{status?.interessado || 0}</span>
+              <span className="text-2xl font-bold text-emerald-900">{status?.interessado || 0}</span>
               {metricas && (
-                <span className="text-xs text-green-600 ml-1">({metricas.taxaConversao})</span>
+                <span className="text-xs text-emerald-600 ml-1">({metricas.taxaConversao})</span>
               )}
             </div>
             
@@ -621,7 +621,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = 'ATIVA', onStatusCh
             </div>
             <div className="text-center">
               <span className="text-sm text-slate-500">Taxa de Resposta</span>
-              <div className="text-lg font-semibold text-blue-600">
+              <div className="text-lg font-semibold text-brand">
                 {metricas?.taxaResposta || '0%'}
               </div>
             </div>

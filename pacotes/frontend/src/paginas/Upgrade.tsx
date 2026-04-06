@@ -218,7 +218,7 @@ export function Upgrade() {
     if (carregando) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand" />
             </div>
         );
     }
@@ -255,7 +255,7 @@ export function Upgrade() {
                             className={cn(
                                 "relative bg-white rounded-2xl border-2 transition-all duration-300",
                                 status === "atual"
-                                    ? "border-blue-500 shadow-lg shadow-blue-500/10"
+                                    ? "border-brand shadow-lg shadow-blue-500/10"
                                     : plano.destaque
                                         ? "border-amber-500 shadow-xl shadow-amber-500/10 scale-105"
                                         : "border-slate-200 hover:border-slate-300 hover:shadow-lg"
@@ -271,7 +271,7 @@ export function Upgrade() {
                             )}
                             {status === "atual" && (
                                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                                    <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full shadow-md">
+                                    <span className="px-3 py-1 bg-brand text-white text-xs font-bold rounded-full shadow-md">
                                         SEU PLANO ATUAL
                                     </span>
                                 </div>
@@ -400,7 +400,7 @@ export function Upgrade() {
                         return (
                             <div key={i} className="text-center">
                                 <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-white shadow-sm flex items-center justify-center">
-                                    <Icon className="w-6 h-6 text-blue-600" />
+                                    <Icon className="w-6 h-6 text-brand" />
                                 </div>
                                 <h3 className="font-semibold text-slate-900 mb-1">
                                     {beneficio.titulo}

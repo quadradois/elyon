@@ -54,7 +54,7 @@ export function AdminTransacoes() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <Receipt className="w-7 h-7 text-purple-400" />
+                        <Receipt className="w-7 h-7 text-violet-400" />
                         Transações
                     </h1>
                     <p className="text-slate-400 mt-1">Histórico de pagamentos e créditos</p>

@@ -117,12 +117,12 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
     // Estado: Contrato gerado mas não assinado
     if (linkContrato && !lead.dataAssinatura) {
         return (
-            <Card className="border-blue-200 bg-blue-50/30">
+            <Card className="border-indigo-200 bg-indigo-50/30">
                 <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-blue-600" />
+                        <FileText className="w-5 h-5 text-brand" />
                         Contrato Gerado
-                        <Badge className="bg-blue-100 text-blue-700 ml-auto">⏳ Aguardando Aceite</Badge>
+                        <Badge className="bg-indigo-100 text-indigo-700 ml-auto">⏳ Aguardando Aceite</Badge>
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -130,9 +130,9 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
                         Contrato pronto! Envie o link abaixo para o proprietário assinar digitalmente.
                     </p>
 
-                    <div className="bg-white rounded-lg border border-blue-200 p-3 mb-4">
+                    <div className="bg-white rounded-lg border border-indigo-200 p-3 mb-4">
                         <p className="text-xs text-slate-500 mb-1">Link de aceite:</p>
-                        <p className="text-sm text-blue-600 break-all font-mono">
+                        <p className="text-sm text-brand break-all font-mono">
                             {linkContrato}
                         </p>
                     </div>
@@ -149,7 +149,7 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
                         <Button
                             size="sm"
                             onClick={handleEnviarWhatsApp}
-                            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                            className="flex-1 bg-success hover:bg-success-dark text-white"
                         >
                             <Send className="w-4 h-4 mr-2" />
                             Enviar WhatsApp
@@ -162,15 +162,15 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
 
     // Estado: Contrato URL existe (pode ser link de aceite pendente ou assinado)
     return (
-        <Card className={`${lead.dataAssinatura ? 'border-green-200 bg-green-50/30' : 'border-blue-200 bg-blue-50/30'}`}>
+        <Card className={`${lead.dataAssinatura ? 'border-emerald-200 bg-emerald-50/30' : 'border-indigo-200 bg-indigo-50/30'}`}>
             <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
-                    <FileText className={`w-5 h-5 ${lead.dataAssinatura ? 'text-green-600' : 'text-blue-600'}`} />
+                    <FileText className={`w-5 h-5 ${lead.dataAssinatura ? 'text-emerald-600' : 'text-brand'}`} />
                     Contrato de Captação
                     {lead.dataAssinatura ? (
-                        <Badge className="bg-green-100 text-green-700 ml-auto">✅ Assinado</Badge>
+                        <Badge className="bg-emerald-100 text-emerald-700 ml-auto">✅ Assinado</Badge>
                     ) : (
-                        <Badge className="bg-blue-100 text-blue-700 ml-auto">⏳ Aguardando</Badge>
+                        <Badge className="bg-indigo-100 text-indigo-700 ml-auto">⏳ Aguardando</Badge>
                     )}
                 </CardTitle>
             </CardHeader>
@@ -204,7 +204,7 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
 
                     {/* Link do contrato */}
                     {lead.contratoUrl && (
-                        <div className={`flex items-center gap-2 pt-2 border-t ${lead.dataAssinatura ? 'border-green-200' : 'border-blue-200'}`}>
+                        <div className={`flex items-center gap-2 pt-2 border-t ${lead.dataAssinatura ? 'border-emerald-200' : 'border-indigo-200'}`}>
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -217,7 +217,7 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
                             {!lead.dataAssinatura && (
                                 <Button
                                     size="sm"
-                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                    className="bg-success hover:bg-success-dark text-white"
                                     onClick={() => {
                                         if (lead.telefone) {
                                             const mensagem = encodeURIComponent(

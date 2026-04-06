@@ -88,7 +88,7 @@ export function AdminLeadsVip() {
 
     const getStatusClass = (lead: LeadVip) => {
         if (lead.status === 'CONVERTIDO') return 'bg-emerald-500/10 text-emerald-400';
-        if (lead.atendido) return 'bg-blue-500/10 text-blue-400';
+        if (lead.atendido) return 'bg-brand/10 text-indigo-400';
         return 'bg-amber-500/10 text-amber-400';
     };
 
@@ -146,7 +146,7 @@ export function AdminLeadsVip() {
                     titulo="Taxa de Conversão"
                     valor={`${taxa}%`}
                     icone={TrendingUp}
-                    cor="text-purple-400"
+                    cor="text-violet-400"
                 />
             </div>
 

@@ -43,8 +43,8 @@ export function Login() {
       <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-xl shadow-lg border border-slate-100">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-4">
-            <Building2 className="w-6 h-6 text-blue-600" />
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-indigo-100 mb-4">
+            <Building2 className="w-6 h-6 text-brand" />
           </div>
           <h2 className="text-3xl font-bold tracking-tight text-slate-900">
             ELYON
@@ -101,7 +101,7 @@ export function Login() {
 
           <Button
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700"
+            className="w-full bg-brand hover:bg-brand-dark"
             disabled={loading}
           >
             {loading ? "Entrando..." : "Entrar na Plataforma"}

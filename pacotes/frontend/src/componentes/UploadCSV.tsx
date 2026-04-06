@@ -136,16 +136,16 @@ export function UploadCSV({ campanhaId, onSuccess, onClose }: UploadCSVProps) {
   if (status === 'sucesso' && resultado) {
     return (
       <div className="space-y-4">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-          <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-green-900">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-6 text-center">
+          <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-emerald-900">
             Importação Concluída!
           </h3>
-          <p className="text-green-700 mt-2">
+          <p className="text-emerald-700 mt-2">
             <span className="font-bold">{resultado.importados}</span> contatos importados
           </p>
           {resultado.duplicados > 0 && (
-            <p className="text-green-600 text-sm">
+            <p className="text-emerald-600 text-sm">
               {resultado.duplicados} duplicados ignorados
             </p>
           )}
@@ -186,7 +186,7 @@ export function UploadCSV({ campanhaId, onSuccess, onClose }: UploadCSVProps) {
         <Button
           variant="ghost"
           size="sm"
-          className="gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+          className="gap-2 text-brand hover:text-brand hover:bg-indigo-50"
           onClick={baixarTemplate}
         >
           <Download className="w-4 h-4" />
@@ -204,10 +204,10 @@ export function UploadCSV({ campanhaId, onSuccess, onClose }: UploadCSVProps) {
           border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
           transition-all duration-200
           ${status === 'arrastando' 
-            ? 'border-blue-500 bg-blue-50' 
-            : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50'
+            ? 'border-brand bg-indigo-50' 
+            : 'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'
           }
-          ${arquivo ? 'border-green-400 bg-green-50' : ''}
+          ${arquivo ? 'border-emerald-400 bg-emerald-50' : ''}
         `}
       >
         <input
@@ -221,7 +221,7 @@ export function UploadCSV({ campanhaId, onSuccess, onClose }: UploadCSVProps) {
 
         {arquivo ? (
           <div className="space-y-2">
-            <FileSpreadsheet className="w-12 h-12 text-green-600 mx-auto" />
+            <FileSpreadsheet className="w-12 h-12 text-emerald-600 mx-auto" />
             <p className="font-medium text-slate-900">{arquivo.name}</p>
             <p className="text-sm text-slate-500">
               {(arquivo.size / 1024).toFixed(1)} KB

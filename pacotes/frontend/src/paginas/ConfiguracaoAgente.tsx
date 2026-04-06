@@ -269,7 +269,7 @@ export function ConfiguracaoAgente() {
         response = await api.put(`/agentes/${agenteId}`, payload);
         toast.success("Agente atualizado!", {
           description: "As alterações já estão ativas.",
-          icon: <CheckCircle className="w-5 h-5 text-green-500" />,
+          icon: <CheckCircle className="w-5 h-5 text-emerald-500" />,
         });
       } else {
         response = await api.post("/agentes", payload);
@@ -279,7 +279,7 @@ export function ConfiguracaoAgente() {
           replace: true,
         });
         toast.success("Agente criado!", {
-          icon: <CheckCircle className="w-5 h-5 text-green-500" />,
+          icon: <CheckCircle className="w-5 h-5 text-emerald-500" />,
         });
       }
     } catch (error: any) {
@@ -461,7 +461,7 @@ export function ConfiguracaoAgente() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand" />
         <span className="ml-3 text-slate-600">Carregando configuração...</span>
       </div>
     );
@@ -511,7 +511,7 @@ export function ConfiguracaoAgente() {
               variant="outline"
               onClick={toggleAtivo}
               className={
-                formData.estaAtivo ? "text-green-600" : "text-slate-400"
+                formData.estaAtivo ? "text-emerald-600" : "text-slate-400"
               }
             >
               {formData.estaAtivo ? (
@@ -530,7 +530,7 @@ export function ConfiguracaoAgente() {
           <Button
             onClick={salvarAgente}
             disabled={salvando}
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-success hover:bg-success-dark"
           >
             {salvando ? (
               <>
@@ -575,29 +575,29 @@ export function ConfiguracaoAgente() {
         <div
           className={`p-4 rounded-lg flex items-center justify-between ${
             formData.estaAtivo
-              ? "bg-green-50 border border-green-200"
-              : "bg-yellow-50 border border-yellow-200"
+              ? "bg-emerald-50 border border-emerald-200"
+              : "bg-amber-50 border border-amber-200"
           }`}
         >
           <div className="flex items-center gap-3">
             {formData.estaAtivo ? (
               <>
-                <CheckCircle className="w-5 h-5 text-green-600" />
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
                 <div>
-                  <p className="font-medium text-green-800">
+                  <p className="font-medium text-emerald-800">
                     Agente ativo e respondendo
                   </p>
-                  <p className="text-sm text-green-600">
+                  <p className="text-sm text-emerald-600">
                     Seu assistente está atendendo leads automaticamente.
                   </p>
                 </div>
               </>
             ) : (
               <>
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
+                <AlertCircle className="w-5 h-5 text-amber-600" />
                 <div>
-                  <p className="font-medium text-yellow-800">Agente pausado</p>
-                  <p className="text-sm text-yellow-600">
+                  <p className="font-medium text-amber-800">Agente pausado</p>
+                  <p className="text-sm text-amber-600">
                     Mensagens estão sendo encaminhadas para atendimento humano.
                   </p>
                 </div>
@@ -628,7 +628,7 @@ export function ConfiguracaoAgente() {
         <div className="space-y-6">
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
             <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-              <Bot className="w-5 h-5 text-blue-600" />
+              <Bot className="w-5 h-5 text-brand" />
               Identidade
             </h3>
 
@@ -657,7 +657,7 @@ export function ConfiguracaoAgente() {
           {/* Conexão WhatsApp */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
             <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-              <Smartphone className="w-5 h-5 text-green-600" />
+              <Smartphone className="w-5 h-5 text-emerald-600" />
               Conexão WhatsApp
             </h3>
 
@@ -745,7 +745,7 @@ export function ConfiguracaoAgente() {
                   onClick={() => setFormData({ ...formData, tomDeVoz: tom })}
                   className={`p-4 rounded-lg border text-center transition-all ${
                     formData.tomDeVoz === tom
-                      ? "border-blue-600 bg-blue-50 text-blue-700 ring-1 ring-blue-600"
+                      ? "border-brand bg-indigo-50 text-indigo-700 ring-1 ring-blue-600"
                       : "border-slate-200 hover:border-slate-300 text-slate-600"
                   }`}
                 >
@@ -765,7 +765,7 @@ export function ConfiguracaoAgente() {
                 onChange={(e) =>
                   setFormData({ ...formData, usarEmojis: e.target.checked })
                 }
-                className="w-4 h-4 text-blue-600 rounded"
+                className="w-4 h-4 text-brand rounded"
               />
               <label htmlFor="usarEmojis" className="text-sm text-slate-700">
                 Usar emojis moderadamente nas respostas
@@ -898,7 +898,7 @@ export function ConfiguracaoAgente() {
                           doc.status === "ERRO"
                             ? "bg-red-50 border-red-200"
                             : doc.status === "SUCESSO"
-                              ? "bg-green-50 border-green-200"
+                              ? "bg-emerald-50 border-emerald-200"
                               : "bg-white border-slate-200"
                         }`}
                       >
@@ -907,7 +907,7 @@ export function ConfiguracaoAgente() {
                             doc.status === "ERRO"
                               ? "text-red-500"
                               : doc.status === "SUCESSO"
-                                ? "text-green-500"
+                                ? "text-emerald-500"
                                 : "text-slate-400"
                           }`}
                         />

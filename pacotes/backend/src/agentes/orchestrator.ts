@@ -30,6 +30,8 @@ import { resolverAgenteFinal, logAgenteResolvido } from './agent-resolution';
 import { executarGuardrailsEntrada } from './entry-guardrail';
 import { resolverAgentePersistido } from './persisted-agent';
 import { analisarSentimento, gerarInstrucaoSentimento } from './sentiment-analyzer';
+import { tentarDetectarObjecao } from './classificador-objecao';
+import { resolverChaveAgentes } from './byok-resolver';
 
 // Módulos extraídos
 import {
@@ -269,6 +271,28 @@ export async function processarMensagemOrquestrada(
                     inputSDK = [{ role: 'system' as const, content: instrucaoSentimento }, ...inputSDK];
                     logger.debug(`[ORCHESTRATOR] 🎭 Sentimento detectado: ${sentimento.sentimento} (${sentimento.confianca}%) — ajustando tom do agente`);
                 }
+            }
+
+            // ✅ INJEÇÃO SEMÂNTICA: Classificação de Objeção Tática (Middleware Bypass)
+            const resolvedBYOK = resolverChaveAgentes(config as any); // Usa a chave criptografada do tenant
+            const modelToUse = resolvedBYOK.modelo?.includes('gpt-4o') || !resolvedBYOK.modelo ? 'gpt-4o-mini' : resolvedBYOK.modelo; // forçar submodelo rápido se OpenAI
+            
+            const objecaoDetectada = await tentarDetectarObjecao(
+                ultimaMensagemLead.content, 
+                resolvedBYOK.apiKey, 
+                resolvedBYOK.baseUrl,
+                modelToUse
+            );
+
+            if (objecaoDetectada) {
+                // Alinhamento de escopo: A objeção só é injetada se a fase dela bater com o agente atual (ou similar),
+                // Mas de qualquer forma a barreira tática prioriza o contorno.
+                const instrucaoTatica = `[INJEÇÃO TÁTICA ATIVADA] 🚨 O usuário levantou uma objeção clássica identificada pelo sistema (ID ${objecaoDetectada.id}).
+                
+INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMENTE A SEGUINTE PREMISSA DE CONTORNO (sem parecer robótico, use seu tom natural baseado nessa lógica):
+"""${objecaoDetectada.contorno}"""`;
+
+                inputSDK = [{ role: 'system' as const, content: instrucaoTatica }, ...inputSDK];
             }
         }
 

@@ -22,15 +22,15 @@ export function EtapaModo({ dados, setDados }: WizardEtapaProps) {
           className={cn(
             "p-8 rounded-xl border-2 text-left transition-all",
             dados.modoCreacao === 'PRE_TREINADO'
-              ? "border-blue-600 bg-blue-50 ring-2 ring-blue-200"
+              ? "border-brand bg-indigo-50 ring-2 ring-indigo-200"
               : "border-slate-200 hover:border-slate-300"
           )}
         >
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-              <Zap className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center">
+              <Zap className="w-6 h-6 text-brand" />
             </div>
-            <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+            <span className="text-xs font-bold text-brand bg-indigo-100 px-2 py-1 rounded-full">
               RECOMENDADO
             </span>
           </div>
@@ -41,7 +41,7 @@ export function EtapaModo({ dados, setDados }: WizardEtapaProps) {
           <ul className="space-y-2">
             {['Conhecimento de mercado', 'Scripts otimizados', 'Tratamento de objeções', 'Funil configurado'].map((item) => (
               <li key={item} className="flex items-center gap-2 text-sm text-slate-600">
-                <CheckCircle className="w-4 h-4 text-green-500" />
+                <CheckCircle className="w-4 h-4 text-emerald-500" />
                 {item}
               </li>
             ))}
@@ -55,15 +55,15 @@ export function EtapaModo({ dados, setDados }: WizardEtapaProps) {
           className={cn(
             "p-8 rounded-xl border-2 text-left transition-all",
             dados.modoCreacao === 'PERSONALIZADO'
-              ? "border-purple-600 bg-purple-50 ring-2 ring-purple-200"
+              ? "border-violet-600 bg-violet-50 ring-2 ring-violet-200"
               : "border-slate-200 hover:border-slate-300"
           )}
         >
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
-              <Settings2 className="w-6 h-6 text-purple-600" />
+            <div className="w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center">
+              <Settings2 className="w-6 h-6 text-violet-600" />
             </div>
-            <span className="text-xs font-bold text-purple-600 bg-purple-100 px-2 py-1 rounded-full">
+            <span className="text-xs font-bold text-violet-600 bg-violet-100 px-2 py-1 rounded-full">
               AVANÇADO
             </span>
           </div>
@@ -74,7 +74,7 @@ export function EtapaModo({ dados, setDados }: WizardEtapaProps) {
           <ul className="space-y-2">
             {['Tom de voz customizado', 'Scripts próprios', 'Expertise específica', 'Configuração granular'].map((item) => (
               <li key={item} className="flex items-center gap-2 text-sm text-slate-600">
-                <Settings2 className="w-4 h-4 text-purple-500" />
+                <Settings2 className="w-4 h-4 text-violet-500" />
                 {item}
               </li>
             ))}

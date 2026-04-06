@@ -160,13 +160,13 @@ export function Campanhas() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "ATIVA":
-        return "bg-green-100 text-green-700";
+        return "bg-emerald-100 text-emerald-700";
       case "PAUSADA":
-        return "bg-yellow-100 text-yellow-700";
+        return "bg-amber-100 text-amber-700";
       case "FINALIZADA":
         return "bg-slate-100 text-slate-700";
       default:
-        return "bg-blue-100 text-blue-700";
+        return "bg-indigo-100 text-indigo-700";
     }
   };
 
@@ -178,13 +178,13 @@ export function Campanhas() {
     if (confiabilidade >= 0.8) {
       return (
         <span title={titulo}>
-          <CheckCircle2 className="w-4 h-4 text-green-600" />
+          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
         </span>
       );
     } else if (confiabilidade >= 0.5) {
       return (
         <span title={titulo}>
-          <AlertTriangle className="w-4 h-4 text-yellow-600" />
+          <AlertTriangle className="w-4 h-4 text-amber-600" />
         </span>
       );
     } else {
@@ -458,7 +458,7 @@ export function Campanhas() {
                 {campanhas.length}
               </p>
             </div>
-            <TrendingUp className="w-8 h-8 text-blue-600" />
+            <TrendingUp className="w-8 h-8 text-brand" />
           </div>
         </div>
 
@@ -470,7 +470,7 @@ export function Campanhas() {
                 {campanhas.reduce((acc, c) => acc + c.totalContatos, 0)}
               </p>
             </div>
-            <Users className="w-8 h-8 text-green-600" />
+            <Users className="w-8 h-8 text-emerald-600" />
           </div>
         </div>
 
@@ -482,7 +482,7 @@ export function Campanhas() {
                 {campanhas.reduce((acc, c) => acc + c.totalLeads, 0)}
               </p>
             </div>
-            <Target className="w-8 h-8 text-purple-600" />
+            <Target className="w-8 h-8 text-violet-600" />
           </div>
         </div>
       </div>
@@ -512,7 +512,7 @@ export function Campanhas() {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {loading ? (
           <div className="flex justify-center items-center h-64">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-brand" />
           </div>
         ) : (
           <Table>

@@ -112,7 +112,7 @@ export function DashboardAgentes() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand" />
         <span className="ml-3 text-slate-600">Carregando métricas...</span>
       </div>
     );
@@ -124,7 +124,7 @@ export function DashboardAgentes() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Bot className="w-7 h-7 text-blue-600" />
+            <Bot className="w-7 h-7 text-brand" />
             Performance dos Agentes
           </h1>
           <p className="text-slate-500">
@@ -141,7 +141,7 @@ export function DashboardAgentes() {
                 onClick={() => setPeriodo(p)}
                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                   periodo === p 
-                    ? 'bg-white text-blue-600 shadow-sm' 
+                    ? 'bg-white text-brand shadow-sm' 
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -167,13 +167,13 @@ export function DashboardAgentes() {
               <p className="text-3xl font-bold text-slate-900 mt-1">
                 {resumo?.resumo.totalConversas || 0}
               </p>
-              <p className="text-sm text-green-600 mt-1 flex items-center gap-1">
+              <p className="text-sm text-emerald-600 mt-1 flex items-center gap-1">
                 <TrendingUp className="w-4 h-4" />
                 {resumo?.tendencia.conversas}
               </p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <MessageSquare className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
+              <MessageSquare className="w-6 h-6 text-indigo-600" />
             </div>
           </div>
         </div>
@@ -186,13 +186,13 @@ export function DashboardAgentes() {
               <p className="text-3xl font-bold text-slate-900 mt-1">
                 {resumo?.resumo.leadsQualificados || 0}
               </p>
-              <p className="text-sm text-green-600 mt-1 flex items-center gap-1">
+              <p className="text-sm text-emerald-600 mt-1 flex items-center gap-1">
                 <TrendingUp className="w-4 h-4" />
                 {resumo?.tendencia.qualificados}
               </p>
             </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <Users className="w-6 h-6 text-purple-600" />
+            <div className="w-12 h-12 bg-violet-100 rounded-xl flex items-center justify-center">
+              <Users className="w-6 h-6 text-violet-600" />
             </div>
           </div>
         </div>
@@ -209,8 +209,8 @@ export function DashboardAgentes() {
                 Qualificados → Quentes
               </p>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-green-600" />
+            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+              <BarChart3 className="w-6 h-6 text-emerald-600" />
             </div>
           </div>
         </div>
@@ -291,19 +291,19 @@ export function DashboardAgentes() {
 
             {/* Frios */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Snowflake className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <Snowflake className="w-5 h-5 text-brand" />
               </div>
               <div className="flex-1">
                 <div className="flex justify-between mb-1">
                   <span className="text-sm font-medium text-slate-700">Frios</span>
-                  <span className="text-sm font-bold text-blue-600">
+                  <span className="text-sm font-bold text-brand">
                     {resumo?.distribuicaoTemperatura.frios || 0}
                   </span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full">
                   <div 
-                    className="h-2 bg-blue-500 rounded-full transition-all"
+                    className="h-2 bg-brand rounded-full transition-all"
                     style={{ 
                       width: `${Math.min(100, ((resumo?.distribuicaoTemperatura.frios || 0) / Math.max(1, (resumo?.resumo.leadsQualificados || 1))) * 100)}%` 
                     }}
@@ -330,13 +330,13 @@ export function DashboardAgentes() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${
-                      worker.status === 'ativo' ? 'bg-green-500' : 'bg-slate-400'
+                      worker.status === 'ativo' ? 'bg-success' : 'bg-slate-400'
                     }`} />
                     <span className="font-medium text-slate-900">{worker.nome}</span>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-full ${
                     worker.status === 'ativo' 
-                      ? 'bg-green-100 text-green-700' 
+                      ? 'bg-emerald-100 text-emerald-700' 
                       : 'bg-slate-200 text-slate-600'
                   }`}>
                     {worker.status}
@@ -354,7 +354,7 @@ export function DashboardAgentes() {
                   </div>
                   <div>
                     <p className="text-slate-500">Taxa sucesso</p>
-                    <p className="font-semibold text-green-600">{worker.taxaSucesso}</p>
+                    <p className="font-semibold text-emerald-600">{worker.taxaSucesso}</p>
                   </div>
                   <div>
                     <p className="text-slate-500">Última ação</p>
@@ -388,7 +388,7 @@ export function DashboardAgentes() {
                   className="flex-1 flex flex-col items-center gap-2"
                 >
                   <div 
-                    className="w-full bg-blue-500 rounded-t-md transition-all hover:bg-blue-600"
+                    className="w-full bg-brand rounded-t-md transition-all hover:bg-brand-dark"
                     style={{ height: `${Math.max(altura, 5)}%` }}
                     title={`${dia.conversas} conversas`}
                   />
@@ -428,8 +428,8 @@ export function DashboardAgentes() {
                   key={index}
                   className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg"
                 >
-                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
+                  <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-900">
@@ -450,13 +450,13 @@ export function DashboardAgentes() {
       </div>
 
       {/* Estatísticas Adicionais */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
+      <div className="rounded-xl p-6 text-white" style={{ background: 'var(--gradient-primary)' }}>
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-xl font-semibold">
               {resumo?.resumo.totalMensagens || 0} mensagens processadas
             </h3>
-            <p className="text-blue-100 mt-1">
+            <p className="text-indigo-100 mt-1">
               Média de {resumo?.resumo.mediaMensagensPorConversa || 0} mensagens por conversa
             </p>
           </div>
@@ -464,7 +464,7 @@ export function DashboardAgentes() {
             <p className="text-3xl font-bold">
               {workers.length}
             </p>
-            <p className="text-blue-100">workers ativos</p>
+            <p className="text-indigo-100">workers ativos</p>
           </div>
         </div>
       </div>

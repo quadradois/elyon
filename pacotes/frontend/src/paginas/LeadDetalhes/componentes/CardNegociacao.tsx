@@ -81,8 +81,8 @@ export function CardNegociacao({ lead }: CardNegociacaoProps) {
                             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Anúncio Autorizado</p>
                             <Badge className={
                                 lead.autorizouAnuncio
-                                    ? 'bg-green-100 text-green-700'
-                                    : 'bg-yellow-100 text-yellow-700'
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-amber-100 text-amber-700'
                             }>
                                 {lead.autorizouAnuncio ? '✅ Sim' : '⏳ Pendente'}
                             </Badge>

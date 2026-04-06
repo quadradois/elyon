@@ -47,12 +47,12 @@ const MOTIVOS_DESCRICAO: Record<string, string> = {
 
 const MOTIVOS_COR: Record<string, string> = {
   'CONTATO_PESSOAL': 'bg-indigo-100 text-indigo-800',
-  'OPTOUT': 'bg-yellow-100 text-yellow-800',
+  'OPTOUT': 'bg-amber-100 text-amber-800',
   'INVALIDO': 'bg-gray-100 text-gray-800',
   'RECLAMACAO': 'bg-red-100 text-red-800',
-  'BLOQUEADO_WHATSAPP': 'bg-green-100 text-green-800',
-  'MANUAL': 'bg-blue-100 text-blue-800',
-  'NAO_PERTURBE': 'bg-purple-100 text-purple-800',
+  'BLOQUEADO_WHATSAPP': 'bg-emerald-100 text-emerald-800',
+  'MANUAL': 'bg-indigo-100 text-indigo-800',
+  'NAO_PERTURBE': 'bg-violet-100 text-violet-800',
   'CONCORRENTE': 'bg-orange-100 text-orange-800',
   'SPAM': 'bg-red-100 text-red-800'
 };
@@ -270,7 +270,7 @@ export function Blacklist() {
           <div 
             key={motivo}
             className={`bg-white rounded-lg border p-4 cursor-pointer transition-all ${
-              filtroMotivo === motivo ? 'ring-2 ring-blue-500 border-blue-500' : 'hover:border-blue-300'
+              filtroMotivo === motivo ? 'ring-2 ring-brand border-brand' : 'hover:border-indigo-300'
             }`}
             onClick={() => setFiltroMotivo(filtroMotivo === motivo ? '' : motivo)}
           >
@@ -301,7 +301,7 @@ export function Blacklist() {
               setBusca(e.target.value);
               setPagina(1);
             }}
-            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand"
           />
         </div>
         
@@ -313,7 +313,7 @@ export function Blacklist() {
           }}
           title="Filtrar por motivo"
           aria-label="Filtrar por motivo"
-          className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand"
         >
           <option value="">Todos os motivos</option>
           {Object.entries(MOTIVOS_DESCRICAO).map(([valor, desc]) => (
@@ -330,7 +330,7 @@ export function Blacklist() {
       <div className="bg-white rounded-xl border overflow-hidden">
         {carregando ? (
           <div className="flex items-center justify-center h-64">
-            <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
+            <RefreshCw className="w-8 h-8 animate-spin text-brand" />
           </div>
         ) : bloqueados.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-slate-500">
@@ -459,7 +459,7 @@ export function Blacklist() {
                   value={novoTelefone}
                   onChange={(e) => setNovoTelefone(e.target.value)}
                   placeholder="(XX) XXXXX-XXXX"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand"
                 />
               </div>
               
@@ -472,7 +472,7 @@ export function Blacklist() {
                   value={novoNome}
                   onChange={(e) => setNovoNome(e.target.value)}
                   placeholder="Nome do contato"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand"
                 />
               </div>
               
@@ -485,7 +485,7 @@ export function Blacklist() {
                   onChange={(e) => setNovoMotivo(e.target.value)}
                   title="Selecionar motivo"
                   aria-label="Selecionar motivo"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand"
                 >
                   {Object.entries(MOTIVOS_DESCRICAO).map(([valor, desc]) => (
                     <option key={valor} value={valor}>{desc}</option>
@@ -502,7 +502,7 @@ export function Blacklist() {
                   onChange={(e) => setNovaObservacao(e.target.value)}
                   placeholder="Notas adicionais..."
                   rows={3}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand"
                 />
               </div>
             </div>
@@ -543,7 +543,7 @@ export function Blacklist() {
                   onChange={(e) => setTelefonesLote(e.target.value)}
                   placeholder="(11) 99999-9999&#10;(21) 88888-8888&#10;(31) 77777-7777"
                   rows={10}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand font-mono text-sm"
                 />
                 <p className="text-xs text-slate-500 mt-1">
                   {telefonesLote.split('\n').filter(t => t.trim().length >= 8).length} telefones válidos
@@ -559,7 +559,7 @@ export function Blacklist() {
                   onChange={(e) => setMotivoLote(e.target.value)}
                   title="Selecionar motivo do lote"
                   aria-label="Selecionar motivo do lote"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand"
                 >
                   {Object.entries(MOTIVOS_DESCRICAO).map(([valor, desc]) => (
                     <option key={valor} value={valor}>{desc}</option>

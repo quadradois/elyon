@@ -43,7 +43,7 @@ export function EtapaIdentidade({ dados, setDados }: WizardEtapaProps) {
                 className={cn(
                   "flex flex-col items-center p-4 rounded-xl border-2 transition-all",
                   dados.avatar === av.id
-                    ? "border-blue-600 bg-blue-50 ring-2 ring-blue-200"
+                    ? "border-brand bg-indigo-50 ring-2 ring-indigo-200"
                     : "border-slate-200 hover:border-slate-300"
                 )}
               >
@@ -56,9 +56,9 @@ export function EtapaIdentidade({ dados, setDados }: WizardEtapaProps) {
       </div>
 
       {/* Dica */}
-      <div className="bg-blue-50 p-4 rounded-lg flex items-start gap-3">
-        <Sparkles className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-        <p className="text-sm text-blue-700">
+      <div className="bg-indigo-50 p-4 rounded-lg flex items-start gap-3">
+        <Sparkles className="w-5 h-5 text-brand mt-0.5 flex-shrink-0" />
+        <p className="text-sm text-indigo-700">
           <strong>Dica:</strong> Nomes humanos como "Sofia" ou "Pedro" aumentam 
           a taxa de resposta em 15% comparado a "Assistente Virtual".
         </p>

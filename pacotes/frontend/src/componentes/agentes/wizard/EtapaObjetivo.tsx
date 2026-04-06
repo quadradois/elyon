@@ -29,8 +29,8 @@ export function EtapaObjetivo({ dados, setDados }: WizardEtapaProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center space-y-2">
-        <div className="w-16 h-16 mx-auto bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
-          <Target className="w-8 h-8 text-purple-600" />
+        <div className="w-16 h-16 mx-auto bg-violet-100 dark:bg-violet-900/30 rounded-full flex items-center justify-center">
+          <Target className="w-8 h-8 text-violet-600" />
         </div>
         <h2 className="text-2xl font-bold">Objetivo e Contexto</h2>
         <p className="text-gray-500 dark:text-gray-400">
@@ -60,7 +60,7 @@ export function EtapaObjetivo({ dados, setDados }: WizardEtapaProps) {
         </label>
         <textarea
           placeholder="Ex: Qualificar leads interessados em imóveis de alto padrão na região Sul de Goiânia, identificando poder de compra e urgência..."
-          className="w-full min-h-[120px] px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          className="w-full min-h-[120px] px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand resize-none"
           value={dados.objetivo || ''}
           onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDados(prev => ({ ...prev, objetivo: e.target.value }))}
         />
@@ -78,7 +78,7 @@ export function EtapaObjetivo({ dados, setDados }: WizardEtapaProps) {
         </label>
         <textarea
           placeholder="Ex: Trabalhamos apenas com imóveis acima de R$ 500.000. Nossa imobiliária está no mercado há 15 anos e é conhecida pelo atendimento premium..."
-          className="w-full min-h-[100px] px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          className="w-full min-h-[100px] px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand resize-none"
           value={dados.contexto || ''}
           onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDados(prev => ({ ...prev, contexto: e.target.value }))}
         />

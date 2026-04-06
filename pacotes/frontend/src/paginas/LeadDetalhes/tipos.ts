@@ -100,6 +100,27 @@ export interface Lead {
     // Perda
     motivoPerda?: string | null;          // "Expectativa Irreal", etc.
 
+    // Dados Pessoais (Assertiva — migrados do Contato)
+    idade?: number | null;
+    sexo?: string | null;
+    rendaEstimada?: string | null;
+    faixaSalarial?: string | null;
+    scoreAssertiva?: number | null;
+
+    // Múltiplos Contatos
+    telefone2?: string | null;
+    telefone3?: string | null;
+    email2?: string | null;
+
+    // Imóvel Assertiva
+    bairroImovel?: string | null;
+    nomeEdificio?: string | null;
+    inscricaoIptu?: string | null;
+    valorVenal?: string | null;
+
+    // Briefing IA (Dossiê do Closer)
+    briefingCloser?: string | null;
+
     // Relacionamentos
     atividades: Atividade[];
     conversas: Conversa[];

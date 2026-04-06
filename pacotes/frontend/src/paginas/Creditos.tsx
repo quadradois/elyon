@@ -230,7 +230,7 @@ export function Creditos() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand" />
       </div>
     );
   }
@@ -240,7 +240,7 @@ export function Creditos() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <Coins className="w-7 h-7 text-yellow-500" />
+          <Coins className="w-7 h-7 text-amber-500" />
           Meus Créditos
         </h1>
         <p className="text-slate-500 mt-1">
@@ -254,7 +254,7 @@ export function Creditos() {
           <h2 className="text-lg font-semibold text-slate-900">Saldo Atual</h2>
           <button
             onClick={carregarSaldo}
-            className="text-slate-400 hover:text-blue-600 transition-colors"
+            className="text-slate-400 hover:text-brand transition-colors"
             title="Atualizar"
           >
             <RefreshCw className="w-5 h-5" />
@@ -262,27 +262,27 @@ export function Creditos() {
         </div>
 
         <div className="grid grid-cols-4 gap-4">
-          <div className="bg-blue-50 rounded-lg p-4 text-center">
-            <p className="text-sm text-blue-600 font-medium">Mensais</p>
-            <p className="text-3xl font-bold text-blue-700">
+          <div className="bg-indigo-50 rounded-lg p-4 text-center">
+            <p className="text-sm text-brand font-medium">Mensais</p>
+            <p className="text-3xl font-bold text-indigo-700">
               {saldo?.mensais || 0}
             </p>
           </div>
-          <div className="bg-green-50 rounded-lg p-4 text-center">
-            <p className="text-sm text-green-600 font-medium">Pré-pagos</p>
-            <p className="text-3xl font-bold text-green-700">
+          <div className="bg-emerald-50 rounded-lg p-4 text-center">
+            <p className="text-sm text-emerald-600 font-medium">Pré-pagos</p>
+            <p className="text-3xl font-bold text-emerald-700">
               {saldo?.prepagos || 0}
             </p>
           </div>
-          <div className="bg-purple-50 rounded-lg p-4 text-center">
-            <p className="text-sm text-purple-600 font-medium">Bônus</p>
-            <p className="text-3xl font-bold text-purple-700">
+          <div className="bg-violet-50 rounded-lg p-4 text-center">
+            <p className="text-sm text-violet-600 font-medium">Bônus</p>
+            <p className="text-3xl font-bold text-violet-700">
               {saldo?.bonus || 0}
             </p>
           </div>
-          <div className="bg-yellow-50 rounded-lg p-4 text-center border-2 border-yellow-300">
-            <p className="text-sm text-yellow-600 font-medium">TOTAL</p>
-            <p className="text-3xl font-bold text-yellow-700">
+          <div className="bg-amber-50 rounded-lg p-4 text-center border-2 border-amber-300">
+            <p className="text-sm text-amber-600 font-medium">TOTAL</p>
+            <p className="text-3xl font-bold text-amber-700">
               {saldo?.total || 0}
             </p>
           </div>
@@ -293,9 +293,9 @@ export function Creditos() {
             <span
               className={`px-2 py-1 rounded-full text-xs font-semibold ${
                 planoAtual === "PRO"
-                  ? "bg-purple-100 text-purple-700"
+                  ? "bg-violet-100 text-violet-700"
                   : planoAtual === "GROWTH"
-                    ? "bg-blue-100 text-blue-700"
+                    ? "bg-indigo-100 text-indigo-700"
                     : "bg-slate-100 text-slate-700"
               }`}
             >
@@ -316,7 +316,7 @@ export function Creditos() {
       {/* Comprar Créditos */}
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-          <CreditCard className="w-5 h-5 text-green-600" />
+          <CreditCard className="w-5 h-5 text-emerald-600" />
           Comprar Créditos
         </h2>
 
@@ -348,7 +348,7 @@ export function Creditos() {
                 onClick={() => setQuantidade(qtd)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   quantidade === qtd
-                    ? "bg-blue-600 text-white"
+                    ? "bg-brand text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
@@ -371,14 +371,14 @@ export function Creditos() {
 
             {/* Comparador PRO */}
             {planoAtual !== "PRO" && economiaProCompra > 0 && (
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mt-3">
+              <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 mt-3">
                 <div className="flex items-start gap-2">
-                  <Crown className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+                  <Crown className="w-5 h-5 text-violet-600 shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm text-purple-700 font-medium">
+                    <p className="text-sm text-violet-700 font-medium">
                       Se fosse PRO, pagaria R$ {valorSeFossePro.toFixed(2)}
                     </p>
-                    <p className="text-purple-600 text-sm">
+                    <p className="text-violet-600 text-sm">
                       Economia de{" "}
                       <span className="font-bold">
                         R$ {economiaProCompra.toFixed(2)}
@@ -395,7 +395,7 @@ export function Creditos() {
           <Button
             onClick={comprarCreditos}
             disabled={comprando || quantidade < 10}
-            className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+            className="w-full h-14 text-lg bg-success hover:bg-success-dark"
           >
             {comprando ? (
               <>
@@ -414,9 +414,9 @@ export function Creditos() {
 
       {/* Upgrade de Plano (se não for PRO) */}
       {planoAtual !== "PRO" && (
-        <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl border border-purple-200 p-6">
+        <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl border border-violet-200 p-6">
           <h2 className="text-lg font-semibold text-slate-900 mb-2 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-purple-600" />
+            <TrendingUp className="w-5 h-5 text-violet-600" />
             Fazer Upgrade
           </h2>
           <p className="text-slate-600 text-sm mb-4">
@@ -426,22 +426,22 @@ export function Creditos() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Card Growth (se for Starter) */}
             {planoAtual === "STARTER" && (
-              <div className="bg-white rounded-lg p-4 border border-blue-200">
+              <div className="bg-white rounded-lg p-4 border border-indigo-200">
                 <div className="flex items-center gap-2 mb-2">
-                  <Zap className="w-5 h-5 text-blue-600" />
-                  <span className="font-bold text-blue-700">GROWTH</span>
+                  <Zap className="w-5 h-5 text-brand" />
+                  <span className="font-bold text-indigo-700">GROWTH</span>
                 </div>
                 <ul className="space-y-1 text-sm text-slate-600 mb-4">
                   <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
+                    <Check className="w-4 h-4 text-emerald-500" />
                     100 créditos/mês inclusos
                   </li>
                   <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
+                    <Check className="w-4 h-4 text-emerald-500" />
                     R$ 1,50 por crédito extra
                   </li>
                   <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
+                    <Check className="w-4 h-4 text-emerald-500" />
                     Economize R$ 0,50/crédito
                   </li>
                 </ul>
@@ -449,7 +449,7 @@ export function Creditos() {
                   onClick={() => executarUpgrade("GROWTH")}
                   disabled={executandoUpgrade}
                   variant="outline"
-                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
+                  className="w-full border-indigo-300 text-indigo-700 hover:bg-indigo-50"
                 >
                   Upgrade para Growth
                   <ArrowRight className="w-4 h-4 ml-2" />
@@ -459,39 +459,39 @@ export function Creditos() {
 
             {/* Card PRO */}
             <div className="bg-white rounded-lg p-4 border-2 border-purple-300 relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-purple-600 text-white text-xs px-3 py-1 rounded-bl-lg font-medium">
+              <div className="absolute top-0 right-0 bg-violet-600 text-white text-xs px-3 py-1 rounded-bl-lg font-medium">
                 RECOMENDADO
               </div>
               <div className="flex items-center gap-2 mb-2">
-                <Crown className="w-5 h-5 text-purple-600" />
-                <span className="font-bold text-purple-700">PRO</span>
+                <Crown className="w-5 h-5 text-violet-600" />
+                <span className="font-bold text-violet-700">PRO</span>
               </div>
               <ul className="space-y-1 text-sm text-slate-600 mb-4">
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-emerald-500" />
                   <strong>250 créditos/mês</strong> inclusos
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-emerald-500" />
                   <strong>R$ 1,00</strong> por crédito extra
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-emerald-500" />
                   Economize até <strong>R$ 1,00/crédito</strong>
                 </li>
               </ul>
 
               {calculoUpgrade && (
-                <div className="bg-purple-50 rounded-lg p-3 mb-3 text-sm">
-                  <p className="text-purple-700">
+                <div className="bg-violet-50 rounded-lg p-3 mb-3 text-sm">
+                  <p className="text-violet-700">
                     <strong>Pague hoje:</strong> R${" "}
                     {calculoUpgrade.calculo.valorUpgradeProRata.toFixed(2)}
                   </p>
-                  <p className="text-purple-600 text-xs mt-1">
+                  <p className="text-violet-600 text-xs mt-1">
                     (proporcional a {calculoUpgrade.calculo.diasRestantes} dias
                     restantes)
                   </p>
-                  <p className="text-purple-700 mt-2">
+                  <p className="text-violet-700 mt-2">
                     <Sparkles className="w-4 h-4 inline mr-1" />
                     Ganhe{" "}
                     <strong>
@@ -505,7 +505,7 @@ export function Creditos() {
               <Button
                 onClick={() => executarUpgrade("PRO")}
                 disabled={executandoUpgrade}
-                className="w-full bg-purple-600 hover:bg-purple-700"
+                className="w-full bg-violet-600 hover:bg-violet-700"
               >
                 {executandoUpgrade ? (
                   <>
@@ -529,7 +529,7 @@ export function Creditos() {
         <div className="bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl p-6 text-white text-center">
           <Crown className="w-12 h-12 mx-auto mb-2" />
           <h3 className="text-xl font-bold">Você é PRO! 🎉</h3>
-          <p className="text-purple-100 mt-1">
+          <p className="text-violet-100 mt-1">
             250 créditos mensais + R$ 1,00 por crédito extra
           </p>
         </div>

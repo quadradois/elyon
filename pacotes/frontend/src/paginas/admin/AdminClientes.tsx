@@ -171,7 +171,7 @@ export function AdminClientes() {
                     titulo="MRR"
                     valor={`R$ ${mrr.toLocaleString('pt-BR')}`}
                     icone={TrendingUp}
-                    cor="text-purple-400"
+                    cor="text-violet-400"
                 />
             </div>
 

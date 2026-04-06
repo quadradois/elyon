@@ -23,20 +23,20 @@ import {
 
 export const statusConfig: Record<string, { label: string; color: string; bgColor: string }> = {
     // Funil de Captação (Playbook)
-    NOVO: { label: 'Interesse Confirmado', color: 'text-blue-700', bgColor: 'bg-blue-100' },
+    NOVO: { label: 'Interesse Confirmado', color: 'text-indigo-700', bgColor: 'bg-indigo-100' },
     TENTATIVA_AGENDAMENTO: { label: 'Alinhamento', color: 'text-violet-700', bgColor: 'bg-violet-100' },
     VISITA_AGENDADA: { label: 'Visita Agendada', color: 'text-indigo-700', bgColor: 'bg-indigo-100' },
-    AVALIACAO_EM_ANDAMENTO: { label: 'Avaliação', color: 'text-purple-700', bgColor: 'bg-purple-100' },
+    AVALIACAO_EM_ANDAMENTO: { label: 'Avaliação', color: 'text-violet-700', bgColor: 'bg-violet-100' },
     DOCUMENTACAO: { label: 'Documentação', color: 'text-amber-700', bgColor: 'bg-amber-100' },
-    CAPTADO: { label: 'Captado', color: 'text-green-700', bgColor: 'bg-green-100' },
+    CAPTADO: { label: 'Captado', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
     PERDIDO: { label: 'Perdido', color: 'text-red-700', bgColor: 'bg-red-100' },
     ARQUIVADO: { label: 'Arquivado', color: 'text-gray-500', bgColor: 'bg-gray-50' },
     // Legado (compatibilidade)
-    QUALIFICANDO: { label: 'Qualificando', color: 'text-blue-700', bgColor: 'bg-blue-100' },
+    QUALIFICANDO: { label: 'Qualificando', color: 'text-indigo-700', bgColor: 'bg-indigo-100' },
     QUALIFICADO: { label: 'Qualificado', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
     NAO_QUALIFICADO: { label: 'Não Qualificado', color: 'text-red-700', bgColor: 'bg-red-100' },
     AGENDADO: { label: 'Agendado', color: 'text-violet-700', bgColor: 'bg-violet-100' },
-    CONVERTIDO: { label: 'Captado', color: 'text-green-700', bgColor: 'bg-green-100' },
+    CONVERTIDO: { label: 'Captado', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
 };
 
 // ============================================
@@ -45,8 +45,8 @@ export const statusConfig: Record<string, { label: string; color: string; bgColo
 
 export const temperaturaConfig: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
     QUENTE: { label: 'Quente', icon: <Flame className="w-4 h-4" />, color: 'text-orange-500' },
-    MORNO: { label: 'Morno', icon: <Sun className="w-4 h-4" />, color: 'text-yellow-500' },
-    FRIO: { label: 'Frio', icon: <Snowflake className="w-4 h-4" />, color: 'text-blue-500' },
+    MORNO: { label: 'Morno', icon: <Sun className="w-4 h-4" />, color: 'text-amber-500' },
+    FRIO: { label: 'Frio', icon: <Snowflake className="w-4 h-4" />, color: 'text-indigo-500' },
 };
 
 // ============================================
@@ -54,8 +54,8 @@ export const temperaturaConfig: Record<string, { label: string; icon: React.Reac
 // ============================================
 
 export const tipoAtividadeConfig: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-    LIGACAO: { label: 'Ligação', icon: <Phone className="w-4 h-4" />, color: 'text-blue-500' },
-    MENSAGEM: { label: 'Mensagem', icon: <MessageSquare className="w-4 h-4" />, color: 'text-green-500' },
+    LIGACAO: { label: 'Ligação', icon: <Phone className="w-4 h-4" />, color: 'text-indigo-500' },
+    MENSAGEM: { label: 'Mensagem', icon: <MessageSquare className="w-4 h-4" />, color: 'text-emerald-500' },
     AVALIACAO: { label: 'Avaliação', icon: <Home className="w-4 h-4" />, color: 'text-violet-500' },
     FOLLOW_UP: { label: 'Follow-up', icon: <RefreshCw className="w-4 h-4" />, color: 'text-orange-500' },
     REUNIAO: { label: 'Reunião', icon: <Calendar className="w-4 h-4" />, color: 'text-indigo-500' },
@@ -69,10 +69,10 @@ export const tipoAtividadeConfig: Record<string, { label: string; icon: React.Re
 // ============================================
 
 export const statusAgendamentoConfig: Record<string, { label: string; color: string }> = {
-    PENDENTE: { label: 'Pendente', color: 'bg-yellow-100 text-yellow-700' },
-    CONFIRMADO: { label: 'Confirmado', color: 'bg-green-100 text-green-700' },
+    PENDENTE: { label: 'Pendente', color: 'bg-amber-100 text-amber-700' },
+    CONFIRMADO: { label: 'Confirmado', color: 'bg-emerald-100 text-emerald-700' },
     CANCELADO: { label: 'Cancelado', color: 'bg-red-100 text-red-700' },
-    REALIZADO: { label: 'Realizado', color: 'bg-blue-100 text-blue-700' },
+    REALIZADO: { label: 'Realizado', color: 'bg-indigo-100 text-indigo-700' },
     NAO_COMPARECEU: { label: 'Não Compareceu', color: 'bg-gray-100 text-gray-700' },
 };
 
@@ -127,7 +127,7 @@ export const fasesPlaybook = [
         nome: 'Prospectar',
         descricao: 'Interesse Confirmado',
         corBorda: 'border-l-blue-500',
-        corFundo: 'bg-blue-50'
+        corFundo: 'bg-indigo-50'
     },
     {
         status: 'TENTATIVA_AGENDAMENTO',
@@ -151,6 +151,6 @@ export const fasesPlaybook = [
         nome: 'Finalizar',
         descricao: 'Captado (Ativo)',
         corBorda: 'border-l-green-500',
-        corFundo: 'bg-green-50'
+        corFundo: 'bg-emerald-50'
     },
 ];

@@ -87,7 +87,7 @@ export default function Listas() {
   if (carregando) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand" />
       </div>
     );
   }
@@ -141,8 +141,8 @@ export default function Listas() {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Building2 className="w-5 h-5 text-blue-600" />
+                    <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                      <Building2 className="w-5 h-5 text-indigo-600" />
                     </div>
                     <div>
                       <CardTitle className="text-base">{lista.nome}</CardTitle>
@@ -185,13 +185,13 @@ export default function Listas() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <MessageCircle className="w-4 h-4 text-green-500" />
+                    <MessageCircle className="w-4 h-4 text-emerald-500" />
                     <span className="text-slate-600">
                       <strong className="text-slate-900">{lista.totalComWhatsapp}</strong> WhatsApp
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-blue-500" />
+                    <CheckCircle2 className="w-4 h-4 text-indigo-500" />
                     <span className="text-slate-600">
                       <strong className="text-slate-900">{lista.totalUsados}</strong> usados
                     </span>
@@ -207,7 +207,7 @@ export default function Listas() {
                     </div>
                     <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-blue-500 rounded-full transition-all"
+                        className="h-full bg-brand rounded-full transition-all"
                         style={{ width: `${(lista.totalUsados / lista.totalContatos) * 100}%` }}
                       />
                     </div>

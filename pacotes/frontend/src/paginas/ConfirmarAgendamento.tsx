@@ -181,7 +181,7 @@ export default function ConfirmarAgendamento() {
     return (
       <PageContainer>
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
+          <Loader2 className="w-12 h-12 animate-spin text-brand mb-4" />
           <p className="text-slate-600">Verificando agendamento...</p>
         </div>
       </PageContainer>
@@ -207,7 +207,7 @@ export default function ConfirmarAgendamento() {
               {dados?.imobiliaria?.telefone && (
                 <a 
                   href={`tel:${dados.imobiliaria.telefone}`}
-                  className="inline-flex items-center gap-2 text-blue-600 hover:underline"
+                  className="inline-flex items-center gap-2 text-brand hover:underline"
                 >
                   <Phone className="w-4 h-4" />
                   {dados.imobiliaria.telefone}
@@ -230,10 +230,10 @@ export default function ConfirmarAgendamento() {
           <CardContent className="pt-6">
             <div className="text-center">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                isConfirmado ? 'bg-green-100' : 'bg-gray-100'
+                isConfirmado ? 'bg-emerald-100' : 'bg-gray-100'
               }`}>
                 {isConfirmado 
-                  ? <CheckCircle2 className="w-8 h-8 text-green-500" />
+                  ? <CheckCircle2 className="w-8 h-8 text-emerald-500" />
                   : <XCircle className="w-8 h-8 text-gray-500" />
                 }
               </div>
@@ -266,10 +266,10 @@ export default function ConfirmarAgendamento() {
         <Card className="max-w-md mx-auto mt-12">
           <CardContent className="pt-6">
             <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 className="w-8 h-8 text-green-500" />
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 className="w-8 h-8 text-emerald-500" />
               </div>
-              <h2 className="text-xl font-bold text-green-700 mb-2">
+              <h2 className="text-xl font-bold text-emerald-700 mb-2">
                 Agendamento Confirmado!
               </h2>
               <p className="text-slate-600 mb-6">
@@ -343,7 +343,7 @@ export default function ConfirmarAgendamento() {
               {dados?.imobiliaria?.telefone && (
                 <a 
                   href={`tel:${dados.imobiliaria.telefone}`}
-                  className="inline-flex items-center gap-2 text-blue-600 hover:underline mt-4"
+                  className="inline-flex items-center gap-2 text-brand hover:underline mt-4"
                 >
                   <Phone className="w-4 h-4" />
                   {dados.imobiliaria.telefone}
@@ -362,7 +362,7 @@ export default function ConfirmarAgendamento() {
       <PageContainer>
         {/* Header da Imobiliária */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-brand rounded-xl flex items-center justify-center mx-auto mb-4">
             <Building2 className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900">
@@ -389,7 +389,7 @@ export default function ConfirmarAgendamento() {
             {/* Detalhes do Agendamento */}
             <div className="bg-slate-50 rounded-lg p-4 space-y-3 mb-6">
               <div className="flex items-start gap-3">
-                <Calendar className="w-5 h-5 text-blue-500 mt-0.5" />
+                <Calendar className="w-5 h-5 text-indigo-500 mt-0.5" />
                 <div>
                   <p className="text-sm text-slate-500">Data</p>
                   <p className="font-medium text-slate-900">
@@ -399,7 +399,7 @@ export default function ConfirmarAgendamento() {
               </div>
               
               <div className="flex items-start gap-3">
-                <Clock className="w-5 h-5 text-blue-500 mt-0.5" />
+                <Clock className="w-5 h-5 text-indigo-500 mt-0.5" />
                 <div>
                   <p className="text-sm text-slate-500">Horário</p>
                   <p className="font-medium text-slate-900">
@@ -410,7 +410,7 @@ export default function ConfirmarAgendamento() {
               
               {dados.imovel?.endereco && (
                 <div className="flex items-start gap-3">
-                  <MapPin className="w-5 h-5 text-blue-500 mt-0.5" />
+                  <MapPin className="w-5 h-5 text-indigo-500 mt-0.5" />
                   <div>
                     <p className="text-sm text-slate-500">Local</p>
                     <p className="font-medium text-slate-900">
@@ -422,7 +422,7 @@ export default function ConfirmarAgendamento() {
 
               {dados.imovel?.tipo && (
                 <div className="flex items-start gap-3">
-                  <Home className="w-5 h-5 text-blue-500 mt-0.5" />
+                  <Home className="w-5 h-5 text-indigo-500 mt-0.5" />
                   <div>
                     <p className="text-sm text-slate-500">Tipo de Imóvel</p>
                     <p className="font-medium text-slate-900">
@@ -485,7 +485,7 @@ export default function ConfirmarAgendamento() {
               /* Botões de Ação */
               <div className="space-y-3">
                 <Button
-                  className="w-full bg-green-600 hover:bg-green-700"
+                  className="w-full bg-success hover:bg-success-dark"
                   size="lg"
                   onClick={confirmarAgendamento}
                   disabled={processando}
@@ -525,7 +525,7 @@ export default function ConfirmarAgendamento() {
             <span className="block mt-1">
               <a 
                 href={`tel:${dados.imobiliaria.telefone}`}
-                className="text-blue-600 hover:underline"
+                className="text-brand hover:underline"
               >
                 {dados.imobiliaria.telefone}
               </a>

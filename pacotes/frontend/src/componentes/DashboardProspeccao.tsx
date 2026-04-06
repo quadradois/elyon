@@ -257,7 +257,7 @@ export function DashboardProspeccao() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand" />
       </div>
     );
   }
@@ -268,7 +268,7 @@ export function DashboardProspeccao() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <BarChart3 className="w-7 h-7 text-blue-600" />
+            <BarChart3 className="w-7 h-7 text-brand" />
             Dashboard de Prospecção
           </h1>
           <p className="text-slate-500 mt-1">
@@ -289,72 +289,76 @@ export function DashboardProspeccao() {
 
       {/* Cards de Métricas Principais */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="card-premium relative overflow-hidden bg-white/70 backdrop-blur-md border-0 ring-1 ring-slate-200/50">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-indigo-600" />
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Total Contatos</p>
-                <p className="text-3xl font-bold text-slate-900">
+                <p className="text-sm font-medium text-slate-500">Total Contatos</p>
+                <p className="text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
                   {metricas?.totalContatos.toLocaleString() || 0}
                 </p>
               </div>
-              <div className="p-3 bg-blue-100 rounded-full">
-                <Users className="w-6 h-6 text-blue-600" />
+              <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100/50">
+                <Users className="w-6 h-6 text-indigo-600" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="card-premium relative overflow-hidden bg-white/70 backdrop-blur-md border-0 ring-1 ring-slate-200/50">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-purple-600" />
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Disparados</p>
-                <p className="text-3xl font-bold text-slate-900">
+                <p className="text-sm font-medium text-slate-500">Disparados</p>
+                <p className="text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
                   {metricas?.totalDisparados.toLocaleString() || 0}
                 </p>
               </div>
-              <div className="p-3 bg-purple-100 rounded-full">
-                <MessageSquare className="w-6 h-6 text-purple-600" />
+              <div className="p-3 bg-violet-50 rounded-xl border border-violet-100/50">
+                <MessageSquare className="w-6 h-6 text-violet-600" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="card-premium relative overflow-hidden bg-white/70 backdrop-blur-md border-0 ring-1 ring-slate-200/50">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-500" />
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Respostas</p>
-                <p className="text-3xl font-bold text-slate-900">
+                <p className="text-sm font-medium text-slate-500">Respostas</p>
+                <p className="text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
                   {metricas?.totalRespostas.toLocaleString() || 0}
                 </p>
-                <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
-                  <TrendingUp className="w-3 h-3" />
+                <p className="text-xs font-medium text-emerald-600 flex items-center gap-1 mt-1.5">
+                  <TrendingUp className="w-3.5 h-3.5" />
                   {metricas?.taxaResposta.toFixed(1)}% taxa
                 </p>
               </div>
-              <div className="p-3 bg-green-100 rounded-full">
-                <UserCheck className="w-6 h-6 text-green-600" />
+              <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-glow-success">
+                <UserCheck className="w-6 h-6 text-white" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="card-premium relative overflow-hidden bg-white/70 backdrop-blur-md border-0 ring-1 ring-slate-200/50">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-emerald-700" />
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Interessados</p>
-                <p className="text-3xl font-bold text-green-600">
+                <p className="text-sm font-medium text-slate-500">Interessados</p>
+                <p className="text-3xl font-extrabold text-emerald-600 tracking-tight mt-1">
                   {metricas?.totalInteressados.toLocaleString() || 0}
                 </p>
-                <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
-                  <Target className="w-3 h-3" />
+                <p className="text-xs font-medium text-emerald-600 flex items-center gap-1 mt-1.5">
+                  <Target className="w-3.5 h-3.5" />
                   {metricas?.taxaConversao.toFixed(1)}% conversão
                 </p>
               </div>
-              <div className="p-3 bg-emerald-100 rounded-full">
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100/50">
                 <Zap className="w-6 h-6 text-emerald-600" />
               </div>
             </div>
@@ -364,69 +368,69 @@ export function DashboardProspeccao() {
 
       {/* Segunda linha de métricas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="card-premium relative overflow-hidden bg-white/70 backdrop-blur-md border-0 ring-1 ring-slate-200/50">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Campanhas Ativas</p>
-                <p className="text-2xl font-bold text-slate-900">
+                <p className="text-sm font-medium text-slate-500">Campanhas Ativas</p>
+                <p className="text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
                   {metricas?.campanhasAtivas || 0} / {metricas?.totalCampanhas || 0}
                 </p>
               </div>
-              <div className="p-3 bg-indigo-100 rounded-full">
-                <Calendar className="w-6 h-6 text-indigo-600" />
+              <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100/50">
+                <Calendar className="w-5 h-5 text-indigo-600" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="card-premium relative overflow-hidden bg-white/70 backdrop-blur-md border-0 ring-1 ring-slate-200/50">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Aguardando</p>
-                <p className="text-2xl font-bold text-slate-900">
+                <p className="text-sm font-medium text-slate-500">Aguardando</p>
+                <p className="text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
                   {campanhas.reduce((acc, c) => acc + (c.aguardando || 0), 0).toLocaleString()}
                 </p>
               </div>
-              <div className="p-3 bg-slate-100 rounded-full">
-                <Clock className="w-6 h-6 text-slate-600" />
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/50">
+                <Clock className="w-5 h-5 text-slate-600" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="card-premium relative overflow-hidden bg-white/70 backdrop-blur-md border-0 ring-1 ring-slate-200/50">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Opt-out</p>
-                <p className="text-2xl font-bold text-amber-600">
+                <p className="text-sm font-medium text-slate-500">Opt-out</p>
+                <p className="text-2xl font-extrabold text-amber-600 tracking-tight mt-1">
                   {metricas?.totalOptout || 0}
                 </p>
-                <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
-                  <TrendingDown className="w-3 h-3" />
+                <p className="text-xs font-medium text-amber-600 flex items-center gap-1 mt-1">
+                  <TrendingDown className="w-3.5 h-3.5" />
                   {metricas?.taxaOptout.toFixed(1)}% taxa
                 </p>
               </div>
-              <div className="p-3 bg-amber-100 rounded-full">
-                <UserX className="w-6 h-6 text-amber-600" />
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-100/50">
+                <UserX className="w-5 h-5 text-amber-600" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="card-premium relative overflow-hidden bg-white/70 backdrop-blur-md border-0 ring-1 ring-slate-200/50">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Blacklist</p>
-                <p className="text-2xl font-bold text-red-600">
+                <p className="text-sm font-medium text-slate-500">Blacklist</p>
+                <p className="text-2xl font-extrabold text-red-600 tracking-tight mt-1">
                   {blacklist?.total || 0}
                 </p>
               </div>
-              <div className="p-3 bg-red-100 rounded-full">
-                <Phone className="w-6 h-6 text-red-600" />
+              <div className="p-3 bg-red-50 rounded-xl border border-red-100/50">
+                <Phone className="w-5 h-5 text-red-600" />
               </div>
             </div>
           </CardContent>
@@ -435,85 +439,85 @@ export function DashboardProspeccao() {
 
       {/* Funil de Prospecção Visual */}
       {funil && (
-        <Card>
+        <Card className="card-premium border-0 ring-1 ring-slate-200/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Target className="w-5 h-5 text-blue-600" />
+              <Target className="w-5 h-5 text-indigo-500" />
               Funil de Prospecção
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between gap-2">
               {/* Etapa 1: Aguardando */}
-              <div className="flex-1 text-center">
-                <div className="bg-slate-100 rounded-lg p-4 mb-2">
+              <div className="flex-1 text-center group">
+                <div className="bg-slate-50 rounded-xl p-4 mb-3 border border-slate-200/50 transition-all duration-300 group-hover:shadow-md">
                   <p className="text-2xl font-bold text-slate-700">{funil.aguardando}</p>
-                  <p className="text-xs text-slate-500">Aguardando</p>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-widest mt-1">Aguardando</p>
                 </div>
-                <div className="h-2 bg-slate-200 rounded-full">
-                  <div className="h-2 bg-slate-400 rounded-full" style={{ width: '100%' }} />
+                <div className="h-2 bg-slate-100 rounded-full w-full overflow-hidden">
+                  <div className="h-full bg-slate-300 rounded-full transition-all" style={{ width: '100%' }} />
                 </div>
               </div>
               
-              <ChevronRight className="w-5 h-5 text-slate-400 flex-shrink-0" />
+              <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0" />
               
               {/* Etapa 2: Contatando */}
-              <div className="flex-1 text-center">
-                <div className="bg-blue-100 rounded-lg p-4 mb-2">
-                  <p className="text-2xl font-bold text-blue-700">{funil.contatando}</p>
-                  <p className="text-xs text-blue-600">Contatando</p>
+              <div className="flex-1 text-center group">
+                <div className="bg-indigo-50 rounded-xl p-4 mb-3 border border-indigo-100/50 transition-all duration-300 group-hover:shadow-md group-hover:border-indigo-200">
+                  <p className="text-2xl font-bold text-indigo-700">{funil.contatando}</p>
+                  <p className="text-xs font-medium text-indigo-600 uppercase tracking-widest mt-1">Contatando</p>
                 </div>
-                <div className="h-2 bg-blue-200 rounded-full">
+                <div className="h-2 bg-indigo-100 rounded-full w-full overflow-hidden">
                   <div 
-                    className="h-2 bg-blue-500 rounded-full transition-all" 
+                    className="h-full bg-gradient-to-r from-indigo-400 to-indigo-600 rounded-full transition-all" 
                     style={{ width: funil.aguardando > 0 ? `${Math.min(100, (funil.contatando / (funil.aguardando + funil.contatando)) * 100)}%` : '0%' }} 
                   />
                 </div>
               </div>
               
-              <ChevronRight className="w-5 h-5 text-slate-400 flex-shrink-0" />
+              <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0" />
               
               {/* Etapa 3: Respondeu */}
-              <div className="flex-1 text-center">
-                <div className="bg-purple-100 rounded-lg p-4 mb-2">
-                  <p className="text-2xl font-bold text-purple-700">{funil.respondeu}</p>
-                  <p className="text-xs text-purple-600">Respondeu</p>
+              <div className="flex-1 text-center group">
+                <div className="bg-violet-50 rounded-xl p-4 mb-3 border border-violet-100/50 transition-all duration-300 group-hover:shadow-md group-hover:border-violet-200">
+                  <p className="text-2xl font-bold text-violet-700">{funil.respondeu}</p>
+                  <p className="text-xs font-medium text-violet-600 uppercase tracking-widest mt-1">Respondeu</p>
                 </div>
-                <div className="h-2 bg-purple-200 rounded-full">
+                <div className="h-2 bg-violet-100 rounded-full w-full overflow-hidden">
                   <div 
-                    className="h-2 bg-purple-500 rounded-full transition-all" 
+                    className="h-full bg-gradient-to-r from-violet-400 to-violet-600 rounded-full transition-all" 
                     style={{ width: funil.contatando > 0 ? `${Math.min(100, (funil.respondeu / funil.contatando) * 100)}%` : '0%' }} 
                   />
                 </div>
               </div>
               
-              <ChevronRight className="w-5 h-5 text-slate-400 flex-shrink-0" />
+              <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0" />
               
               {/* Etapa 4: Interessado */}
-              <div className="flex-1 text-center">
-                <div className="bg-amber-100 rounded-lg p-4 mb-2">
+              <div className="flex-1 text-center group">
+                <div className="bg-amber-50 rounded-xl p-4 mb-3 border border-amber-100/50 transition-all duration-300 group-hover:shadow-md group-hover:border-amber-200">
                   <p className="text-2xl font-bold text-amber-700">{funil.interessado + funil.mornoFuturo}</p>
-                  <p className="text-xs text-amber-600">Interessados</p>
+                  <p className="text-xs font-medium text-amber-600 uppercase tracking-widest mt-1">Interessados</p>
                 </div>
-                <div className="h-2 bg-amber-200 rounded-full">
+                <div className="h-2 bg-amber-100 rounded-full w-full overflow-hidden">
                   <div 
-                    className="h-2 bg-amber-500 rounded-full transition-all" 
+                    className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all" 
                     style={{ width: funil.respondeu > 0 ? `${Math.min(100, ((funil.interessado + funil.mornoFuturo) / funil.respondeu) * 100)}%` : '0%' }} 
                   />
                 </div>
               </div>
               
-              <ChevronRight className="w-5 h-5 text-slate-400 flex-shrink-0" />
+              <ChevronRight className="w-5 h-5 text-slate-300 flex-shrink-0" />
               
               {/* Etapa 5: Lead Convertido */}
-              <div className="flex-1 text-center">
-                <div className="bg-green-100 rounded-lg p-4 mb-2">
-                  <p className="text-2xl font-bold text-green-700">{funil.lead}</p>
-                  <p className="text-xs text-green-600">Leads</p>
+              <div className="flex-1 text-center group">
+                <div className="bg-emerald-50 rounded-xl p-4 mb-3 border border-emerald-100/50 transition-all duration-300 group-hover:shadow-md group-hover:border-emerald-200">
+                  <p className="text-2xl font-bold text-emerald-700">{funil.lead}</p>
+                  <p className="text-xs font-medium text-emerald-600 uppercase tracking-widest mt-1">Leads</p>
                 </div>
-                <div className="h-2 bg-green-200 rounded-full">
+                <div className="h-2 bg-emerald-100 rounded-full w-full overflow-hidden">
                   <div 
-                    className="h-2 bg-green-500 rounded-full transition-all" 
+                    className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full transition-all shadow-glow-success" 
                     style={{ width: (funil.interessado + funil.mornoFuturo) > 0 ? `${Math.min(100, (funil.lead / (funil.interessado + funil.mornoFuturo)) * 100)}%` : '0%' }} 
                   />
                 </div>
@@ -568,12 +572,12 @@ export function DashboardProspeccao() {
                       </div>
                       <div className="text-right">
                         {lead.campanha && (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                          <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">
                             {lead.campanha.empreendimento}
                           </span>
                         )}
                         {lead.reuniaoAgendada && (
-                          <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                          <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {new Date(lead.reuniaoAgendada.agendadoPara).toLocaleDateString('pt-BR')}
                           </p>
@@ -583,7 +587,7 @@ export function DashboardProspeccao() {
                   </div>
                 ))}
                 {leadsQuentes.length > 5 && (
-                  <p className="text-center text-sm text-blue-600 pt-2">
+                  <p className="text-center text-sm text-brand pt-2">
                     +{leadsQuentes.length - 5} leads quentes
                   </p>
                 )}
@@ -595,7 +599,7 @@ export function DashboardProspeccao() {
         {/* Avaliações Agendadas */}
         <Card className="border-l-4 border-l-green-500">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-green-600">
+            <CardTitle className="flex items-center gap-2 text-emerald-600">
               <Calendar className="w-5 h-5" />
               Avaliações Agendadas ({avaliacoes.length})
             </CardTitle>
@@ -608,7 +612,7 @@ export function DashboardProspeccao() {
             ) : (
               <div className="space-y-3 max-h-64 overflow-y-auto">
                 {avaliacoes.slice(0, 5).map((av) => (
-                  <div key={av.id} className="bg-green-50 rounded-lg p-3 hover:bg-green-100 transition-colors">
+                  <div key={av.id} className="bg-emerald-50 rounded-lg p-3 hover:bg-emerald-100 transition-colors">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="font-medium text-slate-900">{av.lead.nome}</p>
@@ -621,7 +625,7 @@ export function DashboardProspeccao() {
                         )}
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-medium text-green-600 flex items-center gap-1">
+                        <p className="text-sm font-medium text-emerald-600 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           {av.agendadoPara 
                             ? new Date(av.agendadoPara).toLocaleDateString('pt-BR', { 
@@ -634,7 +638,7 @@ export function DashboardProspeccao() {
                             : 'A definir'}
                         </p>
                         {av.campanha && (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded mt-1 inline-block">
+                          <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded mt-1 inline-block">
                             {av.campanha.empreendimento}
                           </span>
                         )}
@@ -643,7 +647,7 @@ export function DashboardProspeccao() {
                   </div>
                 ))}
                 {avaliacoes.length > 5 && (
-                  <p className="text-center text-sm text-blue-600 pt-2">
+                  <p className="text-center text-sm text-brand pt-2">
                     +{avaliacoes.length - 5} avaliações
                   </p>
                 )}
@@ -701,9 +705,9 @@ export function DashboardProspeccao() {
                         <td className="text-center py-3 px-2">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                             campanha.status === 'ATIVA' 
-                              ? 'bg-green-100 text-green-700' 
+                              ? 'bg-emerald-100 text-emerald-700' 
                               : campanha.status === 'PAUSADA'
-                                ? 'bg-yellow-100 text-yellow-700'
+                                ? 'bg-amber-100 text-amber-700'
                                 : 'bg-slate-100 text-slate-600'
                           }`}>
                             {campanha.status}
@@ -711,12 +715,12 @@ export function DashboardProspeccao() {
                         </td>
                         <td className="text-center py-3 px-2 font-medium">{campanha.total}</td>
                         <td className="text-center py-3 px-2 text-slate-600">{campanha.aguardando}</td>
-                        <td className="text-center py-3 px-2 text-blue-600">{campanha.contatando}</td>
-                        <td className="text-center py-3 px-2 text-purple-600">{respostas}</td>
-                        <td className="text-center py-3 px-2 text-green-600 font-medium">{campanha.interessado}</td>
+                        <td className="text-center py-3 px-2 text-brand">{campanha.contatando}</td>
+                        <td className="text-center py-3 px-2 text-violet-600">{respostas}</td>
+                        <td className="text-center py-3 px-2 text-emerald-600 font-medium">{campanha.interessado}</td>
                         <td className="text-center py-3 px-2 text-amber-600">{campanha.optout}</td>
                         <td className="text-center py-3 px-2">
-                          <span className={`font-medium ${taxaResposta >= 10 ? 'text-green-600' : taxaResposta >= 5 ? 'text-blue-600' : 'text-slate-600'}`}>
+                          <span className={`font-medium ${taxaResposta >= 10 ? 'text-emerald-600' : taxaResposta >= 5 ? 'text-brand' : 'text-slate-600'}`}>
                             {taxaResposta.toFixed(1)}%
                           </span>
                         </td>

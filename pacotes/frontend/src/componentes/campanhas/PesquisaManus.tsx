@@ -349,12 +349,12 @@ export function PesquisaManusModal({
           <DialogTitle className="flex items-center gap-2">
             {modoManual ? (
               <>
-                <Edit3 className="w-5 h-5 text-blue-600" />
+                <Edit3 className="w-5 h-5 text-brand" />
                 Briefing Manual
               </>
             ) : (
               <>
-                <Brain className="w-5 h-5 text-purple-600" />
+                <Brain className="w-5 h-5 text-violet-600" />
                 Pesquisa de Empreendimento via IA
               </>
             )}
@@ -599,12 +599,12 @@ export function PesquisaManusModal({
             </div>
 
             {/* Info Box */}
-            <div className="bg-purple-50 rounded-lg p-4 text-sm text-purple-800 opacity-80">
+            <div className="bg-violet-50 rounded-lg p-4 text-sm text-violet-800 opacity-80">
               <p className="font-medium flex items-center gap-2">
                 <Sparkles className="w-4 h-4" />
                 Como funciona?
               </p>
-              <ul className="mt-2 space-y-1 text-purple-700">
+              <ul className="mt-2 space-y-1 text-violet-700">
                 <li>• A IA irá buscar informações na web sobre o empreendimento</li>
                 <li>• Coleta dados como: plantas, preços, infraestrutura, localização</li>
                 <li>• O processo leva de 2 a 5 minutos</li>
@@ -653,8 +653,8 @@ export function PesquisaManusModal({
         {pesquisa && pesquisa.status !== "CONCLUIDO" && pesquisa.status !== "ERRO" && (
           <div className="space-y-6 py-4">
             <div className="text-center">
-              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Brain className="w-8 h-8 text-purple-600 animate-pulse" />
+              <div className="w-16 h-16 bg-violet-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Brain className="w-8 h-8 text-violet-600 animate-pulse" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900">
                 Pesquisando...
@@ -678,7 +678,7 @@ export function PesquisaManusModal({
                   href={pesquisa.shareUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-purple-600 hover:underline"
+                  className="inline-flex items-center gap-2 text-sm text-violet-600 hover:underline"
                 >
                   <ExternalLink className="w-4 h-4" />
                   Acompanhar no Manus
@@ -708,8 +708,8 @@ export function PesquisaManusModal({
         {pesquisa && pesquisa.status === "CONCLUIDO" && (
           <div className="space-y-4 py-4">
             <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 className="w-8 h-8 text-green-600" />
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900">
                 Pesquisa Concluída!
@@ -737,7 +737,7 @@ export function PesquisaManusModal({
                   href={pesquisa.shareUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-purple-600 hover:underline"
+                  className="inline-flex items-center gap-2 text-sm text-violet-600 hover:underline"
                 >
                   <ExternalLink className="w-4 h-4" />
                   Ver pesquisa completa no Manus
@@ -782,9 +782,9 @@ export function PesquisaManusModal({
             </div>
 
             {/* Sugestão de preenchimento manual */}
-            <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800 text-center">
+            <div className="bg-indigo-50 rounded-lg p-4 text-sm text-indigo-800 text-center">
               <p className="font-medium">💡 Alternativa</p>
-              <p className="mt-1 text-blue-700">
+              <p className="mt-1 text-indigo-700">
                 Você pode preencher o briefing manualmente enquanto o serviço de IA é restabelecido.
               </p>
             </div>
@@ -805,7 +805,7 @@ export function PesquisaManusModal({
                   setPesquisa(null);
                   setModoManual(true);
                 }}
-                className="text-blue-600 hover:text-blue-700"
+                className="text-brand hover:text-brand"
               >
                 <Edit3 className="w-4 h-4 mr-2" />
                 Preencher manualmente

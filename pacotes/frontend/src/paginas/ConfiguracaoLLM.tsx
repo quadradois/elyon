@@ -280,7 +280,7 @@ export function ConfiguracaoLLM() {
                 <div className={cn(
                     'px-4 py-3 rounded-lg flex items-center gap-2 text-sm border',
                     mensagem.tipo === 'sucesso'
-                        ? 'bg-green-50 text-green-700 border-green-200'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         : 'bg-red-50 text-red-700 border-red-200'
                 )}>
                     {mensagem.tipo === 'sucesso' ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <XCircle className="w-4 h-4 flex-shrink-0" />}
@@ -346,7 +346,7 @@ export function ConfiguracaoLLM() {
                                     </div>
                                 </div>
                                 {config?.temApiKey && !editando && (
-                                    <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                                    <span className="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
                                         <CheckCircle2 className="w-3 h-3" />
                                         Configurado
                                     </span>
@@ -390,7 +390,7 @@ export function ConfiguracaoLLM() {
                                                     <div className="flex items-center justify-between w-full">
                                                         <span className="truncate">{m.name}</span>
                                                         {m.isFree ? (
-                                                            <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 ml-2">
+                                                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-emerald-200 ml-2">
                                                                 Grátis
                                                             </Badge>
                                                         ) : (
@@ -571,7 +571,7 @@ export function ConfiguracaoLLM() {
                                         </div>
                                     </div>
                                     {config?.temOpenaiApiKey && !editando && (
-                                        <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                                        <span className="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
                                             <CheckCircle2 className="w-3 h-3" />
                                             Salvo
                                         </span>
@@ -639,24 +639,24 @@ export function ConfiguracaoLLM() {
                     )}
 
                     {/* Info */}
-                    <Card className="bg-blue-50 border-blue-100 shadow-sm">
+                    <Card className="bg-indigo-50 border-indigo-100 shadow-sm">
                         <CardContent className="py-5">
                             <div className="flex items-start gap-4">
-                                <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                                <Info className="w-5 h-5 text-brand flex-shrink-0 mt-0.5" />
                                 <div className="space-y-2">
                                     <h4 className="font-bold text-slate-900 text-sm">Como funciona a compatibilidade?</h4>
                                     <p className="text-sm text-slate-600 leading-relaxed">
                                         O motor de agentes do Elyon utiliza o <strong>protocolo padrão da OpenAI</strong>. Isso significa que ele é compatível com qualquer provedor que aceite esse formato.
                                     </p>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                                        <div className="bg-white/50 p-3 rounded-lg border border-blue-100">
-                                            <p className="text-xs font-bold text-blue-800 uppercase mb-1">Dica para Claude/Gemini</p>
+                                        <div className="bg-white/50 p-3 rounded-lg border border-indigo-100">
+                                            <p className="text-xs font-bold text-indigo-800 uppercase mb-1">Dica para Claude/Gemini</p>
                                             <p className="text-xs text-slate-600">
                                                 Para usar modelos como <strong>Claude 3.5 Sonnet</strong>, a forma mais estável é via <strong>OpenRouter</strong>, que traduz o sinal para o formato que nossos agentes entendem.
                                             </p>
                                         </div>
-                                        <div className="bg-white/50 p-3 rounded-lg border border-blue-100">
-                                            <p className="text-xs font-bold text-blue-800 uppercase mb-1">Outros Provedores</p>
+                                        <div className="bg-white/50 p-3 rounded-lg border border-indigo-100">
+                                            <p className="text-xs font-bold text-indigo-800 uppercase mb-1">Outros Provedores</p>
                                             <p className="text-xs text-slate-600">
                                                 Serviços como <strong>Groq</strong> ou <strong>Together AI</strong> funcionam nativamente pois já seguem o padrão necessário.
                                             </p>

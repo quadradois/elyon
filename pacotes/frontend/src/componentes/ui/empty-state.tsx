@@ -41,19 +41,19 @@ const CONFIGURACOES = {
     icone: Users,
     titulo: "Nenhum lead ainda",
     descricao: "Comece minerando propriedades para criar seus primeiros leads.",
-    cor: "text-blue-400"
+    cor: "text-indigo-400"
   },
   "nenhuma-campanha": {
     icone: Target,
     titulo: "Nenhuma campanha criada",
     descricao: "Crie uma campanha para organizar e acompanhar suas captações.",
-    cor: "text-purple-400"
+    cor: "text-violet-400"
   },
   "nenhuma-conversa": {
     icone: MessageSquare,
     titulo: "Nenhuma conversa iniciada",
     descricao: "As conversas aparecerão aqui quando você começar a se comunicar com os leads.",
-    cor: "text-green-400"
+    cor: "text-emerald-400"
   },
   "nenhuma-selecao": {
     icone: Building2,

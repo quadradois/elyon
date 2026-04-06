@@ -116,7 +116,7 @@ export function AbaContatos({
             <select
               value={filtroStatus}
               onChange={(e) => onFiltroChange(e.target.value)}
-              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
               title="Filtrar por status"
               aria-label="Filtrar por status"
             >
@@ -173,7 +173,7 @@ export function AbaContatos({
         <CardContent className="p-0">
           {loadingContatos ? (
             <div className="flex justify-center items-center h-48">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+              <Loader2 className="w-6 h-6 animate-spin text-brand" />
             </div>
           ) : contatos.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-slate-500">
@@ -193,7 +193,7 @@ export function AbaContatos({
                         title={todosEstaoSelecionados ? "Desmarcar todos" : "Selecionar todos"}
                       >
                         {todosEstaoSelecionados ? (
-                          <CheckSquare className="w-5 h-5 text-blue-600" />
+                          <CheckSquare className="w-5 h-5 text-brand" />
                         ) : (
                           <Square className="w-5 h-5" />
                         )}
@@ -210,14 +210,14 @@ export function AbaContatos({
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {contatos.map((contato) => (
-                    <tr key={contato.id} className={`hover:bg-slate-50 ${selecionados.has(contato.id) ? 'bg-blue-50' : ''}`}>
+                    <tr key={contato.id} className={`hover:bg-slate-50 ${selecionados.has(contato.id) ? 'bg-indigo-50' : ''}`}>
                       <td className="px-4 py-3">
                         <button
                           onClick={() => toggleSelecionado(contato.id)}
                           className="flex items-center justify-center text-slate-500 hover:text-slate-700"
                         >
                           {selecionados.has(contato.id) ? (
-                            <CheckSquare className="w-5 h-5 text-blue-600" />
+                            <CheckSquare className="w-5 h-5 text-brand" />
                           ) : (
                             <Square className="w-5 h-5" />
                           )}
@@ -232,7 +232,7 @@ export function AbaContatos({
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
                           {contato.temWhatsapp && (
-                            <MessageSquare className="w-3.5 h-3.5 text-green-600" />
+                            <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
                           )}
                           <span>{formatarTelefone(contato.telefone)}</span>
                         </div>
@@ -263,8 +263,8 @@ export function AbaContatos({
                       <td className="px-4 py-3">
                         {contato.scoreAssertiva ? (
                           <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            contato.scoreAssertiva >= 70 ? 'bg-green-100 text-green-700' :
-                            contato.scoreAssertiva >= 40 ? 'bg-yellow-100 text-yellow-700' :
+                            contato.scoreAssertiva >= 70 ? 'bg-emerald-100 text-emerald-700' :
+                            contato.scoreAssertiva >= 40 ? 'bg-amber-100 text-amber-700' :
                             'bg-slate-100 text-slate-700'
                           }`}>
                             {contato.scoreAssertiva}

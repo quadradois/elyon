@@ -24,7 +24,7 @@ export function AbaVisaoGeral({ campanha, estatisticasContatos }: AbaVisaoGeralP
             </p>
             {briefing.faixa_preco && (
               <div className="mt-4 flex items-center gap-4">
-                <DollarSign className="w-5 h-5 text-green-600" />
+                <DollarSign className="w-5 h-5 text-emerald-600" />
                 <span className="text-slate-900 font-medium">
                   {formatarPreco(briefing.faixa_preco.min)} - {formatarPreco(briefing.faixa_preco.max)}
                 </span>
@@ -45,12 +45,12 @@ export function AbaVisaoGeral({ campanha, estatisticasContatos }: AbaVisaoGeralP
               <div className="text-2xl font-bold text-slate-900">{estatisticasContatos['AGUARDANDO'] || 0}</div>
               <div className="text-sm text-slate-600">Aguardando</div>
             </div>
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{estatisticasContatos['CONTATANDO'] || 0}</div>
+            <div className="text-center p-4 bg-indigo-50 rounded-lg">
+              <div className="text-2xl font-bold text-brand">{estatisticasContatos['CONTATANDO'] || 0}</div>
               <div className="text-sm text-slate-600">Em Contato</div>
             </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">{estatisticasContatos['INTERESSADO'] || 0}</div>
+            <div className="text-center p-4 bg-violet-50 rounded-lg">
+              <div className="text-2xl font-bold text-violet-600">{estatisticasContatos['INTERESSADO'] || 0}</div>
               <div className="text-sm text-slate-600">Interessados</div>
             </div>
             <div className="text-center p-4 bg-emerald-50 rounded-lg">

@@ -224,7 +224,7 @@ export function EtapaFerramentas({ dados, setDados }: WizardEtapaProps) {
             <label className="text-xs font-medium text-slate-600">Tipo de Ação</label>
             <select
               title="Tipo de ação da ferramenta"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand text-sm"
               value={novaFerramenta.acao}
               onChange={(e) => 
                 setNovaFerramenta(prev => ({ ...prev, acao: e.target.value as ToolCustomizada['acao'] }))

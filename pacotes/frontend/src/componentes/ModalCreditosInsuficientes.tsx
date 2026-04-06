@@ -199,7 +199,7 @@ export function ModalCreditosInsuficientes({
               </h2>
               <p className="text-white/90 mt-1">
                 Você precisa de{" "}
-                <span className="font-bold text-yellow-200">
+                <span className="font-bold text-amber-200">
                   {creditosNecessarios} créditos
                 </span>{" "}
                 para {operacao}
@@ -217,10 +217,10 @@ export function ModalCreditosInsuficientes({
         {/* Conteúdo */}
         <div className="p-6 space-y-6">
           {/* Opção 1: Compra Rápida */}
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200 p-5">
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-emerald-200 p-5">
             <div className="flex items-center gap-2 mb-3">
-              <Zap className="w-5 h-5 text-green-600" />
-              <h3 className="font-semibold text-green-800">Compra Rápida</h3>
+              <Zap className="w-5 h-5 text-emerald-600" />
+              <h3 className="font-semibold text-emerald-800">Compra Rápida</h3>
             </div>
 
             <div className="flex gap-3 items-center mb-4">
@@ -236,19 +236,19 @@ export function ModalCreditosInsuficientes({
                     )
                   )
                 }
-                className="text-xl font-bold text-center h-12 w-32 border-green-300 focus:ring-green-500"
+                className="text-xl font-bold text-center h-12 w-32 border-emerald-300 focus:ring-green-500"
               />
               <div className="flex-1">
-                <p className="text-sm text-green-700">créditos</p>
-                <p className="text-xs text-green-600">
+                <p className="text-sm text-emerald-700">créditos</p>
+                <p className="text-xs text-emerald-600">
                   Mínimo: {creditosFaltando} (o que falta)
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold text-green-700">
+                <p className="text-2xl font-bold text-emerald-700">
                   R$ {valorCompra.toFixed(2)}
                 </p>
-                <p className="text-xs text-green-600">
+                <p className="text-xs text-emerald-600">
                   {config.custoPorCredito.toFixed(2)}/crédito
                 </p>
               </div>
@@ -257,7 +257,7 @@ export function ModalCreditosInsuficientes({
             <Button
               onClick={comprarCreditos}
               disabled={comprando}
-              className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-semibold"
+              className="w-full h-12 bg-success hover:bg-success-dark text-white font-semibold"
             >
               {comprando ? (
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -288,26 +288,26 @@ export function ModalCreditosInsuficientes({
                 </div>
 
                 <div className="flex items-center gap-2 mb-3">
-                  <Crown className="w-5 h-5 text-purple-600" />
-                  <h3 className="font-semibold text-purple-800">Seja PRO</h3>
+                  <Crown className="w-5 h-5 text-violet-600" />
+                  <h3 className="font-semibold text-violet-800">Seja PRO</h3>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div className="bg-white/60 rounded-lg p-3 text-center">
-                    <p className="text-3xl font-bold text-purple-700">250</p>
-                    <p className="text-xs text-purple-600">créditos/mês</p>
+                    <p className="text-3xl font-bold text-violet-700">250</p>
+                    <p className="text-xs text-violet-600">créditos/mês</p>
                   </div>
                   <div className="bg-white/60 rounded-lg p-3 text-center">
-                    <p className="text-3xl font-bold text-purple-700">
+                    <p className="text-3xl font-bold text-violet-700">
                       R$ 1,00
                     </p>
-                    <p className="text-xs text-purple-600">por crédito extra</p>
+                    <p className="text-xs text-violet-600">por crédito extra</p>
                   </div>
                 </div>
 
                 {/* Economia nesta compra */}
-                <div className="bg-purple-100 rounded-lg p-3 mb-4">
-                  <div className="flex items-center gap-2 text-purple-700">
+                <div className="bg-violet-100 rounded-lg p-3 mb-4">
+                  <div className="flex items-center gap-2 text-violet-700">
                     <TrendingUp className="w-4 h-4" />
                     <span className="text-sm">
                       Só nesta compra você economizaria{" "}
@@ -319,24 +319,24 @@ export function ModalCreditosInsuficientes({
                 {/* Valor do upgrade */}
                 <div className="flex items-center justify-between mb-4 px-2">
                   <div>
-                    <p className="text-sm text-purple-600">
+                    <p className="text-sm text-violet-600">
                       Pague hoje (proporcional):
                     </p>
-                    <p className="text-2xl font-bold text-purple-700">
+                    <p className="text-2xl font-bold text-violet-700">
                       {carregandoUpgrade
                         ? "..."
                         : `R$ ${valorUpgrade.toFixed(2)}`}
                     </p>
-                    <p className="text-xs text-purple-500">
+                    <p className="text-xs text-violet-500">
                       {diasRestantes} dias restantes
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-purple-600">E ganhe:</p>
-                    <p className="text-xl font-bold text-purple-700">
+                    <p className="text-sm text-violet-600">E ganhe:</p>
+                    <p className="text-xl font-bold text-violet-700">
                       250 créditos
                     </p>
-                    <p className="text-xs text-purple-500">imediatamente!</p>
+                    <p className="text-xs text-violet-500">imediatamente!</p>
                   </div>
                 </div>
 
@@ -359,7 +359,7 @@ export function ModalCreditosInsuficientes({
           {/* Link para mais opções */}
           <button
             onClick={irParaPaginaCreditos}
-            className="w-full text-center text-sm text-slate-500 hover:text-blue-600 transition-colors py-2 flex items-center justify-center gap-1"
+            className="w-full text-center text-sm text-slate-500 hover:text-brand transition-colors py-2 flex items-center justify-center gap-1"
           >
             Ver mais opções de recarga
             <ArrowRight className="w-4 h-4" />

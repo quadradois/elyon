@@ -43,7 +43,7 @@ export function CardImovel({ lead, isPerdidoOuArquivado, isCaptado, onEditar }: 
                         {lead.imovel.interesseEm && (
                             <div>
                                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Interesse em</p>
-                                <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+                                <Badge variant="secondary" className="bg-indigo-50 text-indigo-700">
                                     {lead.imovel.interesseEm}
                                 </Badge>
                             </div>
@@ -91,13 +91,13 @@ export function CardImovel({ lead, isPerdidoOuArquivado, isCaptado, onEditar }: 
                             </div>
                         )}
 
-                        {/* Novos campos do playbook */}
+                        {/* Campos do playbook */}
                         {lead.estadoConservacao && (
                             <div>
                                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Conservação</p>
                                 <Badge variant="outline" className={
-                                    lead.estadoConservacao === 'excelente' ? 'border-green-500 text-green-700' :
-                                        lead.estadoConservacao === 'bom' ? 'border-blue-500 text-blue-700' :
+                                    lead.estadoConservacao === 'excelente' ? 'border-emerald-500 text-emerald-700' :
+                                        lead.estadoConservacao === 'bom' ? 'border-brand text-indigo-700' :
                                             'border-orange-500 text-orange-700'
                                 }>
                                     {lead.estadoConservacao === 'excelente' ? 'Excelente' :
@@ -119,10 +119,42 @@ export function CardImovel({ lead, isPerdidoOuArquivado, isCaptado, onEditar }: 
                             <div>
                                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Dívidas</p>
                                 <Badge variant={lead.temDividas ? "destructive" : "secondary"} className={
-                                    lead.temDividas ? '' : 'bg-green-100 text-green-700'
+                                    lead.temDividas ? '' : 'bg-emerald-100 text-emerald-700'
                                 }>
                                     {lead.temDividas ? 'Possui dívidas' : 'Sem dívidas'}
                                 </Badge>
+                            </div>
+                        )}
+
+                        {/* Dados Assertiva do Imóvel */}
+                        {lead.nomeEdificio && (
+                            <div className="col-span-2 md:col-span-3 pt-3 border-t border-slate-100">
+                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Empreendimento</p>
+                                <p className="font-semibold text-slate-800 flex items-center gap-2">
+                                    <Building2 className="w-4 h-4 text-slate-400" />
+                                    {lead.nomeEdificio}
+                                </p>
+                            </div>
+                        )}
+
+                        {lead.bairroImovel && (
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Bairro</p>
+                                <p className="font-medium text-slate-700">{lead.bairroImovel}</p>
+                            </div>
+                        )}
+
+                        {lead.inscricaoIptu && (
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Inscrição IPTU</p>
+                                <p className="font-mono text-sm text-slate-700">{lead.inscricaoIptu}</p>
+                            </div>
+                        )}
+
+                        {lead.valorVenal && (
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Valor Venal</p>
+                                <p className="font-medium text-slate-700">{formatarMoeda(Number(lead.valorVenal))}</p>
                             </div>
                         )}
                     </div>

@@ -13,13 +13,13 @@ interface BannersStatusProps {
 export function BannersStatus({ status, isPerdidoOuArquivado, isCaptado }: BannersStatusProps) {
     if (isCaptado) {
         return (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                    <Trophy className="w-6 h-6 text-green-600" />
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                    <Trophy className="w-6 h-6 text-emerald-600" />
                 </div>
                 <div>
-                    <p className="font-medium text-green-800">🎉 Imóvel Captado com Sucesso!</p>
-                    <p className="text-sm text-green-600">Este lead foi convertido em captação</p>
+                    <p className="font-medium text-emerald-800">🎉 Imóvel Captado com Sucesso!</p>
+                    <p className="text-sm text-emerald-600">Este lead foi convertido em captação</p>
                 </div>
             </div>
         );

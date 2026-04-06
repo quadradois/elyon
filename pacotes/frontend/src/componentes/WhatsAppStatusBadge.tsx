@@ -12,11 +12,11 @@ export function WhatsAppStatusBadge() {
       className={cn(
         "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors border",
         status === "CONECTADO" &&
-          "bg-green-50 text-green-700 border-green-200 hover:bg-green-100",
+          "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100",
         status === "DESCONECTADO" &&
           "bg-red-50 text-red-700 border-red-200 hover:bg-red-100",
         (status === "CONECTANDO" || status === "CARREGANDO") &&
-          "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+          "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
       )}
     >
       {status === "CONECTADO" && <CheckCircle2 className="w-3.5 h-3.5" />}

@@ -197,7 +197,7 @@ export function WizardCriacaoAgente({
                   className={cn(
                     "w-12 h-12 rounded-full flex items-center justify-center transition-all",
                     indiceAtual >= index 
-                      ? "bg-blue-600 text-white" 
+                      ? "bg-brand text-white" 
                       : "bg-slate-100 text-slate-400"
                   )}
                 >
@@ -209,7 +209,7 @@ export function WizardCriacaoAgente({
                 </div>
                 <span className={cn(
                   "mt-2 text-sm font-medium",
-                  indiceAtual >= index ? "text-blue-600" : "text-slate-400"
+                  indiceAtual >= index ? "text-brand" : "text-slate-400"
                 )}>
                   {etapa.titulo}
                 </span>
@@ -217,7 +217,7 @@ export function WizardCriacaoAgente({
               {index < etapas.length - 1 && (
                 <div className={cn(
                   "flex-1 h-1 mx-2 rounded",
-                  indiceAtual > index ? "bg-blue-600" : "bg-slate-200"
+                  indiceAtual > index ? "bg-brand" : "bg-slate-200"
                 )} />
               )}
             </div>
@@ -241,7 +241,7 @@ export function WizardCriacaoAgente({
           <Button
             onClick={concluir}
             disabled={salvando || !dados.termosAceitos}
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-success hover:bg-success-dark"
           >
             {salvando ? (
               <>

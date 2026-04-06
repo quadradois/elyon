@@ -121,15 +121,15 @@ export function CampanhaDetalhes() {
         titulo: 'Finalizar Campanha',
         mensagem: `Deseja finalizar a campanha "${campanha?.nome}"? Esta ação encerrará definitivamente a campanha.`,
         icone: CheckCircle2,
-        corIcone: 'text-green-500',
-        corBotao: 'bg-green-600 hover:bg-green-700'
+        corIcone: 'text-emerald-500',
+        corBotao: 'bg-success hover:bg-success-dark'
       },
       ATIVA: {
         titulo: 'Reativar Campanha',
         mensagem: `Deseja reativar a campanha "${campanha?.nome}"? O processamento dos contatos será retomado.`,
         icone: Play,
-        corIcone: 'text-blue-500',
-        corBotao: 'bg-blue-600 hover:bg-blue-700'
+        corIcone: 'text-indigo-500',
+        corBotao: 'bg-brand hover:bg-brand-dark'
       }
     };
     return novoStatusPendente ? configs[novoStatusPendente] : null;
@@ -138,7 +138,7 @@ export function CampanhaDetalhes() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand" />
       </div>
     );
   }
@@ -198,7 +198,7 @@ export function CampanhaDetalhes() {
           {/* Botão Importar de Lista */}
           <Button 
             variant="outline" 
-            className="gap-2 bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
+            className="gap-2 bg-violet-50 border-violet-200 text-violet-700 hover:bg-violet-100"
             onClick={abrirModalLista}
           >
             <List className="w-4 h-4" />
@@ -230,7 +230,7 @@ export function CampanhaDetalhes() {
                   onClick={() => setAbaImportacao('csv')}
                   className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                     abaImportacao === 'csv' 
-                      ? 'border-blue-600 text-blue-600' 
+                      ? 'border-brand text-brand' 
                       : 'border-transparent text-slate-500 hover:text-slate-700'
                   }`}
                 >
@@ -240,7 +240,7 @@ export function CampanhaDetalhes() {
                   onClick={() => setAbaImportacao('texto')}
                   className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                     abaImportacao === 'texto' 
-                      ? 'border-blue-600 text-blue-600' 
+                      ? 'border-brand text-brand' 
                       : 'border-transparent text-slate-500 hover:text-slate-700'
                   }`}
                 >
@@ -268,7 +268,7 @@ export function CampanhaDetalhes() {
                       Cole sua lista no formato: <strong>Nome, Telefone</strong> (um por linha)
                     </p>
                     <textarea
-                      className="w-full h-48 p-3 border rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      className="w-full h-48 p-3 border rounded-md font-mono text-sm focus:ring-2 focus:ring-brand focus:outline-none"
                       placeholder={`João Silva, 62999998888\nMaria Santos, 62988887777`}
                       value={textoImportacao}
                       onChange={(e) => setTextoImportacao(e.target.value)}
@@ -353,7 +353,7 @@ export function CampanhaDetalhes() {
               <span className="text-3xl font-bold text-slate-900">
                 {campanha.totalContatos}
               </span>
-              <Users className="w-8 h-8 text-blue-600" />
+              <Users className="w-8 h-8 text-brand" />
             </div>
           </CardContent>
         </Card>
@@ -369,7 +369,7 @@ export function CampanhaDetalhes() {
               <span className="text-3xl font-bold text-slate-900">
                 {campanha.totalLeads}
               </span>
-              <Target className="w-8 h-8 text-green-600" />
+              <Target className="w-8 h-8 text-emerald-600" />
             </div>
           </CardContent>
         </Card>
@@ -390,7 +390,7 @@ export function CampanhaDetalhes() {
                   : 0}
                 %
               </span>
-              <TrendingUp className="w-8 h-8 text-purple-600" />
+              <TrendingUp className="w-8 h-8 text-violet-600" />
             </div>
           </CardContent>
         </Card>
@@ -403,7 +403,7 @@ export function CampanhaDetalhes() {
             onClick={() => setAbaAtiva('visao-geral')}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               abaAtiva === 'visao-geral' 
-                ? 'border-blue-600 text-blue-600' 
+                ? 'border-brand text-brand' 
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
           >
@@ -416,7 +416,7 @@ export function CampanhaDetalhes() {
             onClick={() => setAbaAtiva('contatos')}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               abaAtiva === 'contatos' 
-                ? 'border-blue-600 text-blue-600' 
+                ? 'border-brand text-brand' 
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
           >
@@ -434,7 +434,7 @@ export function CampanhaDetalhes() {
             onClick={() => setAbaAtiva('empreendimento')}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               abaAtiva === 'empreendimento' 
-                ? 'border-blue-600 text-blue-600' 
+                ? 'border-brand text-brand' 
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
           >
@@ -447,7 +447,7 @@ export function CampanhaDetalhes() {
             onClick={() => setAbaAtiva('disparos')}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               abaAtiva === 'disparos' 
-                ? 'border-blue-600 text-blue-600' 
+                ? 'border-brand text-brand' 
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
           >
@@ -492,17 +492,17 @@ export function CampanhaDetalhes() {
         <div className="space-y-6">
           {/* Botão de Pesquisa com IA - aparece se não tem briefing ou para atualizar */}
           {(!campanha?.briefingCompleto || !campanha?.briefingValidado) && (
-            <Card className="bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200">
+            <Card className="bg-gradient-to-r from-purple-50 to-indigo-50 border-violet-200">
               <CardContent className="pt-6">
                 <div className="flex items-start gap-4">
-                  <div className="p-3 bg-purple-100 rounded-lg">
-                    <Brain className="w-6 h-6 text-purple-600" />
+                  <div className="p-3 bg-violet-100 rounded-lg">
+                    <Brain className="w-6 h-6 text-violet-600" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-purple-900 mb-1">
+                    <h3 className="font-semibold text-violet-900 mb-1">
                       {campanha?.briefingCompleto ? 'Atualizar Briefing com IA' : 'Criar Briefing com IA'}
                     </h3>
-                    <p className="text-sm text-purple-700 mb-4">
+                    <p className="text-sm text-violet-700 mb-4">
                       {campanha?.briefingCompleto 
                         ? 'Quer pesquisar novamente para atualizar as informações do empreendimento?'
                         : 'Deixe a IA pesquisar informações detalhadas sobre o empreendimento. Isso preencherá o briefing automaticamente.'
@@ -662,14 +662,14 @@ export function CampanhaDetalhes() {
       {notificacao && (
         <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border animate-in slide-in-from-right-5 duration-300 ${
           notificacao.tipo === 'sucesso' 
-            ? 'bg-green-50 border-green-200 text-green-800' 
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
             : 'bg-red-50 border-red-200 text-red-800'
         }`}>
           <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-            notificacao.tipo === 'sucesso' ? 'bg-green-100' : 'bg-red-100'
+            notificacao.tipo === 'sucesso' ? 'bg-emerald-100' : 'bg-red-100'
           }`}>
             {notificacao.tipo === 'sucesso' ? (
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             ) : (
               <AlertCircle className="w-5 h-5 text-red-600" />
             )}
@@ -679,7 +679,7 @@ export function CampanhaDetalhes() {
             onClick={fecharNotificacao}
             title="Fechar notificação"
             className={`ml-2 p-1 rounded-lg hover:bg-white/50 transition-colors ${
-              notificacao.tipo === 'sucesso' ? 'text-green-600' : 'text-red-600'
+              notificacao.tipo === 'sucesso' ? 'text-emerald-600' : 'text-red-600'
             }`}
           >
             <X className="w-4 h-4" />

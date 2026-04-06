@@ -133,44 +133,50 @@ IMPORTANTE: Passe TODOS os dados que o lead mencionou na conversa (dores, motiva
     } as any,
 
     execute: async (args: any) => {
-        const useCase = new QualificarLeadUseCase();
-        const input: any = { ...args };
-        if (typeof args.doresIdentificadas === 'string') {
-            input.doresIdentificadas = args.doresIdentificadas.split(',').map((d: string) => d.trim()).filter((d: string) => d);
-        }
-        if (typeof args.objecoes === 'string') {
-            input.objecoes = args.objecoes.split(',').map((o: string) => o.trim()).filter((o: string) => o);
-        }
-        // Tratar numbers vindos como strings dos LLMs
-        if (input.quartosImovel && typeof input.quartosImovel === 'string') input.quartosImovel = parseInt(input.quartosImovel, 10) || undefined;
-        if (input.vagasImovel && typeof input.vagasImovel === 'string') input.vagasImovel = parseInt(input.vagasImovel, 10) || undefined;
+        try {
+            const useCase = new QualificarLeadUseCase();
+            const input: any = { ...args };
+            if (typeof args.doresIdentificadas === 'string') {
+                input.doresIdentificadas = args.doresIdentificadas.split(',').map((d: string) => d.trim()).filter((d: string) => d);
+            }
+            if (typeof args.objecoes === 'string') {
+                input.objecoes = args.objecoes.split(',').map((o: string) => o.trim()).filter((o: string) => o);
+            }
+            // Tratar numbers vindos como strings dos LLMs
+            if (input.quartosImovel && typeof input.quartosImovel === 'string') input.quartosImovel = parseInt(input.quartosImovel, 10) || undefined;
+            if (input.vagasImovel && typeof input.vagasImovel === 'string') input.vagasImovel = parseInt(input.vagasImovel, 10) || undefined;
 
-        const camposPresentes = coletarCamposQualificacaoPresentes(input);
-        if (camposPresentes.length < 2) {
-            const resposta = {
-                success: false,
-                error: 'Dados insuficientes para qualificar com segurança.',
-                camposObrigatoriosMinimos: ['tipoImovel/areaImovel/ocupacaoImovel/valorPretendido', 'doresIdentificadas/situacaoAtual/motivacaoVenda'],
-                camposRecebidos: camposPresentes
-            };
+            const camposPresentes = coletarCamposQualificacaoPresentes(input);
+            if (camposPresentes.length < 2) {
+                const resposta = {
+                    success: false,
+                    error: 'Dados insuficientes para qualificar com segurança.',
+                    camposObrigatoriosMinimos: ['tipoImovel/areaImovel/ocupacaoImovel/valorPretendido', 'doresIdentificadas/situacaoAtual/motivacaoVenda'],
+                    camposRecebidos: camposPresentes
+                };
 
+                await registrarExecucaoTool({
+                    toolName: 'qualificar_lead',
+                    sucesso: false,
+                    detalhes: `Bloqueado por baixa completude (${camposPresentes.length} campos)`
+                });
+
+                return JSON.stringify(resposta);
+            }
+
+            const result = await useCase.execute(input);
             await registrarExecucaoTool({
+                leadId: result?.leadId,
                 toolName: 'qualificar_lead',
-                sucesso: false,
-                detalhes: `Bloqueado por baixa completude (${camposPresentes.length} campos)`
+                sucesso: !!result?.success,
+                detalhes: result?.message || result?.error
             });
-
-            return JSON.stringify(resposta);
+            return JSON.stringify(result);
+        } catch (e) {
+            const error = e as Error;
+            console.error('[TOOL] qualificar_lead - Erro Crítico:', error);
+            return JSON.stringify({ success: false, error: error?.message || 'Falha na Tool' });
         }
-
-        const result = await useCase.execute(input);
-        await registrarExecucaoTool({
-            leadId: result?.leadId,
-            toolName: 'qualificar_lead',
-            sucesso: !!result?.success,
-            detalhes: result?.message || result?.error
-        });
-        return JSON.stringify(result);
     }
 });
 
@@ -242,23 +248,29 @@ IMPORTANTE: Passe TODOS os dados coletados na conversa! Tipo de imóvel, quartos
     } as any,
 
     execute: async (args: any) => {
-        const useCase = new ConverterParaLeadUseCase();
-        const input: any = { ...args };
-        if (typeof args.doresIdentificadas === 'string') {
-            input.doresIdentificadas = args.doresIdentificadas.split(',').map((d: string) => d.trim()).filter((d: string) => d);
-        }
-        // Tratar numbers vindos como strings
-        if (input.quartosImovel && typeof input.quartosImovel === 'string') input.quartosImovel = parseInt(input.quartosImovel, 10) || undefined;
-        if (input.vagasImovel && typeof input.vagasImovel === 'string') input.vagasImovel = parseInt(input.vagasImovel, 10) || undefined;
+        try {
+            const useCase = new ConverterParaLeadUseCase();
+            const input: any = { ...args };
+            if (typeof args.doresIdentificadas === 'string') {
+                input.doresIdentificadas = args.doresIdentificadas.split(',').map((d: string) => d.trim()).filter((d: string) => d);
+            }
+            // Tratar numbers vindos como strings
+            if (input.quartosImovel && typeof input.quartosImovel === 'string') input.quartosImovel = parseInt(input.quartosImovel, 10) || undefined;
+            if (input.vagasImovel && typeof input.vagasImovel === 'string') input.vagasImovel = parseInt(input.vagasImovel, 10) || undefined;
 
-        const result = await useCase.execute(input);
-        await registrarExecucaoTool({
-            leadId: result?.leadId,
-            toolName: 'converter_para_lead',
-            sucesso: !!result?.success,
-            detalhes: result?.message || result?.error
-        });
-        return JSON.stringify(result);
+            const result = await useCase.execute(input);
+            await registrarExecucaoTool({
+                leadId: result?.leadId,
+                toolName: 'converter_para_lead',
+                sucesso: !!result?.success,
+                detalhes: result?.message || result?.error
+            });
+            return JSON.stringify(result);
+        } catch (e) {
+            const error = e as Error;
+            console.error('[TOOL] converter_para_lead - Erro Crítico:', error);
+            return JSON.stringify({ success: false, error: error?.message || 'Falha na Tool' });
+        }
     }
 });
 

@@ -1,0 +1,311 @@
+/**
+ * Elyon Design System — Generated CSS Variables
+ * DO NOT EDIT DIRECTLY. Source of truth: tokens.json
+ *
+ * Three-layer architecture: Primitive → Semantic → Component
+ * 
+ * Usage: import this file in index.css
+ *   @import './design-system/tokens.css';
+ */
+
+/* =============================================
+   LAYER 1: PRIMITIVE TOKENS
+   Raw values — Never use directly in components
+   ============================================= */
+:root {
+  /* Color: Indigo Scale */
+  --color-indigo-50:  #eef2ff;
+  --color-indigo-100: #e0e7ff;
+  --color-indigo-200: #c7d2fe;
+  --color-indigo-300: #a5b4fc;
+  --color-indigo-400: #818cf8;
+  --color-indigo-500: #6366f1;
+  --color-indigo-600: #4f46e5;
+  --color-indigo-700: #4338ca;
+  --color-indigo-800: #3730a3;
+  --color-indigo-900: #312e81;
+  --color-indigo-950: #1e1b4b;
+
+  /* Color: Violet Scale */
+  --color-violet-50:  #f5f3ff;
+  --color-violet-100: #ede9fe;
+  --color-violet-200: #ddd6fe;
+  --color-violet-300: #c4b5fd;
+  --color-violet-400: #a78bfa;
+  --color-violet-500: #8b5cf6;
+  --color-violet-600: #7c3aed;
+  --color-violet-700: #6d28d9;
+  --color-violet-800: #5b21b6;
+  --color-violet-900: #4c1d95;
+
+  /* Color: Purple Scale */
+  --color-purple-400: #c084fc;
+  --color-purple-500: #a855f7;
+  --color-purple-600: #9333ea;
+
+  /* Color: Emerald Scale (Success) */
+  --color-emerald-50:  #ecfdf5;
+  --color-emerald-100: #d1fae5;
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-emerald-700: #047857;
+  --color-emerald-800: #065f46;
+  --color-emerald-900: #064e3b;
+  --color-emerald-950: #022c22;
+
+  /* Color: Amber Scale (Warning/Gold) */
+  --color-amber-50:  #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+  --color-amber-700: #b45309;
+  --color-amber-800: #92400e;
+  --color-amber-900: #78350f;
+
+  /* Color: Blue Scale (Info) */
+  --color-blue-100: #dbeafe;
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-700: #1d4ed8;
+
+  /* Color: Red Scale (Danger) */
+  --color-red-50:  #fef2f2;
+  --color-red-100: #fee2e2;
+  --color-red-200: #fecaca;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-red-600: #dc2626;
+  --color-red-700: #b91c1c;
+
+  /* Color: Slate Scale (Neutrals) */
+  --color-slate-50:  #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+
+  /* Color: Base */
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* Typography: Fonts */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* Typography: Sizes */
+  --font-size-xs:   0.75rem;   /* 12px */
+  --font-size-sm:   0.875rem;  /* 14px */
+  --font-size-base: 1rem;      /* 16px */
+  --font-size-lg:   1.125rem;  /* 18px */
+  --font-size-xl:   1.25rem;   /* 20px */
+  --font-size-2xl:  1.5rem;    /* 24px */
+  --font-size-3xl:  1.875rem;  /* 30px */
+  --font-size-4xl:  2.25rem;   /* 36px */
+  --font-size-5xl:  3rem;      /* 48px */
+
+  /* Typography: Weights */
+  --font-weight-normal:    400;
+  --font-weight-medium:    500;
+  --font-weight-semibold:  600;
+  --font-weight-bold:      700;
+  --font-weight-extrabold: 800;
+
+  /* Typography: Line Heights */
+  --line-height-tight:   1.25;
+  --line-height-snug:    1.375;
+  --line-height-normal:  1.5;
+  --line-height-relaxed: 1.625;
+
+  /* Border Radius */
+  --radius-none: 0rem;
+  --radius-sm:   0.25rem;
+  --radius-md:   0.375rem;
+  --radius:      0.5rem;
+  --radius-lg:   0.75rem;
+  --radius-xl:   1rem;
+  --radius-2xl:  1.5rem;
+  --radius-full: 9999px;
+
+  /* Spacing */
+  --space-0:   0rem;
+  --space-1:   0.25rem;
+  --space-2:   0.5rem;
+  --space-3:   0.75rem;
+  --space-4:   1rem;
+  --space-5:   1.25rem;
+  --space-6:   1.5rem;
+  --space-8:   2rem;
+  --space-10:  2.5rem;
+  --space-12:  3rem;
+  --space-16:  4rem;
+  --space-20:  5rem;
+  --space-24:  6rem;
+
+  /* Shadows */
+  --shadow-soft:    0 2px 8px -2px rgba(0,0,0,0.08), 0 1px 4px -1px rgba(0,0,0,0.04);
+  --shadow-medium:  0 4px 12px -2px rgba(0,0,0,0.10), 0 2px 6px -1px rgba(0,0,0,0.06);
+  --shadow-premium: 0 8px 30px -4px rgba(0,0,0,0.12), 0 4px 12px -2px rgba(0,0,0,0.08);
+  --shadow-none:    none;
+
+  /* Transitions */
+  --duration-fast:   150ms;
+  --duration-normal: 200ms;
+  --duration-slow:   300ms;
+  --duration-slower: 500ms;
+  --ease-linear: linear;
+  --ease-out:    cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* =============================================
+   LAYER 2: SEMANTIC TOKENS
+   Purpose-based aliases — Reference in components
+   ============================================= */
+:root {
+  /* Brand */
+  --color-brand-primary:      var(--color-indigo-500);
+  --color-brand-primary-dark: var(--color-indigo-700);
+  --color-brand-secondary:    var(--color-violet-500);
+  --color-brand-accent:       var(--color-purple-500);
+  --color-brand-gold:         var(--color-amber-500);
+
+  /* Feedback */
+  --color-success:      var(--color-emerald-500);
+  --color-success-dark: var(--color-emerald-600);
+  --color-warning:      var(--color-amber-500);
+  --color-danger:       var(--color-red-500);
+  --color-info:         var(--color-blue-500);
+
+  /* Surfaces */
+  --surface-page:         var(--color-white);
+  --surface-card:         var(--color-white);
+  --surface-subtle:       var(--color-slate-50);
+  --surface-muted:        var(--color-slate-100);
+  --surface-overlay:      rgba(0, 0, 0, 0.5);
+  --surface-glass:        rgba(255, 255, 255, 0.8);
+  --surface-glass-border: rgba(255, 255, 255, 0.18);
+
+  /* Text */
+  --text-default:     var(--color-slate-900);
+  --text-secondary:   var(--color-slate-600);
+  --text-muted:       var(--color-slate-400);
+  --text-inverse:     var(--color-white);
+  --text-on-primary:  var(--color-white);
+
+  /* Borders */
+  --border-default:   var(--color-slate-200);
+  --border-muted:     var(--color-slate-100);
+  --border-strong:    var(--color-slate-300);
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, var(--color-indigo-500) 0%, var(--color-violet-500) 50%, var(--color-purple-500) 100%);
+  --gradient-success: linear-gradient(135deg, var(--color-emerald-500) 0%, var(--color-emerald-600) 100%);
+  --gradient-warning: linear-gradient(135deg, var(--color-amber-500) 0%, var(--color-amber-600) 100%);
+  --gradient-info:    linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-700) 100%);
+  --gradient-dark:    linear-gradient(135deg, var(--color-indigo-950) 0%, var(--color-indigo-900) 100%);
+
+  /* Glows */
+  --glow-primary: 0 0 20px -2px rgba(99, 102, 241, 0.25);
+  --glow-success: 0 0 20px -2px rgba(16, 185, 129, 0.25);
+}
+
+/* =============================================
+   LAYER 3: COMPONENT TOKENS
+   Per-component design — Reference in CSS/JSX
+   ============================================= */
+:root {
+  /* Button: Primary */
+  --btn-primary-bg:          var(--color-brand-primary);
+  --btn-primary-bg-hover:    var(--color-brand-primary-dark);
+  --btn-primary-text:        var(--text-on-primary);
+  --btn-primary-shadow-hover: 0 6px 20px -2px rgba(99, 102, 241, 0.5);
+  --btn-primary-gradient:    var(--gradient-primary);
+
+  /* Button: Success */
+  --btn-success-bg:       var(--color-success);
+  --btn-success-bg-hover: var(--color-success-dark);
+  --btn-success-shadow-hover: 0 6px 20px -2px rgba(16, 185, 129, 0.5);
+
+  /* Card */
+  --card-bg:           var(--surface-card);
+  --card-border:       var(--border-default);
+  --card-radius:       var(--radius-lg);
+  --card-shadow:       var(--shadow-soft);
+  --card-shadow-hover: var(--shadow-premium);
+
+  /* Input */
+  --input-bg:           var(--surface-card);
+  --input-border:       var(--border-default);
+  --input-border-focus: var(--color-brand-primary);
+  --input-radius:       var(--radius-md);
+  --input-text:         var(--text-default);
+  --input-placeholder:  var(--text-muted);
+
+  /* Badge: Primary */
+  --badge-primary-bg:   var(--color-indigo-100);
+  --badge-primary-text: var(--color-indigo-700);
+
+  /* Badge: Success */
+  --badge-success-bg:   var(--color-emerald-100);
+  --badge-success-text: var(--color-emerald-700);
+
+  /* Badge: Warning */
+  --badge-warning-bg:   var(--color-amber-100);
+  --badge-warning-text: var(--color-amber-700);
+
+  /* Badge: Danger */
+  --badge-danger-bg:    var(--color-red-100);
+  --badge-danger-text:  var(--color-red-600);
+
+  /* Sidebar */
+  --sidebar-bg:           var(--color-slate-900);
+  --sidebar-text:         var(--color-slate-300);
+  --sidebar-text-active:  var(--color-white);
+  --sidebar-item-hover:   var(--color-slate-800);
+  --sidebar-item-active:  var(--color-brand-primary);
+  --sidebar-width:        16rem;
+
+  /* Table */
+  --table-header-bg:    var(--surface-subtle);
+  --table-header-text:  var(--text-secondary);
+  --table-row-bg:       var(--surface-card);
+  --table-row-hover-bg: var(--surface-muted);
+  --table-border:       var(--border-muted);
+}
+
+/* =============================================
+   DARK MODE OVERRIDES
+   Semantic tokens only — no primitives needed
+   ============================================= */
+.dark {
+  --surface-page:  var(--color-slate-900);
+  --surface-card:  var(--color-slate-800);
+  --surface-subtle:var(--color-slate-800);
+  --surface-muted: var(--color-slate-700);
+
+  --text-default:   var(--color-slate-50);
+  --text-secondary: var(--color-slate-300);
+  --text-muted:     var(--color-slate-500);
+
+  --border-default: var(--color-slate-700);
+  --border-muted:   var(--color-slate-800);
+  --border-strong:  var(--color-slate-600);
+
+  --surface-glass:        rgba(15, 23, 42, 0.8);
+  --surface-glass-border: rgba(255, 255, 255, 0.08);
+
+  --sidebar-bg:          var(--color-slate-950);
+  --sidebar-item-hover:  var(--color-slate-900);
+}

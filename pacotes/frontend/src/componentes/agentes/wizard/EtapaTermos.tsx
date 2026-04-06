@@ -71,7 +71,7 @@ export function EtapaTermos({ dados, setDados }: WizardEtapaProps) {
           type="checkbox"
           checked={dados.termosAceitos}
           onChange={(e) => setDados({ ...dados, termosAceitos: e.target.checked })}
-          className="w-5 h-5 mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          className="w-5 h-5 mt-0.5 rounded border-slate-300 text-brand focus:ring-brand"
         />
         <div>
           <p className="font-medium text-slate-900">

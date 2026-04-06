@@ -122,23 +122,23 @@ export const formatarPreco = (valor: number): string => {
 export const getStatusColor = (status: string): string => {
   switch (status) {
     case "ATIVA":
-      return "bg-green-100 text-green-700 border-green-200";
+      return "bg-emerald-100 text-emerald-700 border-emerald-200";
     case "PAUSADA":
-      return "bg-yellow-100 text-yellow-700 border-yellow-200";
+      return "bg-amber-100 text-amber-700 border-amber-200";
     case "FINALIZADA":
       return "bg-slate-100 text-slate-700 border-slate-200";
     default:
-      return "bg-blue-100 text-blue-700 border-blue-200";
+      return "bg-indigo-100 text-indigo-700 border-indigo-200";
   }
 };
 
 export const getStatusProspeccaoColor = (status: string): string => {
   const cores: Record<string, string> = {
     'AGUARDANDO': 'bg-slate-100 text-slate-700',
-    'CONTATANDO': 'bg-blue-100 text-blue-700',
-    'RESPONDEU': 'bg-green-100 text-green-700',
+    'CONTATANDO': 'bg-indigo-100 text-indigo-700',
+    'RESPONDEU': 'bg-emerald-100 text-emerald-700',
     'SEM_INTERESSE': 'bg-red-100 text-red-700',
-    'INTERESSADO': 'bg-purple-100 text-purple-700',
+    'INTERESSADO': 'bg-violet-100 text-violet-700',
     'LEAD': 'bg-emerald-100 text-emerald-700',
   };
   return cores[status] || 'bg-slate-100 text-slate-700';

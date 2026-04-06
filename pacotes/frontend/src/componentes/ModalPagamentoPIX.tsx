@@ -62,7 +62,7 @@ export function ModalPagamentoPIX({
         <DialogContent className="sm:max-w-md">
           <DialogTitle className="sr-only">Pagamento PIX</DialogTitle>
           <div className="flex flex-col items-center justify-center p-8">
-            <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
+            <Loader2 className="w-12 h-12 animate-spin text-brand mb-4" />
             <p className="text-slate-600">Gerando PIX...</p>
           </div>
         </DialogContent>
@@ -79,12 +79,12 @@ export function ModalPagamentoPIX({
 
         <div className="space-y-6 pt-4">
           {/* Valor */}
-          <div className="text-center bg-green-50 rounded-lg p-4">
-            <p className="text-sm text-green-600">Valor a pagar</p>
-            <p className="text-3xl font-bold text-green-700">
+          <div className="text-center bg-emerald-50 rounded-lg p-4">
+            <p className="text-sm text-emerald-600">Valor a pagar</p>
+            <p className="text-3xl font-bold text-emerald-700">
               R$ {valor.toFixed(2)}
             </p>
-            <p className="text-sm text-green-600 mt-1">{creditos} créditos</p>
+            <p className="text-sm text-emerald-600 mt-1">{creditos} créditos</p>
           </div>
 
           {/* QR Code */}
@@ -120,7 +120,7 @@ export function ModalPagamentoPIX({
               <Button
                 onClick={copiarPIX}
                 variant={copiado ? "default" : "outline"}
-                className={copiado ? "bg-green-600 hover:bg-green-600" : ""}
+                className={copiado ? "bg-success hover:bg-success" : ""}
               >
                 {copiado ? (
                   <CheckCircle className="w-4 h-4" />

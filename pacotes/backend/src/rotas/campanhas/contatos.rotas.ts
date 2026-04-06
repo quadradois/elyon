@@ -1649,12 +1649,31 @@ router.post('/:campanhaId/contatos/:contatoId/promover', async (req, res) => {
         areaImovel: contato.areaConstruida ? String(contato.areaConstruida) : null,
         valorPretendido: contato.valorVenal ? String(contato.valorVenal) : null,
 
-        // Dados de Empresa (Atualmente ficam apenas no Contato)
-        // cnpjEmpresa: contato.cnpjEmpresa,
-        // empresaAtual: contato.empresaAtual,
-        // setor: contato.setor,
-        // profissao: contato.profissao,
-        // participacoesEmpresas: contato.participacoesEmpresas ?? undefined,
+        // Dados Pessoais (Assertiva)
+        idade: contato.idade,
+        sexo: contato.sexo,
+        rendaEstimada: contato.rendaEstimada ? String(contato.rendaEstimada) : null,
+        faixaSalarial: contato.faixaSalarial,
+        scoreAssertiva: contato.scoreAssertiva,
+
+        // Múltiplos Contatos
+        telefone2: contato.telefone2,
+        telefone3: contato.telefone3,
+        email2: contato.email2,
+
+        // Imóvel Assertiva
+        bairroImovel: contato.bairroImovel,
+        nomeEdificio: typeof contato.nomeEdificio === 'object' && contato.nomeEdificio !== null
+          ? (contato.nomeEdificio as any).nome || String(contato.nomeEdificio)
+          : (contato.nomeEdificio || null),
+        inscricaoIptu: contato.inscricaoIptu,
+        valorVenal: contato.valorVenal ? String(contato.valorVenal) : null,
+
+        // Empresa (CNPJ)
+        cnpjEmpresa: contato.cnpjEmpresa,
+        empresaAtual: contato.empresaAtual,
+        setor: contato.setor,
+        profissao: contato.profissao,
       }
     });
 

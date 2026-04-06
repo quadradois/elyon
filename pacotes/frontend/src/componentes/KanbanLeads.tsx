@@ -51,8 +51,8 @@ const KANBAN_COLUMNS = [
         id: "FASE1",
         label: "1. Qualificação",
         status: "NOVO",
-        color: "bg-blue-50 border-blue-200",
-        text: "text-blue-700",
+        color: "bg-indigo-50 border-indigo-200",
+        text: "text-indigo-700",
         description: "Opener: Confirmar interesse + identificar dores",
         agente: "OPENER"
     },
@@ -69,8 +69,8 @@ const KANBAN_COLUMNS = [
         id: "FASE3",
         label: "3. Documentação",
         status: "DOCUMENTACAO",
-        color: "bg-purple-50 border-purple-200",
-        text: "text-purple-700",
+        color: "bg-violet-50 border-violet-200",
+        text: "text-violet-700",
         description: "Humano: Contrato e formalização",
         agente: "HUMANO"
     },
@@ -78,8 +78,8 @@ const KANBAN_COLUMNS = [
         id: "FASE4",
         label: "4. Onboarding",
         status: "ONBOARDING",
-        color: "bg-green-50 border-green-200",
-        text: "text-green-700",
+        color: "bg-emerald-50 border-emerald-200",
+        text: "text-emerald-700",
         description: "Admin: Documentos + agendamento",
         agente: "ADMIN"
     },
@@ -253,7 +253,7 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                                         className={`
                    relative group bg-white p-3 rounded-lg border border-slate-200 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-all
                    ${updating === lead.id ? 'opacity-50 pointer-events-none' : ''}
-                   ${draggedLeadId === lead.id ? 'border-blue-400 rotate-2' : ''}
+                   ${draggedLeadId === lead.id ? 'border-indigo-400 rotate-2' : ''}
                  `}
                                         onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
                                     >
@@ -262,7 +262,7 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                                             <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <Button
                                                     size="sm"
-                                                    className="bg-green-600 hover:bg-green-700 text-white text-[10px] h-6 px-3 shadow-lg rounded-full"
+                                                    className="bg-success hover:bg-success-dark text-white text-[10px] h-6 px-3 shadow-lg rounded-full"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         // Usar endpoint de captação
@@ -290,7 +290,7 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                                                 <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md mb-1 inline-block
                        ${lead.temperatura === 'QUENTE' ? 'bg-red-50 text-red-600' :
                                                         lead.temperatura === 'MORNO' ? 'bg-amber-50 text-amber-600' :
-                                                            'bg-blue-50 text-blue-600'}
+                                                            'bg-indigo-50 text-brand'}
                      `}>
                                                     {lead.temperatura === 'QUENTE' ? '🔥 Quente' : lead.temperatura === 'MORNO' ? '⚡ Morno' : '❄️ Frio'}
                                                 </span>

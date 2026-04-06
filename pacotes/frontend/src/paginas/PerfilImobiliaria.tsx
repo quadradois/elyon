@@ -442,7 +442,7 @@ export function PerfilImobiliaria() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center space-y-4">
-          <Loader2 className="w-10 h-10 animate-spin text-blue-600 mx-auto" />
+          <Loader2 className="w-10 h-10 animate-spin text-brand mx-auto" />
           <p className="text-slate-500">Carregando perfil...</p>
         </div>
       </div>
@@ -456,7 +456,7 @@ export function PerfilImobiliaria() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <Building2 className="w-7 h-7 text-blue-600" />
+              <Building2 className="w-7 h-7 text-brand" />
               Perfil da Imobiliária
             </h1>
             <p className="text-slate-500 mt-1">
@@ -503,7 +503,7 @@ export function PerfilImobiliaria() {
         {/* ========== TAB: EMPRESA ========== */}
         <TabsContent value="empresa" className="space-y-6 animate-in fade-in-50 duration-300">
           <div className="bg-white border rounded-xl p-6 space-y-6">
-            <div className="flex items-center gap-2 text-blue-600 mb-2">
+            <div className="flex items-center gap-2 text-brand mb-2">
               <Building2 className="w-5 h-5" />
               <h2 className="font-semibold">Dados da Empresa</h2>
             </div>
@@ -521,7 +521,7 @@ export function PerfilImobiliaria() {
                 />
                 <label
                   htmlFor="logo-upload"
-                  className="block w-24 h-24 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 hover:border-blue-400 transition-all"
+                  className="block w-24 h-24 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 hover:border-indigo-400 transition-all"
                 >
                   {perfil.logoUrl ? (
                     <img src={perfil.logoUrl} alt="Logo" className="w-full h-full object-cover rounded-xl" />
@@ -603,7 +603,7 @@ export function PerfilImobiliaria() {
         {/* ========== TAB: CONTATO ========== */}
         <TabsContent value="contato" className="space-y-6 animate-in fade-in-50 duration-300">
           <div className="bg-white border rounded-xl p-6 space-y-6">
-            <div className="flex items-center gap-2 text-green-600 mb-2">
+            <div className="flex items-center gap-2 text-emerald-600 mb-2">
               <Phone className="w-5 h-5" />
               <h2 className="font-semibold">Informações de Contato</h2>
             </div>
@@ -646,7 +646,7 @@ export function PerfilImobiliaria() {
             <div className="grid grid-cols-2 gap-4">
               <Campo label="WhatsApp" help="Número principal para contato">
                 <div className="flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-green-500" />
+                  <Phone className="w-4 h-4 text-emerald-500" />
                   <Input
                     value={perfil.whatsapp || ''}
                     onChange={(e) => atualizarCampo('whatsapp', aplicarMascaraTelefone(e.target.value))}
@@ -695,7 +695,7 @@ export function PerfilImobiliaria() {
                 
                 <Campo label="Facebook">
                   <div className="flex items-center gap-2">
-                    <Facebook className="w-4 h-4 text-blue-600" />
+                    <Facebook className="w-4 h-4 text-brand" />
                     <Input
                       value={perfil.facebook || ''}
                       onChange={(e) => atualizarCampo('facebook', e.target.value)}
@@ -812,7 +812,7 @@ export function PerfilImobiliaria() {
         {/* ========== TAB: VENDAS ========== */}
         <TabsContent value="vendas" className="space-y-6 animate-in fade-in-50 duration-300">
           <div className="bg-white border rounded-xl p-6 space-y-6">
-            <div className="flex items-center gap-2 text-purple-600 mb-2">
+            <div className="flex items-center gap-2 text-violet-600 mb-2">
               <Percent className="w-5 h-5" />
               <h2 className="font-semibold">Política de Vendas</h2>
             </div>
@@ -822,7 +822,7 @@ export function PerfilImobiliaria() {
               <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
                 <Percent className="w-4 h-4" />
                 Comissão Padrão
-                <span className="ml-auto text-purple-600 font-bold">{perfil.perfilVenda?.comissaoPadrao || 6}%</span>
+                <span className="ml-auto text-violet-600 font-bold">{perfil.perfilVenda?.comissaoPadrao || 6}%</span>
               </label>
               <Slider
                 value={[perfil.perfilVenda?.comissaoPadrao || 6]}
@@ -849,7 +849,7 @@ export function PerfilImobiliaria() {
               />
               
               {perfil.perfilVenda?.aceitaExclusividade && (
-                <div className="ml-4 p-3 bg-purple-50 rounded-lg border border-purple-100 animate-in slide-in-from-top-2 duration-200">
+                <div className="ml-4 p-3 bg-violet-50 rounded-lg border border-violet-100 animate-in slide-in-from-top-2 duration-200">
                   <Campo label="Tempo padrão de exclusividade">
                     <div className="flex items-center gap-2">
                       <Input
@@ -907,7 +907,7 @@ export function PerfilImobiliaria() {
                     className={cn(
                       "px-3 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1",
                       perfil.perfilVenda?.anunciaPortais?.includes(portal)
-                        ? "bg-purple-600 text-white shadow-sm"
+                        ? "bg-violet-600 text-white shadow-sm"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     )}
                   >
@@ -931,10 +931,10 @@ export function PerfilImobiliaria() {
               />
               
               {perfil.perfilVenda?.temParcerias && (
-                <div className="ml-4 p-3 bg-purple-50 rounded-lg border border-purple-100 animate-in slide-in-from-top-2 duration-200">
+                <div className="ml-4 p-3 bg-violet-50 rounded-lg border border-violet-100 animate-in slide-in-from-top-2 duration-200">
                   <label className="text-sm font-medium text-slate-600 flex items-center gap-2">
                     Percentual da parceria
-                    <span className="ml-auto text-purple-600 font-bold">{perfil.perfilVenda?.percentualParceria || 50}%</span>
+                    <span className="ml-auto text-violet-600 font-bold">{perfil.perfilVenda?.percentualParceria || 50}%</span>
                   </label>
                   <Slider
                     value={[perfil.perfilVenda?.percentualParceria || 50]}

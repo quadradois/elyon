@@ -41,4 +41,39 @@ describe('extrairRespostaECot', () => {
     expect(result.respostaFinal).toBe('{"foo":"bar"}');
     expect(result.structuredOutputDetectado).toBe(false);
   });
+
+  it('remove tags XML de tools vazadas (qualificar_lead com conteúdo)', () => {
+    const result = extrairRespostaECot({
+      finalOutput: 'Entendi!\n<qualificar_lead>\n<contatoId>abc123</contatoId>\n<temperatura>QUENTE</temperatura>\n</qualificar_lead>\nPosso te ajudar?',
+    });
+
+    expect(result.respostaFinal).toBe('Entendi!\n\nPosso te ajudar?');
+  });
+
+  it('remove tags XML de converter_para_lead vazadas', () => {
+    const result = extrairRespostaECot({
+      finalOutput: '<converter_para_lead>\n<contatoId>abc</contatoId>\n<temperatura>QUENTE</temperatura>\n</converter_para_lead>\n?',
+    });
+
+    // Deve ficar vazio ou só com "?" removido
+    expect(result.respostaFinal).not.toContain('converter_para_lead');
+    expect(result.respostaFinal).not.toContain('contatoId');
+  });
+
+  it('remove tags órfãs de transfer_to_* sem fechamento', () => {
+    const result = extrairRespostaECot({
+      finalOutput: 'Resposta válida\n<transfer_to_presenter_agent_v5>\n',
+    });
+
+    expect(result.respostaFinal).toBe('Resposta válida');
+    expect(result.respostaFinal).not.toContain('transfer_to');
+  });
+
+  it('preserva texto normal com emojis e acentos ao limpar tags XML', () => {
+    const result = extrairRespostaECot({
+      finalOutput: 'Boa! 😊 Já conheço o empreendimento.\n<qualificar_lead><contatoId>x</contatoId></qualificar_lead>\nVocê tem valor em mente?',
+    });
+
+    expect(result.respostaFinal).toBe('Boa! 😊 Já conheço o empreendimento.\n\nVocê tem valor em mente?');
+  });
 });

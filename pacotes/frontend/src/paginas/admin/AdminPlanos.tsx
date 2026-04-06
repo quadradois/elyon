@@ -89,7 +89,7 @@ const PLANOS_INICIAIS: PlanoConfig[] = [
 function PlanoIcone({ tipo }: { tipo: 'starter' | 'growth' | 'pro' }) {
     switch (tipo) {
         case 'starter':
-            return <Zap className="w-8 h-8 text-blue-400" />;
+            return <Zap className="w-8 h-8 text-indigo-400" />;
         case 'growth':
             return <Rocket className="w-8 h-8 text-emerald-400" />;
         case 'pro':

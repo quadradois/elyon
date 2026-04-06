@@ -88,19 +88,19 @@ function CardMetrica({
   cor?: "blue" | "green" | "yellow" | "purple" | "red";
 }) {
   const coresFundo = {
-    blue: "bg-blue-50",
-    green: "bg-green-50",
-    yellow: "bg-yellow-50",
-    purple: "bg-purple-50",
-    red: "bg-red-50"
+    blue:   "bg-indigo-100",
+    green:  "bg-emerald-100",
+    yellow: "bg-amber-100",
+    purple: "bg-violet-100",
+    red:    "bg-red-100"
   };
   
   const coresIcone = {
-    blue: "text-blue-600",
-    green: "text-green-600",
-    yellow: "text-yellow-600",
-    purple: "text-purple-600",
-    red: "text-red-600"
+    blue:   "text-indigo-600",
+    green:  "text-emerald-600",
+    yellow: "text-amber-600",
+    purple: "text-violet-600",
+    red:    "text-red-600"
   };
 
   return (
@@ -115,7 +115,7 @@ function CardMetrica({
             )}
             {variacao && (
               <div className={`flex items-center gap-1 text-xs ${
-                variacao.tipo === "up" ? "text-green-600" : "text-red-600"
+                variacao.tipo === "up" ? "text-emerald-600" : "text-red-600"
               }`}>
                 {variacao.tipo === "up" ? (
                   <ArrowUpRight className="w-3 h-3" />
@@ -139,13 +139,13 @@ function BarraStatus({ status, quantidade, total }: { status: string; quantidade
   const porcentagem = total > 0 ? (quantidade / total) * 100 : 0;
   
   const cores: Record<string, string> = {
-    NOVO: "bg-blue-500",
-    CONTATANDO: "bg-yellow-500",
-    QUALIFICADO: "bg-purple-500",
+    NOVO:          "bg-indigo-500",
+    CONTATANDO:    "bg-amber-500",
+    QUALIFICADO:   "bg-violet-500",
     EM_NEGOCIACAO: "bg-orange-500",
-    CONVERTIDO: "bg-green-500",
-    PERDIDO: "bg-red-500",
-    INATIVO: "bg-slate-400"
+    CONVERTIDO:    "bg-emerald-500",
+    PERDIDO:       "bg-danger",
+    INATIVO:       "bg-slate-400"
   };
   
   const labels: Record<string, string> = {
@@ -215,7 +215,7 @@ export function Relatorios() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              <BarChart3 className="w-7 h-7 text-blue-600" />
+              <BarChart3 className="w-7 h-7 text-brand" />
               Painel Gerencial
             </h1>
             <p className="text-slate-500 text-sm mt-1">
@@ -259,7 +259,7 @@ export function Relatorios() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <BarChart3 className="w-7 h-7 text-blue-600" />
+            <BarChart3 className="w-7 h-7 text-brand" />
             Painel Gerencial
           </h1>
           <p className="text-slate-500 text-sm mt-1">
@@ -313,7 +313,7 @@ export function Relatorios() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Zap className="w-5 h-5 text-purple-500" />
+              <Zap className="w-5 h-5 text-violet-500" />
               Atividade e Produtividade
             </CardTitle>
             <CardDescription>
@@ -322,14 +322,14 @@ export function Relatorios() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-purple-50 rounded-lg text-center">
-                <p className="text-2xl font-bold text-purple-600">
+              <div className="p-4 bg-violet-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-violet-600">
                   {resumo.assertiva.consultasMes}
                 </p>
                 <p className="text-xs text-slate-500">CPFs enriquecidos</p>
               </div>
-              <div className="p-4 bg-blue-50 rounded-lg text-center">
-                <p className="text-2xl font-bold text-blue-600">
+              <div className="p-4 bg-indigo-50 rounded-lg text-center">
+                <p className="text-2xl font-bold text-brand">
                   {resumo.campanhas.ativas}
                 </p>
                 <p className="text-xs text-slate-500">Campanhas ativas</p>
@@ -339,30 +339,30 @@ export function Relatorios() {
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-green-600" />
+                  <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-emerald-600" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-slate-700">Leads este mês</p>
                     <p className="text-xs text-slate-500">Mineração automática</p>
                   </div>
                 </div>
-                <span className="text-lg font-bold text-green-600">
+                <span className="text-lg font-bold text-emerald-600">
                   +{resumo.leads.mes}
                 </span>
               </div>
               
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Target className="w-4 h-4 text-blue-600" />
+                  <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                    <Target className="w-4 h-4 text-brand" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-slate-700">Taxa de conversão</p>
                     <p className="text-xs text-slate-500">Lead → Oportunidade</p>
                   </div>
                 </div>
-                <span className="text-lg font-bold text-blue-600">
+                <span className="text-lg font-bold text-brand">
                   {resumo.leads.total > 0 
                     ? Math.round((resumo.leads.convertidos / resumo.leads.total) * 100) 
                     : 0}%
@@ -391,7 +391,7 @@ export function Relatorios() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Users className="w-5 h-5 text-blue-500" />
+              <Users className="w-5 h-5 text-indigo-500" />
               Leads por Status
             </CardTitle>
             <CardDescription>
@@ -425,7 +425,7 @@ export function Relatorios() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Target className="w-5 h-5 text-purple-500" />
+            <Target className="w-5 h-5 text-violet-500" />
             Top Campanhas
           </CardTitle>
           <CardDescription>
@@ -442,7 +442,7 @@ export function Relatorios() {
                 >
                   <div className="flex items-center gap-4">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
-                      index === 0 ? "bg-yellow-500" :
+                      index === 0 ? "bg-warning" :
                       index === 1 ? "bg-slate-400" :
                       index === 2 ? "bg-amber-700" :
                       "bg-slate-300"

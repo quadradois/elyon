@@ -431,7 +431,7 @@ export function ModalProcessamento({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {modoTurbo && <Zap className="w-5 h-5 text-yellow-500" />}
+            {modoTurbo && <Zap className="w-5 h-5 text-amber-500" />}
             Mineração: {nomeEmpreendimento}
           </DialogTitle>
         </DialogHeader>
@@ -442,7 +442,7 @@ export function ModalProcessamento({
             <div className="flex justify-between text-sm font-medium text-slate-500">
               <span className="flex items-center gap-2">
                 {modoTurbo && (
-                  <span className="bg-yellow-100 text-yellow-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
                     <Zap className="w-3 h-3" />
                     Modo Turbo
                   </span>
@@ -460,9 +460,9 @@ export function ModalProcessamento({
             <div className="flex flex-col items-center">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
                 etapa === "SCRAPER" 
-                  ? "bg-blue-500 text-white animate-pulse" 
+                  ? "bg-brand text-white animate-pulse" 
                   : progresso >= 50 
-                    ? "bg-green-500 text-white" 
+                    ? "bg-success text-white" 
                     : "bg-slate-200 text-slate-500"
               }`}>
                 {progresso >= 50 ? <CheckCircle2 className="w-5 h-5" /> : "1"}
@@ -471,15 +471,15 @@ export function ModalProcessamento({
             </div>
             
             {/* Linha conectora */}
-            <div className={`flex-1 h-1 mx-2 rounded ${progresso >= 50 ? "bg-green-300" : "bg-slate-200"}`} />
+            <div className={`flex-1 h-1 mx-2 rounded ${progresso >= 50 ? "bg-emerald-300" : "bg-slate-200"}`} />
             
             {/* Etapa 2 */}
             <div className="flex flex-col items-center">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
                 etapa === "ENRIQUECIMENTO" 
-                  ? "bg-blue-500 text-white animate-pulse" 
+                  ? "bg-brand text-white animate-pulse" 
                   : progresso >= 90 
-                    ? "bg-green-500 text-white" 
+                    ? "bg-success text-white" 
                     : "bg-slate-200 text-slate-500"
               }`}>
                 {progresso >= 90 ? <CheckCircle2 className="w-5 h-5" /> : "2"}
@@ -488,13 +488,13 @@ export function ModalProcessamento({
             </div>
             
             {/* Linha conectora */}
-            <div className={`flex-1 h-1 mx-2 rounded ${progresso >= 90 ? "bg-green-300" : "bg-slate-200"}`} />
+            <div className={`flex-1 h-1 mx-2 rounded ${progresso >= 90 ? "bg-emerald-300" : "bg-slate-200"}`} />
             
             {/* Etapa 3 */}
             <div className="flex flex-col items-center">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
                 etapa === "CONCLUIDO" 
-                  ? "bg-green-500 text-white" 
+                  ? "bg-success text-white" 
                   : "bg-slate-200 text-slate-500"
               }`}>
                 {etapa === "CONCLUIDO" ? <CheckCircle2 className="w-5 h-5" /> : "3"}
@@ -514,7 +514,7 @@ export function ModalProcessamento({
               </div>
             ))}
             {(etapa === "SCRAPER" || etapa === "ENRIQUECIMENTO") && (
-              <div className="flex items-center gap-2 animate-pulse text-blue-400">
+              <div className="flex items-center gap-2 animate-pulse text-brand">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 Processando...
               </div>
@@ -536,7 +536,7 @@ export function ModalProcessamento({
               {erro.includes("Créditos insuficientes") && (
                 <button
                   onClick={() => setModalCreditosOpen(true)}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 mb-2"
+                  className="w-full bg-success hover:bg-success-dark text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 mb-2"
                 >
                   <DollarSign className="w-4 h-4" />
                   Comprar Créditos Agora
@@ -554,7 +554,7 @@ export function ModalProcessamento({
                      executarScraper();
                   }
                 }}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full bg-brand hover:bg-brand-dark text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 <Zap className="w-4 h-4" />
                 {proprietariosEncontrados.length > 0 ? "Tentar Enriquecer Novamente" : "Tentar Mineracão Novamente"}
@@ -565,7 +565,7 @@ export function ModalProcessamento({
           {/* Botão de Revisão (só aparece se NÃO for modo turbo) */}
           {etapa === "REVISAO_SCRAPER" && !modoTurbo && (
             <div className="flex flex-col items-center gap-4 w-full">
-              <div className="flex items-center gap-2 text-blue-600 font-medium bg-blue-50 px-4 py-2 rounded-full text-sm">
+              <div className="flex items-center gap-2 text-brand font-medium bg-indigo-50 px-4 py-2 rounded-full text-sm">
                 <Users className="w-4 h-4" />
                 {proprietariosEncontrados.length} proprietários identificados
               </div>
@@ -605,7 +605,7 @@ export function ModalProcessamento({
 
               <button
                 onClick={() => executarEnriquecimento()}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full bg-brand hover:bg-brand-dark text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 <Zap className="w-4 h-4" />
                 Buscar Contatos (Assertiva)
@@ -618,34 +618,34 @@ export function ModalProcessamento({
             <div className="space-y-4">
               {/* Stats Cards */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-green-50 rounded-lg p-3 text-center">
-                  <Users className="w-5 h-5 text-green-600 mx-auto mb-1" />
-                  <div className="text-2xl font-bold text-green-700">
+                <div className="bg-emerald-50 rounded-lg p-3 text-center">
+                  <Users className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
+                  <div className="text-2xl font-bold text-emerald-700">
                     {estatisticas.leadsQualificados}
                   </div>
-                  <div className="text-xs text-green-600">Leads</div>
+                  <div className="text-xs text-emerald-600">Leads</div>
                 </div>
                 
-                <div className="bg-blue-50 rounded-lg p-3 text-center">
-                  <Clock className="w-5 h-5 text-blue-600 mx-auto mb-1" />
-                  <div className="text-2xl font-bold text-blue-700">
+                <div className="bg-indigo-50 rounded-lg p-3 text-center">
+                  <Clock className="w-5 h-5 text-brand mx-auto mb-1" />
+                  <div className="text-2xl font-bold text-indigo-700">
                     {estatisticas.tempoTotal}s
                   </div>
-                  <div className="text-xs text-blue-600">Tempo</div>
+                  <div className="text-xs text-brand">Tempo</div>
                 </div>
                 
                 {estatisticas.cpfsDoCache > 0 && (
-                  <div className="bg-yellow-50 rounded-lg p-3 text-center">
-                    <DollarSign className="w-5 h-5 text-yellow-600 mx-auto mb-1" />
-                    <div className="text-2xl font-bold text-yellow-700">
+                  <div className="bg-amber-50 rounded-lg p-3 text-center">
+                    <DollarSign className="w-5 h-5 text-amber-600 mx-auto mb-1" />
+                    <div className="text-2xl font-bold text-amber-700">
                       R$ {estatisticas.economiaCacheReais.toFixed(0)}
                     </div>
-                    <div className="text-xs text-yellow-600">Economia</div>
+                    <div className="text-xs text-amber-600">Economia</div>
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center gap-2 text-green-600 font-medium bg-green-50 px-4 py-3 rounded-lg justify-center">
+              <div className="flex items-center gap-2 text-emerald-600 font-medium bg-emerald-50 px-4 py-3 rounded-lg justify-center">
                 <CheckCircle2 className="w-5 h-5" />
                 Mineração Concluída com Sucesso!
               </div>
@@ -661,7 +661,7 @@ export function ModalProcessamento({
                   <button
                     type="button"
                     onClick={() => setDropdownAberto(!dropdownAberto)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-white border-2 border-slate-200 rounded-lg hover:border-blue-400 focus:border-blue-500 focus:outline-none transition-colors"
+                    className="w-full flex items-center justify-between px-4 py-3 bg-white border-2 border-slate-200 rounded-lg hover:border-indigo-400 focus:border-brand focus:outline-none transition-colors"
                   >
                     <span className={campanhaSelecionada ? "text-slate-900" : "text-slate-400"}>
                       {campanhaSelecionada 
@@ -687,8 +687,8 @@ export function ModalProcessamento({
                               setCampanhaSelecionada(campanha.id);
                               setDropdownAberto(false);
                             }}
-                            className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-blue-50 transition-colors ${
-                              campanhaSelecionada === campanha.id ? 'bg-blue-50' : ''
+                            className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-indigo-50 transition-colors ${
+                              campanhaSelecionada === campanha.id ? 'bg-indigo-50' : ''
                             }`}
                           >
                             <div>
@@ -698,7 +698,7 @@ export function ModalProcessamento({
                               </div>
                             </div>
                             {campanhaSelecionada === campanha.id && (
-                              <Check className="w-5 h-5 text-blue-600" />
+                              <Check className="w-5 h-5 text-brand" />
                             )}
                           </button>
                         ))
@@ -722,7 +722,7 @@ export function ModalProcessamento({
                   disabled={!campanhaSelecionada || vinculandoCampanha}
                   className={`flex-1 font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
                     campanhaSelecionada && !vinculandoCampanha
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      ? 'bg-brand hover:bg-brand-dark text-white'
                       : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   }`}
                 >

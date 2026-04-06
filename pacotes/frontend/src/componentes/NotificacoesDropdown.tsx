@@ -19,7 +19,7 @@ export function NotificacoesDropdown() {
   const getIcone = (tipo: string) => {
     switch (tipo) {
       case 'ATENDIMENTO_HUMANO':
-        return <MessageSquare className="w-4 h-4 text-blue-500" />;
+        return <MessageSquare className="w-4 h-4 text-indigo-500" />;
       case 'LEAD_QUENTE':
         return <AlertTriangle className="w-4 h-4 text-orange-500" />;
       case 'escalacao':
@@ -37,7 +37,7 @@ export function NotificacoesDropdown() {
       case 'media':
         return 'bg-orange-500';
       default:
-        return 'bg-blue-500';
+        return 'bg-brand';
     }
   };
   
@@ -73,7 +73,7 @@ export function NotificacoesDropdown() {
         {/* Indicador de conexão */}
         <span 
           className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${
-            conectado ? 'bg-green-500' : 'bg-gray-400'
+            conectado ? 'bg-success' : 'bg-gray-400'
           }`}
           title={conectado ? 'Conectado' : 'Desconectado'}
         />
@@ -103,8 +103,8 @@ export function NotificacoesDropdown() {
               </h3>
               
               <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className={`flex items-center gap-1 ${conectado ? 'text-green-600' : 'text-gray-400'}`}>
-                  <span className={`w-2 h-2 rounded-full ${conectado ? 'bg-green-500' : 'bg-gray-400'}`} />
+                <span className={`flex items-center gap-1 ${conectado ? 'text-emerald-600' : 'text-gray-400'}`}>
+                  <span className={`w-2 h-2 rounded-full ${conectado ? 'bg-success' : 'bg-gray-400'}`} />
                   {conectado ? 'Ao vivo' : 'Offline'}
                 </span>
               </div>
@@ -119,7 +119,7 @@ export function NotificacoesDropdown() {
                 </div>
               ) : alertas.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                  <CheckCircle className="w-12 h-12 mb-3 text-green-500" />
+                  <CheckCircle className="w-12 h-12 mb-3 text-emerald-500" />
                   <p className="font-medium">Tudo em dia!</p>
                   <p className="text-sm">Nenhum alerta pendente</p>
                 </div>
@@ -129,7 +129,7 @@ export function NotificacoesDropdown() {
                     <li 
                       key={alerta.id}
                       className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer ${
-                        alerta.status === 'pendente' ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''
+                        alerta.status === 'pendente' ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''
                       }`}
                       onClick={() => {
                         if (alerta.status === 'pendente') {
@@ -192,7 +192,7 @@ export function NotificacoesDropdown() {
                                     // Navegar para o lead
                                     window.location.href = `/dashboard/conversas?lead=${alerta.leadId}`;
                                   }}
-                                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-brand hover:text-brand hover:bg-indigo-50 rounded transition-colors"
                                 >
                                   <ExternalLink className="w-3 h-3" />
                                   Ver conversa
@@ -204,7 +204,7 @@ export function NotificacoesDropdown() {
                                   e.stopPropagation();
                                   marcarAtendido(alerta.id);
                                 }}
-                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors"
+                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors"
                               >
                                 <CheckCircle className="w-3 h-3" />
                                 Atendido
@@ -224,7 +224,7 @@ export function NotificacoesDropdown() {
               <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                 <a 
                   href="/dashboard/alertas"
-                  className="block text-center text-sm font-medium text-blue-600 hover:text-blue-700"
+                  className="block text-center text-sm font-medium text-brand hover:text-brand"
                 >
                   Ver todos os alertas
                 </a>

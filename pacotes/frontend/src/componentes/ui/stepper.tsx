@@ -58,7 +58,7 @@ export function Stepper({
                   <div
                     className={cn(
                       "w-0.5 flex-1 min-h-[24px] mt-1",
-                      status === "concluida" ? "bg-green-400" : "bg-slate-200"
+                      status === "concluida" ? "bg-emerald-400" : "bg-slate-200"
                     )}
                   />
                 )}
@@ -69,8 +69,8 @@ export function Stepper({
                   className={cn(
                     "font-medium",
                     t.texto,
-                    status === "atual" && "text-blue-600",
-                    status === "concluida" && "text-green-600",
+                    status === "atual" && "text-brand",
+                    status === "concluida" && "text-emerald-600",
                     status === "pendente" && "text-slate-400"
                   )}
                 >
@@ -110,8 +110,8 @@ export function Stepper({
                 className={cn(
                   "mt-1 font-medium text-center max-w-[80px]",
                   t.texto,
-                  status === "atual" && "text-blue-600",
-                  status === "concluida" && "text-green-600",
+                  status === "atual" && "text-brand",
+                  status === "concluida" && "text-emerald-600",
                   status === "pendente" && "text-slate-400"
                 )}
               >
@@ -124,7 +124,7 @@ export function Stepper({
               <div
                 className={cn(
                   "flex-1 h-1 mx-2 rounded",
-                  status === "concluida" ? "bg-green-300" : "bg-slate-200"
+                  status === "concluida" ? "bg-emerald-300" : "bg-slate-200"
                 )}
               />
             )}
@@ -150,7 +150,7 @@ function StepperCirculo({ numero, status, icone, tamanho }: StepperCirculoProps)
 
   if (status === "concluida") {
     return (
-      <div className={cn(baseClasses, "bg-green-500 text-white")}>
+      <div className={cn(baseClasses, "bg-success text-white")}>
         <CheckCircle2 className={tamanho.icone} />
       </div>
     );
@@ -158,7 +158,7 @@ function StepperCirculo({ numero, status, icone, tamanho }: StepperCirculoProps)
 
   if (status === "atual") {
     return (
-      <div className={cn(baseClasses, "bg-blue-500 text-white animate-pulse")}>
+      <div className={cn(baseClasses, "bg-brand text-white animate-pulse")}>
         {icone || numero}
       </div>
     );

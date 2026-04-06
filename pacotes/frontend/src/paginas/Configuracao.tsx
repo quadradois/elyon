@@ -45,8 +45,8 @@ export function Configuracao() {
       titulo: "Perfil da Imobiliária",
       descricao: "Configure dados, diferenciais e políticas da sua imobiliária para o SDR IA",
       icon: Store,
-      iconColor: "text-blue-600",
-      iconBg: "bg-blue-50",
+      iconColor: "text-brand",
+      iconBg: "bg-indigo-50",
       path: "/dashboard/perfil",
     },
     {
@@ -54,8 +54,8 @@ export function Configuracao() {
       titulo: "Sessões WhatsApp",
       descricao: "Gerencie conexões do WhatsApp e vincule a agentes",
       icon: Phone,
-      iconColor: "text-green-600",
-      iconBg: "bg-green-50",
+      iconColor: "text-emerald-600",
+      iconBg: "bg-emerald-50",
       path: "/dashboard/sessoes-whatsapp",
     },
     {
@@ -81,8 +81,8 @@ export function Configuracao() {
       titulo: "Relatórios e Métricas",
       descricao: "Análise de desempenho e indicadores do sistema",
       icon: BarChart3,
-      iconColor: "text-purple-600",
-      iconBg: "bg-purple-50",
+      iconColor: "text-violet-600",
+      iconBg: "bg-violet-50",
       path: "/dashboard/relatorios",
     },
     {
@@ -94,7 +94,7 @@ export function Configuracao() {
       iconBg: "bg-indigo-50",
       path: "/dashboard/integracoes",
       badge: "Novo",
-      badgeColor: "bg-green-100 text-green-700",
+      badgeColor: "bg-emerald-100 text-emerald-700",
     },
     {
       id: "byok-llm",
@@ -179,7 +179,7 @@ export function Configuracao() {
             {card.badge ? (
               <span className={cn(
                 "text-xs font-medium px-2 py-1 rounded-full",
-                card.badgeColor || "bg-blue-100 text-blue-700"
+                card.badgeColor || "bg-indigo-100 text-indigo-700"
               )}>
                 {card.badge}
               </span>
@@ -241,11 +241,11 @@ export function Configuracao() {
       </div>
 
       {/* Ajuda */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100">
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-indigo-100">
         <CardContent className="flex items-center justify-between py-6">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <FileText className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+              <FileText className="w-5 h-5 text-brand" />
             </div>
             <div>
               <h3 className="font-semibold text-slate-900">Precisa de ajuda?</h3>
@@ -256,7 +256,7 @@ export function Configuracao() {
           </div>
           <button
             onClick={() => window.open("https://docs.quadradois.com.br", "_blank")}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 bg-brand text-white rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors"
           >
             Ver Documentação
           </button>

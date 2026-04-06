@@ -136,7 +136,7 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-blue-600 hover:bg-blue-700">+ Novo Lead</Button>
+        <Button className="bg-brand hover:bg-brand-dark">+ Novo Lead</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
@@ -152,12 +152,12 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
           <TabsContent value="iptu" className="space-y-4 py-4">
             {etapa === "busca" && (
               <div className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-sm text-blue-800">
+                <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100 text-sm text-indigo-800">
                   <p className="flex items-center gap-2 font-medium">
                     <Building2 className="w-4 h-4" />
                     Integração Prefeitura de Goiânia
                   </p>
-                  <p className="mt-1 text-blue-600">
+                  <p className="mt-1 text-brand">
                     Digite a inscrição do IPTU para buscar dados do proprietário
                     e enriquecer com contatos automaticamente.
                   </p>
@@ -207,14 +207,14 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
                 <div className="space-y-4">
                   <h3 className="font-medium text-slate-900 border-b pb-2 flex items-center justify-between">
                     Dados do Proprietário
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
                       Enriquecido via Assertiva
                     </span>
                   </h3>
 
                   <div className="bg-slate-50 p-4 rounded-lg space-y-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-brand font-bold">
                         {dadosEncontrados.proprietario.nome.charAt(0)}
                       </div>
                       <div>
@@ -240,7 +240,7 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
                         <span className="text-xs text-slate-400 block">
                           Score de Crédito
                         </span>
-                        <span className="font-medium text-green-600">
+                        <span className="font-medium text-emerald-600">
                           {dadosEncontrados.proprietario.score} (Alto)
                         </span>
                       </div>
@@ -249,7 +249,7 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
                 </div>
 
                 <Button
-                  className="w-full bg-green-600 hover:bg-green-700"
+                  className="w-full bg-success hover:bg-success-dark"
                   onClick={handleSalvarLead}
                   disabled={loading}
                 >
@@ -260,8 +260,8 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
 
             {etapa === "sucesso" && (
               <div className="text-center py-8 space-y-4 animate-in zoom-in">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="w-8 h-8 text-green-600" />
+                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">
@@ -320,7 +320,7 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
                 />
               </div>
               <Button
-                className="w-full bg-blue-600 hover:bg-blue-700 mt-4"
+                className="w-full bg-brand hover:bg-brand-dark mt-4"
                 onClick={handleSalvarManual}
                 disabled={loading || !novoLead.nome || !novoLead.telefone}
               >

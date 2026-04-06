@@ -17,7 +17,7 @@ const CONFIG_STATUS = {
   ATIVO: {
     label: 'Ativo',
     emoji: '✅',
-    cor: 'bg-green-100 text-green-700 border-green-200',
+    cor: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     descricao: 'Atendendo automaticamente'
   },
   PAUSADO: {

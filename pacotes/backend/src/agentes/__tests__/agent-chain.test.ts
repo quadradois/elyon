@@ -161,6 +161,14 @@ describe('MAPA_NOMES_AGENTES', () => {
   it('mapeia knowledge_agent → OPENER', () => {
     expect(MAPA_NOMES_AGENTES['knowledge_agent']).toBe('OPENER');
   });
+
+  it('mapeia opener_agent_v12 → OPENER', () => {
+    expect(MAPA_NOMES_AGENTES['opener_agent_v12']).toBe('OPENER');
+  });
+
+  it('mapeia presenter_agent_v5 → PRESENTER', () => {
+    expect(MAPA_NOMES_AGENTES['presenter_agent_v5']).toBe('PRESENTER');
+  });
 });
 
 // ============================================

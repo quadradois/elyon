@@ -7,7 +7,9 @@ const MAPA_AGENTE_PERSISTIDO: Record<string, TipoAgente> = {
   ADMIN: 'ADMIN',
   CLOSER: 'PRESENTER',
   opener_agent_v11: 'OPENER',
+  opener_agent_v12: 'OPENER',
   presenter_agent_v4: 'PRESENTER',
+  presenter_agent_v5: 'PRESENTER',
   closer_agent_v5: 'PRESENTER',
   admin_agent_v4: 'ADMIN',
 };

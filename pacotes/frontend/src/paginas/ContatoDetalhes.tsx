@@ -202,7 +202,7 @@ const formatarBairro = (bairro: string | null) => {
 // Status config
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   AGUARDANDO: { label: 'Aguardando', color: 'text-slate-600', bg: 'bg-slate-100' },
-  EM_CONVERSA: { label: 'Em conversa', color: 'text-blue-700', bg: 'bg-blue-50' },
+  EM_CONVERSA: { label: 'Em conversa', color: 'text-indigo-700', bg: 'bg-indigo-50' },
   QUALIFICADO: { label: 'Qualificado', color: 'text-emerald-700', bg: 'bg-emerald-50' },
   NAO_QUALIFICADO: { label: 'Não qualificado', color: 'text-red-700', bg: 'bg-red-50' },
   CONVERTIDO: { label: 'Convertido', color: 'text-violet-700', bg: 'bg-violet-50' },
@@ -476,7 +476,7 @@ export default function ContatoDetalhes() {
                     <Phone className="w-4 h-4 mr-2" />
                     Ligar
                   </Button>
-                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => window.open(`https://wa.me/55${telefonePrincipal.numero.replace(/\D/g, '')}`, '_blank')}>
+                  <Button size="sm" className="bg-success hover:bg-success-dark text-white" onClick={() => window.open(`https://wa.me/55${telefonePrincipal.numero.replace(/\D/g, '')}`, '_blank')}>
                     <MessageSquare className="w-4 h-4 mr-2" />
                     WhatsApp
                   </Button>
@@ -489,7 +489,7 @@ export default function ContatoDetalhes() {
                 </Button>
               )}
               {!contato.virouLead ? (
-                <Button className="bg-indigo-600 hover:bg-indigo-700 text-white ml-2 shadow-sm" onClick={promoverLead} disabled={promovendo}>
+                <Button className="bg-brand hover:bg-brand-dark text-white ml-2 shadow-sm" onClick={promoverLead} disabled={promovendo}>
                   {promovendo ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Rocket className="w-4 h-4 mr-2" />}
                   Promover a Oportunidade
                 </Button>
@@ -513,7 +513,7 @@ export default function ContatoDetalhes() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`}
+                      className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`}
                     >
                       {tab.icon}
                       {tab.label}
@@ -550,7 +550,7 @@ export default function ContatoDetalhes() {
                     return (
                       <div key={msg.id} className={`flex ${isSaida ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[85%]`}>
-                          <div className={`rounded-2xl px-4 py-2.5 ${isSaida ? 'bg-blue-600 text-white rounded-br-md' : 'bg-slate-100 text-slate-900 rounded-bl-md'}`}>
+                          <div className={`rounded-2xl px-4 py-2.5 ${isSaida ? 'bg-brand text-white rounded-br-md' : 'bg-slate-100 text-slate-900 rounded-bl-md'}`}>
                             <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.conteudo}</p>
                           </div>
                           {dataMsg && <p className={`text-xs text-slate-400 mt-1 ${isSaida ? 'text-right' : ''}`}>{tempoRelativo(dataMsg)}</p>}
@@ -574,7 +574,7 @@ export default function ContatoDetalhes() {
                       }
                     }}
                   />
-                  <Button onClick={enviarMensagem} disabled={!novaMensagem.trim() || enviando} className="bg-blue-600 hover:bg-blue-700 h-[44px] w-[44px] p-0">
+                  <Button onClick={enviarMensagem} disabled={!novaMensagem.trim() || enviando} className="bg-brand hover:bg-brand-dark h-[44px] w-[44px] p-0">
                     {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   </Button>
                 </div>
@@ -611,7 +611,7 @@ function TabAtendimento({ contato, statusInfo, alternarModo, alternandoModo }: {
             <h3 className="font-semibold text-slate-700">Modo de Atendimento</h3>
           </div>
           <div className="flex items-center gap-1 bg-white rounded-lg p-1 border border-slate-200">
-            <Button variant={contato.modoAtendimento === 'IA' || !contato.modoAtendimento ? 'default' : 'ghost'} size="sm" onClick={() => alternarModo('IA')} disabled={alternandoModo || contato.modoAtendimento === 'IA'} className={`flex-1 h-9 ${contato.modoAtendimento === 'IA' || !contato.modoAtendimento ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'text-slate-600 hover:text-slate-900'}`}><Bot className="w-4 h-4 mr-1.5" />IA</Button>
+            <Button variant={contato.modoAtendimento === 'IA' || !contato.modoAtendimento ? 'default' : 'ghost'} size="sm" onClick={() => alternarModo('IA')} disabled={alternandoModo || contato.modoAtendimento === 'IA'} className={`flex-1 h-9 ${contato.modoAtendimento === 'IA' || !contato.modoAtendimento ? 'bg-brand hover:bg-brand-dark text-white' : 'text-slate-600 hover:text-slate-900'}`}><Bot className="w-4 h-4 mr-1.5" />IA</Button>
             <Button variant={contato.modoAtendimento === 'HUMANO' ? 'default' : 'ghost'} size="sm" onClick={() => alternarModo('HUMANO')} disabled={alternandoModo || contato.modoAtendimento === 'HUMANO'} className={`flex-1 h-9 ${contato.modoAtendimento === 'HUMANO' ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'text-slate-600 hover:text-slate-900'}`}><User className="w-4 h-4 mr-1.5" />Humano</Button>
             <Button variant={contato.modoAtendimento === 'PAUSADO' ? 'default' : 'ghost'} size="sm" onClick={() => alternarModo('PAUSADO')} disabled={alternandoModo || contato.modoAtendimento === 'PAUSADO'} className={`flex-1 h-9 ${contato.modoAtendimento === 'PAUSADO' ? 'bg-slate-600 hover:bg-slate-700 text-white' : 'text-slate-600 hover:text-slate-900'}`}><Pause className="w-4 h-4 mr-1.5" />Pausado</Button>
           </div>
@@ -619,16 +619,16 @@ function TabAtendimento({ contato, statusInfo, alternarModo, alternandoModo }: {
       </div>
       <div className="grid grid-cols-2 gap-6">
         {contato.scoreAssertiva && (
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-100">
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border border-indigo-100">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-blue-500" />
-                <h3 className="font-semibold text-blue-900">Score de Dados</h3>
+                <Sparkles className="w-5 h-5 text-indigo-500" />
+                <h3 className="font-semibold text-indigo-900">Score de Dados</h3>
               </div>
-              <span className="text-3xl font-bold text-blue-600">{contato.scoreAssertiva}</span>
+              <span className="text-3xl font-bold text-brand">{contato.scoreAssertiva}</span>
             </div>
-            <div className="h-2 bg-blue-200 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all" style={{ width: `${Math.min(100, contato.scoreAssertiva)}%` }} /></div>
-            <p className="text-xs text-blue-600 mt-2">{contato.scoreAssertiva >= 80 ? '✓ Dados confiáveis' : contato.scoreAssertiva >= 50 ? '⚠ Verificar dados' : '✗ Dados incompletos'}</p>
+            <div className="h-2 bg-indigo-200 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all" style={{ width: `${Math.min(100, contato.scoreAssertiva)}%` }} /></div>
+            <p className="text-xs text-brand mt-2">{contato.scoreAssertiva >= 80 ? '✓ Dados confiáveis' : contato.scoreAssertiva >= 50 ? '⚠ Verificar dados' : '✗ Dados incompletos'}</p>
           </div>
         )}
         {contato.scoreQualificacao && contato.scoreQualificacao > 0 && (
@@ -678,11 +678,11 @@ function TabProprietario({ contato, telefones, emails, copiar, copiado }: {
             {contato.situacaoCadastral && <div className="flex justify-between py-2"><span className="text-sm text-slate-500">Situação</span><span className={`text-sm font-medium ${contato.situacaoCadastral === 'REGULAR' ? 'text-emerald-600' : 'text-amber-600'}`}>{contato.situacaoCadastral}</span></div>}
           </div>
         </div>
-        <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
-          <div className="flex items-center gap-2 mb-4"><Briefcase className="w-5 h-5 text-blue-500" /><h3 className="font-semibold text-blue-900">Dados Profissionais</h3></div>
+        <div className="bg-indigo-50 rounded-xl p-5 border border-indigo-100">
+          <div className="flex items-center gap-2 mb-4"><Briefcase className="w-5 h-5 text-indigo-500" /><h3 className="font-semibold text-indigo-900">Dados Profissionais</h3></div>
           <div className="space-y-3">
-            {contato.empresaAtual && <div><p className="text-xs text-blue-500 uppercase mb-1">Empresa</p><p className="text-sm font-medium text-blue-900">{contato.empresaAtual}</p></div>}
-            {contato.profissao && <div><p className="text-xs text-blue-500 uppercase mb-1">Cargo/Profissão</p><p className="text-sm text-blue-800">{contato.profissao}</p></div>}
+            {contato.empresaAtual && <div><p className="text-xs text-indigo-500 uppercase mb-1">Empresa</p><p className="text-sm font-medium text-indigo-900">{contato.empresaAtual}</p></div>}
+            {contato.profissao && <div><p className="text-xs text-indigo-500 uppercase mb-1">Cargo/Profissão</p><p className="text-sm text-indigo-800">{contato.profissao}</p></div>}
             {contato.rendaEstimada && <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-lg p-3 mt-3 border border-emerald-200"><p className="text-xs text-emerald-600 uppercase mb-1">Renda Estimada</p><p className="text-xl font-bold text-emerald-700">{formatarMoeda(contato.rendaEstimada)}</p>{contato.faixaSalarial && <p className="text-xs text-emerald-600 mt-1">{contato.faixaSalarial}</p>}</div>}
           </div>
         </div>
@@ -736,16 +736,16 @@ function TabImovel({ contato, copiar, copiado }: {
   return (
     <div className="space-y-6">
       {/* Header Compacto - Apenas Nome */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-indigo-100">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0"><Building2 className="w-7 h-7 text-blue-600" /></div>
+          <div className="w-14 h-14 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0"><Building2 className="w-7 h-7 text-brand" /></div>
           <div className="flex-1">
             {contato.nomeEdificio && (
               <h1 className="text-2xl font-black text-slate-900 tracking-tight">
                 {typeof contato.nomeEdificio === 'object' ? (contato.nomeEdificio as any).nome || 'Empreendimento' : String(contato.nomeEdificio)}
               </h1>
             )}
-            <p className="text-sm text-blue-600 font-medium mt-1 uppercase tracking-wider">Identificação do Edifício</p>
+            <p className="text-sm text-brand font-medium mt-1 uppercase tracking-wider">Identificação do Edifício</p>
           </div>
         </div>
       </div>
@@ -753,7 +753,7 @@ function TabImovel({ contato, copiar, copiado }: {
       {/* Dossiê de Localização e Unidade (Completo) */}
       <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm space-y-6">
         <div className="flex items-center gap-2 pb-4 border-b border-slate-100">
-          <MapPin className="w-5 h-5 text-blue-600" />
+          <MapPin className="w-5 h-5 text-brand" />
           <h3 className="font-bold text-lg text-slate-800">Dossiê de Localização e Unidade</h3>
         </div>
 
@@ -785,13 +785,13 @@ function TabImovel({ contato, copiar, copiado }: {
           {/* Coluna 2: Dados da Unidade */}
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 text-center">
-                <p className="text-[11px] text-blue-500 font-bold uppercase tracking-wider mb-1">Unidade</p>
-                <p className="text-xl font-bold text-blue-700">{contato.unidade || '-'}</p>
+              <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-100 text-center">
+                <p className="text-[11px] text-indigo-500 font-bold uppercase tracking-wider mb-1">Unidade</p>
+                <p className="text-xl font-bold text-indigo-700">{contato.unidade || '-'}</p>
               </div>
-              <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 text-center">
-                <p className="text-[11px] text-blue-500 font-bold uppercase tracking-wider mb-1">Bloco</p>
-                <p className="text-xl font-bold text-blue-700">{contato.bloco || '-'}</p>
+              <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-100 text-center">
+                <p className="text-[11px] text-indigo-500 font-bold uppercase tracking-wider mb-1">Bloco</p>
+                <p className="text-xl font-bold text-indigo-700">{contato.bloco || '-'}</p>
               </div>
             </div>
 

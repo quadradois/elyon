@@ -189,13 +189,13 @@ PROCESSO:
 1. [Passo 1]
 2. [Passo 2]
 ...`}
-          className="w-full min-h-[300px] px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm resize-none"
+          className="w-full min-h-[300px] px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand font-mono text-sm resize-none"
           value={dados.promptCustomizado || ''}
           onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDados(prev => ({ ...prev, promptCustomizado: e.target.value }))}
         />
         
         <div className="flex items-center justify-between text-xs">
-          <span className={isValid ? 'text-green-600' : 'text-red-500'}>
+          <span className={isValid ? 'text-emerald-600' : 'text-red-500'}>
             {contadorCaracteres} caracteres {!isValid && `(mínimo: ${minimoCaracteres})`}
           </span>
           {!isValid && (

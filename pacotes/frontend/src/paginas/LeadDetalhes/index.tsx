@@ -72,6 +72,8 @@ import {
     CardNegociacao,
     CardContrato,
     CardTrackingIA,
+    CardBriefingIA,
+    CardProprietario,
     InfoItem,
     FaseChecklist,
 } from "./componentes";
@@ -162,7 +164,7 @@ export default function LeadDetalhes() {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
                 <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                    <Loader2 className="w-8 h-8 animate-spin text-brand" />
                     <p className="text-slate-500">Carregando lead...</p>
                 </div>
             </div>
@@ -217,6 +219,9 @@ export default function LeadDetalhes() {
             <FaseChecklist lead={lead} />
 
 
+
+            {/* DOSSIÊ IA - sempre no topo quando disponível */}
+            <CardBriefingIA lead={lead} />
 
             {/* CARD TRACKING IA */}
             <CardTrackingIA lead={lead} />
@@ -280,6 +285,9 @@ export default function LeadDetalhes() {
                         isCaptado={isCaptado}
                         onEditar={() => setModalEditar(true)}
                     />
+
+                    {/* Card Proprietário (dados Assertiva) */}
+                    <CardProprietario lead={lead} />
 
                     {/* Card Negociação (Fase 3) */}
                     <CardNegociacao lead={lead} />
@@ -368,7 +376,7 @@ export default function LeadDetalhes() {
                                         <InfoItem
                                             label="Com Corretor Atualmente"
                                             value={lead.spin.situacao.comCorretorAtualmente === null ? null : lead.spin.situacao.comCorretorAtualmente ? 'Sim' : 'Não'}
-                                            icon={lead.spin.situacao.comCorretorAtualmente ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
+                                            icon={lead.spin.situacao.comCorretorAtualmente ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
                                         />
                                     </div>
                                 </TabsContent>
@@ -397,8 +405,8 @@ export default function LeadDetalhes() {
                                             {lead.spin.implicacao.urgencia ? (
                                                 <Badge className={
                                                     lead.spin.implicacao.urgencia === 'ALTA' ? 'bg-red-100 text-red-700' :
-                                                        lead.spin.implicacao.urgencia === 'MEDIA' ? 'bg-yellow-100 text-yellow-700' :
-                                                            'bg-green-100 text-green-700'
+                                                        lead.spin.implicacao.urgencia === 'MEDIA' ? 'bg-amber-100 text-amber-700' :
+                                                            'bg-emerald-100 text-emerald-700'
                                                 }>
                                                     {lead.spin.implicacao.urgencia}
                                                 </Badge>
@@ -433,7 +441,7 @@ export default function LeadDetalhes() {
                                         {lead.spin.necessidade.interesseAvaliacao === null ? (
                                             <span className="text-slate-400">Não informado</span>
                                         ) : lead.spin.necessidade.interesseAvaliacao ? (
-                                            <Badge className="bg-green-100 text-green-700"><CheckCircle2 className="w-3 h-3 mr-1" />Sim</Badge>
+                                            <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 className="w-3 h-3 mr-1" />Sim</Badge>
                                         ) : (
                                             <Badge className="bg-red-100 text-red-700"><XCircle className="w-3 h-3 mr-1" />Não</Badge>
                                         )}
@@ -571,8 +579,8 @@ export default function LeadDetalhes() {
                                             className="flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors"
                                         >
                                             <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                                                    <MessageSquare className="w-4 h-4 text-green-600" />
+                                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                                                    <MessageSquare className="w-4 h-4 text-emerald-600" />
                                                 </div>
                                                 <div>
                                                     <p className="font-medium text-sm">{conversa.canal}</p>
@@ -768,7 +776,7 @@ export default function LeadDetalhes() {
             <Dialog open={modalCaptado} onOpenChange={setModalCaptado}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-green-600">
+                        <DialogTitle className="flex items-center gap-2 text-emerald-600">
                             <Trophy className="w-5 h-5" />
                             Registrar Captação
                         </DialogTitle>
@@ -798,7 +806,7 @@ export default function LeadDetalhes() {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalCaptado(false)}>Cancelar</Button>
-                        <Button className="bg-green-600 hover:bg-green-700" onClick={async () => { if (await marcarCaptado()) setModalCaptado(false); }} disabled={salvando}>
+                        <Button className="bg-success hover:bg-success-dark" onClick={async () => { if (await marcarCaptado()) setModalCaptado(false); }} disabled={salvando}>
                             {salvando && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                             🎉 Confirmar Captação
                         </Button>

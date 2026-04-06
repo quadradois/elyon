@@ -459,7 +459,7 @@ export function Mineracao() {
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Building2 className="w-8 h-8 text-blue-600" />
+            <Building2 className="w-8 h-8 text-brand" />
             Mineração de Leads
           </h1>
           <p className="text-slate-500 mt-1">
@@ -472,10 +472,10 @@ export function Mineracao() {
           {/* Opção 1: Edifícios por Bairro */}
           <button
             onClick={() => setEtapa("por-bairro")}
-            className="bg-white p-6 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:shadow-lg transition-all text-left group"
+            className="bg-white p-6 rounded-xl border-2 border-slate-200 hover:border-brand hover:shadow-lg transition-all text-left group"
           >
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-500 transition-colors">
-              <Building2 className="w-6 h-6 text-blue-600 group-hover:text-white" />
+            <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-brand transition-colors">
+              <Building2 className="w-6 h-6 text-indigo-600 group-hover:text-white" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-2">
               Edifícios
@@ -483,7 +483,7 @@ export function Mineracao() {
             <p className="text-sm text-slate-500">
               Navegue pelos bairros e escolha edifícios para minerar apartamentos.
             </p>
-            <div className="flex items-center gap-1 mt-4 text-blue-600 font-medium text-sm">
+            <div className="flex items-center gap-1 mt-4 text-brand font-medium text-sm">
               <Sparkles className="w-4 h-4" />
               Recomendado
             </div>
@@ -492,9 +492,9 @@ export function Mineracao() {
           {/* Opção 2: Por Nome */}
           <button
             onClick={() => setEtapa("por-nome")}
-            className="bg-white p-6 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:shadow-lg transition-all text-left group"
+            className="bg-white p-6 rounded-xl border-2 border-slate-200 hover:border-brand hover:shadow-lg transition-all text-left group"
           >
-            <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-500 transition-colors">
+            <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-brand transition-colors">
               <Search className="w-6 h-6 text-slate-600 group-hover:text-white" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-2">
@@ -508,10 +508,10 @@ export function Mineracao() {
           {/* Opção 3: Condomínios Horizontais */}
           <button
             onClick={() => setEtapa("condominio-horizontal")}
-            className="bg-white p-6 rounded-xl border-2 border-slate-200 hover:border-green-500 hover:shadow-lg transition-all text-left group"
+            className="bg-white p-6 rounded-xl border-2 border-slate-200 hover:border-success hover:shadow-lg transition-all text-left group"
           >
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-500 transition-colors">
-              <Trees className="w-6 h-6 text-green-600 group-hover:text-white" />
+            <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-success transition-colors">
+              <Trees className="w-6 h-6 text-emerald-600 group-hover:text-white" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-2">
               Condomínios de Casas
@@ -519,7 +519,7 @@ export function Mineracao() {
             <p className="text-sm text-slate-500">
               Busque condomínios horizontais (ex: "Jardins Florença", "Alphaville").
             </p>
-            <div className="flex items-center gap-1 mt-4 text-green-600 font-medium text-sm">
+            <div className="flex items-center gap-1 mt-4 text-success font-medium text-sm">
               <Sparkles className="w-4 h-4" />
               Novo!
             </div>
@@ -528,9 +528,9 @@ export function Mineracao() {
           {/* Opção 4: Por IPTU */}
           <button
             onClick={() => setEtapa("por-iptu")}
-            className="bg-white p-6 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:shadow-lg transition-all text-left group"
+            className="bg-white p-6 rounded-xl border-2 border-slate-200 hover:border-brand hover:shadow-lg transition-all text-left group"
           >
-            <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-500 transition-colors">
+            <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-brand transition-colors">
               <Home className="w-6 h-6 text-slate-600 group-hover:text-white" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-2">
@@ -591,7 +591,7 @@ export function Mineracao() {
             Voltar
           </Button>
           <div className="flex items-center gap-2 text-sm text-slate-500">
-            <span className="text-blue-600 font-medium">1. Bairro</span>
+            <span className="text-brand font-medium">1. Bairro</span>
             <ChevronRight className="w-4 h-4" />
             <span>2. Edifício</span>
             <ChevronRight className="w-4 h-4" />
@@ -626,14 +626,14 @@ export function Mineracao() {
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-brand" />
             <span className="ml-3 text-slate-600">Carregando edifícios...</span>
           </div>
         )}
 
         {/* Erro */}
         {erro && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
+          <div className="bg-red-100 text-danger p-4 rounded-lg flex items-center gap-2">
             <AlertCircle className="w-5 h-5" />
             {erro}
           </div>
@@ -685,10 +685,10 @@ export function Mineracao() {
                 <button
                   key={edificio.codigo}
                   onClick={() => handleSelecionarEdificio(edificio)}
-                  className="w-full p-4 text-left hover:bg-blue-50 transition-colors flex items-center justify-between group"
+                  className="w-full p-4 text-left hover:bg-indigo-50 transition-colors flex items-center justify-between group"
                 >
                   <div>
-                    <div className="font-medium text-slate-900 group-hover:text-blue-700">
+                    <div className="font-medium text-slate-900 group-hover:text-brand">
                       {edificio.nome}
                     </div>
                     <div className="text-sm text-slate-500">
@@ -701,7 +701,7 @@ export function Mineracao() {
                         {edificio.totalUnidades} unid.
                       </span>
                     )}
-                    <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-blue-600" />
+                    <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-brand" />
                   </div>
                 </button>
               ))}
@@ -771,7 +771,7 @@ export function Mineracao() {
 
         {/* Erro */}
         {erro && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
+          <div className="bg-red-100 text-danger p-4 rounded-lg flex items-center gap-2">
             <AlertCircle className="w-5 h-5" />
             {erro}
           </div>
@@ -794,17 +794,17 @@ export function Mineracao() {
                 <button
                   key={edificio.codigo}
                   onClick={() => handleSelecionarEdificio(edificio)}
-                  className="w-full p-4 text-left hover:bg-blue-50 transition-colors flex items-center justify-between group"
+                  className="w-full p-4 text-left hover:bg-indigo-50 transition-colors flex items-center justify-between group"
                 >
                   <div>
-                    <div className="font-medium text-slate-900 group-hover:text-blue-700">
+                    <div className="font-medium text-slate-900 group-hover:text-brand">
                       {edificio.nome}
                     </div>
                     <div className="text-sm text-slate-500">
                       {edificio.logradouro}
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-blue-600" />
+                  <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-brand" />
                 </button>
               ))}
             </div>
@@ -839,7 +839,7 @@ export function Mineracao() {
           
           <div className="flex gap-3">
             <div className="relative flex-1">
-              <Trees className="absolute left-3 top-3 h-5 w-5 text-green-500" />
+              <Trees className="absolute left-3 top-3 h-5 w-5 text-emerald-500" />
               <Input
                 placeholder="Digite o nome do condomínio (ex: Jardins, Madri, Alphaville)..."
                 className="pl-10 h-12 text-lg"
@@ -851,7 +851,7 @@ export function Mineracao() {
             <Button 
               onClick={buscarCondominios}
               disabled={loading || termoCondominio.length < 2}
-              className="h-12 px-6 bg-green-600 hover:bg-green-700"
+              className="h-12 px-6 bg-success hover:bg-success-dark"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Buscar"}
             </Button>
@@ -864,7 +864,7 @@ export function Mineracao() {
 
         {/* Erro */}
         {erro && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
+          <div className="bg-red-100 text-danger p-4 rounded-lg flex items-center gap-2">
             <AlertCircle className="w-5 h-5" />
             {erro}
           </div>
@@ -873,7 +873,7 @@ export function Mineracao() {
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-success" />
             <span className="ml-3 text-slate-600">Buscando condomínios...</span>
           </div>
         )}
@@ -881,9 +881,9 @@ export function Mineracao() {
         {/* Resultados da Busca */}
         {condominios.length > 0 && !loading && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-100 bg-green-50">
+            <div className="p-4 border-b border-slate-100 bg-emerald-50">
               <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-                <Trees className="w-5 h-5 text-green-600" />
+                <Trees className="w-5 h-5 text-emerald-600" />
                 {condominios.length} condomínios encontrados
               </h3>
               <p className="text-sm text-slate-500">
@@ -896,14 +896,14 @@ export function Mineracao() {
                 <button
                   key={condominio.codigo}
                   onClick={() => carregarCasasPorCondominio(condominio)}
-                  className="w-full p-4 text-left hover:bg-green-50 transition-colors flex items-center justify-between group"
+                  className="w-full p-4 text-left hover:bg-emerald-50 transition-colors flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                      <Trees className="w-5 h-5 text-green-600" />
+                    <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                      <Trees className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div>
-                      <div className="font-medium text-slate-900 group-hover:text-green-700">
+                      <div className="font-medium text-slate-900 group-hover:text-success">
                         {condominio.nome}
                       </div>
                       <div className="text-xs text-slate-400">
@@ -911,7 +911,7 @@ export function Mineracao() {
                       </div>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-green-600" />
+                  <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-success" />
                 </button>
               ))}
             </div>
@@ -982,7 +982,7 @@ export function Mineracao() {
 
         {/* Erro */}
         {erro && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
+          <div className="bg-red-100 text-danger p-4 rounded-lg flex items-center gap-2">
             <AlertCircle className="w-5 h-5" />
             {erro}
           </div>
@@ -1034,7 +1034,7 @@ export function Mineracao() {
 
         {/* Erro */}
         {erro && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
+          <div className="bg-red-100 text-danger p-4 rounded-lg flex items-center gap-2">
             <AlertCircle className="w-5 h-5" />
             {erro}
           </div>
@@ -1068,14 +1068,14 @@ export function Mineracao() {
           <div className="flex items-center gap-2 text-sm">
             <span className="text-slate-500">{bairroSelecionado?.nome || "Busca"}</span>
             <ChevronRight className="w-4 h-4 text-slate-400" />
-            <span className="text-blue-600 font-medium">{edificioSelecionado.nome}</span>
+            <span className="text-brand font-medium">{edificioSelecionado.nome}</span>
           </div>
         )}
         
         {condominioSelecionado && (
           <div className="flex items-center gap-2 text-sm">
-            <Trees className="w-4 h-4 text-green-600" />
-            <span className="text-green-600 font-medium">{condominioSelecionado.nome}</span>
+            <Trees className="w-4 h-4 text-emerald-600" />
+            <span className="text-success font-medium">{condominioSelecionado.nome}</span>
           </div>
         )}
         
@@ -1107,7 +1107,7 @@ export function Mineracao() {
             {condominioSelecionado?.nome || edificioSelecionado?.nome || enderecoAtual || unidades[0]?.nmedificio || "Imóveis Encontrados"}
           </h1>
         </div>
-        <p className={`${enderecoAtual ? 'text-orange-100' : 'text-blue-100'}`}>
+        <p className={`${enderecoAtual ? 'text-orange-100' : 'text-indigo-100'}`}>
           {enderecoAtual 
             ? `${unidades.filter(u => u.tipo === 'casa').length} casas e ${unidades.filter(u => u.tipo === 'apartamento').length} apartamentos encontrados`
             : `${unidades[0]?.nmlogradou}, ${unidades[0]?.nmbairro}`
@@ -1117,7 +1117,7 @@ export function Mineracao() {
 
       {/* Erro */}
       {erro && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center gap-2">
+        <div className="bg-red-100 text-danger p-4 rounded-lg flex items-center gap-2">
           <AlertCircle className="w-5 h-5" />
           {erro}
         </div>
@@ -1126,7 +1126,7 @@ export function Mineracao() {
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-brand" />
           <span className="ml-3 text-slate-600">Carregando unidades...</span>
         </div>
       )}
@@ -1140,7 +1140,7 @@ export function Mineracao() {
                 {unidades.length} de {paginacao.total > 0 ? paginacao.total : unidades.length} unidades
               </span>
               <span className="text-slate-400">|</span>
-              <span className="text-blue-600 font-medium">
+              <span className="text-brand font-medium">
                 {selecionados.length} selecionadas
               </span>
             </div>
@@ -1151,7 +1151,7 @@ export function Mineracao() {
                 className="flex items-center gap-2 cursor-pointer group"
                 title="Pula a etapa de revisão e executa automaticamente"
               >
-                <span className={`text-xs font-medium transition-colors ${modoTurbo ? 'text-yellow-700' : 'text-slate-500'}`}>
+                <span className={`text-xs font-medium transition-colors ${modoTurbo ? 'text-amber-700' : 'text-slate-500'}`}>
                   Modo Turbo
                 </span>
                 <button
@@ -1159,7 +1159,7 @@ export function Mineracao() {
                   onClick={() => setModoTurbo(!modoTurbo)}
                   className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 ${
                     modoTurbo 
-                      ? 'bg-yellow-500' 
+                      ? 'bg-warning' 
                       : 'bg-slate-300 hover:bg-slate-400'
                   }`}
                 >
@@ -1168,7 +1168,7 @@ export function Mineracao() {
                       modoTurbo ? 'translate-x-4' : 'translate-x-0'
                     }`}
                   >
-                    {modoTurbo && <Zap className="w-2.5 h-2.5 text-yellow-500" />}
+                    {modoTurbo && <Zap className="w-2.5 h-2.5 text-amber-500" />}
                   </span>
                 </button>
               </label>
@@ -1177,8 +1177,8 @@ export function Mineracao() {
                 onClick={handleProcessar}
                 disabled={selecionados.length === 0}
                 className={modoTurbo 
-                  ? "bg-yellow-500 hover:bg-yellow-600 text-yellow-900" 
-                  : "bg-green-600 hover:bg-green-700"
+                  ? "bg-warning hover:bg-amber-600 text-amber-900" 
+                  : "bg-success hover:bg-success-dark"
                 }
               >
                 {modoTurbo && <Zap className="w-4 h-4 mr-2" />}
@@ -1192,9 +1192,9 @@ export function Mineracao() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[50px]">
-                  <button onClick={toggleTodos} className="hover:text-blue-600">
+                  <button onClick={toggleTodos} className="hover:text-brand">
                     {selecionados.length === unidades.length && unidades.length > 0 ? (
-                      <CheckSquare className="w-5 h-5 text-blue-600" />
+                      <CheckSquare className="w-5 h-5 text-brand" />
                     ) : (
                       <Square className="w-5 h-5 text-slate-400" />
                     )}
@@ -1220,12 +1220,12 @@ export function Mineracao() {
                 return (
                   <TableRow
                     key={item.nrinscr}
-                    className={`hover:bg-blue-50 cursor-pointer ${isSelected ? "bg-blue-50/50" : ""}`}
+                    className={`hover:bg-indigo-50 cursor-pointer ${isSelected ? "bg-indigo-50/50" : ""}`}
                     onClick={() => toggleSelecao(item.nrinscr)}
                   >
                     <TableCell>
                       {isSelected ? (
-                        <CheckSquare className="w-5 h-5 text-blue-600" />
+                        <CheckSquare className="w-5 h-5 text-brand" />
                       ) : (
                         <Square className="w-5 h-5 text-slate-300" />
                       )}
@@ -1233,7 +1233,7 @@ export function Mineracao() {
                     <TableCell>
                       <span className={`px-2 py-1 rounded font-medium ${
                         condominioSelecionado 
-                          ? 'bg-green-100 text-green-700' 
+                          ? 'bg-emerald-100 text-emerald-700' 
                           : enderecoAtual && isCasa
                             ? 'bg-orange-100 text-orange-700'
                             : 'bg-slate-100 text-slate-700'
@@ -1252,7 +1252,7 @@ export function Mineracao() {
                         : enderecoAtual
                           ? (
                             <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                              isCasa ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'
+                              isCasa ? 'bg-orange-50 text-orange-600' : 'bg-indigo-50 text-brand'
                             }`}>
                               {isCasa ? '🏠 Casa' : '🏢 Apto'}
                             </span>

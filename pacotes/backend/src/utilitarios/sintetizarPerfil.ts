@@ -188,14 +188,23 @@ export function sintetizarPerfilRAG(perfil: PerfilImobiliaria): string {
     // Comissão
     secoes.push(`- Comissão padrão: ${venda.comissaoPadrao}% sobre o valor de venda.`);
     
-    // Exclusividade — Reframing: exclusividade = rede de parceiros, NÃO limitação
+    // Exclusividade — Reframing: gestão de venda + compartilhamento ativo
     if (venda.aceitaExclusividade) {
-      secoes.push(`- Nosso modelo de exclusividade é diferente do mercado: o imóvel fica disponível para todos os corretores e imobiliárias da cidade que quiserem trabalhar a venda, com coordenação centralizada pela nossa equipe.`);
-      secoes.push(`- ⚠️ JAMAIS diga "trabalhamos sem exclusividade" ou "exclusividade é opcional". Quando o proprietário perguntar sobre exclusividade, primeiro pergunte: "O que você entende por exclusividade?" — depois mostre que no nosso modelo exclusividade significa AMPLIAR alcance, não limitar.`);
+      secoes.push(`- ⚠️ REGRA FUNDAMENTAL SOBRE EXCLUSIVIDADE: Quando o proprietário citar "exclusividade", NUNCA explique de cara. AJA EM 2 PASSOS.`);
+      secoes.push(`  Passo 1: Pergunte "O que você entende por exclusividade hoje?" e aguarde ele responder.`);
+      secoes.push(`  Passo 2: Após a resposta, foque direto na dor dele (o medo de ficar preso). Diga: "Ao invés de UMA empresa trabalhando, a gente compartilha sua venda com TODOS os corretores da cidade. O contrato de Gestão existe apenas porque arcamos com os custos iniciais e só recebemos no sucesso. Ele garante nosso investimento, não prende você a um corretor só."`);
+      
+      secoes.push(`- ⚠️ OBJEÇÃO "VÁRIOS CORRETORES / POUCAS VISITAS": Se o cliente disser que prefere deixar com várias imobiliárias, ou reclamar que já tem vários mas quase não tem visita, use o 'Dilema do Carona' para explicar a causa. Diga que se ele deixa solto, nenhum corretor investe dinheiro em tráfego ou fotos profissionais por medo de outro corretor vender rápido e pegar carona no investimento. O imóvel fica sem marketing. Com a nossa gestão, nós bancamos 100% do marketing pesado, protegemos nossa operação através da gestão, e ainda assim acionamos toda a rede para vender.`);
+
+      secoes.push(`- ⚠️ REGRA INQUEBRÁVEL (E SE EU VENDER SOZINHO?): Se ele perguntar se pode vender sozinho sem pagar caso encontre o comprador, NUNCA autorize trabalho gratuito. Diga: "Se você contrata a gente pra fazer tudo e assumir o risco do investimento, o lógico é que se achar um cliente, você repassa pra nós resolvermos a burocracia e garantirmos o pagamento de ponta a ponta. Como na analogia de uma reforma com os empreiteiros: ele cobrará pela reforma mesmo se você for lá na obra lavar as ferramentas dele, certo? Nós somos a sua gestora imobiliária, a comissão continua sendo paga integralmente na venda final sob nossa responsabilidade de execução de papelada."`);
     } else {
       secoes.push(`- Não trabalhamos com contratos de exclusividade.`);
       secoes.push(`- O proprietário fica livre para anunciar em outros lugares.`);
     }
+
+    secoes.push(`- Prazo do Contrato Padrão: 180 dias.`);
+    secoes.push(`  (Se questionado por que 180 dias: Responda de forma simples que este tempo foi definido após estudos comprovarem que a média de tempo de venda de um apartamento na Quadra Dois gira em 180 dias. Reforce que essa média está muito abaixo da média nacional de vendas no mercado imobiliário, indicando alta velocidade na gestão. Não trata-se de prender, e sim de tempo técnico).`);
+    
     
     // Serviços inclusos
     const servicosInclusos: string[] = [];

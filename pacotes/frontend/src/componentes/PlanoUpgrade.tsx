@@ -29,9 +29,9 @@ const PLANOS: Record<PlanoTipo, PlanoInfo> = {
     STARTER: {
         nome: "Starter",
         icone: Zap,
-        cor: "text-blue-500",
-        corBg: "bg-blue-500/10",
-        corBorder: "border-blue-500/30",
+        cor: "text-indigo-500",
+        corBg: "bg-brand/10",
+        corBorder: "border-brand/30",
         creditosMensais: 0,
         custoPorCredito: 2.0,
     },

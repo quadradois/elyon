@@ -122,7 +122,7 @@ export function ChatModal({ lead, open, onOpenChange }: ChatProps) {
                     <div
                       className={`max-w-[80%] rounded-lg p-3 text-sm ${
                         msg.papel === "ASSISTENTE" || msg.papel === "SISTEMA"
-                          ? "bg-blue-600 text-white rounded-br-none"
+                          ? "bg-brand text-white rounded-br-none"
                           : "bg-white border border-slate-200 text-slate-800 rounded-bl-none"
                       }`}
                     >
@@ -152,7 +152,7 @@ export function ChatModal({ lead, open, onOpenChange }: ChatProps) {
                       <span
                         className={`text-[10px] block mt-1 text-right ${
                           msg.papel === "ASSISTENTE"
-                            ? "text-blue-100"
+                            ? "text-indigo-100"
                             : "text-slate-400"
                         }`}
                       >

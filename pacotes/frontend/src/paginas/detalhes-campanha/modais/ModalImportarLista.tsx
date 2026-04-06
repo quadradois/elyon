@@ -42,7 +42,7 @@ export function ModalImportarLista({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <List className="w-5 h-5 text-purple-600" />
+            <List className="w-5 h-5 text-violet-600" />
             Importar de Lista
           </DialogTitle>
           <DialogDescription>
@@ -53,7 +53,7 @@ export function ModalImportarLista({
         <div className="py-4">
           {carregandoListas ? (
             <div className="flex items-center justify-center h-32">
-              <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+              <Loader2 className="w-6 h-6 animate-spin text-violet-600" />
             </div>
           ) : listas.length === 0 ? (
             <div className="text-center py-8 text-slate-500">
@@ -77,7 +77,7 @@ export function ModalImportarLista({
                       onClick={() => onListaSelect(lista.id)}
                       className={`w-full text-left p-4 rounded-lg border transition-all ${
                         listaSelecionada === lista.id
-                          ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-200'
+                          ? 'border-purple-500 bg-violet-50 ring-2 ring-violet-200'
                           : 'border-slate-200 hover:border-purple-300 hover:bg-slate-50'
                       }`}
                     >
@@ -87,7 +87,7 @@ export function ModalImportarLista({
                           <p className="text-sm text-slate-500">{lista.nomeEdificio}</p>
                         </div>
                         {listaSelecionada === lista.id && (
-                          <CheckCircle2 className="w-5 h-5 text-purple-600" />
+                          <CheckCircle2 className="w-5 h-5 text-violet-600" />
                         )}
                       </div>
                       <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
@@ -96,7 +96,7 @@ export function ModalImportarLista({
                           {disponiveis} disponíveis
                         </span>
                         {lista.totalComWhatsapp > 0 && (
-                          <span className="flex items-center gap-1 text-green-600">
+                          <span className="flex items-center gap-1 text-emerald-600">
                             <MessageSquare className="w-3 h-3" />
                             {lista.totalComWhatsapp} WhatsApp
                           </span>
@@ -117,7 +117,7 @@ export function ModalImportarLista({
           <Button 
             onClick={onImportar} 
             disabled={!listaSelecionada || importandoDeLista}
-            className="bg-purple-600 hover:bg-purple-700"
+            className="bg-violet-600 hover:bg-violet-700"
           >
             {importandoDeLista ? (
               <>

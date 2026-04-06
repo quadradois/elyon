@@ -106,14 +106,14 @@ export function MeusAgentes() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Bot className="w-7 h-7 text-blue-600" />
+            <Bot className="w-7 h-7 text-brand" />
             Meus Agentes
           </h1>
           <p className="text-slate-500">Gerencie seus assistentes virtuais</p>
         </div>
         <Button
           onClick={() => navigate("/dashboard/agente/novo")}
-          className="bg-blue-600 hover:bg-blue-700"
+          className="bg-brand hover:bg-brand-dark"
         >
           <Plus className="w-4 h-4 mr-2" />
           Novo Agente
@@ -122,13 +122,13 @@ export function MeusAgentes() {
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-brand" />
         </div>
       ) : agentes.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-              <Bot className="w-8 h-8 text-blue-600" />
+            <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mb-4">
+              <Bot className="w-8 h-8 text-brand" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900">
               Nenhum agente encontrado
@@ -169,7 +169,7 @@ export function MeusAgentes() {
                   </div>
                   <Badge
                     variant={agente.estaAtivo ? "default" : "secondary"}
-                    className={agente.estaAtivo ? "bg-green-600" : ""}
+                    className={agente.estaAtivo ? "bg-success" : ""}
                   >
                     {agente.status}
                   </Badge>

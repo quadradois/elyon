@@ -233,9 +233,9 @@ export function SessoesWhatsapp() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "CONECTADO":
-        return "bg-green-100 text-green-700 border-green-200";
+        return "bg-emerald-100 text-emerald-700 border-emerald-200";
       case "CONECTANDO":
-        return "bg-yellow-100 text-yellow-700 border-yellow-200";
+        return "bg-amber-100 text-amber-700 border-amber-200";
       case "ERRO":
         return "bg-red-100 text-red-700 border-red-200";
       default:
@@ -248,7 +248,7 @@ export function SessoesWhatsapp() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Smartphone className="w-7 h-7 text-green-600" />
+            <Smartphone className="w-7 h-7 text-emerald-600" />
             Sessões WhatsApp
           </h1>
           <p className="text-slate-500">
@@ -257,7 +257,7 @@ export function SessoesWhatsapp() {
         </div>
         <Button
           onClick={() => setModalCriarOpen(true)}
-          className="bg-green-600 hover:bg-green-700"
+          className="bg-success hover:bg-success-dark"
         >
           <Plus className="w-4 h-4 mr-2" />
           Nova Sessão
@@ -266,13 +266,13 @@ export function SessoesWhatsapp() {
 
       {loading ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
         </div>
       ) : sessoes.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-4">
-              <Smartphone className="w-8 h-8 text-green-600" />
+            <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mb-4">
+              <Smartphone className="w-8 h-8 text-emerald-600" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900">
               Nenhuma sessão encontrada
@@ -314,13 +314,13 @@ export function SessoesWhatsapp() {
               <CardContent className="pt-4 space-y-4">
                 {/* Info do número conectado */}
                 {sessao.status === "CONECTADO" && sessao.numeroWhatsapp && (
-                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-100">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                      <Smartphone className="w-5 h-5 text-green-600" />
+                  <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                    <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <Smartphone className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div>
-                      <p className="font-semibold text-green-800">{sessao.nomeWhatsapp || "WhatsApp"}</p>
-                      <p className="text-sm text-green-600">+{sessao.numeroWhatsapp}</p>
+                      <p className="font-semibold text-emerald-800">{sessao.nomeWhatsapp || "WhatsApp"}</p>
+                      <p className="text-sm text-emerald-600">+{sessao.numeroWhatsapp}</p>
                     </div>
                   </div>
                 )}
@@ -372,7 +372,7 @@ export function SessoesWhatsapp() {
                     </Button>
                   ) : (
                     <Button
-                      className="flex-1 bg-green-600 hover:bg-green-700"
+                      className="flex-1 bg-success hover:bg-success-dark"
                       onClick={() => conectarSessao(sessao.id)}
                       disabled={sessaoConectando === sessao.id}
                     >

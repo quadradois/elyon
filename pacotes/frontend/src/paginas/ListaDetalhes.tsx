@@ -194,7 +194,7 @@ export default function ListaDetalhes() {
   if (carregando && !lista) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand" />
       </div>
     );
   }
@@ -224,8 +224,8 @@ export default function ListaDetalhes() {
             Voltar para Listas
           </Button>
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-brand" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">{lista.nome}</h1>
@@ -265,8 +265,8 @@ export default function ListaDetalhes() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Phone className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <Phone className="w-5 h-5 text-brand" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-slate-900">{lista.totalEnriquecidos}</p>
@@ -279,8 +279,8 @@ export default function ListaDetalhes() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <MessageCircle className="w-5 h-5 text-green-600" />
+              <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <MessageCircle className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-slate-900">{lista.totalComWhatsapp}</p>
@@ -293,8 +293,8 @@ export default function ListaDetalhes() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-purple-600" />
+              <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-violet-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-slate-900">{lista.totalUsados}</p>
@@ -316,7 +316,7 @@ export default function ListaDetalhes() {
               </CardDescription>
             </div>
             {contatosSelecionados.size > 0 && (
-              <div className="text-sm text-blue-600 font-medium">
+              <div className="text-sm text-brand font-medium">
                 {contatosSelecionados.size} selecionado(s)
               </div>
             )}
@@ -395,7 +395,7 @@ export default function ListaDetalhes() {
                     </td>
                     <td className="py-3 px-2 text-center">
                       {contato.temWhatsapp ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">
                           <MessageCircle className="w-3 h-3" />
                           {contato.quantidadeWhatsapp}
                         </span>
@@ -405,7 +405,7 @@ export default function ListaDetalhes() {
                     </td>
                     <td className="py-3 px-2 text-center">
                       {contato.usadoEmCampanha ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-100 px-2 py-1 rounded-full">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 bg-indigo-100 px-2 py-1 rounded-full">
                           <Check className="w-3 h-3" />
                           Usado
                         </span>
@@ -453,7 +453,7 @@ export default function ListaDetalhes() {
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Target className="w-5 h-5 text-blue-600" />
+              <Target className="w-5 h-5 text-brand" />
               Adicionar à Campanha
             </DialogTitle>
             <DialogDescription>
@@ -471,7 +471,7 @@ export default function ListaDetalhes() {
             <select
               value={campanhaSelecionada}
               onChange={(e) => setCampanhaSelecionada(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand focus:border-brand"
               title="Selecione a campanha"
             >
               <option value="">Selecione uma campanha...</option>

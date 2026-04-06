@@ -168,9 +168,9 @@ export function UploadDocumentos({
   const getIconeStatus = (status: DocumentoUpload['status']) => {
     switch (status) {
       case 'enviando':
-        return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
+        return <Loader2 className="w-4 h-4 animate-spin text-brand" />;
       case 'sucesso':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
+        return <CheckCircle className="w-4 h-4 text-emerald-500" />;
       case 'erro':
         return <AlertCircle className="w-4 h-4 text-red-500" />;
       default:
@@ -189,7 +189,7 @@ export function UploadDocumentos({
         className={cn(
           "border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all",
           arrastando 
-            ? "border-blue-500 bg-blue-50" 
+            ? "border-brand bg-indigo-50" 
             : "border-slate-200 hover:border-slate-300 hover:bg-slate-50",
           disabled && "opacity-50 cursor-not-allowed"
         )}
@@ -209,11 +209,11 @@ export function UploadDocumentos({
         <div className="flex flex-col items-center gap-3">
           <div className={cn(
             "w-14 h-14 rounded-full flex items-center justify-center",
-            arrastando ? "bg-blue-100" : "bg-slate-100"
+            arrastando ? "bg-indigo-100" : "bg-slate-100"
           )}>
             <FileUp className={cn(
               "w-7 h-7",
-              arrastando ? "text-blue-600" : "text-slate-400"
+              arrastando ? "text-brand" : "text-slate-400"
             )} />
           </div>
           
@@ -244,7 +244,7 @@ export function UploadDocumentos({
                   doc.status === 'erro' 
                     ? "bg-red-50 border-red-200" 
                     : doc.status === 'sucesso'
-                      ? "bg-green-50 border-green-200"
+                      ? "bg-emerald-50 border-emerald-200"
                       : "bg-white border-slate-200"
                 )}
               >

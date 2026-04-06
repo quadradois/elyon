@@ -783,6 +783,33 @@ model Lead {
   ocupacaoImovel  String? // "ocupado", "vazio"
   interesseEm     String? // "vender", "alugar", "ambos"
 
+  // Imóvel Assertiva (migrado do Contato na promoção)
+  bairroImovel    String? // Bairro do imóvel
+  nomeEdificio    String? // Nome do empreendimento/condomínio
+  inscricaoIptu   String? // Inscrição IPTU
+  valorVenal      String? // Valor venal (IPTU)
+
+  // Dados Pessoais Assertiva (migrado do Contato na promoção)
+  idade           Int?    // Idade do proprietário
+  sexo            String? // Masculino, Feminino
+  rendaEstimada   String? // Renda estimada em string
+  faixaSalarial   String? // Faixa salarial descritiva
+  scoreAssertiva  Int?    // Score Assertiva 0-100
+
+  // Dados Profissionais (migrado do Contato na promoção)
+  empresaAtual    String?
+  cnpjEmpresa     String?
+  profissao       String?
+  setor           String?
+
+  // Múctiplos Contatos (migrado do Contato na promoção)
+  telefone2       String?
+  telefone3       String?
+  email2          String?
+
+  // Briefing IA (gerado no handoff Presenter → Closer)
+  briefingCloser  String? @db.Text
+
   // estado de coleta de dados IA/SDR (JSON livre)
   schemaState Json?
 

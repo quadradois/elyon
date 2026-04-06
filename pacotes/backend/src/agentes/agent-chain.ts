@@ -122,7 +122,9 @@ export function determinarAgente(statusLead?: string, contatoId?: string, agente
 
 export const MAPA_NOMES_AGENTES: Record<string, TipoAgente> = {
     'opener_agent_v11': 'OPENER',
+    'opener_agent_v12': 'OPENER',
     'presenter_agent_v4': 'PRESENTER',
+    'presenter_agent_v5': 'PRESENTER',
     'closer_agent_v5': 'PRESENTER',
     'admin_agent_v4': 'ADMIN',
     'knowledge_agent': 'OPENER' // Redireciona para o inicial se por acaso ele responder por último

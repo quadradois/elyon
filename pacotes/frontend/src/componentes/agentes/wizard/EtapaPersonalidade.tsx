@@ -55,7 +55,7 @@ export function EtapaPersonalidade({ dados, setDados }: WizardEtapaProps) {
                 className={cn(
                   "p-6 rounded-xl border-2 text-left transition-all",
                   dados.personalidade.tom === tom.id
-                    ? "border-blue-600 bg-blue-50 ring-2 ring-blue-200"
+                    ? "border-brand bg-indigo-50 ring-2 ring-indigo-200"
                     : "border-slate-200 hover:border-slate-300"
                 )}
               >
@@ -85,7 +85,7 @@ export function EtapaPersonalidade({ dados, setDados }: WizardEtapaProps) {
             })}
             className={cn(
               "w-14 h-8 rounded-full transition-all relative",
-              dados.personalidade.usarEmojis ? "bg-blue-600" : "bg-slate-300"
+              dados.personalidade.usarEmojis ? "bg-brand" : "bg-slate-300"
             )}
           >
             <span 
@@ -103,7 +103,7 @@ export function EtapaPersonalidade({ dados, setDados }: WizardEtapaProps) {
             <MessageSquare className="w-4 h-4" />
             Preview da Saudação
           </label>
-          <div className="p-4 bg-green-50 border border-green-100 rounded-lg">
+          <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-lg">
             <p className="text-sm text-slate-700">
               {gerarSaudacao(dados)}
             </p>

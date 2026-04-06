@@ -105,17 +105,17 @@ function formatarData(data: string | null): string {
 
 function getStatusBadge(status: string): { label: string; className: string } {
   const badges: Record<string, { label: string; className: string }> = {
-    NOVO: { label: "Novo", className: "bg-blue-100 text-blue-700 border-blue-200" },
+    NOVO: { label: "Novo", className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
     TENTATIVA_AGENDAMENTO: { label: "Tentando Agendar", className: "bg-sky-100 text-sky-700 border-sky-200" },
     VISITA_AGENDADA: { label: "Visita Marcada", className: "bg-amber-100 text-amber-700 border-amber-200" },
-    AVALIACAO_EM_ANDAMENTO: { label: "Avaliação/Fotos", className: "bg-purple-100 text-purple-700 border-purple-200" },
+    AVALIACAO_EM_ANDAMENTO: { label: "Avaliação/Fotos", className: "bg-violet-100 text-violet-700 border-violet-200" },
     DOCUMENTACAO: { label: "Documentação", className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-    CAPTADO: { label: "Captado", className: "bg-green-100 text-green-700 border-green-200" },
+    CAPTADO: { label: "Captado", className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
     PERDIDO: { label: "Perdido", className: "bg-red-100 text-red-700 border-red-200" },
     ARQUIVADO: { label: "Arquivado", className: "bg-gray-100 text-gray-700 border-gray-200" },
     // Legado
     CONTATANDO: { label: "Tentando Agendar", className: "bg-sky-100 text-sky-700 border-sky-200" },
-    QUALIFICADO: { label: "Novo", className: "bg-blue-100 text-blue-700 border-blue-200" },
+    QUALIFICADO: { label: "Novo", className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
     EM_NEGOCIACAO: { label: "Documentação", className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
   };
   return badges[status] || { label: status, className: "bg-gray-100 text-gray-700" };
@@ -124,8 +124,8 @@ function getStatusBadge(status: string): { label: string; className: string } {
 function getTemperaturaBadge(temp: string | null): { label: string; className: string } {
   const badges: Record<string, { label: string; className: string }> = {
     QUENTE: { label: "🔥 Quente", className: "bg-red-50 text-red-600 border-red-200" },
-    MORNO: { label: "⚡ Morno", className: "bg-yellow-50 text-yellow-600 border-yellow-200" },
-    FRIO: { label: "❄️ Frio", className: "bg-blue-50 text-blue-600 border-blue-200" },
+    MORNO: { label: "⚡ Morno", className: "bg-amber-50 text-amber-600 border-amber-200" },
+    FRIO: { label: "❄️ Frio", className: "bg-indigo-50 text-brand border-indigo-200" },
   };
   return badges[temp || ""] || { label: "-", className: "" };
 }
@@ -287,8 +287,8 @@ export function Leads() {
                 <p className="text-sm font-medium text-gray-500">Total de Leads</p>
                 <p className="text-2xl font-bold text-gray-900">{estatisticas.total}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                <Users className="h-6 w-6 text-blue-600" />
+              <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center">
+                <Users className="h-6 w-6 text-brand" />
               </div>
             </div>
           </CardContent>
@@ -315,8 +315,8 @@ export function Leads() {
                 <p className="text-sm font-medium text-gray-500">Agendamentos Hoje</p>
                 <p className="text-2xl font-bold text-gray-900">{estatisticas.agendamentosHoje}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                <Calendar className="h-6 w-6 text-green-600" />
+              <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center">
+                <Calendar className="h-6 w-6 text-emerald-600" />
               </div>
             </div>
           </CardContent>
@@ -329,8 +329,8 @@ export function Leads() {
                 <p className="text-sm font-medium text-gray-500">Novos Hoje</p>
                 <p className="text-2xl font-bold text-gray-900">{estatisticas.novosHoje}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-purple-600" />
+              <div className="h-12 w-12 rounded-full bg-violet-100 flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-violet-600" />
               </div>
             </div>
           </CardContent>
@@ -362,7 +362,7 @@ export function Leads() {
                   <Filter className="h-4 w-4 mr-2" />
                   Filtros
                   {temFiltrosAtivos && (
-                    <span className="ml-2 h-2 w-2 rounded-full bg-blue-500" />
+                    <span className="ml-2 h-2 w-2 rounded-full bg-brand" />
                   )}
                 </Button>
 
@@ -434,7 +434,7 @@ export function Leads() {
         <div className="overflow-hidden">
           {loading ? (
             <div className="flex justify-center items-center h-64">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <Loader2 className="w-8 h-8 animate-spin text-brand" />
             </div>
           ) : (
             <KanbanLeads leads={leadsFiltrados} onLeadUpdate={carregarDados} />
@@ -444,7 +444,7 @@ export function Leads() {
         <Card>
           {loading ? (
             <CardContent className="flex justify-center items-center h-64">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <Loader2 className="w-8 h-8 animate-spin text-brand" />
             </CardContent>
           ) : leadsFiltrados.length === 0 ? (
             <CardContent className="p-12 flex flex-col items-center justify-center">
@@ -497,7 +497,7 @@ export function Leads() {
                         <TableCell>
                           <div className="font-medium text-gray-900">{nome}</div>
                           {lead.proximaAtividade && (
-                            <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                            <div className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
                               {lead.proximaAtividade.tipo} - {formatarData(lead.proximaAtividade.dataAgendada)}
                             </div>

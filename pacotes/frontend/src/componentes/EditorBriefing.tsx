@@ -329,9 +329,9 @@ export function EditorBriefing({
         <div className="flex items-center gap-3">
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
             confiabilidade >= 0.8 
-              ? 'bg-green-100 text-green-700 border border-green-200' 
+              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
               : confiabilidade >= 0.5 
-                ? 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                ? 'bg-amber-100 text-amber-700 border border-amber-200'
                 : 'bg-red-100 text-red-700 border border-red-200'
           }`}>
             {confiabilidade >= 0.8 ? (
@@ -361,7 +361,7 @@ export function EditorBriefing({
           <Button
             onClick={salvar}
             disabled={salvando}
-            className="bg-green-600 hover:bg-green-700 text-white"
+            className="bg-success hover:bg-success-dark text-white"
           >
             {salvando ? (
               <>
@@ -392,7 +392,7 @@ export function EditorBriefing({
               onClick={() => setAbaAtiva(id as any)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                 abaAtiva === id
-                  ? 'border-blue-600 text-blue-600 bg-blue-50/50'
+                  ? 'border-brand text-brand bg-indigo-50/50'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >
@@ -412,7 +412,7 @@ export function EditorBriefing({
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Info className="w-5 h-5 text-blue-600" />
+                  <Info className="w-5 h-5 text-brand" />
                   Resumo para SDR
                 </CardTitle>
                 <CardDescription>
@@ -421,7 +421,7 @@ export function EditorBriefing({
               </CardHeader>
               <CardContent>
                 <textarea
-                  className="w-full h-32 p-3 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none resize-none"
+                  className="w-full h-32 p-3 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none resize-none"
                   value={resumo}
                   onChange={(e) => setResumo(e.target.value)}
                   placeholder="Escreva um resumo completo do empreendimento incluindo localização, preços, diferenciais, lazer do condomínio..."
@@ -445,7 +445,7 @@ export function EditorBriefing({
                     </label>
                     <input
                       type="text"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                       value={briefing.nome_empreendimento || ''}
                       onChange={(e) => setBriefing(prev => ({ ...prev, nome_empreendimento: e.target.value }))}
                       placeholder="Ex: Reserva Buriti"
@@ -456,7 +456,7 @@ export function EditorBriefing({
                       Tipo de Imóvel
                     </label>
                     <select
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                       value={briefing.tipo_imovel || 'Apartamento'}
                       onChange={(e) => setBriefing(prev => ({ ...prev, tipo_imovel: e.target.value }))}
                       title="Tipo de Imóvel"
@@ -476,7 +476,7 @@ export function EditorBriefing({
                   </label>
                   <input
                     type="text"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                     value={briefing.localizacao_completa || ''}
                     onChange={(e) => setBriefing(prev => ({ ...prev, localizacao_completa: e.target.value }))}
                     placeholder="Ex: Vila Rosa, Goiânia - GO"
@@ -495,7 +495,7 @@ export function EditorBriefing({
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                     value={novaCaracteristica}
                     onChange={(e) => setNovaCaracteristica(e.target.value)}
                     placeholder="Ex: 2 quartos com 1 suíte"
@@ -541,7 +541,7 @@ export function EditorBriefing({
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                     value={novoDiferencial}
                     onChange={(e) => setNovoDiferencial(e.target.value)}
                     placeholder="Ex: Vista para área verde"
@@ -558,10 +558,10 @@ export function EditorBriefing({
                   {(briefing.diferenciais || []).map((dif, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between p-2 bg-green-50 border border-green-100 rounded-lg"
+                      className="flex items-center justify-between p-2 bg-emerald-50 border border-emerald-100 rounded-lg"
                     >
-                      <span className="flex items-center gap-2 text-sm text-green-800">
-                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      <span className="flex items-center gap-2 text-sm text-emerald-800">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                         {dif}
                       </span>
                       <button
@@ -585,7 +585,7 @@ export function EditorBriefing({
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-green-600" />
+                  <DollarSign className="w-5 h-5 text-emerald-600" />
                   Faixa de Preço
                 </CardTitle>
                 <CardDescription>
@@ -600,7 +600,7 @@ export function EditorBriefing({
                     </label>
                     <input
                       type="number"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                       value={briefing.faixa_preco?.min || 0}
                       onChange={(e) => updateFaixaPreco('min', parseInt(e.target.value) || 0)}
                       placeholder="280000"
@@ -612,7 +612,7 @@ export function EditorBriefing({
                     </label>
                     <input
                       type="number"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                       value={briefing.faixa_preco?.max || 0}
                       onChange={(e) => updateFaixaPreco('max', parseInt(e.target.value) || 0)}
                       placeholder="380000"
@@ -622,8 +622,8 @@ export function EditorBriefing({
                 
                 {/* Preview da faixa */}
                 {(briefing.faixa_preco?.min || briefing.faixa_preco?.max) && (
-                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                    <div className="flex items-center gap-2 text-green-800">
+                  <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
+                    <div className="flex items-center gap-2 text-emerald-800">
                       <DollarSign className="w-5 h-5" />
                       <span className="font-semibold">
                         {formatarPreco(briefing.faixa_preco?.min || 0)} - {formatarPreco(briefing.faixa_preco?.max || 0)}
@@ -646,7 +646,7 @@ export function EditorBriefing({
                     <div key={idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
                       <input
                         type="text"
-                        className="w-24 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        className="w-24 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-brand focus:outline-none"
                         value={m.area || ''}
                         onChange={(e) => {
                           const novas = [...(briefing.metragens || [])];
@@ -657,7 +657,7 @@ export function EditorBriefing({
                       />
                       <input
                         type="number"
-                        className="w-16 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        className="w-16 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-brand focus:outline-none"
                         value={m.quartos || ''}
                         onChange={(e) => {
                           const novas = [...(briefing.metragens || [])];
@@ -669,7 +669,7 @@ export function EditorBriefing({
                       <span className="text-xs text-slate-500">quartos</span>
                       <input
                         type="number"
-                        className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-brand focus:outline-none"
                         value={m.preco_medio || ''}
                         onChange={(e) => {
                           const novas = [...(briefing.metragens || [])];
@@ -728,7 +728,7 @@ export function EditorBriefing({
                     </label>
                     <input
                       type="text"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                       value={briefing.localizacao_detalhes?.bairro || ''}
                       onChange={(e) => updateLocalizacao('bairro', e.target.value)}
                       placeholder="Vila Rosa"
@@ -739,7 +739,7 @@ export function EditorBriefing({
                       Característica do Bairro
                     </label>
                     <select
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                       value={briefing.localizacao_detalhes?.caracteristica_bairro || ''}
                       onChange={(e) => updateLocalizacao('caracteristica_bairro', e.target.value)}
                       title="Característica do Bairro"
@@ -760,7 +760,7 @@ export function EditorBriefing({
                   </label>
                   <input
                     type="text"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                     value={briefing.localizacao_detalhes?.regiao_cidade || ''}
                     onChange={(e) => updateLocalizacao('regiao_cidade', e.target.value)}
                     placeholder="Região Sudoeste"
@@ -779,7 +779,7 @@ export function EditorBriefing({
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                     value={novaViaAcesso}
                     onChange={(e) => setNovaViaAcesso(e.target.value)}
                     placeholder="Ex: Av. T-63, BR-153"
@@ -793,12 +793,12 @@ export function EditorBriefing({
                   {(briefing.localizacao_detalhes?.vias_acesso || []).map((via, idx) => (
                     <span
                       key={idx}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm border border-blue-100"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm border border-indigo-100"
                     >
                       {via}
                       <button
                         onClick={() => removerViaAcesso(idx)}
-                        className="ml-1 text-blue-400 hover:text-red-500"
+                        className="ml-1 text-indigo-400 hover:text-red-500"
                         title="Remover via de acesso"
                       >
                         <X className="w-3 h-3" />
@@ -819,7 +819,7 @@ export function EditorBriefing({
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                     value={novaReferencia}
                     onChange={(e) => setNovaReferencia(e.target.value)}
                     placeholder="Ex: Shopping Passeio das Águas - 3km"
@@ -860,7 +860,7 @@ export function EditorBriefing({
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Home className="w-5 h-5 text-purple-600" />
+                  <Home className="w-5 h-5 text-violet-600" />
                   Dados do Condomínio
                 </CardTitle>
               </CardHeader>
@@ -872,7 +872,7 @@ export function EditorBriefing({
                     </label>
                     <input
                       type="number"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                       value={briefing.condominio?.valor_estimado || ''}
                       onChange={(e) => updateCondominio('valor_estimado', parseInt(e.target.value) || 0)}
                       placeholder="350"
@@ -884,7 +884,7 @@ export function EditorBriefing({
                     </label>
                     <input
                       type="text"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                       value={briefing.condominio?.vagas_garagem || ''}
                       onChange={(e) => updateCondominio('vagas_garagem', e.target.value)}
                       placeholder="1 vaga coberta"
@@ -896,7 +896,7 @@ export function EditorBriefing({
                     </label>
                     <input
                       type="number"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                       value={briefing.condominio?.torres || ''}
                       onChange={(e) => updateCondominio('torres', parseInt(e.target.value) || 0)}
                       placeholder="2"
@@ -910,7 +910,7 @@ export function EditorBriefing({
                     </label>
                     <input
                       type="number"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                       value={briefing.condominio?.andares || ''}
                       onChange={(e) => updateCondominio('andares', parseInt(e.target.value) || 0)}
                       placeholder="8"
@@ -922,7 +922,7 @@ export function EditorBriefing({
                         type="checkbox"
                         checked={briefing.condominio?.elevador || false}
                         onChange={(e) => updateCondominio('elevador', e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        className="w-4 h-4 rounded border-slate-300 text-brand focus:ring-brand"
                       />
                       <span className="text-sm text-slate-700">Possui Elevador</span>
                     </label>
@@ -940,7 +940,7 @@ export function EditorBriefing({
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                     value={novaAreaLazer}
                     onChange={(e) => setNovaAreaLazer(e.target.value)}
                     placeholder="Ex: Piscina adulto, Academia, Churrasqueira"
@@ -954,12 +954,12 @@ export function EditorBriefing({
                   {(briefing.condominio?.areas_lazer || []).map((area, idx) => (
                     <span
                       key={idx}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-sm border border-purple-100"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-violet-50 text-violet-700 rounded-lg text-sm border border-violet-100"
                     >
                       ✨ {area}
                       <button
                         onClick={() => removerAreaLazer(idx)}
-                        className="ml-1 text-purple-400 hover:text-red-500"
+                        className="ml-1 text-violet-400 hover:text-red-500"
                         title="Remover área de lazer"
                       >
                         <X className="w-3 h-3" />
@@ -997,7 +997,7 @@ export function EditorBriefing({
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
                     value={novaSeguranca}
                     onChange={(e) => setNovaSeguranca(e.target.value)}
                     placeholder="Ex: Portaria 24h, Câmeras de segurança"
@@ -1011,12 +1011,12 @@ export function EditorBriefing({
                   {(briefing.condominio?.seguranca || []).map((seg, idx) => (
                     <span
                       key={idx}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-sm border border-green-100"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm border border-emerald-100"
                     >
                       🔒 {seg}
                       <button
                         onClick={() => removerSeguranca(idx)}
-                        className="ml-1 text-green-400 hover:text-red-500"
+                        className="ml-1 text-emerald-400 hover:text-red-500"
                         title="Remover item de segurança"
                       >
                         <X className="w-3 h-3" />

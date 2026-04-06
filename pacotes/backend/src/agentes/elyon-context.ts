@@ -117,6 +117,7 @@ export interface ElyonContext {
     // RAG e briefing
     ragPerfilTexto?: string;
     briefingEmpreendimento?: string;
+    knowledgeBase?: string;
 
     // estado persistido de coleta (schema) — livre para qualquer shape
     schemaState?: any;

@@ -94,8 +94,8 @@ export function CreditosIndicador() {
         isCritico
           ? "bg-red-100 text-red-700 border border-red-200"
           : isBaixo
-            ? "bg-yellow-100 text-yellow-700 border border-yellow-200"
-            : "bg-green-50 text-green-700 border border-green-200"
+            ? "bg-amber-100 text-amber-700 border border-amber-200"
+            : "bg-emerald-50 text-emerald-700 border border-emerald-200"
       )}
       title={`Mensais: ${saldo.mensais} | Pré-pagos: ${saldo.prepagos} | Bônus: ${saldo.bonus}`}
     >
@@ -105,8 +105,8 @@ export function CreditosIndicador() {
           isCritico
             ? "text-red-500"
             : isBaixo
-              ? "text-yellow-500"
-              : "text-green-500"
+              ? "text-amber-500"
+              : "text-emerald-500"
         )}
       />
       <span className="text-sm font-semibold">{saldo.total}</span>
@@ -115,7 +115,7 @@ export function CreditosIndicador() {
         <AlertTriangle
           className={cn(
             "w-3.5 h-3.5 ml-1",
-            isCritico ? "text-red-500" : "text-yellow-500"
+            isCritico ? "text-red-500" : "text-amber-500"
           )}
         />
       )}

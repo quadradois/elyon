@@ -291,31 +291,31 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
         key={item.path}
         to={item.path}
         className={cn(
-          "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium relative group",
+          "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium relative group border border-transparent",
           isActive
             ? isDestaque
-              ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-md"
-              : "bg-blue-50 text-blue-700"
+              ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md border-amber-400/30"
+              : "bg-slate-800 text-white shadow-inner"
             : isDestaque
-              ? "bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 hover:from-yellow-200 hover:to-orange-200 border border-orange-200"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+              ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20"
+              : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
         )}
       >
         {/* Indicador lateral de item ativo */}
         {isActive && !isDestaque && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full" />
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-brand rounded-r-full" />
         )}
 
         <Icon
           className={cn(
-            "w-4 h-4 shrink-0",
+            "w-4 h-4 shrink-0 transition-colors",
             isActive
               ? isDestaque
                 ? "text-white"
-                : "text-blue-600"
+                : "text-indigo-400"
               : isDestaque
-                ? "text-orange-500"
-                : "text-slate-400 group-hover:text-slate-600"
+                ? "text-amber-500"
+                : "text-slate-500 group-hover:text-slate-300"
           )}
         />
         {sidebarOpen && (
@@ -356,19 +356,19 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
             onClick={() => toggleSection(section.id)}
             className={cn(
               "w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200",
-              "hover:bg-slate-100 group",
-              hasActiveItem && !isCollapsed && "bg-slate-50"
+              "hover:bg-slate-800 group",
+              hasActiveItem && !isCollapsed && "bg-slate-800/50"
             )}
           >
             <span className={cn(
               "text-xs font-semibold uppercase tracking-wider transition-colors",
-              hasActiveItem ? "text-blue-600" : "text-slate-500 group-hover:text-slate-700"
+              hasActiveItem ? "text-indigo-400" : "text-slate-500 group-hover:text-slate-300"
             )}>
               {section.label}
             </span>
             <span className={cn(
               "transition-transform duration-200",
-              hasActiveItem ? "text-blue-500" : "text-slate-400 group-hover:text-slate-600",
+              hasActiveItem ? "text-indigo-400" : "text-slate-500 group-hover:text-slate-300",
               !isCollapsed && "rotate-0"
             )}>
               {isCollapsed ? (
@@ -380,7 +380,7 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           </button>
         ) : (
           <div className="flex justify-center py-2">
-            <div className="w-8 border-t border-slate-200" />
+            <div className="w-8 border-t border-slate-800" />
           </div>
         )}
 
@@ -408,19 +408,20 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
       <div className="min-h-screen bg-slate-50 flex">
         {/* Sidebar */}
         <aside
+          style={{ backgroundColor: '#0f172a', borderRightColor: '#1e293b' }}
           className={cn(
-            "bg-white border-r border-slate-200 fixed inset-y-0 left-0 z-50 transition-all duration-300 flex flex-col shadow-sm",
+            "border-r fixed inset-y-0 left-0 z-50 transition-all duration-300 flex flex-col shadow-xl",
             sidebarOpen ? "w-64" : "w-[72px]"
           )}
         >
           {/* Logo */}
-          <div className="h-16 flex items-center px-5 border-b border-slate-100">
+          <div className="h-16 flex items-center px-5 border-b border-slate-800">
             <Link to="/dashboard/prospeccao" className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shrink-0 shadow-md">
+              <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-xl flex items-center justify-center shrink-0 shadow-glow-primary">
                 <Building2 className="w-5 h-5 text-white" />
               </div>
               {sidebarOpen && (
-                <span className="font-bold text-xl text-slate-900 tracking-tight">
+                <span className="font-bold text-xl text-white tracking-tight">
                   ELYON
                 </span>
               )}
@@ -436,8 +437,8 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-sm font-medium relative",
                   location.pathname === "/dashboard/prospeccao"
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-                    : "bg-blue-50 text-blue-700 hover:bg-blue-100"
+                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-glow-primary"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
                 )}
               >
                 <Zap
@@ -445,7 +446,7 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
                     "w-5 h-5 shrink-0",
                     location.pathname === "/dashboard/prospeccao"
                       ? "text-white"
-                      : "text-blue-600"
+                      : "text-indigo-400 group-hover:text-indigo-300"
                   )}
                 />
                 {sidebarOpen && "Dashboard"}
@@ -455,7 +456,7 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
             {/* Separador visual */}
             <div className="py-2">
               <div className={cn(
-                "border-t border-slate-100",
+                "border-t border-slate-800",
                 !sidebarOpen && "mx-2"
               )} />
             </div>
@@ -469,13 +470,13 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
                 {sidebarOpen ? (
                   <button
                     onClick={() => toggleSection("admin")}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200 hover:bg-purple-50 group"
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200 hover:bg-slate-800 group"
                   >
-                    <span className="text-xs font-semibold text-purple-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Shield className="w-3.5 h-3.5" />
                       Admin
                     </span>
-                    <span className="text-purple-400 group-hover:text-purple-600 transition-colors">
+                    <span className="text-slate-500 group-hover:text-slate-300 transition-colors">
                       {collapsedSections["admin"] ? (
                         <ChevronRight className="w-4 h-4" />
                       ) : (
@@ -485,7 +486,7 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
                   </button>
                 ) : (
                   <div className="flex justify-center py-2">
-                    <div className="w-8 border-t border-purple-200" />
+                    <div className="w-8 border-t border-slate-800" />
                   </div>
                 )}
 
@@ -500,19 +501,19 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
                           key={item.path}
                           to={item.path}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium relative group",
+                            "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium relative group border border-transparent",
                             isActive
-                              ? "bg-purple-100 text-purple-700"
-                              : "text-purple-600 hover:bg-purple-50 hover:text-purple-800"
+                              ? "bg-slate-800 text-white shadow-inner"
+                              : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                           )}
                         >
                           {isActive && (
-                            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-purple-500 rounded-r-full" />
+                            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-indigo-500 rounded-r-full" />
                           )}
                           <Icon
                             className={cn(
-                              "w-4 h-4 shrink-0",
-                              isActive ? "text-purple-600" : "text-purple-400 group-hover:text-purple-600"
+                              "w-4 h-4 shrink-0 transition-colors",
+                              isActive ? "text-indigo-400" : "text-slate-500 group-hover:text-slate-300"
                             )}
                           />
                           {sidebarOpen && item.label}
@@ -547,7 +548,7 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
                 >
                   <div className="relative">
                     <Phone className="w-5 h-5 text-slate-400" />
-                    <Circle className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5 fill-green-500 text-green-500" />
+                    <Circle className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5 fill-green-500 text-emerald-500" />
                   </div>
                 </Link>
               </ConditionalTooltip>
@@ -555,35 +556,35 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           </div>
 
           {/* User Footer com Dropdown */}
-          <div ref={dropdownRef} className="p-3 border-t border-slate-100 relative">
+          <div ref={dropdownRef} className="p-3 border-t border-slate-800 relative bg-slate-900">
             {/* Dropdown Menu (aparece acima do footer quando aberto) */}
             {sidebarOpen && collapsedSections["userMenu"] && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 mx-3 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-200">
+              <div className="absolute bottom-full left-0 right-0 mb-2 mx-3 bg-slate-800 rounded-xl shadow-xl border border-slate-700 overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-200">
                 <div className="p-2">
                   <Link
                     to="/dashboard/perfil"
                     onClick={() => toggleSection("userMenu")}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors text-sm text-slate-700"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-700 transition-colors text-sm text-slate-200"
                   >
-                    <Store className="w-4 h-4 text-blue-500" />
+                    <Store className="w-4 h-4 text-indigo-400" />
                     Perfil da Imobiliária
                   </Link>
                   <Link
                     to="/dashboard/configuracoes"
                     onClick={() => toggleSection("userMenu")}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors text-sm text-slate-700"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-700 transition-colors text-sm text-slate-200"
                   >
                     <Settings className="w-4 h-4 text-slate-400" />
                     Configurações
                   </Link>
                 </div>
-                <div className="border-t border-slate-100 p-2">
+                <div className="border-t border-slate-700 p-2">
                   <button
                     onClick={() => {
                       toggleSection("userMenu");
                       handleLogout();
                     }}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-50 transition-colors text-sm text-red-600 w-full"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-red-900/30 transition-colors text-sm text-red-400 w-full"
                   >
                     <LogOut className="w-4 h-4" />
                     Sair da conta
@@ -599,9 +600,9 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
                 className={cn(
                   "flex items-center gap-3 w-full rounded-xl transition-all duration-200",
                   sidebarOpen
-                    ? "p-2 hover:bg-slate-50 cursor-pointer"
+                    ? "p-2 hover:bg-slate-800 cursor-pointer"
                     : "justify-center p-2",
-                  collapsedSections["userMenu"] && "bg-slate-50"
+                  collapsedSections["userMenu"] && "bg-slate-800"
                 )}
               >
                 <div className={cn(
@@ -616,10 +617,10 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
                 {sidebarOpen && (
                   <>
                     <div className="flex-1 min-w-0 text-left">
-                      <p className="text-sm font-semibold text-slate-900 truncate">
+                      <p className="text-sm font-semibold text-white truncate">
                         {usuario.nome}
                       </p>
-                      <p className="text-xs text-slate-500 truncate">{tenant.nome}</p>
+                      <p className="text-xs text-slate-400 truncate">{tenant.nome}</p>
                     </div>
                     <span className={cn(
                       "text-slate-400 transition-transform duration-200",
