@@ -31,6 +31,7 @@ import { executarGuardrailsEntrada } from './entry-guardrail';
 import { resolverAgentePersistido } from './persisted-agent';
 import { analisarSentimento, gerarInstrucaoSentimento } from './sentiment-analyzer';
 import { tentarDetectarObjecao } from './classificador-objecao';
+import { tentarPreCarregarSkill, AgenteAtual } from './classificador-skills';
 import { resolverChaveAgentes } from './byok-resolver';
 
 // Módulos extraídos
@@ -293,6 +294,14 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
 """${objecaoDetectada.contorno}"""`;
 
                 inputSDK = [{ role: 'system' as const, content: instrucaoTatica }, ...inputSDK];
+            }
+
+            // ✅ TASK-IA-06: Pre-load determinístico de Skills (Zero IA via Regex)
+            const agenteAtualStr = tipoAgente === 'OPENER' ? 'opener' : 'presenter';
+            const injecaoSkill = await tentarPreCarregarSkill(ultimaMensagemLead.content, agenteAtualStr as AgenteAtual);
+            if (injecaoSkill) {
+                inputSDK = [{ role: 'system' as const, content: injecaoSkill }, ...inputSDK];
+                logger.debug(`[ORCHESTRATOR] ⚡ Skill pré-carregada injetada no inputSDK.`);
             }
         }
 
