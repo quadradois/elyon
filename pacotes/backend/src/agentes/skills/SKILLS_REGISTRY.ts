@@ -14,7 +14,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
 
-const SKILLS_DIR = path.join(__dirname, 'skills');
+// O próprio SKILLS_REGISTRY.ts está em /agentes/skills/, então __dirname já é a raiz das skills.
+const SKILLS_DIR = __dirname;
 
 export const SKILLS_REGISTRY: Record<string, string> = {
     // ===========================
