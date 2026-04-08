@@ -39,6 +39,7 @@ import rotaClientes from './rotas/clientes';
 import rotaConfiguracaoIntegracao from './rotas/configuracao-integracao';
 import rotaConfiguracaoLLM from './rotas/configuracao-llm';
 import rotaMetricasIA from './rotas/metricas-ia.rotas';
+import rotaUsuarios from './rotas/usuarios';
 
 // Importar Prisma do módulo central (evita dependência circular)
 import { prisma } from './lib/db';
@@ -161,6 +162,7 @@ app.use('/api/clientes', rotaClientes);     // Clientes (Carteira)
 app.use('/api/configuracao/integracao', rotaConfiguracaoIntegracao); // Config integrações CRM
 app.use('/api/configuracao/llm', rotaConfiguracaoLLM);               // Config BYOK (LLM próprio)
 app.use('/api/metricas-ia', rotaMetricasIA);                          // Métricas da IA (performance agentes, tools, conversões)
+app.use('/api/usuarios', rotaUsuarios);                               // Gestão de usuários da equipe
 app.use('/webhooks', rotaWebhook);
 app.use('/webhooks', rotaWebhookManus);     // Webhooks do Manus (pesquisa IA)
 

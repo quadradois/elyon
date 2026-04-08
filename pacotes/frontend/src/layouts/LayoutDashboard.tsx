@@ -25,6 +25,7 @@ import {
   Crown,
   Briefcase,
   Calendar,
+  UserCog,
 } from "lucide-react";
 
 // ... (código intermediário omitido, vou usar replace separado para o ícone e menu se for longe)
@@ -214,6 +215,11 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           path: "/dashboard/upgrade",
           destaque: true,
         },
+        ...((["ADMIN", "SUPER_ADMIN"].includes(usuario.papel)) ? [{
+          icon: UserCog,
+          label: "Equipe",
+          path: "/dashboard/equipe",
+        }] : []),
       ],
     },
   ];

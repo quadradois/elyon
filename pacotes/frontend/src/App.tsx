@@ -29,6 +29,7 @@ import { CarteiraClientes } from "./paginas/CarteiraClientes";
 import { Agenda } from "./paginas/Agenda";
 import { Integracoes } from "./paginas/Integracoes";
 import { ConfiguracaoLLM } from "./paginas/ConfiguracaoLLM";
+import GestaoUsuarios from "./paginas/GestaoUsuarios";
 
 // Páginas Admin
 import { AdminClientes, AdminTransacoes, AdminLeadsVip, AdminPacotes, AdminPlanos } from "./paginas/admin";
@@ -378,6 +379,17 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <ConfiguracaoLLM />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/equipe"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <GestaoUsuarios />
               </LayoutDashboard>
             </RotaPrivada>
           }
