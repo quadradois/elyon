@@ -46,6 +46,8 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 COPY --chown=nodejs:nodejs --from=builder /app/dist ./dist
 COPY --chown=nodejs:nodejs --from=builder /app/prisma ./prisma
 COPY --chown=nodejs:nodejs --from=builder /app/package*.json ./
+# Copiar arquivos .md das skills (tsc não os compila — precisam ir junto ao dist)
+COPY --chown=nodejs:nodejs --from=builder /app/src/agentes/skills ./dist/agentes/skills
 
 # Instalar apenas dependências de produção (sem devDependencies)
 RUN npm install --omit=dev --legacy-peer-deps
