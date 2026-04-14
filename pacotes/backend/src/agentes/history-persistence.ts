@@ -1,24 +1,13 @@
 import { getCacheStats, setHistory } from './conversation-cache';
 import { removeHandoffNarration, sliceHistoryPreservingSystem } from './handoff-filters';
 import { logger } from '../lib/logger';
+import { MAPA_NOMES_AGENTES } from './agent-chain';
+import type { ElyonRunResult } from './types';
+import type { RunItem } from '@openai/agents';
 
 function normalizarNomeAgente(nome?: string): string | undefined {
   if (!nome) return undefined;
-
-  const mapa: Record<string, string> = {
-    OPENER: 'OPENER',
-    PRESENTER: 'PRESENTER',
-    ADMIN: 'ADMIN',
-    CLOSER: 'PRESENTER',
-    opener_agent_v11: 'OPENER',
-    opener_agent_v12: 'OPENER',
-    presenter_agent_v4: 'PRESENTER',
-    presenter_agent_v5: 'PRESENTER',
-    closer_agent_v5: 'PRESENTER',
-    admin_agent_v4: 'ADMIN',
-  };
-
-  return mapa[nome] || nome;
+  return MAPA_NOMES_AGENTES[nome] || nome;
 }
 
 export interface PersistenciaHistoryResult {
@@ -29,7 +18,7 @@ export interface PersistenciaHistoryResult {
 
 export async function persistirHistoricoSdk(
   contatoId: string,
-  result: any
+  result: ElyonRunResult
 ): Promise<PersistenciaHistoryResult> {
   const retornoPadrao: PersistenciaHistoryResult = {
     nomesToolsTurno: [],
@@ -38,31 +27,29 @@ export async function persistirHistoricoSdk(
   };
 
   try {
-    const history = (result as any).history;
+    const history = result.history;
     if (history && Array.isArray(history)) {
-      const lastAgentName = (result as any).lastAgent?.name;
+      const lastAgentName = result.lastAgent?.name;
       const lastAgentNormalizado = normalizarNomeAgente(lastAgentName);
-      const historySemNarracao = removeHandoffNarration(history as any);
-      const historyFinal = sliceHistoryPreservingSystem(historySemNarracao as any, 20, 'Persistência Orchestrator');
+      const historySemNarracao = removeHandoffNarration(history);
+      const historyFinal = sliceHistoryPreservingSystem(historySemNarracao, 40, 'Persistência Orchestrator');
       await setHistory(contatoId, historyFinal, lastAgentNormalizado);
 
-      const newItems = (result as any).newItems;
+      const newItems: RunItem[] = result.newItems;
       if (newItems && Array.isArray(newItems)) {
         const toolCalls = newItems.filter(
-          (i: any) =>
+          (i: RunItem) =>
             i.type === 'tool_call_item' ||
-            i.type === 'tool_call_output_item' ||
-            i.type === 'function_call' ||
-            i.type === 'function_call_result'
+            i.type === 'tool_call_output_item'
         );
 
         const handoffs = newItems.filter(
-          (i: any) => i.type === 'handoff_call_item' || i.type === 'handoff_output_item'
+          (i: RunItem) => i.type === 'handoff_call_item' || i.type === 'handoff_output_item'
         );
 
         const nomesToolsTurno = toolCalls
-          .map((i: any) => i.name || i.tool_name)
-          .filter((n: any) => typeof n === 'string' && n.length > 0);
+          .map((i: RunItem) => ('name' in i ? (i as unknown as Record<string, unknown>).name as string : undefined) || ('toolName' in i ? (i as unknown as Record<string, unknown>).toolName as string : undefined))
+          .filter((n): n is string => typeof n === 'string' && n.length > 0);
 
         const toolCallsTurno = toolCalls.length;
         const handoffsTurno = handoffs.length;
@@ -80,7 +67,7 @@ export async function persistirHistoricoSdk(
       }
     }
   } catch (histErr) {
-    logger.warn("[erro capturado]");
+    logger.warn({ err: histErr }, '[HISTORY-PERSISTENCE] Erro ao persistir histórico SDK');
   }
 
   return retornoPadrao;

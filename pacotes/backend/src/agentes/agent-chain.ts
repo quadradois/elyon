@@ -3,32 +3,40 @@
  * 
  * Extraído do orchestrator.ts para separação de responsabilidades.
  * Contém:
- * - Mapeamento status → agente (OPENER/PRESENTER/ADMIN)
+ * - Mapeamento status → agente (SDR/ADMIN)
  * - Cache em memória do último agente por contato
  * - Criação da cadeia com handoffs nativos do SDK
  * 
- * @version 1.0
- * @date 04/03/2026
+ * @version 2.0 — Unificação SDR (Opener+Presenter merge)
+ * @date 11/04/2026
  */
 
-import { handoff } from '@openai/agents';
-import { criarOpenerAgent } from './opener-agent';
-import { criarPresenterAgent } from './presenter-agent';
+import { Agent, handoff, type HandoffInputData, type RunContext, type AgentInputItem } from '@openai/agents';
+import { criarSdrAgent } from './sdr-agent';
 import { criarAdminAgent } from './admin-agent';
 import { criarKnowledgeAgent } from './knowledge-agent';
 import { filterHistoryByQuery } from './handoff-filters';
 import { getActiveAgent, setActiveAgent } from './conversation-cache';
 import type { ConfiguracaoOrquestrador, ContextoConversa } from './orchestrator';
+import type { ElyonContext } from './elyon-context';
+import type { ElyonAgent } from './types';
 import { logger } from '../lib/logger';
+import { MODELO_PADRAO_PRINCIPAL, MODELO_PADRAO_AUXILIAR } from './byok-resolver';
 
 // ====================================
 // TIPOS
 // ====================================
 
-export type TipoAgente = 'OPENER' | 'PRESENTER' | 'ADMIN';
+export type TipoAgente = 'SDR' | 'ADMIN';
 
-/** Tipo base para agentes no sistema Elyon, permitindo outputs variados. */
-export type ElyonAgent = any;
+/** Valores legados que podem existir no Redis/cache — mapeados para TipoAgente atual */
+type TipoAgenteLegado = 'OPENER' | 'PRESENTER' | 'SDR' | 'ADMIN';
+
+/** Converte valor legado (OPENER/PRESENTER) para o tipo atual */
+function normalizarTipoAgente(valor: string): TipoAgente {
+    if (valor === 'ADMIN') return 'ADMIN';
+    return 'SDR'; // OPENER, PRESENTER, SDR → tudo vira SDR
+}
 
 // ====================================
 // CONSTANTES
@@ -38,7 +46,40 @@ export const STATUS_FASE_HUMANA = new Set(['DOCUMENTACAO', 'EM_NEGOCIACAO']);
 
 // 🔑 Cache em memória local: fallback síncrono para acesso imediato
 // A fonte de verdade agora é o Redis (via getActiveAgent/setActiveAgent)
-export const ultimoAgentePorContato = new Map<string, TipoAgente>();
+// FIX MEMORY LEAK: TTL de 6h para evitar crescimento monotônico
+const AGENT_LOCAL_TTL_MS = 6 * 60 * 60 * 1000;
+const ultimoAgentePorContatoInternal = new Map<string, { agente: TipoAgente; ts: number }>();
+
+/** Proxy de leitura para manter API existente de testes */
+export const ultimoAgentePorContato = {
+  get(key: string): TipoAgente | undefined {
+    const entry = ultimoAgentePorContatoInternal.get(key);
+    return entry?.agente;
+  },
+  set(key: string, agente: TipoAgente): void {
+    ultimoAgentePorContatoInternal.set(key, { agente, ts: Date.now() });
+  },
+  has(key: string): boolean {
+    return ultimoAgentePorContatoInternal.has(key);
+  },
+  delete(key: string): boolean {
+    return ultimoAgentePorContatoInternal.delete(key);
+  },
+  clear(): void {
+    ultimoAgentePorContatoInternal.clear();
+  },
+  get size(): number {
+    return ultimoAgentePorContatoInternal.size;
+  },
+};
+
+// Cleanup periódico: evicta entradas mais antigas que 6h
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of ultimoAgentePorContatoInternal) {
+    if (now - v.ts > AGENT_LOCAL_TTL_MS) ultimoAgentePorContatoInternal.delete(k);
+  }
+}, 5 * 60 * 1000).unref();
 
 /**
  * Persiste o agente ativo para um contato no Redis + memória local.
@@ -55,8 +96,9 @@ export async function persistirAgente(contatoId: string, agente: TipoAgente): Pr
 export async function lerAgentePersistido(contatoId: string): Promise<TipoAgente | undefined> {
     const fromRedis = await getActiveAgent(contatoId);
     if (fromRedis) {
-        ultimoAgentePorContato.set(contatoId, fromRedis as TipoAgente); // sincroniza memória local
-        return fromRedis as TipoAgente;
+        const normalizado = normalizarTipoAgente(fromRedis);
+        ultimoAgentePorContato.set(contatoId, normalizado); // sincroniza memória local
+        return normalizado;
     }
     return ultimoAgentePorContato.get(contatoId); // fallback síncrono
 }
@@ -89,31 +131,14 @@ export function determinarAgente(statusLead?: string, contatoId?: string, agente
     }
 
     // Prioridade 2: Status do lead no BD
-    if (!statusLead) return 'OPENER';
+    if (!statusLead) return 'SDR';
 
-    const mapa: Record<string, TipoAgente> = {
-        // Fase 1
-        'NOVO': 'OPENER',
-        'QUALIFICADO': 'PRESENTER',
+    // Apenas fases pós-assinatura/documental vão para ADMIN
+    const statusAdmin = new Set(['DOCUMENTACAO', 'EM_NEGOCIACAO', 'ONBOARDING', 'CAPTADO']);
+    if (statusAdmin.has(statusLead)) return 'ADMIN';
 
-        // Fase 2
-        'TENTATIVA_AGENDAMENTO': 'PRESENTER',
-        'VISITA_AGENDADA': 'PRESENTER',
-        'CONTATANDO': 'PRESENTER',
-
-        // Fase 3
-        'AVALIACAO_EM_ANDAMENTO': 'PRESENTER',
-        'DOCUMENTACAO': 'ADMIN',
-        'EM_NEGOCIACAO': 'ADMIN',
-
-        // Fase 4
-        'ONBOARDING': 'ADMIN',
-
-        // Pós-assinatura / carteira
-        'CAPTADO': 'ADMIN'
-    };
-
-    return mapa[statusLead] || 'OPENER';
+    // Tudo mais (NOVO, QUALIFICADO, TENTATIVA_AGENDAMENTO, VISITA_AGENDADA, CONTATANDO, AVALIACAO_EM_ANDAMENTO) → SDR
+    return 'SDR';
 }
 
 // ====================================
@@ -121,13 +146,25 @@ export function determinarAgente(statusLead?: string, contatoId?: string, agente
 // ====================================
 
 export const MAPA_NOMES_AGENTES: Record<string, TipoAgente> = {
-    'opener_agent_v11': 'OPENER',
-    'opener_agent_v12': 'OPENER',
-    'presenter_agent_v4': 'PRESENTER',
-    'presenter_agent_v5': 'PRESENTER',
-    'closer_agent_v5': 'PRESENTER',
+    // Agente atual
+    'sdr_agent_v1': 'SDR',
     'admin_agent_v4': 'ADMIN',
-    'knowledge_agent': 'OPENER' // Redireciona para o inicial se por acaso ele responder por último
+    // Valores canônicos (Redis/cache)
+    'SDR': 'SDR',
+    'ADMIN': 'ADMIN',
+    // Mapa legado — valores brutos que podem existir no Redis
+    'OPENER': 'SDR',
+    'PRESENTER': 'SDR',
+    'CLOSER': 'SDR',
+    // Mapa legado — versões SDK anteriores → SDR
+    'opener_agent_v11': 'SDR',
+    'opener_agent_v12': 'SDR',
+    'opener_agent_v13': 'SDR',
+    'presenter_agent_v4': 'SDR',
+    'presenter_agent_v5': 'SDR',
+    'presenter_agent_v6': 'SDR',
+    'closer_agent_v5': 'SDR',
+    'knowledge_agent': 'SDR', // Redireciona para o inicial se por acaso ele responder por último
 };
 
 // ====================================
@@ -136,26 +173,71 @@ export const MAPA_NOMES_AGENTES: Record<string, TipoAgente> = {
 
 /**
  * Cria a cadeia completa de agentes com handoffs nativos do SDK.
- * Retorna o agente RAIZ (baseado no status do lead).
+ * Retorna os agentes disponíveis.
  * 
- * Cadeia: Opener → Presenter → Admin
+ * Cadeia: SDR → Admin
  * O SDK gerencia as transferências via tools transfer_to_*.
  */
-const agentChainCache = new Map<string, Record<TipoAgente, any>>();
+const AGENT_CHAIN_MAX_SIZE = 50;
+const AGENT_CHAIN_TTL_MS = 30 * 60 * 1000; // 30 min
+const agentChainCache = new Map<string, { agents: Record<TipoAgente, ElyonAgent>; lastAccess: number }>();
 
-export function obterCadeiaAgentes(config: ConfiguracaoOrquestrador): Record<TipoAgente, any> {
-    const cacheKey = `${config.tenantId}-${config.llmModelo || 'default'}-${config.llmApiKey ? 'custom' : 'default'}`;
-    if (!agentChainCache.has(cacheKey)) {
-        agentChainCache.set(cacheKey, criarCadeiaAgentes(config));
+// Cleanup periódico: evicta entradas mais velhas que 30 min
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of agentChainCache) {
+    if (now - v.lastAccess > AGENT_CHAIN_TTL_MS) agentChainCache.delete(k);
+  }
+}, 5 * 60 * 1000).unref();
+
+/** Gera hash curto (djb2) para strings longas usadas na chave de cache */
+function hashCurto(str: string): string {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) + hash) + str.charCodeAt(i);
+        hash |= 0; // Convert to 32bit integer
     }
-    return agentChainCache.get(cacheKey)!;
+    return (hash >>> 0).toString(36);
+}
+
+export function obterCadeiaAgentes(config: ConfiguracaoOrquestrador): Record<TipoAgente, ElyonAgent> {
+    const cacheKey = [
+        config.tenantId,
+        config.llmModelo || 'default',
+        config.llmApiKey ? 'custom' : 'default',
+        config.comissaoPadrao || '',
+        config.prazoContrato ?? '',
+        config.cidade || '',
+        config.briefingEmpreendimento ? hashCurto(config.briefingEmpreendimento) : '',
+        config.diferenciais ? hashCurto(config.diferenciais.join(',')) : '',
+    ].join('-');
+    const cached = agentChainCache.get(cacheKey);
+    if (cached) {
+        cached.lastAccess = Date.now();
+        return cached.agents;
+    }
+    const agents = criarCadeiaAgentes(config);
+    agentChainCache.set(cacheKey, { agents, lastAccess: Date.now() });
+    // LRU eviction: remover entrada mais antiga se exceder limite
+    if (agentChainCache.size > AGENT_CHAIN_MAX_SIZE) {
+        let oldest: string | null = null, oldestTime = Infinity;
+        for (const [k, v] of agentChainCache) {
+            if (v.lastAccess < oldestTime) { oldest = k; oldestTime = v.lastAccess; }
+        }
+        if (oldest) agentChainCache.delete(oldest);
+    }
+    return agents;
 }
 
 /**
  * Fábrica genérica para filtros de handoff baseados em Regex (Fix CR-11)
  */
-function createCleanInputFilter(padroes: RegExp[], direcao: string, contextMod?: (data: any, history: any[], clean: any[]) => any) {
-    return (data: any) => {
+function createCleanInputFilter(
+    padroes: RegExp[],
+    direcao: string,
+    contextMod?: (data: HandoffInputData, history: AgentInputItem[], clean: AgentInputItem[]) => HandoffInputData
+) {
+    return (data: HandoffInputData): HandoffInputData => {
         const history = Array.isArray(data.inputHistory) ? data.inputHistory : [];
         const clean = filterHistoryByQuery(history, padroes, direcao);
         
@@ -168,8 +250,7 @@ function createCleanInputFilter(padroes: RegExp[], direcao: string, contextMod?:
 
 export function criarCadeiaAgentes(
     config: ConfiguracaoOrquestrador,
-    _contexto?: ContextoConversa // Ignorado, os agentes agora lêem via ctx.context em runtime
-): Record<TipoAgente, any> {
+): Record<TipoAgente, ElyonAgent> {
     const baseConfig = {
         nomeAgente: config.nomeAgente,
         genero: config.genero,
@@ -182,8 +263,8 @@ export function criarCadeiaAgentes(
     const llmModelo = config.llmModelo ?? undefined;
 
     // BYOK: resolver modelo para cada agente (menor para admin, maior para os demais)
-    const modeloPrincipal = llmModelo || 'gpt-4.1';
-    const modeloAdmin = llmModelo || 'gpt-4.1-mini';
+    const modeloPrincipal = llmModelo || MODELO_PADRAO_PRINCIPAL;
+    const modeloAdmin = llmModelo || MODELO_PADRAO_AUXILIAR;
 
     // Knowledge agent com BYOK do tenant
     const knowledgeAgent = criarKnowledgeAgent({
@@ -192,7 +273,7 @@ export function criarCadeiaAgentes(
         baseUrl: llmBaseUrl,
     });
 
-    // Build bottom-up: Admin → Presenter → Opener
+    // Build bottom-up: Admin → SDR
     const adminAgent = criarAdminAgent({
         ...baseConfig,
         comissaoPadrao: config.comissaoPadrao,
@@ -202,8 +283,11 @@ export function criarCadeiaAgentes(
         baseUrl: llmBaseUrl,
     });
 
-    const presenterAgent = criarPresenterAgent({
+    const sdrAgent = criarSdrAgent({
         ...baseConfig,
+        cidade: config.cidade,
+        comissaoPadrao: config.comissaoPadrao,
+        prazoContrato: config.prazoContrato,
         diferenciais: config.diferenciais,
         model: modeloPrincipal,
         apiKey: llmApiKey,
@@ -211,108 +295,33 @@ export function criarCadeiaAgentes(
         tools: [knowledgeAgent.asTool({
             toolDescription: 'Consulte o estrategista de vendas quando o lead apresentar qualquer dúvida técnica ou objeção.'
         })]
-    }) as any;
-    const h_presenter_to_admin = handoff(adminAgent as any, {
+    });
+
+    // Único handoff: SDR → Admin (para onboarding/documentação pós-assinatura)
+    const h_sdr_to_admin = handoff(adminAgent as Agent<ElyonContext>, {
         toolDescriptionOverride: 'Transferir para onboarding operacional quando houver necessidade de coleta cadastral e dados pós-assinatura.',
         inputFilter: createCleanInputFilter([
             /transferindo|vou\s+te\s+passar|aguarde\s+um\s+instante|especialista/i
-        ], 'Presenter→Admin')
+        ], 'SDR→Admin')
     });
-    // handoffs do Presenter serão atribuídos depois que Opener existir (reverse handoff)
+    sdrAgent.handoffs = [h_sdr_to_admin];
 
-    const openerAgent = criarOpenerAgent({
-        ...baseConfig,
-        cidade: config.cidade,
-        comissaoPadrao: config.comissaoPadrao,
-        prazoContrato: config.prazoContrato,
-        model: modeloPrincipal,
-        apiKey: llmApiKey,
-        baseUrl: llmBaseUrl,
-        tools: [knowledgeAgent.asTool({
-            toolDescription: 'Consulte o estrategista de vendas quando o lead apresentar qualquer dúvida técnica ou objeção.'
-        })]
-    }) as any;
-    const h_opener_to_presenter = handoff(presenterAgent as any, {
-        toolDescriptionOverride: `TRANSFERIR_PARA_DIAGNOSTICO: Use esta função quando o proprietário demonstrar interesse real e estiver pronto para diagnóstico consultivo antes do fechamento.
-
-SINAIS CLAROS DE INTERESSE:
-- Respostas positivas como "sim", "pode", "faz sentido", "quero saber mais"
-- Perguntas sobre o processo: "como funciona?", "pode explicar?", "qual é o método?"
-- Demonstra curiosidade sobre o serviço
-- Aceita ouvir como funciona após coleta de dados básicos
-
-REQUISITOS ANTES DE TRANSFERIR:
-- Já coletou: tipo de imóvel, quartos, metragem (se possível)
-- Lead demonstrou interesse real (não apenas educado)
-- Contexto da conversa indica prontidão para próxima fase
-
-NÃO TRANSFERIR SE:
-- Lead ainda está desconfiado ou fazendo perguntas de segurança
-- Não coletou informações básicas do imóvel
-- Resposta foi vaga ou neutra`,
-        inputFilter: createCleanInputFilter([
-            /quem\s+[eé]\s+voc[êe]|onde\s+voc[êe]\s+conseguiu|seu\s+nome\s+[ée]|quem\s+fala/i,
-            /como\s+voc[êe]\s+conseguiu|meu\s+número\s+de\s+telefone|empresa\s+[ée]|de\s+qual\s+empresa/i
-        ], 'Opener→Presenter', (data, history, clean) => {
-            // C3: Extrair leadId do contexto para garantir disponibilidade no Presenter
-            const leadId = data.context?.leadId
-                || history.find((m: any) => m?.leadId)?.leadId
-                || undefined;
-
-            // C3: Detectar se proprietário já está anunciando (Trilha A vs B)
-            const historicoTexto = history.map((m: any) => m?.content || '').join(' ');
-            const proprietarioAtivo = /anunciado|já\s+t[oô]\s+no|OLX|Zap|Viva[Rr]eal|portal|imobili[aá]ria|corretor/i.test(historicoTexto);
-
-            return {
-                ...data,
-                inputHistory: clean,
-                context: { ...data.context, leadId, proprietarioAtivo }
-            };
-        })
-    });
-    openerAgent.handoffs = [h_opener_to_presenter];
-
-    // Reverse handoff: Presenter → Opener (lead transferido prematuramente)
-    const h_presenter_to_opener = handoff(openerAgent as any, {
-        toolDescriptionOverride: `DEVOLVER_PARA_ABERTURA: Use APENAS quando o lead claramente não está pronto para diagnóstico.
-
-SINAIS DE TRANSFERÊNCIA PREMATURA:
-- Lead responde com desconfiança: "quem é você?", "como conseguiu meu número?"
-- Lead demonstra frieza ou hostilidade
-- Respostas monossilábicas sem engajamento
-- Lead pede para parar ou demonstra irritação
-
-NÃO DEVOLVER SE:
-- Lead fez apenas uma pergunta técnica (use knowledge tool)
-- Lead está engajado mas inseguro (continue o diagnóstico)
-- Lead pediu tempo para pensar (agende follow-up)`,
-        inputFilter: createCleanInputFilter([
-            /transferindo|vou\s+te\s+passar|aguarde\s+um\s+instante|especialista/i
-        ], 'Presenter→Opener')
-    });
-
-    // Atribuir todos os handoffs do Presenter (incluindo reverse)
-    presenterAgent.handoffs = [h_presenter_to_admin, h_presenter_to_opener];
-
-    // Lifecycle Hooks — métricas e logging (atribuídos uma única vez por cache hit)
-    const agentes: any[] = [openerAgent, presenterAgent, adminAgent];
+    // Lifecycle Hooks — métricas e logging
+    const agentes: ElyonAgent[] = [sdrAgent, adminAgent];
     for (const ag of agentes) {
-        ag.on('agent_start', (_ctx: any, agent: any) => {
-            // Usa propriedade anexa no escopo do runner em vez de closure Map vazante
-            _ctx._startTime = Date.now();
+        ag.on('agent_start', (_ctx: RunContext<ElyonContext>, agent: Agent<ElyonContext>) => {
+            (_ctx as unknown as Record<string, unknown>)._startTime = Date.now();
             logger.debug(`[LIFECYCLE] ▶️ ${agent.name} iniciou`);
         });
-        ag.on('agent_end', (_ctx: any, output: any) => {
-            const elapsed = Date.now() - (_ctx._startTime || Date.now());
-            const outputText = typeof output === 'string' ? output : JSON.stringify(output);
-            const linhas = outputText.split('\n').length;
+        ag.on('agent_end', (_ctx: RunContext<ElyonContext>, output: string) => {
+            const elapsed = Date.now() - ((_ctx as unknown as Record<string, unknown>)._startTime as number || Date.now());
+            const linhas = output.split('\n').length;
             logger.debug(`[LIFECYCLE] ⏹️ ${ag.name} finalizou (${elapsed}ms, ${linhas} linhas)`);
         });
     }
 
     return {
-        OPENER: openerAgent,
-        PRESENTER: presenterAgent,
+        SDR: sdrAgent,
         ADMIN: adminAgent
     };
 }

@@ -7,24 +7,26 @@
  * Fluxo:
  * 1. Coletar documentos (CPF, email, endereço)
  * 2. Gerar e enviar contrato
- * 3. Agendar avaliação/fotos
- * 4. NOVO: Coletar dados do imóvel (quartos, área, valor, características)
- * 5. NOVO: Enviar para CRM
- * 6. Marcar como CAPTADO
+ * 3. Coletar dados do imóvel (quartos, área, valor, características)
+ * 4. Enviar para CRM (Quadra Dois)
+ * 5. Marcar como CAPTADO
+ *
+ * OBS: O Admin NÃO agenda — o Corretor Humano cuida do agendamento.
  * 
  * @version 2.0
  * @date 22/12/2025
  */
 
-import { Agent, tool, handoff } from '@openai/agents';
+import { Agent, type RunContext, type Tool } from '@openai/agents';
 import { criarModeloBYOK } from './elyon-context';
 import { ElyonContext } from './elyon-context';
+import type { ElyonAgent } from './types';
+import { MODELO_PADRAO_AUXILIAR } from './byok-resolver';
 import { z } from 'zod';
 import { getSharedBehavioralRules } from './shared-behavioral-guardrails';
 import { resolverComissaoPadrao, resolverPrazoContrato } from './commercial-policy';
 import {
     moverParaFaseTool,
-    agendarAvaliacaoTool,
     encaminharCorretorTool,
     gerarLinkContratoTool,
     atualizarDadosLeadTool,
@@ -126,11 +128,7 @@ ${DOCUMENTOS_NECESSARIOS.map((doc, i) => `${i + 1}. **${doc.nome}** ${doc.obriga
 2. Envie ao cliente
 3. Aguarde confirmação de recebimento
 
-### ETAPA 3: Agendar Avaliação
-- Pergunte: "Qual o melhor dia/horário para fotos?"
-- Use \`agendar_avaliacao\`
-
-### ETAPA 4: 📸 COLETAR DADOS DO IMÓVEL (NOVO!)
+### ETAPA 3: 📸 COLETAR DADOS DO IMÓVEL
 Após o contrato, colete detalhes para anunciar:
 
 ${DADOS_IMOVEL_COLETAR.map((d, i) => `${i + 1}. **${d.nome}** - Ex: "${d.exemplo}"`).join('\n')}
@@ -145,20 +143,19 @@ ${DADOS_IMOVEL_COLETAR.map((d, i) => `${i + 1}. **${d.nome}** - Ex: "${d.exemplo
 
 → Use \`salvar_dados_imovel\` para CADA GRUPO de dados recebido
 
-### ETAPA 5: Enviar para CRM
+### ETAPA 4: Enviar para CRM (Quadra Dois)
 Após coletar os dados do imóvel:
-→ Use \`enviar_para_crm\` para sincronizar com o sistema de gestão
+→ Use \`enviar_para_crm\` para sincronizar com o sistema de gestão (dashboard/integracoes)
 
-### ETAPA 6: Finalizar
+### ETAPA 5: Finalizar
 Quando tudo estiver completo:
 → Use \`mover_para_fase\` com faseDestino="CAPTADO"
 
 ## ✅ CHECKLIST DE SUCESSO
 - [ ] CPF e E-mail salvos
 - [ ] Link do contrato enviado
-- [ ] Visita agendada
 - [ ] Dados do imóvel coletados
-- [ ] Enviado para CRM
+- [ ] Enviado para CRM (Quadra Dois)
 
 ## 💬 ESTILO
 - Tom prático: "Vamos resolver isso rapidinho!"
@@ -186,7 +183,7 @@ const AdminOutputSchema = z.object({
         area: z.number().nullable().optional(),
         valorPretendido: z.number().nullable().optional()
     }).describe('Estado atual dos dados coletados durante esta interação.'),
-    proximoPasso: z.enum(['COLETAR_DOCS', 'GERAR_CONTRATO', 'AGENDAR_VISITA', 'COLETAR_DADOS_IMOVEL', 'FINALIZAR']).describe('Qual a próxima etapa lógica do fluxo.')
+    proximoPasso: z.enum(['COLETAR_DOCS', 'GERAR_CONTRATO', 'COLETAR_DADOS_IMOVEL', 'ENVIAR_CRM', 'FINALIZAR']).describe('Qual a próxima etapa lógica do fluxo.')
 });
 
 export type AdminOutput = z.infer<typeof AdminOutputSchema>;
@@ -204,9 +201,9 @@ export function criarAdminAgent(config: {
     model?: string;
     apiKey?: string;
     baseUrl?: string;
-    tools?: any[];
-}): any {
-    const modelInstance = criarModeloBYOK(config, 'gpt-4.1-mini');
+    tools?: Tool<ElyonContext>[];
+}): ElyonAgent {
+    const modelInstance = criarModeloBYOK(config, MODELO_PADRAO_AUXILIAR);
 
     // O SDK aceita resultType em runtime, mas os generics de Agent não expõem
     // ZodObject como AgentOutputType válido na v0.5.x. Usamos cast seguro.
@@ -214,13 +211,13 @@ export function criarAdminAgent(config: {
         name: 'admin_agent_v4',
         model: modelInstance,
         resultType: AdminOutputSchema,
-        instructions: (runnerContext?: any) => {
+        instructions: (runnerContext: RunContext<ElyonContext>) => {
             const ctx: ElyonContext = runnerContext?.context;
             let basePrompt = gerarPromptAdmin({
                 nomeAgente: ctx?.nomeAgente || config.nomeAgente,
                 genero: ctx?.genero || config.genero || 'feminino',
                 nomeImobiliaria: ctx?.nomeImobiliaria || config.nomeImobiliaria,
-                emailContrato: (ctx as any)?.emailContrato || config.emailContrato,
+                emailContrato: config.emailContrato,
                 tipoAutorizacao: ctx?.tipoAutorizacao || config.tipoAutorizacao,
                 prazoTrabalho: ctx?.prazoTrabalho || config.prazoTrabalho,
                 comissaoAcordada: ctx?.comissaoAcordada || config.comissaoAcordada,
@@ -243,7 +240,6 @@ Mantenha o tom de voz casual no campo 'respostaParaOCliente'.`;
         },
         tools: [
             moverParaFaseTool,
-            agendarAvaliacaoTool,
             encaminharCorretorTool,
             gerarLinkContratoTool,
             atualizarDadosLeadTool,
@@ -253,7 +249,7 @@ Mantenha o tom de voz casual no campo 'respostaParaOCliente'.`;
         ]
         // ⚠️ outputGuardrails removidos: incompatíveis com resultType (Structured Output).
         // A validação é garantida pelo schema Zod do resultType.
-    } as any);
+    } as unknown as ElyonAgent);
 }
 
 // ====================================

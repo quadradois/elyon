@@ -5,6 +5,53 @@ Todas as mudanças notáveis deste projeto serão documentadas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.3.0] - 2026-04-14
+
+### Adicionado
+- **SDR Agent unificado** (`sdr-agent.ts`) — fusão do Opener + Presenter em um único agente com fases internas progressivas (MEIO_CAMPO → DESCOBERTA → DIAGNOSTICO_SPIN → PITCH → AGENDAMENTO → FOLLOW_UP / RECUO).
+- **Roteiro de governança centralizado** (`roteiro-governanca.ts`) — contrato único de fases (`ROTEIRO_SDR_FASES_V1`), regras de avanço, tools permitidas por fase e perguntas obrigatórias. Fonte única de verdade consumida pelo SDR, input-builder e guardrails.
+- **Governança de qualificação** (`governanca-qualificacao.ts`) — validação de campos críticos faltantes e rastreio de `fieldSources` (evidência textual obrigatória para persistir dados sensíveis).
+- **Sanitizador de resposta** (`client-response-sanitizer.ts`) — remove aspas envolventes, vazamento de metadados internos e blocos técnicos da saída final enviada ao WhatsApp.
+- **Tool Wrapper com pré-validação e auditoria** (`tool-wrapper.ts`) — wrapper genérico para tools do OpenAI Agents SDK com pré-validação de args, enriquecimento de resultado e log JSON estruturado.
+- **Sanitização centralizada de inputs LLM** (`tool-sanitize.ts`) — normalização de tipos vindos de tool calls (string→number, ""→undefined, "true"→boolean).
+- **Integração Google Calendar + Meet** (`google-calendar.ts`) — serviço via Service Account para consultar slots livres, criar eventos reais com Google Meet automático e gerar link público de agendamento.
+- **Sistema de auditoria** (`servico-auditoria.ts` + `admin-auditoria.ts`) — registro assíncrono de ações em `LogAuditoria` com rota paginada para SUPER_ADMIN.
+- **Gate de transição de fase** (GOV-07) — `mover-para-fase.usecase.ts` bloqueia salto de fase >1 etapa, retornando `PHASE_TRANSITION_BLOCKED`.
+- **Migration** para tabela `LogAuditoria`, índice de rastreamento proprietário-imóvel e índice composto `leads_tenant_statusAtualizado`.
+- **Testes de regressão** — suítes de governança (GOV-01 a GOV-07), classificador de objeções, BYOK resolver, sentiment analyzer, skills system, structured output E2E.
+- **Tela de auditoria** no frontend admin (`AdminAuditoria.tsx`).
+
+### Melhorado
+- Blindagem valor × área (GOV-02) — parser de metragem bloqueia `m` dentro de `mil/meses`; entradas monetárias nunca preenchem `areaImovel`.
+- Blindagem de linguagem na saída final (GOV-01C) — guardrail pós-sanitização reescreve frases proibidas.
+- Skills SDR atualizadas — `spin-diagnostico` com pergunta curta direta; `pitch-rede-parceiros` com contorno de objeção; nova skill `tratativa-sem-aceite-agendamento`.
+
+### Alterado
+- **Cadeia de agentes** de `OPENER → PRESENTER → ADMIN` (3 agentes, 8 gates) para **`SDR → ADMIN`** (2 agentes, 1 handoff). `TipoAgente` agora é `'SDR' | 'ADMIN'`.
+- **Structured Output unificado** — 2 schemas separados (PVAM + SPIN) consolidados em 1 (`SdrOutputSchema`).
+- **Prompt em 5 camadas** — merge dos prompts Opener + Presenter em prompt unificado (~500 linhas).
+
+### Corrigido
+- GOV-01: Aspas envolventes removidas na camada final de renderização.
+- GOV-01B: Blocos `raciocinio:`, `fase:`, `pvam:`, `spin:` não vazam mais no WhatsApp.
+- GOV-03: Campos não citados na conversa não são mais preenchidos com valores default inferidos (`source_of_truth` + `fieldSources`).
+- GOV-03B: `temDividas` e `comCorretorAtualmente` exigem evidência textual explícita; sem evidência → `null`.
+- GOV-04: Política global de `UNKNOWN`/`null` para dados não coletados; `timeline` não mais obrigatório.
+- GOV-06A: Removidas instruções conflitantes de tool/checklist no `input-builder`; regex de escalation ajustado.
+
+### Removido
+- `opener-agent.ts` — substituído por `sdr-agent.ts`.
+- `presenter-agent.ts` — substituído por `sdr-agent.ts`.
+- `templates-agentes.ts` — templates legados removidos (prompt gerado inline no SDR).
+- `few-shot-examples.ts` — exemplos few-shot legados substituídos por CoT unificado + skills.
+- `output-guardrails.ts` — substituído por `client-response-sanitizer.ts` + `response-filters.ts`.
+- `agendar-avaliacao.usecase.ts` e `buscar-imovel.usecase.ts` — use cases legados removidos.
+- Arquivos de workflow `.agent/tasks/` e `.agent/workflows/` removidos.
+
+### Refatorado
+- Eliminação de ~600 linhas de cola de handoff Opener↔Presenter. Latência de handoff (~200-400ms por transição) eliminada.
+- Governança centralizada em `governanca-campos.ts` com regressão dedicada. `shared-behavioral-guardrails.ts` e `input-builder.ts` referenciam fonte única.
+
 ## [0.2.3] - 2026-04-14
 
 ### Melhorado
@@ -113,5 +160,6 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 [0.2.0]: https://github.com/quadradois/elyon/compare/v0.1.0...v0.2.0
 [0.2.1]: https://github.com/quadradois/elyon/compare/v0.2.0...v0.2.1
 [0.2.2]: https://github.com/quadradois/elyon/compare/v0.2.1...v0.2.2
+[0.3.0]: https://github.com/quadradois/elyon/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/quadradois/elyon/compare/v0.2.2...v0.2.3
 [0.1.0]: https://github.com/quadradois/elyon/releases/tag/v0.1.0

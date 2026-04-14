@@ -1,5 +1,9 @@
 import type { EstadoConversa } from './conversation-state';
+import type { SchemaState } from './conversation-state';
 import { construirSecaoPoliticaComercial } from './commercial-policy';
+import type { AgentInputItem } from '@openai/agents';
+import type { Lead } from '@prisma/client';
+import { instrucaoGovernancaCurta } from './roteiro-governanca';
 
 export interface MensagemConversa {
   role: 'user' | 'assistant';
@@ -20,31 +24,59 @@ interface InputBuilderContexto {
   statusLead?: string;
   doresIdentificadas?: string[];
   empreendimento?: string;
-  leadRecord?: any; // data fetched from lead table (resumo form-like)
+  leadRecord?: Lead | null;
 }
 
 interface ConstruirInputSdkParams {
   mensagens: MensagemConversa[];
-  cachedHistory?: any[];
+  cachedHistory?: AgentInputItem[];
   estadoConversaAtual: EstadoConversa;
-  schemaState?: any;
+  schemaState?: SchemaState;
   config: InputBuilderConfig;
   contexto: InputBuilderContexto;
 }
 
 interface ConstruirInputSdkResult {
-  inputSDK: any[];
+  inputSDK: AgentInputItem[];
   origem: 'cache' | 'primeiro_turno';
   cachedHistoryLength: number;
+}
+
+function pareceValorMonetario(texto?: string | null): boolean {
+  const t = (texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  if (!t) return false;
+
+  if (/r\$\s*\d/.test(t)) return true;
+  if (/\b\d+(?:[.,]\d+)?\s*(k|mil|mi|milhao|milhoes|reais?)\b/.test(t)) return true;
+  if (
+    /\b\d{1,3}(?:\.\d{3})+(?:,\d{2})?\b/.test(t)
+    && !/\b(m2|m²|metros?|metro\s+quadrado|metros\s+quadrados)\b/.test(t)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function areaImovelConfiavel(area?: unknown): boolean {
+  if (typeof area !== 'string') return false;
+  const valor = area.trim();
+  if (!valor) return false;
+  if (pareceValorMonetario(valor)) return false;
+
+  const t = valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  return /\b(m2|m²|metros?|metro\s+quadrado|metros\s+quadrados)\b/.test(t)
+    || /^\d{2,4}(?:[.,]\d{1,2})?$/.test(t)
+    || /\b(?:area|metragem)\b/.test(t);
 }
 
 function construirInputPrimeiroTurno(params: {
   mensagens: MensagemConversa[];
   estadoConversaAtual: EstadoConversa;
-  schemaState?: any;
+  schemaState?: SchemaState;
   config: InputBuilderConfig;
   contexto: InputBuilderContexto;
-}): any[] {
+}): AgentInputItem[] {
   const { mensagens, estadoConversaAtual, schemaState, config, contexto } = params;
 
   let secaoMetodoTrabalho: string;
@@ -70,8 +102,11 @@ function construirInputPrimeiroTurno(params: {
   if (estadoConversaAtual.valorPretendido) {
     linhasGuardrailEstado.push(`⛔ Valor JÁ informado: ${estadoConversaAtual.valorPretendido}. NÃO pergunte o valor novamente.`);
   }
-  if (estadoConversaAtual.estaAnunciando) {
-    linhasGuardrailEstado.push(`⛔ Lead JÁ ESTÁ ANUNCIANDO → PULE a pergunta de valor (ele sabe o preço) e PULE a pergunta sobre decisão de venda. Vá direto para a mensagem de transição da Fase 2.`);
+  if (estadoConversaAtual.statusAnuncio === null || estadoConversaAtual.statusAnuncio === undefined) {
+    linhasGuardrailEstado.push(`⛔ Status do anúncio ainda NÃO confirmado. Pergunte: "já está anunciando ou ainda não?" antes de avançar para SPIN.`);
+  }
+  if (estadoConversaAtual.estaAnunciando && !estadoConversaAtual.origemAnuncio) {
+    linhasGuardrailEstado.push(`⛔ Lead já está anunciando, mas ORIGEM DO ANÚNCIO ainda não confirmada. Pergunte se é por conta própria ou com imobiliária/corretores.`);
   }
   if (estadoConversaAtual.timeline) {
     linhasGuardrailEstado.push(`⛔ Timeline JÁ informada: "${estadoConversaAtual.timeline}". NÃO pergunte prazo, urgência ou se é prioridade vender.`);
@@ -108,13 +143,19 @@ function construirInputPrimeiroTurno(params: {
   ] as const;
   const leadResumoStr = leadResumo
     ? `\nDADOS EXISTENTES NO LEAD (ficha do banco — NÃO pergunte o que já está aqui):\n${CAMPOS_IMOVEL
-        .filter(k => leadResumo[k] !== null && leadResumo[k] !== undefined && leadResumo[k] !== '')
-        .map(k => `  • ${k}: ${Array.isArray(leadResumo[k]) ? (leadResumo[k] as any[]).join(', ') : leadResumo[k]}`)
+        .filter(k => {
+          const valor = leadResumo[k];
+          if (valor === null || valor === undefined || valor === '') return false;
+          if (k === 'areaImovel' && !areaImovelConfiavel(valor)) return false;
+          return true;
+        })
+        .map(k => `  • ${k}: ${Array.isArray(leadResumo[k]) ? (leadResumo[k] as unknown[]).join(', ') : leadResumo[k]}`)
         .join('\n')}`
     : '';
 
   const contextoLead = `CONTEXTO DO LEAD (MEMÓRIA SEMÂNTICA):
-- ID: ${contexto.leadId || contexto.contatoId || 'N/A'}
+- LeadId: ${contexto.leadId || 'N/A'}
+- ContatoId: ${contexto.contatoId || 'N/A'}
 - Fila do Funil: ${contexto.statusLead || 'Novo contato frio'}
 - Dores/Objeções Anteriores: ${contexto.doresIdentificadas?.join(', ') || 'Nenhuma objeção mapeada ainda'}${leadResumoStr ? `
 ${leadResumoStr}` : ''}
@@ -126,15 +167,17 @@ ESTADO RESUMIDO (NÃO REPETIR PERGUNTAS JÁ RESPONDIDAS):
 - Metragem: ${estadoConversaAtual.metragem ? estadoConversaAtual.metragem + 'm²' : 'não confirmada'}
 - Ocupação: ${estadoConversaAtual.ocupacao || 'não confirmada'}
 - Valor pretendido: ${estadoConversaAtual.valorPretendido || 'não confirmado'}
-- Já anunciando: ${estadoConversaAtual.estaAnunciando ? 'SIM — lead tem experiência com venda, sabe o preço' : 'não detectado'}
+- Já está anunciando: ${estadoConversaAtual.statusAnuncio || 'não confirmado'}
+- Já anunciando: ${estadoConversaAtual.estaAnunciando ? 'SIM' : 'não detectado'}
+- Origem do anúncio: ${estadoConversaAtual.origemAnuncio || 'não confirmada'}
 - Timeline informada: ${estadoConversaAtual.timeline || 'não mencionada'}
 - Já respondeu decisão de venda: ${estadoConversaAtual.jaRespondeuDecisao ? 'SIM — NUNCA mais pergunte se já decidiu vender' : 'não'}
 ${guardrailsAtivos}
-📦 REGRA DE TOOL: Se você já coletou intenção + metragem + ocupação + valor, chame qualificar_lead IMEDIATAMENTE com todos os dados antes de responder.
+🧭 GOVERNANÇA DE FLUXO: ${instrucaoGovernancaCurta()} Siga esse roteiro para decidir fase e tool. Não force tool call por checklist e não pule etapa.
 
-Lembre-se: Extraia a intenção, faça o pitch de valor e peça para avaliar o imóvel. Responda à última mensagem do proprietário.`;
+Responda à última mensagem do proprietário com continuidade conversacional.`;
 
-  const inputItems: any[] = [
+  const inputItems: AgentInputItem[] = [
     { role: 'system' as const, content: contextoLead }
   ];
 
@@ -162,28 +205,55 @@ export function construirInputSdk(params: ConstruirInputSdkParams): ConstruirInp
 
   if (cachedHistory && cachedHistory.length > 0) {
     const ultimaMsgUser = mensagens.filter((m) => m.role === 'user').pop();
+
+    // Construir guardrails ricos com dados do leadRecord (mesmo nível do primeiro turno)
+    const guardrails: string[] = [];
+    if (estadoConversaAtual.intencao) guardrails.push(`⛔ Intenção JÁ confirmada: ${estadoConversaAtual.intencao}. NÃO pergunte se quer vender ou alugar.`);
+    if (estadoConversaAtual.valorPretendido) guardrails.push(`⛔ Valor JÁ informado: ${estadoConversaAtual.valorPretendido}. NÃO pergunte o valor novamente.`);
+    if (estadoConversaAtual.statusAnuncio === null || estadoConversaAtual.statusAnuncio === undefined) guardrails.push(`⛔ Status de anúncio ainda não confirmado (já anuncia ou ainda não).`);
+    if (estadoConversaAtual.estaAnunciando && !estadoConversaAtual.origemAnuncio) guardrails.push(`⛔ Lead está anunciando, mas a origem do anúncio ainda não foi confirmada (conta própria vs imobiliária/corretores).`);
+    if (estadoConversaAtual.timeline) guardrails.push(`⛔ Timeline JÁ informada: "${estadoConversaAtual.timeline}". NÃO pergunte prazo/urgência/prioridade.`);
+    if (estadoConversaAtual.jaRespondeuDecisao) guardrails.push(`⛔ Lead já demonstrou decisão de venda. NÃO pergunte se já decidiu.`);
+
+    // Dados do leadRecord (banco) — evita repetir perguntas sobre dados já salvos
+    const leadRecord = contexto.leadRecord;
+    if (leadRecord) {
+      if (leadRecord.tipoImovel) guardrails.push(`⛔ Tipo do imóvel JÁ CONHECIDO: ${leadRecord.tipoImovel}. NÃO pergunte novamente.`);
+      if (leadRecord.quartosImovel) guardrails.push(`⛔ Quartos JÁ CONHECIDO: ${leadRecord.quartosImovel}. NÃO pergunte novamente.`);
+      if (leadRecord.areaImovel && areaImovelConfiavel(leadRecord.areaImovel)) {
+        guardrails.push(`⛔ Área JÁ CONHECIDA: ${leadRecord.areaImovel}. NÃO pergunte novamente.`);
+      }
+      if (leadRecord.ocupacaoImovel) guardrails.push(`⛔ Ocupação JÁ CONHECIDA: ${leadRecord.ocupacaoImovel}. NÃO pergunte novamente.`);
+      if (leadRecord.situacaoAtual) guardrails.push(`⛔ Situação JÁ CONHECIDA: ${leadRecord.situacaoAtual}. NÃO pergunte novamente.`);
+      if (leadRecord.motivacaoVenda) guardrails.push(`⛔ Motivação JÁ CONHECIDA: ${leadRecord.motivacaoVenda}. NÃO pergunte novamente.`);
+      if (leadRecord.enderecoImovel) guardrails.push(`⛔ Endereço JÁ CONHECIDO: ${leadRecord.enderecoImovel}. NÃO pergunte novamente.`);
+    }
+
+    const estadoResumo = [
+      `ESTADO RESUMIDO DA CONVERSA (NÃO REPITA O QUE JÁ FOI RESPONDIDO):`,
+      `intenção=${estadoConversaAtual.intencao || 'n/a'}`,
+      `metragem=${estadoConversaAtual.metragem ? estadoConversaAtual.metragem + 'm²' : 'n/a'}`,
+      `ocupação=${estadoConversaAtual.ocupacao || 'n/a'}`,
+      `valor=${estadoConversaAtual.valorPretendido || 'n/a'}`,
+      `status anúncio=${estadoConversaAtual.statusAnuncio || 'n/a'}`,
+      `timeline=${estadoConversaAtual.timeline || 'n/a'}`,
+      `já anunciando=${estadoConversaAtual.estaAnunciando ? 'SIM' : 'não'}`,
+      `origem anúncio=${estadoConversaAtual.origemAnuncio || 'n/a'}`,
+      `decisão já respondida=${estadoConversaAtual.jaRespondeuDecisao ? 'SIM' : 'não'}`,
+    ];
+
+    const conteudoCompleto = [
+      ...estadoResumo,
+      '',
+      ...guardrails,
+      '',
+      `GOVERNANÇA: ${instrucaoGovernancaCurta()} Siga esse roteiro para decidir fase e tool. Não force tool call por checklist.`,
+    ].filter(l => l !== undefined).join('\n');
+
     return {
       inputSDK: [
         ...cachedHistory,
-        {
-          role: 'system' as const,
-          content: [
-            `ESTADO RESUMIDO (NÃO REPITA O QUE JÁ FOI RESPONDIDO):`,
-            `intenção=${estadoConversaAtual.intencao || 'n/a'}`,
-            `metragem=${estadoConversaAtual.metragem ? estadoConversaAtual.metragem + 'm²' : 'n/a'}`,
-            `ocupação=${estadoConversaAtual.ocupacao || 'n/a'}`,
-            `valor=${estadoConversaAtual.valorPretendido || 'n/a'}`,
-            `timeline=${estadoConversaAtual.timeline || 'n/a'}`,
-            `já anunciando=${estadoConversaAtual.estaAnunciando ? 'SIM' : 'não'}`,
-            `decisão já respondida=${estadoConversaAtual.jaRespondeuDecisao ? 'SIM' : 'não'}`,
-            estadoConversaAtual.valorPretendido ? '⛔ NÃO pergunte o valor novamente.' : '',
-            estadoConversaAtual.intencao ? `⛔ NÃO pergunte se quer vender ou alugar.` : '',
-            estadoConversaAtual.estaAnunciando ? '⛔ Lead JÁ ANUNCIANDO → PULE pergunta de valor e decisão, vá para transição da Fase 2.' : '',
-            estadoConversaAtual.timeline ? `⛔ Timeline JÁ informada ("${estadoConversaAtual.timeline}"). NÃO pergunte sobre prazo/urgência/prioridade.` : '',
-            estadoConversaAtual.jaRespondeuDecisao ? '⛔ NÃO pergunte se já decidiu vender.' : '',
-            'Se tem intenção+metragem+ocupação+valor (ou lead anunciando), chame qualificar_lead COM TODOS OS DADOS.',
-          ].filter(Boolean).join(' | ')
-        },
+        { role: 'system' as const, content: conteudoCompleto },
         { role: 'user' as const, content: ultimaMsgUser?.content || '' }
       ],
       origem: 'cache',

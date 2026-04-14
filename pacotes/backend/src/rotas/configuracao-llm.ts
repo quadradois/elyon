@@ -3,46 +3,46 @@ import { Router } from 'express';
 import { prisma } from '../lib/db';
 import { criptografar, descriptografar } from '../lib/crypto';
 import OpenAI from 'openai';
-import Anthropic from '@anthropic-ai/sdk';
 import { verificarAutenticacao } from '../middleware/middleware-auth';
+import { MODELO_PADRAO_PRINCIPAL } from '../agentes/byok-resolver';
 
 const router = Router();
 router.use(verificarAutenticacao);
 
-// Provedores suportados
+// ====================================
+// PROVEDORES SUPORTADOS
+// Apenas provedores 100% compatíveis com o SDK @openai/agents:
+//   - OpenAI (nativo)
+//   - OpenRouter (proxy OpenAI-compatible)
+// Moonshot e Anthropic foram removidos por incompatibilidades com
+// Structured Outputs, function calling nativo e reasoning_content.
+// ====================================
 const PROVEDORES_SUPORTADOS: any = {
   openai: {
     nome: 'OpenAI',
-    modelos: ['gpt-4-turbo', 'gpt-4o', 'gpt-3.5-turbo'],
-    baseUrl: 'https://api.openai.com/v1'
-  },
-  anthropic: {
-    nome: 'Anthropic',
-    modelos: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
-    baseUrl: 'https://api.anthropic.com/v1'
-  },
-  moonshot: {
-    nome: 'Moonshot AI (Kimi)',
     modelos: [
-      'moonshot-v1-8k',
-      'moonshot-v1-32k',
-      'moonshot-v1-128k',
-      'moonshot-v1-auto',
-      'moonshot-v1-8k-vision-preview',
-      'moonshot-v1-32k-vision-preview',
-      'moonshot-v1-128k-vision-preview',
-      'kimi-k2.5',
-      'kimi-k2-0905-preview',
-      'kimi-k2-0711-preview',
-      'kimi-k2-turbo-preview',
-      'kimi-k2-thinking',
-      'kimi-k2-thinking-turbo'
+      // Família GPT-4.1 (recomendados — mesmo default da plataforma)
+      'gpt-4.1',
+      'gpt-4.1-mini',
+      'gpt-4.1-nano',
+      // Família GPT-5
+      'gpt-5',
+      'gpt-5-mini',
+      // Família o (raciocínio)
+      'o3-mini',
+      'o4-mini',
+      // Família GPT-4o (legado)
+      'gpt-4o',
+      'gpt-4o-mini',
+      // Legado (não recomendados)
+      'gpt-4-turbo',
+      'gpt-3.5-turbo',
     ],
-    baseUrl: 'https://api.moonshot.ai/v1'
+    baseUrl: 'https://api.openai.com/v1'
   },
   openrouter: {
     nome: 'OpenRouter',
-    modelos: [], // Busca dinâmica
+    modelos: [], // Busca dinâmica via API
     baseUrl: 'https://openrouter.ai/api/v1'
   }
 };
@@ -58,10 +58,7 @@ router.get('/', async (req: any, res) => {
         llmProvedor: true,
         llmModelo: true,
         llmBaseUrl: true,
-        llmApiKeyCriptografada: true,
-        openaiApiKeyCriptografada: true,
-        usarChavePrincipalParaAudio: true,
-        usarChavePrincipalParaRag: true
+        llmApiKeyCriptografada: true
       }
     });
 
@@ -72,13 +69,10 @@ router.get('/', async (req: any, res) => {
     // Não retornamos a API Key real, apenas indicamos se existe
     const configuracao = {
       provedor: tenant.llmProvedor || 'openai',
-      modelo: tenant.llmModelo || 'gpt-3.5-turbo',
+      modelo: tenant.llmModelo || MODELO_PADRAO_PRINCIPAL,
       baseUrl: tenant.llmBaseUrl,
       temApiKey: !!tenant.llmApiKeyCriptografada,
-      usando_padrao: !tenant.llmApiKeyCriptografada,
-      temOpenaiApiKey: !!tenant.openaiApiKeyCriptografada,
-      usarChavePrincipalParaAudio: tenant.usarChavePrincipalParaAudio ?? true,
-      usarChavePrincipalParaRag: tenant.usarChavePrincipalParaRag ?? true
+      usando_padrao: !tenant.llmApiKeyCriptografada
     };
 
     return res.json({
@@ -96,7 +90,7 @@ router.get('/', async (req: any, res) => {
 router.post('/', async (req: any, res) => {
   try {
     const tenantId = req.tenantId;
-    const { provedor, modelo, apiKey, baseUrl, openaiApiKey, usarChavePrincipalParaAudio, usarChavePrincipalParaRag } = req.body;
+    const { provedor, modelo, apiKey, baseUrl } = req.body;
 
     if (!provedor || !modelo) {
       return responderErro(res, 400, 'Provedor e modelo são obrigatórios');
@@ -110,22 +104,11 @@ router.post('/', async (req: any, res) => {
       llmProvedor: provedor,
       llmModelo: modelo,
       llmBaseUrl: baseUrl || PROVEDORES_SUPORTADOS[provedor].baseUrl,
-      usarChavePrincipalParaAudio: typeof usarChavePrincipalParaAudio === 'boolean' ? usarChavePrincipalParaAudio : true,
-      usarChavePrincipalParaRag: typeof usarChavePrincipalParaRag === 'boolean' ? usarChavePrincipalParaRag : true,
     };
 
     // Se uma nova API Key for fornecida, criptografa e salva
     if (apiKey && apiKey.trim() !== '') {
-        // Validação básica da chave Moonshot
-        if (provedor === 'moonshot' && !apiKey.startsWith('sk-')) {
-            return responderErro(res, 400, 'API Key da Moonshot deve começar com sk-');
-        }
         dadosAtualizacao.llmApiKeyCriptografada = criptografar(apiKey);
-    }
-    
-    // Se uma chave openAI secundaria for fornecida, criptografa
-    if (openaiApiKey && openaiApiKey.trim() !== '') {
-        dadosAtualizacao.openaiApiKeyCriptografada = criptografar(openaiApiKey);
     }
 
     const tenant = await prisma.tenant.update({
@@ -140,10 +123,7 @@ router.post('/', async (req: any, res) => {
         provedor: tenant.llmProvedor,
         modelo: tenant.llmModelo,
         baseUrl: tenant.llmBaseUrl,
-        temApiKey: !!tenant.llmApiKeyCriptografada,
-        temOpenaiApiKey: !!tenant.openaiApiKeyCriptografada,
-        usarChavePrincipalParaAudio: tenant.usarChavePrincipalParaAudio,
-        usarChavePrincipalParaRag: tenant.usarChavePrincipalParaRag
+        temApiKey: !!tenant.llmApiKeyCriptografada
       }
     });
   } catch (error) {
@@ -182,20 +162,10 @@ router.post('/testar', async (req: any, res) => {
     }
 
     const provedor = tenant.llmProvedor || 'openai';
-    const modelo = tenant.llmModelo || 'gpt-3.5-turbo';
+    const modelo = tenant.llmModelo || MODELO_PADRAO_PRINCIPAL;
     const baseUrl = tenant.llmBaseUrl || PROVEDORES_SUPORTADOS[provedor]?.baseUrl;
 
-    if (provedor === 'anthropic') {
-      const client = new Anthropic({ apiKey });
-      await client.messages.create({
-        model: modelo,
-        max_tokens: 1,
-        system: 'ping',
-        messages: [{ role: 'user', content: 'ping' }]
-      });
-      return res.json({ success: true, message: 'Conexão Anthropic OK' });
-    }
-
+    // Todos os provedores suportados usam a API OpenAI-compatible
     const client = new OpenAI({
       apiKey,
       baseURL: baseUrl
@@ -203,8 +173,8 @@ router.post('/testar', async (req: any, res) => {
 
     await client.chat.completions.create({
       model: modelo,
-      max_tokens: 1,
-      messages: [{ role: 'user', content: 'ping' }]
+      max_completion_tokens: 10,
+      messages: [{ role: 'user', content: 'Responda apenas: ok' }]
     });
 
     return res.json({ success: true, message: 'Conexão LLM OK' });
@@ -214,45 +184,74 @@ router.post('/testar', async (req: any, res) => {
   }
 });
 
+// ====================================
+// CACHE DE MODELOS OPENROUTER (TTL 5 min)
+// Evita chamadas repetidas à API do OpenRouter a cada requisição do dashboard.
+// ====================================
+let openRouterModelosCache: { id: string; name: string }[] = [];
+let openRouterCacheTimestamp = 0;
+const OPENROUTER_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+/**
+ * Busca modelos disponíveis no OpenRouter via API pública.
+ * Filtra apenas modelos compatíveis com function calling (chat completions).
+ */
+async function buscarModelosOpenRouter(): Promise<{ id: string; name: string }[]> {
+    const agora = Date.now();
+    if (openRouterModelosCache.length > 0 && (agora - openRouterCacheTimestamp) < OPENROUTER_CACHE_TTL_MS) {
+        return openRouterModelosCache;
+    }
+
+    try {
+        const response = await fetch('https://openrouter.ai/api/v1/models');
+        if (!response.ok) {
+            console.warn(`[LLM-CONFIG] OpenRouter /models respondeu ${response.status}. Usando cache anterior.`);
+            return openRouterModelosCache;
+        }
+
+        const body = await response.json() as { data?: Array<{ id: string; name?: string }> };
+        if (!body.data || !Array.isArray(body.data)) {
+            return openRouterModelosCache;
+        }
+
+        // Filtrar modelos relevantes: priorizar OpenAI, Google, Anthropic, Meta, Mistral, DeepSeek
+        const provedoresPrioritarios = /^(openai|google|anthropic|meta-llama|mistralai|deepseek)/i;
+        const modelosFiltrados = body.data
+            .filter((m) => provedoresPrioritarios.test(m.id))
+            .map((m) => ({ id: m.id, name: m.name || m.id }))
+            .sort((a, b) => a.id.localeCompare(b.id));
+
+        openRouterModelosCache = modelosFiltrados;
+        openRouterCacheTimestamp = agora;
+        console.log(`[LLM-CONFIG] ✅ OpenRouter: ${modelosFiltrados.length} modelos carregados (TTL 5min)`);
+
+        return modelosFiltrados;
+    } catch (err: any) {
+        console.warn(`[LLM-CONFIG] ⚠️ Falha ao buscar modelos OpenRouter: ${err?.message}. Usando cache.`);
+        return openRouterModelosCache;
+    }
+}
+
 // GET /configuracao-llm/modelos/:provedor
 router.get('/modelos/:provedor', async (req: any, res) => {
     try {
         const { provedor } = req.params;
-        const tenantId = req.tenantId;
 
         if (!PROVEDORES_SUPORTADOS[provedor]) {
             return responderErro(res, 400, 'Provedor não suportado');
         }
 
-        // Se for Moonshot, tentamos buscar modelos da API se tivermos chave
-        if (provedor === 'moonshot') {
-             const tenant = await prisma.tenant.findUnique({
-                where: { id: tenantId },
-                select: { llmApiKeyCriptografada: true }
-            });
-
-            if (tenant?.llmApiKeyCriptografada) {
-                try {
-                    const apiKey = descriptografar(tenant.llmApiKeyCriptografada);
-                    // IMPORTANTE: Endpoint Global da Moonshot
-                    const client = new OpenAI({
-                        apiKey: apiKey,
-                        baseURL: "https://api.moonshot.ai/v1"
-                    });
-                    
-                    const models = await client.models.list();
-                    return res.json({ 
-                        modelos: models.data.map((m: any) => ({ id: m.id, name: m.id })),
-                        source: 'api'
-                    });
-                } catch (apiError) {
-                    console.error('Erro ao buscar modelos Moonshot:', apiError);
-                    // Fallback para estático em caso de erro
-                }
+        // OpenRouter: busca dinâmica com cache de 5 min
+        if (provedor === 'openrouter') {
+            const modelos = await buscarModelosOpenRouter();
+            if (modelos.length > 0) {
+                return res.json({ modelos, source: 'dynamic' });
             }
+            // Fallback: sem resultados da API, retorna lista vazia com aviso
+            return res.json({ modelos: [], source: 'dynamic', aviso: 'Nenhum modelo retornado pela API OpenRouter' });
         }
 
-        // Retorna modelos estáticos se não for possível buscar dinamicamente
+        // OpenAI e demais: lista estática
         const modelos = PROVEDORES_SUPORTADOS[provedor].modelos.map((m: string) => ({
             id: m,
             name: m

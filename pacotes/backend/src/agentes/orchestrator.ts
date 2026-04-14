@@ -1,5 +1,5 @@
 /**
- * ORCHESTRATOR - Orquestrador dos 4 Agentes de Captação
+ * ORCHESTRATOR - Orquestrador da Cadeia de Agentes de Captação
  * 
  * Responsável por:
  * 1. Executar guardrails de entrada
@@ -14,6 +14,8 @@
 import { setTracingExportApiKey } from '@openai/agents';
 import { prisma } from '../lib/db';
 import type { Lead, Prisma } from '@prisma/client';
+import type { SchemaState } from './conversation-state';
+import type { ElyonRunResult, AgentInputItem } from './types';
 import { executarGuardrails, GuardrailResult } from './guardrails';
 import type { ElyonContext } from './elyon-context';
 import type { MessageItem } from './types';
@@ -23,16 +25,17 @@ import { persistirHistoricoSdk } from './history-persistence';
 import { extrairRespostaECot } from './output-extraction';
 import { construirInputSdk } from './input-builder';
 import { construirElyonContext } from './context-builder';
-import { executarAgenteComRetryReasoning } from './agent-runner';
+import { executarAgenteComRetry } from './agent-runner';
 import { processarPosHandoff } from './post-handoff';
 import { logMetricaOrchestrator } from './orchestrator-metrics';
+import { ServicoAuditoria } from '../servicos/servico-auditoria';
 import { resolverAgenteFinal, logAgenteResolvido } from './agent-resolution';
 import { executarGuardrailsEntrada } from './entry-guardrail';
 import { resolverAgentePersistido } from './persisted-agent';
 import { analisarSentimento, gerarInstrucaoSentimento } from './sentiment-analyzer';
 import { tentarDetectarObjecao } from './classificador-objecao';
 import { tentarPreCarregarSkill, AgenteAtual } from './classificador-skills';
-import { resolverChaveAgentes } from './byok-resolver';
+import { resolverChaveAgentes, MODELO_PADRAO_AUXILIAR } from './byok-resolver';
 
 // Módulos extraídos
 import {
@@ -41,7 +44,6 @@ import {
     gerarFallbackContextual,
     gerarFallbackAntiRepeticao,
     respostaRepetePerguntaCritica,
-    deveForcarTransicaoParaPresenter,
     atualizarSchemaState,
 } from './conversation-state';
 import { getSchemaState, setSchemaState } from './conversation-cache';
@@ -85,14 +87,11 @@ export interface ConfiguracaoOrquestrador {
     // Retrocompatibilidade (string não-criptografada resolvida no query builder)
     llmApiKey?: string;
 
-    // BYOK Granular (Campos de configuração herdados da TenantBYOK para byok-resolver)
+    // BYOK (Campos de configuração herdados da TenantBYOK para byok-resolver)
     llmProvedor?: string | null;
     llmModelo?: string | null;
     llmApiKeyCriptografada?: string | null;
     llmBaseUrl?: string | null;
-    openaiApiKeyCriptografada?: string | null;
-    usarChavePrincipalParaAudio?: boolean;
-    usarChavePrincipalParaRag?: boolean;
 }
 
 export interface ContextoConversa {
@@ -126,7 +125,6 @@ export async function processarMensagemOrquestrada(
     mensagens: Array<{ role: 'user' | 'assistant'; content: string }>,
     config: ConfiguracaoOrquestrador,
     contexto: ContextoConversa,
-    profundidade: number = 0 // Mantido para retrocompatibilidade, mas não mais usado
 ): Promise<ResultadoProcessamento> {
     const inicioTurno = Date.now();
 
@@ -187,12 +185,7 @@ export async function processarMensagemOrquestrada(
         });
 
         // 2. DETERMINAR AGENTE INICIAL baseado no status do lead/cache persistido
-        let tipoAgente = determinarAgente(contexto.statusLead, contexto.contatoId, agentePersistido);
-
-        if (tipoAgente === 'OPENER' && deveForcarTransicaoParaPresenter(mensagens)) {
-            tipoAgente = 'PRESENTER';
-            logger.debug('[ORCHESTRATOR] 🧭 Fallback determinístico: confirmação de prioridade detectada, roteando direto para PRESENTER.');
-        }
+        const tipoAgente = determinarAgente(contexto.statusLead, contexto.contatoId, agentePersistido);
 
         logger.debug(`[ORCHESTRATOR] Agente inicial: ${tipoAgente} (status: ${contexto.statusLead || 'sem lead'})`);
 
@@ -207,12 +200,12 @@ export async function processarMensagemOrquestrada(
         const estadoConversaAtual = extrairEstadoConversa(mensagens);
 
         // SCHEMA STATE: recuperar estado anterior do cache
-        let schemaAnterior: Record<string, unknown> | undefined;
+        let schemaAnterior: SchemaState | undefined;
         if (contexto.contatoId) {
             schemaAnterior = await getSchemaState(contexto.contatoId);
         }
         // Primeiro merge do estado extraído da conversa
-        const schemaAtualizado = atualizarSchemaState(schemaAnterior as any, estadoConversaAtual);
+        const schemaAtualizado = atualizarSchemaState(schemaAnterior, estadoConversaAtual);
 
         // persistência opcional no banco (lead record) e leitura da ficha
         let leadRecord: Lead | null | undefined;
@@ -220,8 +213,11 @@ export async function processarMensagemOrquestrada(
             try {
                 leadRecord = await prisma.lead.findUnique({ where: { id: contexto.leadId } });
             } catch (err) {
-                const msg = err instanceof Error ? err.message : err;
-                logger.warn("[erro capturado]");
+                logger.warn({
+                    erro: err instanceof Error ? err.message : err,
+                    leadId: contexto.leadId,
+                    telefone: contexto.telefone,
+                }, '[ORCHESTRATOR] Falha ao buscar lead record');
             }
         }
 
@@ -239,7 +235,12 @@ export async function processarMensagemOrquestrada(
                     where: { id: contexto.leadId },
                     data: { schemaState: schemaFinal as unknown as Prisma.InputJsonValue },
                 });
-            } catch { /* não crítico */ }
+            } catch (err) {
+                logger.warn({
+                    erro: err instanceof Error ? err.message : err,
+                    leadId: contexto.leadId,
+                }, '[ORCHESTRATOR] Falha ao persistir schemaState no lead');
+            }
         }
 
         // pass leadRecord along with contexto so input builder can summarize it
@@ -253,7 +254,7 @@ export async function processarMensagemOrquestrada(
             config,
             contexto: contextoParaInput,
         });
-        let inputSDK: MessageItem[] = inputBuilderResult.inputSDK;
+        let inputSDK: AgentInputItem[] = inputBuilderResult.inputSDK;
 
         if (inputBuilderResult.origem === 'cache') {
             logger.debug(`[ORCHESTRATOR] 📜 Usando cache SDK: ${inputBuilderResult.cachedHistoryLength} itens + nova mensagem`);
@@ -264,30 +265,37 @@ export async function processarMensagemOrquestrada(
         // ✅ TASK-IA-05: Análise de Sentimento em Tempo Real
         const ultimaMensagemLead = mensagens.filter(m => m.role === 'user').pop();
         if (ultimaMensagemLead) {
+            // ── PRÉ-PROCESSAMENTO PARALELO ──
+            // Sentimento é síncrono (regex local), objeção e skill são I/O.
+            // Executamos todos em paralelo para reduzir latência do turno.
             const sentimento = analisarSentimento(ultimaMensagemLead.content);
+
+            const resolvedBYOK = resolverChaveAgentes(config);
+            const modelToUse = resolvedBYOK.modelo || MODELO_PADRAO_AUXILIAR;
+            const agenteAtualStr: AgenteAtual = tipoAgente === 'SDR' ? 'sdr' : 'admin';
+
+            const [objecaoResult, skillResult] = await Promise.allSettled([
+                tentarDetectarObjecao(
+                    ultimaMensagemLead.content,
+                    resolvedBYOK.apiKey,
+                    resolvedBYOK.baseUrl,
+                    modelToUse
+                ),
+                tentarPreCarregarSkill(ultimaMensagemLead.content, agenteAtualStr as AgenteAtual),
+            ]);
+
+            // Injetar sentimento (síncrono — já resolvido)
             if (sentimento.sentimento !== 'NEUTRO') {
                 const instrucaoSentimento = gerarInstrucaoSentimento(sentimento);
                 if (instrucaoSentimento) {
-                    // Injetar como system message no início do input
                     inputSDK = [{ role: 'system' as const, content: instrucaoSentimento }, ...inputSDK];
                     logger.debug(`[ORCHESTRATOR] 🎭 Sentimento detectado: ${sentimento.sentimento} (${sentimento.confianca}%) — ajustando tom do agente`);
                 }
             }
 
-            // ✅ INJEÇÃO SEMÂNTICA: Classificação de Objeção Tática (Middleware Bypass)
-            const resolvedBYOK = resolverChaveAgentes(config as any); // Usa a chave criptografada do tenant
-            const modelToUse = resolvedBYOK.modelo?.includes('gpt-4o') || !resolvedBYOK.modelo ? 'gpt-4o-mini' : resolvedBYOK.modelo; // forçar submodelo rápido se OpenAI
-            
-            const objecaoDetectada = await tentarDetectarObjecao(
-                ultimaMensagemLead.content, 
-                resolvedBYOK.apiKey, 
-                resolvedBYOK.baseUrl,
-                modelToUse
-            );
-
+            // Injetar objeção (se detectada)
+            const objecaoDetectada = objecaoResult.status === 'fulfilled' ? objecaoResult.value : null;
             if (objecaoDetectada) {
-                // Alinhamento de escopo: A objeção só é injetada se a fase dela bater com o agente atual (ou similar),
-                // Mas de qualquer forma a barreira tática prioriza o contorno.
                 const instrucaoTatica = `[INJEÇÃO TÁTICA ATIVADA] 🚨 O usuário levantou uma objeção clássica identificada pelo sistema (ID ${objecaoDetectada.id}).
                 
 INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMENTE A SEGUINTE PREMISSA DE CONTORNO (sem parecer robótico, use seu tom natural baseado nessa lógica):
@@ -295,10 +303,12 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
 
                 inputSDK = [{ role: 'system' as const, content: instrucaoTatica }, ...inputSDK];
             }
+            if (objecaoResult.status === 'rejected') {
+                logger.warn({ err: objecaoResult.reason }, '[ORCHESTRATOR] ⚠️ Falha na detecção de objeção (não-bloqueante)');
+            }
 
-            // ✅ TASK-IA-06: Pre-load determinístico de Skills (Zero IA via Regex)
-            const agenteAtualStr = tipoAgente === 'OPENER' ? 'opener' : 'presenter';
-            const injecaoSkill = await tentarPreCarregarSkill(ultimaMensagemLead.content, agenteAtualStr as AgenteAtual);
+            // Injetar skill pré-carregada (se encontrada)
+            const injecaoSkill = skillResult.status === 'fulfilled' ? skillResult.value : null;
             if (injecaoSkill) {
                 inputSDK = [{ role: 'system' as const, content: injecaoSkill }, ...inputSDK];
                 logger.debug(`[ORCHESTRATOR] ⚡ Skill pré-carregada injetada no inputSDK.`);
@@ -314,15 +324,34 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
             config,
             contexto,
             agenteCache,
-            prismaClient: prisma as any,
+            prismaClient: prisma as unknown as ElyonContext['prisma'],
             schemaState: schemaFinal,
             leadRecord,
         });
 
         // 6. EXECUTAR AGENTE (SDK gerencia handoffs automaticamente)
         let nomesToolsTurno: string[] = [];
-        let result: unknown;
-        const runResult = await executarAgenteComRetryReasoning({
+        let result: ElyonRunResult;
+
+        // Fallback de provedor: se o tenant usa BYOK (chave própria), criamos
+        // callback para recriar o agente com chave da plataforma em caso de falha.
+        const resolvedBYOKForFallback = resolverChaveAgentes(config);
+        const usaBYOK = resolvedBYOKForFallback.fonte !== 'plataforma';
+        const criarAgenteFallbackFn = usaBYOK
+            ? () => {
+                logger.warn('[ORCHESTRATOR] 🔄 Recriando agente com provedor da plataforma (fallback)...');
+                const configPlataforma = {
+                    ...config,
+                    llmApiKeyCriptografada: null,
+                    llmProvedor: 'openai',
+                    llmModelo: null,
+                    llmBaseUrl: null,
+                };
+                return criarAgente(tipoAgente, configPlataforma, contexto);
+            }
+            : undefined;
+
+        const runResult = await executarAgenteComRetry({
             agente,
             inputSDK,
             elyonContext,
@@ -336,10 +365,14 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
                 contexto: contextoParaInput,
             }).inputSDK,
             limparHistoricoContato: clearHistory,
+            criarAgenteFallback: criarAgenteFallbackFn,
         });
 
         result = runResult.result;
         inputSDK = runResult.inputSDKFinal;
+        if (runResult.usouFallbackProvedor) {
+            fallbackAplicado = 'PROVIDER_FALLBACK';
+        }
 
         // 6.1 PERSISTIR HISTÓRICO SDK (preserva tool calls e handoffs para o próximo turno)
         if (contexto.contatoId) {
@@ -355,12 +388,15 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
         const cotLog = outputExtraido.cotLog;
         if (outputExtraido.structuredOutputDetectado) {
             logger.debug(`[ORCHESTRATOR] 📦 Structured Output detectado. Próximo passo: ${outputExtraido.proximoPasso}`);
+            if (outputExtraido.dadosEstruturados) {
+                logger.debug({ dados: outputExtraido.dadosEstruturados }, '[ORCHESTRATOR] 📊 Dados estruturados extraídos');
+            }
         }
         if (cotLog) {
             logger.debug(`[ORCHESTRATOR] 🧠 CoT: \n${cotLog}`);
         }
 
-        const nomeRealAgenteRespondeu = (result as any).lastAgent?.name;
+        const nomeRealAgenteRespondeu = (result as ElyonRunResult)?.lastAgent?.name;
         const resolucaoAgente = resolverAgenteFinal({
             nomeRealAgenteRespondeu,
             tipoAgenteInicial: tipoAgente,
@@ -382,6 +418,14 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
             gerarBriefing: gerarBriefingHandoff,
         });
 
+        // Extrair última mensagem do assistente para continuidade conversacional dos fallbacks
+        const ultimaMsgAssistente = mensagens
+            .filter(m => m.role === 'assistant')
+            .slice(-1)[0]?.content || undefined;
+        const ultimaMsgLeadTexto = mensagens
+            .filter(m => m.role === 'user')
+            .slice(-1)[0]?.content || undefined;
+
         const filtroResposta = aplicarFiltrosRespostaOrchestrator({
             respostaFinal,
             houveHandoff,
@@ -391,6 +435,8 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
             cotLog,
             nomesToolsTurno,
             fallbackAplicadoAtual: fallbackAplicado,
+            ultimaMsgAssistente,
+            ultimaMsgLead: ultimaMsgLeadTexto,
         });
 
         let respostaLimpa = filtroResposta.respostaLimpa;
@@ -410,9 +456,7 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
             respostaLimpa = gerarFallbackAntiRepeticao(estadoConversaAtual, agenteQueRespondeuFormatado, msgAssistente);
         }
 
-        const guardrailRuntime = fallbackAplicado === 'RUNTIME_SPIN_TOOL_GATE'
-            ? 'SPIN_TOOL_GATE'
-            : undefined;
+        const guardrailRuntime: string | undefined = undefined;
 
         logMetricaOrchestrator({
             tenantId: config.tenantId,
@@ -428,8 +472,23 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
             fallback: fallbackAplicado,
             guardrail: guardrailRuntime,
             duracaoMs: Date.now() - inicioTurno,
-            sucesso: true
+            sucesso: true,
+            // usage não existe no tipo RunResult do SDK — campo reservado para futuras versões
+            tokens: undefined,
         });
+
+        // 🔥 Registrar no Audit Log para governança (ações do Agente)
+        if (!cachedHistory || cachedHistory.length === 0) {
+            ServicoAuditoria.registrar({
+                tenantId: config.tenantId,
+                // usuarioId omitido para ação do sistema (evita erro de foreign key)
+                acao: 'LEAD_CONTATADO',
+                entidade: 'Lead',
+                entidadeId: contexto.leadId || contexto.contatoId,
+                detalhes: { agente: agenteQueRespondeuFormatado, telefone: contexto.telefone },
+                ip: '127.0.0.1'
+            });
+        }
 
         return {
             sucesso: true,
@@ -438,7 +497,13 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
         };
 
     } catch (error: unknown) {
-        logger.warn("[erro capturado]");
+        logger.error({
+            erro: error instanceof Error ? error.stack : error,
+            telefone: contexto.telefone,
+            contatoId: contexto.contatoId,
+            leadId: contexto.leadId,
+            turno: mensagens.length,
+        }, '[ORCHESTRATOR] Exceção não tratada');
         
         const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido no orquestrador';
 

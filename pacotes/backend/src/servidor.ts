@@ -40,6 +40,7 @@ import rotaConfiguracaoIntegracao from './rotas/configuracao-integracao';
 import rotaConfiguracaoLLM from './rotas/configuracao-llm';
 import rotaMetricasIA from './rotas/metricas-ia.rotas';
 import rotaUsuarios from './rotas/usuarios';
+import rotaAdminAuditoria from './rotas/admin-auditoria';
 
 // Importar Prisma do módulo central (evita dependência circular)
 import { prisma } from './lib/db';
@@ -48,6 +49,7 @@ export { prisma };
 // Importar serviço WebSocket
 import { websocketService } from './servicos/websocket';
 import { schedulerSincronizacaoMapa } from './servicos/scheduler-sincronizacao-mapa';
+import { schedulerLimpezaCache } from './servicos/scheduler-limpeza-cache';
 
 const app = express();
 const server = http.createServer(app);
@@ -163,6 +165,7 @@ app.use('/api/configuracao/integracao', rotaConfiguracaoIntegracao); // Config i
 app.use('/api/configuracao/llm', rotaConfiguracaoLLM);               // Config BYOK (LLM próprio)
 app.use('/api/metricas-ia', rotaMetricasIA);                          // Métricas da IA (performance agentes, tools, conversões)
 app.use('/api/usuarios', rotaUsuarios);                               // Gestão de usuários da equipe
+app.use('/api/admin/auditoria', rotaAdminAuditoria);                  // Log de Auditoria do sistema (Super Admin)
 app.use('/webhooks', rotaWebhook);
 app.use('/webhooks', rotaWebhookManus);     // Webhooks do Manus (pesquisa IA)
 
@@ -219,6 +222,7 @@ if (require.main === module) {
     console.log(`🔌 WebSocket ativo para alertas em tempo real`);
     console.log(`🏥 Health check: http://localhost:${PORT}/api/saude`);
     schedulerSincronizacaoMapa.iniciar();
+    schedulerLimpezaCache.iniciar();
 
     // REMOVIDO: Autoconfiguração global de webhook
     // Cada sessão WhatsApp configura seu próprio webhook individualmente

@@ -16,6 +16,7 @@
 import { AgentInputItem } from '@openai/agents';
 import OpenAI from 'openai';
 import { logger } from '../lib/logger';
+import { resolverChaveAgentes, MODELO_PADRAO_AUXILIAR, type TenantBYOK } from './byok-resolver';
 
 const logParams = { context: 'Handoff Filters' };
 
@@ -32,15 +33,16 @@ export function filterHistoryByQuery(
     const removidos: string[] = [];
 
     const filtered = history.filter(item => {
-        const itemAny = item as any;
-        if (itemAny.role === 'system') {
+        const rec = item as Record<string, unknown>;
+        if (rec.role === 'system') {
             return true;
         }
 
-        if (typeof itemAny.content === 'string') {
-            const matchedPattern = patterns.find(p => p.test(itemAny.content as string));
+        if (typeof rec.content === 'string') {
+            const content = rec.content;
+            const matchedPattern = patterns.find(p => p.test(content));
             if (matchedPattern) {
-                removidos.push(`"${(itemAny.content as string).substring(0, 40)}..." (${matchedPattern.source})`);
+                removidos.push(`"${content.substring(0, 40)}..." (${matchedPattern.source})`);
                 return false;
             }
         }
@@ -60,6 +62,9 @@ export function filterHistoryByQuery(
 /**
  * Mantém apenas os últimos N turnos de conversa, mas SEMPRE preserva
  * a(s) primeira(s) mensagem(ns) que costuma(m) ser de sistema/contexto.
+ * 
+ * Com provedores 100% OpenAI-compatible, tool_call_item e tool_call_output_item
+ * são PRESERVADOS no histórico (essenciais para context fidelity e function continuity).
  */
 export function sliceHistoryPreservingSystem(
     history: AgentInputItem[],
@@ -67,20 +72,11 @@ export function sliceHistoryPreservingSystem(
     context?: string
 ): AgentInputItem[] {
     const systemItems = history.filter(item => {
-        const itemAny = item as any;
-        return itemAny.role === 'system';
+        return (item as Record<string, unknown>).role === 'system';
     });
     
-    // NOTA: tool_call_item e tool_call_output_item são EXCLUÍDOS do histórico persistido.
-    // Motivo: modelos thinking (ex: kimi-k2-thinking) exigem reasoning_content em mensagens
-    // de tool call. O SDK @openai/agents não preserva esse campo ao serializar result.history,
-    // causando BadRequestError 400 na turn seguinte. O contexto da tool já está refletido
-    // na mensagem de texto do assistant que veio após o tool call.
     const nonSystemItems = history.filter(item => {
-        const itemAny = item as any;
-        return itemAny.role !== 'system' && 
-               itemAny.type !== 'tool_call_item' && 
-               itemAny.type !== 'tool_call_output_item';
+        return (item as Record<string, unknown>).role !== 'system';
     });
 
     // Aumentar o número de turnos preservados para manter mais contexto
@@ -90,7 +86,7 @@ export function sliceHistoryPreservingSystem(
     // 📊 Métricas
     const removidos = nonSystemItems.length - strategyItems.length;
     if (removidos > 0) {
-        logger.debug(`[HANDOFF-FILTER] 📊 ${context || 'Slice'}: ${nonSystemItems.length} → ${strategyItems.length} turnos (${removidos} antigos descartados, ${systemItems.length} system, tool calls excluídos do cache)`);
+        logger.debug(`[HANDOFF-FILTER] 📊 ${context || 'Slice'}: ${nonSystemItems.length} → ${strategyItems.length} turnos (${removidos} antigos descartados, ${systemItems.length} system preservados)`);
     }
 
     return [...systemItems, ...strategyItems];
@@ -120,7 +116,7 @@ export async function gerarBriefingHandoff(
     history: AgentInputItem[],
     agenteOrigem: string,
     agenteDestino: string,
-    config?: any
+    config?: TenantBYOK | null
 ): Promise<AgentInputItem | null> {
     try {
         // Extrair mensagens legíveis (user/assistant) E dados de tool calls para o resumo
@@ -130,24 +126,24 @@ export async function gerarBriefingHandoff(
         const ultimasMensagens = history.slice(-15);
         
         for (const item of ultimasMensagens) {
-            const itemAny = item as any;
+            const rec = item as Record<string, unknown>;
             
             // Tool calls PRIMEIRO (podem ter role 'assistant' junto)
-            if (itemAny.type === 'tool_call_item') {
-                const toolName = itemAny.toolName || itemAny.name || 'tool_desconhecida';
-                const args = itemAny.args || itemAny.parameters || {};
+            if (rec.type === 'tool_call_item') {
+                const toolName = rec.toolName || rec.name || 'tool_desconhecida';
+                const args = rec.args || rec.parameters || {};
                 mensagensFormatadas.push(`[TOOL EXECUTADA: ${toolName}] Parâmetros: ${JSON.stringify(args)}`);
-            } else if (itemAny.type === 'tool_call_output_item') {
-                const toolName = itemAny.toolName || itemAny.name || 'tool_desconhecida';
-                const output = itemAny.output || itemAny.result || {};
+            } else if (rec.type === 'tool_call_output_item') {
+                const toolName = rec.toolName || rec.name || 'tool_desconhecida';
+                const output = rec.output || rec.result || {};
                 const outputResumido = typeof output === 'string' && output.length > 100 ? 
                     output.substring(0, 100) + '...' : JSON.stringify(output);
                 mensagensFormatadas.push(`[RESULTADO TOOL: ${toolName}] ${outputResumido}`);
-            } else if (itemAny.role === 'user') {
-                const conteudo = typeof itemAny.content === 'string' ? itemAny.content : JSON.stringify(itemAny.content);
+            } else if (rec.role === 'user') {
+                const conteudo = typeof rec.content === 'string' ? rec.content : JSON.stringify(rec.content);
                 mensagensFormatadas.push(`PROPRIETÁRIO: ${conteudo}`);
-            } else if (itemAny.role === 'assistant') {
-                const conteudo = typeof itemAny.content === 'string' ? itemAny.content : JSON.stringify(itemAny.content);
+            } else if (rec.role === 'assistant') {
+                const conteudo = typeof rec.content === 'string' ? rec.content : JSON.stringify(rec.content);
                 mensagensFormatadas.push(`AGENTE: ${conteudo}`);
             }
         }
@@ -159,8 +155,7 @@ export async function gerarBriefingHandoff(
         }
 
         // Resolvendo BYOK
-        const resolvedor = require('./byok-resolver');
-        const byok = resolvedor.resolverChaveAgentes(config as any);
+        const byok = resolverChaveAgentes(config ?? null);
         
         const openai = new OpenAI({
              apiKey: byok.apiKey || process.env.OPENAI_API_KEY,
@@ -168,9 +163,9 @@ export async function gerarBriefingHandoff(
         });
 
         const response = await openai.chat.completions.create({
-            model: 'gpt-4.1-mini',
+            model: MODELO_PADRAO_AUXILIAR,
             temperature: 0.3,
-            max_tokens: 300,
+            max_completion_tokens: 300,
             messages: [
                 {
                     role: 'system',
@@ -204,12 +199,12 @@ Base: conversa entre ${agenteOrigem} e o lead.`
 
         // Retornar como mensagem system para injetar no histórico do Closer
         return {
-            role: 'system',
+            role: 'system' as const,
             content: `📋 DOSSIÊ DO LEAD (${agenteOrigem} → ${agenteDestino}):\n${briefing}\n\n⚡ INSTRUÇÃO: Assuma a conversa sem fazê-lo repetir dados. Comece pela instrução "Por onde Começar" acima.`
-        } as any;
+        } as AgentInputItem;
 
     } catch (err) {
-        logger.warn("[erro capturado]");
+        logger.warn({ err }, '[HANDOFF-FILTERS] Erro ao gerar briefing de handoff');
         return null;
     }
 }

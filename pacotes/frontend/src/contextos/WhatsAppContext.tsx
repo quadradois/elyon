@@ -3,9 +3,10 @@ import {
   useContext,
   useState,
   useEffect,
+  useCallback,
   ReactNode,
 } from "react";
-import { api } from "../servicos/api";
+import { api, isRequestCanceled } from "../servicos/api";
 
 type StatusWhatsApp =
   | "CONECTADO"
@@ -25,10 +26,10 @@ const WhatsAppContext = createContext<WhatsAppContextData>(
 export function WhatsAppProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<StatusWhatsApp>("CARREGANDO");
 
-  const verificarStatus = async () => {
+  const verificarStatus = useCallback(async (signal?: AbortSignal) => {
     try {
       // Usa o novo endpoint de sessões
-      const response = await api.get("/sessoes-whatsapp");
+      const response = await api.get("/sessoes-whatsapp", { signal });
       const sessoes = response.data.sessoes || [];
 
       // Se tiver pelo menos uma sessão conectada, considera o sistema conectado
@@ -47,16 +48,23 @@ export function WhatsAppProvider({ children }: { children: ReactNode }) {
         setStatus("DESCONECTADO");
       }
     } catch (error) {
+      if (isRequestCanceled(error)) return;
       console.error("Erro ao verificar status do WhatsApp:", error);
       setStatus("DESCONECTADO");
     }
-  };
+  }, []);
 
   useEffect(() => {
-    verificarStatus();
-    const intervalo = setInterval(verificarStatus, 30000); // Polling a cada 30s
-    return () => clearInterval(intervalo);
-  }, []);
+    const controller = new AbortController();
+
+    verificarStatus(controller.signal);
+    const intervalo = setInterval(() => verificarStatus(), 30000); // Polling a cada 30s
+
+    return () => {
+      controller.abort();
+      clearInterval(intervalo);
+    };
+  }, [verificarStatus]);
 
   return (
     <WhatsAppContext.Provider value={{ status, verificarStatus }}>

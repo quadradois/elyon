@@ -1,4 +1,6 @@
 import type { ElyonContext } from './elyon-context';
+import type { SchemaState } from './conversation-state';
+import type { Lead } from '@prisma/client';
 
 interface ContextBuilderConfig {
   tenantId: string;
@@ -31,8 +33,8 @@ interface ConstruirElyonContextParams {
   contexto: ContextBuilderConversa;
   agenteCache?: string;
   prismaClient: ElyonContext['prisma'];
-  schemaState?: any;
-  leadRecord?: any;
+  schemaState?: SchemaState;
+  leadRecord?: Lead | null;
 }
 
 

@@ -99,7 +99,7 @@ export function Configuracao() {
     {
       id: "byok-llm",
       titulo: "Provedor de IA (BYOK)",
-      descricao: "Use sua própria API Key de OpenAI, Anthropic ou OpenRouter",
+      descricao: "Use sua própria API Key de OpenAI ou OpenRouter",
       icon: Brain,
       iconColor: "text-violet-600",
       iconBg: "bg-violet-50",

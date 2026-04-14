@@ -7,7 +7,7 @@ const router = Router();
 // Middleware de segurança simples (idealmente usaria auth admin)
 const checkAdmin = (req: any, res: any, next: any) => {
     const apiKey = req.headers['x-admin-key'];
-    if (apiKey !== process.env.ADMIN_API_KEY && apiKey !== 'elyon-master-key-2024') {
+    if (!process.env.ADMIN_API_KEY || apiKey !== process.env.ADMIN_API_KEY) {
         return responderErro(res, 401, 'Não autorizado');
     }
     next();

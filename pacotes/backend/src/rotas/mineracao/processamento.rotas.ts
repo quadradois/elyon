@@ -18,8 +18,15 @@ import { assertivaService } from '../../servicos/assertiva';
 import { prisma } from '../../lib/db';
 import { servicoCreditos } from '../../servicos/servico-creditos';
 import { z } from 'zod';
+import { ServicoAuditoria } from '../../servicos/servico-auditoria';
 
 const router = Router();
+
+// TTL do cache de CPFs da Assertiva (compartilhado entre todos os tenants):
+// Proprietário de imóvel raramente muda telefone em menos de 1 ano.
+// Com sliding-window, CPFs consultados frequentemente nunca expiram.
+// Valor em dias — alterar aqui afeta tanto criação quanto renovação.
+const CACHE_CPF_TTL_DIAS = 365;
 
 // ============================================
 // SCHEMAS DE VALIDAÇÃO
@@ -260,7 +267,11 @@ router.post('/confirmar-leads', async (req, res) => {
       proprietarios = parsed.proprietarios;
     } catch (zodError) {
       logger.error({ erroZod: zodError }, '[DEBUG] Zod Error');
-      throw zodError;
+      return responderErro(res, 400, 'Dados inválidos. Envie { proprietarios: [...] }');
+    }
+
+    if (!proprietarios || proprietarios.length === 0) {
+      return responderErro(res, 400, 'Nenhum documento/proprietário fornecido para confirmação');
     }
 
     const inicio = Date.now();
@@ -364,9 +375,12 @@ router.post('/confirmar-leads', async (req, res) => {
           }
         }
 
+        // Sliding window TTL: renova expiraEm a cada acesso (evita que CPFs consultados frequentemente expirem)
+        const novaExpiracao = new Date();
+        novaExpiracao.setDate(novaExpiracao.getDate() + CACHE_CPF_TTL_DIAS);
         await prisma.cacheCpf.update({
           where: { id: cached.id },
-          data: { contagemConsultas: { increment: 1 }, ultimoUsoEm: agora }
+          data: { contagemConsultas: { increment: 1 }, ultimoUsoEm: agora, expiraEm: novaExpiracao }
         });
 
         await prisma.consultaCpf.create({
@@ -437,68 +451,84 @@ router.post('/confirmar-leads', async (req, res) => {
             }
 
             const expiraEm = new Date();
-            expiraEm.setDate(expiraEm.getDate() + 90);
+            expiraEm.setDate(expiraEm.getDate() + CACHE_CPF_TTL_DIAS);
 
-            const novoCache = await prisma.cacheCpf.create({
-              data: {
-                cpf: docLimpo,
-                dados: {
-                  nome: enriquecido.nome,
-                  telefones: enriquecido.telefones,
-                  emails: enriquecido.emails,
-                  score: enriquecido.score,
+            const dadosCache = {
+              nome: enriquecido.nome,
+              telefones: enriquecido.telefones,
+              emails: enriquecido.emails,
+              score: enriquecido.score,
+              dataNascimento: enriquecido.dataNascimento,
+              idade: enriquecido.idade,
+              sexo: enriquecido.sexo,
+              signo: enriquecido.signo,
+              situacaoCadastral: enriquecido.situacaoCadastral,
+              obitoProvavel: enriquecido.obitoProvavel,
+              nomeMae: enriquecido.nomeMae,
+              ppe: enriquecido.ppe,
+              rendaEstimada: enriquecido.rendaEstimada,
+              faixaSalarial: enriquecido.faixaSalarial,
+              profissao: enriquecido.profissao,
+              setor: enriquecido.setor,
+              empresaAtual: enriquecido.empresaAtual,
+              cnpjEmpresa: enriquecido.cnpjEmpresa,
+              endereco: enriquecido.endereco,
+              participacoesEmpresas: enriquecido.participacoesEmpresas,
+              redesSociais: enriquecido.redesSociais,
+            };
 
-                  dataNascimento: enriquecido.dataNascimento,
-                  idade: enriquecido.idade,
-                  sexo: enriquecido.sexo,
-                  signo: enriquecido.signo,
-                  situacaoCadastral: enriquecido.situacaoCadastral,
-                  obitoProvavel: enriquecido.obitoProvavel,
-                  nomeMae: enriquecido.nomeMae,
-                  ppe: enriquecido.ppe,
-                  rendaEstimada: enriquecido.rendaEstimada,
-                  faixaSalarial: enriquecido.faixaSalarial,
-                  profissao: enriquecido.profissao,
-                  setor: enriquecido.setor,
-                  empresaAtual: enriquecido.empresaAtual,
-                  cnpjEmpresa: enriquecido.cnpjEmpresa,
-                  endereco: enriquecido.endereco,
-                  participacoesEmpresas: enriquecido.participacoesEmpresas,
-                  redesSociais: enriquecido.redesSociais,
+            // Cache em try/catch separado: erro de cache (ex: unique constraint em CPF expirado)
+            // NÃO deve descartar os dados enriquecidos pela Assertiva.
+            try {
+              const novoCache = await prisma.cacheCpf.upsert({
+                where: { cpf: docLimpo },
+                update: {
+                  dados: dadosCache,
+                  expiraEm,
+                  ultimoUsoEm: new Date(),
+                  contagemConsultas: { increment: 1 },
                 },
-                fonte: 'assertiva',
-                expiraEm,
-                primeiraConsultaPor: tenant.id
-              }
-            });
+                create: {
+                  cpf: docLimpo,
+                  dados: dadosCache,
+                  fonte: 'assertiva',
+                  expiraEm,
+                  primeiraConsultaPor: tenant.id,
+                },
+              });
 
-            await prisma.consultaCpf.create({
-              data: {
-                tenantId: tenant.id,
-                cpf: docLimpo,
-                veioDoCache: false,
-                custoParaNos: CUSTO_ASSERTIVA,
-                cobradoDe: precoVendaContato,
-                lucro: precoVendaContato - CUSTO_ASSERTIVA,
-                cacheId: novoCache.id
-              }
-            });
+              await prisma.consultaCpf.create({
+                data: {
+                  tenantId: tenant.id,
+                  cpf: docLimpo,
+                  veioDoCache: false,
+                  custoParaNos: CUSTO_ASSERTIVA,
+                  cobradoDe: precoVendaContato,
+                  lucro: precoVendaContato - CUSTO_ASSERTIVA,
+                  cacheId: novoCache.id,
+                },
+              });
+            } catch (cacheError: any) {
+              // Cache falhou (ex: registro expirado causando conflito), mas os dados da Assertiva são preservados.
+              logger.warn(`[Mineracao] ⚠️ Cache upsert falhou para ${tipoDOC} ${docLimpo}: ${cacheError?.message}. Dados enriquecidos mantidos.`);
+            }
 
+            // Dados enriquecidos sempre retornados, independente do cache.
             return leadEnriquecido;
           } catch (enriquecimentoError: any) {
             logger.error({ err: enriquecimentoError?.message }, `[Mineracao] Erro ao enriquecer ${tipoDOC} ${docLimpo}:`);
-            
-            // Fail-Fast: Se for erro de timeout, limite ou autenticação, aborta o lote para não consumir créditos do usuário ou gerar contatos vazios
+
+            // Fail-Fast: erros da Assertiva (timeout, auth, rate limit) abortam o lote
             const msgErro = (enriquecimentoError?.message || '').toLowerCase();
             const errosFatais = ['timeout', 'rate limit', 'não autorizado', 'auth', 'falha de comunicação', 'saldo', 'insuficiente', '500', '502', '503', '504', '403', 'credenciais', 'acesso negado', 'forbidden'];
-            
+
             const ehErroFatal = errosFatais.some(termo => msgErro.includes(termo));
-            
+
             if (ehErroFatal) {
               throw new Error(`Falha crítica na Assertiva ao enriquecer ${tipoDOC} ${docLimpo}: Contrato bloqueado/inexistente ou credencial inválida. Processo abortado para evitar perda de dados.`);
             }
 
-            // Se for apenas "não encontrado" na Assertiva, segue o jogo (retorna proprietário sem enriquecimento)
+            // CPF não encontrado na Assertiva: retorna proprietário sem enriquecimento
             return p as LeadEnriquecido;
           }
         })
@@ -526,6 +556,14 @@ router.post('/confirmar-leads', async (req, res) => {
     });
 
     logger.info(`[Mineracao] Cache: ${cpfsDoCache} hits, API: ${cpfsDaApi} novas consultas`);
+
+    ServicoAuditoria.registrar({
+      tenantId: tenant.id,
+      usuarioId: req.headers['x-usuario-id'] as string || undefined,
+      acao: 'MINERACAO_LOTE',
+      detalhes: { cpfsDoCache, cpfsDaApi, economiaTotal, custoCreditos: cpfsDaApi },
+      ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string
+    });
 
     // 4. Persistência
     const resultadosPersistidos = await Promise.all(
@@ -723,6 +761,14 @@ router.post('/iptu-unitario', async (req, res) => {
           // Cobramos 1 crédito pelo Lead completo (Endereço + Proprietário + Contatos)
           await servicoCreditos.consumirCredito(tenantId);
           creditosConsumidosCount = 1;
+          
+          ServicoAuditoria.registrar({
+            tenantId,
+            usuarioId: req.headers['x-usuario-id'] as string || undefined,
+            acao: 'MINERACAO_UNITARIA',
+            detalhes: { cpf: docLimpo, encontrouTelefone: true },
+            ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string
+          });
         } catch (e) {
           logger.warn('[Mineracao] Falha ao cobrar crédito do enriquecimento');
         }

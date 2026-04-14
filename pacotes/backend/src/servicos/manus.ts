@@ -9,7 +9,7 @@
  * - Alimentar o conhecimento do agente SDR sobre os imóveis
  * 
  * NÃO usar para:
- * - Conversas com leads (usar OpenAI/Groq)
+ * - Conversas com leads (usar agentes OpenAI)
  * - Análise de mensagens (usar outros serviços)
  * - Qualquer outro propósito além de pesquisa de empreendimentos
  * 

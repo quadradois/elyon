@@ -26,7 +26,7 @@ import {
   MapPin,
   ChevronRight
 } from "lucide-react";
-import { api } from "../servicos/api";
+import { api, isRequestCanceled } from "../servicos/api";
 
 // ============================================
 // TIPOS
@@ -138,13 +138,13 @@ export function DashboardProspeccao() {
   // BUSCAR DADOS
   // ============================================
 
-  const buscarDados = useCallback(async (silencioso = false) => {
+  const buscarDados = useCallback(async (silencioso = false, signal?: AbortSignal) => {
     if (!silencioso) setLoading(true);
     setAtualizando(true);
 
     try {
       // Buscar campanhas com métricas
-      const resCampanhas = await api.get('/campanhas');
+      const resCampanhas = await api.get('/campanhas', { signal });
       const campanhasData = resCampanhas.data.campanhas || [];
       
       // Buscar status de cada campanha ativa
@@ -157,7 +157,7 @@ export function DashboardProspeccao() {
       
       for (const campanha of campanhasData) {
         try {
-          const resStatus = await api.get(`/campanhas/${campanha.id}/status-disparo`);
+          const resStatus = await api.get(`/campanhas/${campanha.id}/status-disparo`, { signal });
           const status = resStatus.data.status;
           
           campanhasComMetricas.push({
@@ -200,37 +200,42 @@ export function DashboardProspeccao() {
       
       // Buscar dados do funil
       try {
-        const resFunil = await api.get('/campanhas/funil-prospeccao');
+        const resFunil = await api.get('/campanhas/funil-prospeccao', { signal });
         setFunil(resFunil.data.funil);
       } catch (e) {
+        if (isRequestCanceled(e)) return;
         // Ignora erro do funil
       }
       
       // Buscar leads quentes
       try {
-        const resLeads = await api.get('/campanhas/leads-quentes');
+        const resLeads = await api.get('/campanhas/leads-quentes', { signal });
         setLeadsQuentes(resLeads.data.leads || []);
       } catch (e) {
+        if (isRequestCanceled(e)) return;
         // Ignora erro de leads quentes
       }
       
       // Buscar avaliações agendadas
       try {
-        const resAvaliacoes = await api.get('/campanhas/avaliacoes-agendadas');
+        const resAvaliacoes = await api.get('/campanhas/avaliacoes-agendadas', { signal });
         setAvaliacoes(resAvaliacoes.data.avaliacoes || []);
       } catch (e) {
+        if (isRequestCanceled(e)) return;
         // Ignora erro de avaliações
       }
       
       // Buscar estatísticas da blacklist
       try {
-        const resBlacklist = await api.get('/blacklist/estatisticas');
+        const resBlacklist = await api.get('/blacklist/estatisticas', { signal });
         setBlacklist(resBlacklist.data);
       } catch (e) {
+        if (isRequestCanceled(e)) return;
         // Ignora erro de blacklist
       }
       
     } catch (error) {
+      if (isRequestCanceled(error)) return;
       console.error('Erro ao buscar métricas:', error);
     } finally {
       setLoading(false);
@@ -240,14 +245,18 @@ export function DashboardProspeccao() {
 
   // Buscar dados inicial e atualizar periodicamente
   useEffect(() => {
-    buscarDados();
+    const controller = new AbortController();
+    buscarDados(false, controller.signal);
     
     // Atualizar a cada 30 segundos
     const interval = setInterval(() => {
       buscarDados(true);
     }, 30000);
     
-    return () => clearInterval(interval);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [buscarDados]);
 
   // ============================================

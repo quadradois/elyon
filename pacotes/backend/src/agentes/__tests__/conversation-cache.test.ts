@@ -15,6 +15,7 @@ const mockRedis = {
     setEx: jest.fn().mockResolvedValue('OK'),
     del: jest.fn().mockResolvedValue(1),
     keys: jest.fn().mockResolvedValue([]),
+    dbSize: jest.fn().mockResolvedValue(0),
 };
 
 jest.mock('../../lib/redis', () => ({
@@ -78,7 +79,7 @@ describe('getHistory', () => {
     describe('schema helpers', () => {
       it('salva e lê schema corretamente', async () => {
         const contato = 'schema-1';
-        const obj = { a: 1 };
+        const obj = { a: 1 } as any;
         await setSchemaState(contato, obj);
         // simulate Redis returning the stored value based on last setEx call
         const [[key,,value]] = mockRedis.setEx.mock.calls as [string, number, string][];
@@ -107,7 +108,7 @@ describe('getHistory', () => {
 
 describe('setHistory', () => {
     it('salva no Redis com TTL', async () => {
-        const history = [{ role: 'user', content: 'Oi' }];
+        const history: any[] = [{ role: 'user', content: 'Oi' }];
         await setHistory('contato-001', history, 'OPENER');
 
         expect(mockRedis.setEx).toHaveBeenCalledWith(
@@ -121,8 +122,8 @@ describe('setHistory', () => {
         expect(savedJson.lastAgent).toBe('OPENER');
     });
 
-    it('trunca histórico se excede 50 itens', async () => {
-        const history = Array.from({ length: 60 }, (_, i) => ({
+    it('trunca histórico se excede 80 itens', async () => {
+        const history: any[] = Array.from({ length: 100 }, (_, i) => ({
             role: 'user',
             content: `Msg ${i}`,
         }));
@@ -130,9 +131,9 @@ describe('setHistory', () => {
         await setHistory('contato-001', history);
 
         const savedJson = JSON.parse(mockRedis.setEx.mock.calls[0][2]);
-        expect(savedJson.history).toHaveLength(50);
-        // Deve manter os últimos 50
-        expect(savedJson.history[0].content).toBe('Msg 10');
+        expect(savedJson.history).toHaveLength(80);
+        // Deve manter os últimos 80
+        expect(savedJson.history[0].content).toBe('Msg 20');
     });
 
     it('usa memória como fallback se Redis falhar', async () => {
@@ -215,14 +216,14 @@ describe('clearHistory', () => {
 
 describe('getCacheStats', () => {
     it('retorna contagem de chaves Redis', async () => {
-        mockRedis.keys.mockResolvedValue(['elyon:conv:a', 'elyon:conv:b']);
+        mockRedis.dbSize.mockResolvedValue(2);
         const stats = await getCacheStats();
         expect(stats.redisKeys).toBe(2);
         expect(stats.memoryKeys).toBeGreaterThanOrEqual(0);
     });
 
     it('retorna 0 Redis keys se Redis offline', async () => {
-        mockRedis.keys.mockRejectedValue(new Error('Offline'));
+        mockRedis.dbSize.mockRejectedValue(new Error('Offline'));
         const stats = await getCacheStats();
         expect(stats.redisKeys).toBe(0);
     });

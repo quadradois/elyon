@@ -1,14 +1,12 @@
 // Mock dos módulos pesados antes do import
-const mockOpenerAgent = { name: 'opener_agent_v11', handoffs: [] as any[], on: jest.fn() };
-const mockPresenterAgent = { name: 'presenter_agent_v4', handoffs: [] as any[], on: jest.fn() };
+const mockSdrAgent = { name: 'sdr_agent_v1', handoffs: [] as any[], on: jest.fn() };
 const mockAdminAgent = { name: 'admin_agent_v4', handoffs: [] as any[], on: jest.fn() };
 const mockKnowledgeTool = jest.fn();
 const mockKnowledgeAgent = { asTool: jest.fn(() => mockKnowledgeTool) };
 const mockHandoffResult = { strictJsonSchema: false, inputJsonSchema: { additionalProperties: false } };
 
 jest.mock('@openai/agents', () => ({ handoff: jest.fn(() => ({ ...mockHandoffResult })) }));
-jest.mock('../opener-agent', () => ({ criarOpenerAgent: jest.fn(() => mockOpenerAgent) }));
-jest.mock('../presenter-agent', () => ({ criarPresenterAgent: jest.fn(() => mockPresenterAgent) }));
+jest.mock('../sdr-agent', () => ({ criarSdrAgent: jest.fn(() => mockSdrAgent) }));
 jest.mock('../admin-agent', () => ({ criarAdminAgent: jest.fn(() => mockAdminAgent) }));
 jest.mock('../knowledge-agent', () => ({ criarKnowledgeAgent: jest.fn(() => mockKnowledgeAgent) }));
 jest.mock('../handoff-filters', () => ({ filterHistoryByQuery: jest.fn((h: any[]) => h) }));
@@ -24,8 +22,7 @@ import {
   TipoAgente,
 } from '../agent-chain';
 
-import { criarOpenerAgent } from '../opener-agent';
-import { criarPresenterAgent } from '../presenter-agent';
+import { criarSdrAgent } from '../sdr-agent';
 import { criarAdminAgent } from '../admin-agent';
 import { criarKnowledgeAgent } from '../knowledge-agent';
 import { handoff } from '@openai/agents';
@@ -81,12 +78,11 @@ describe('fasePorStatus', () => {
 
 describe('determinarAgente', () => {
   beforeEach(() => {
-    // Limpar cache entre testes
     ultimoAgentePorContato.clear();
   });
 
   it('usa agente persistido (Redis) como maior prioridade', () => {
-    expect(determinarAgente('NOVO', 'contato-1', 'PRESENTER')).toBe('PRESENTER');
+    expect(determinarAgente('NOVO', 'contato-1', 'SDR')).toBe('SDR');
   });
 
   it('usa cache em memória como segunda prioridade', () => {
@@ -94,17 +90,17 @@ describe('determinarAgente', () => {
     expect(determinarAgente('NOVO', 'contato-1')).toBe('ADMIN');
   });
 
-  it('retorna OPENER sem status e sem cache', () => {
-    expect(determinarAgente(undefined, undefined)).toBe('OPENER');
+  it('retorna SDR sem status e sem cache', () => {
+    expect(determinarAgente(undefined, undefined)).toBe('SDR');
   });
 
   it.each<[string, TipoAgente]>([
-    ['NOVO', 'OPENER'],
-    ['QUALIFICADO', 'PRESENTER'],
-    ['TENTATIVA_AGENDAMENTO', 'PRESENTER'],
-    ['VISITA_AGENDADA', 'PRESENTER'],
-    ['CONTATANDO', 'PRESENTER'],
-    ['AVALIACAO_EM_ANDAMENTO', 'PRESENTER'],
+    ['NOVO', 'SDR'],
+    ['QUALIFICADO', 'SDR'],
+    ['TENTATIVA_AGENDAMENTO', 'SDR'],
+    ['VISITA_AGENDADA', 'SDR'],
+    ['CONTATANDO', 'SDR'],
+    ['AVALIACAO_EM_ANDAMENTO', 'SDR'],
     ['DOCUMENTACAO', 'ADMIN'],
     ['EM_NEGOCIACAO', 'ADMIN'],
     ['ONBOARDING', 'ADMIN'],
@@ -113,8 +109,8 @@ describe('determinarAgente', () => {
     expect(determinarAgente(status)).toBe(agente);
   });
 
-  it('retorna OPENER para status desconhecido', () => {
-    expect(determinarAgente('INEXISTENTE')).toBe('OPENER');
+  it('retorna SDR para status desconhecido', () => {
+    expect(determinarAgente('INEXISTENTE')).toBe('SDR');
   });
 });
 
@@ -142,32 +138,36 @@ describe('STATUS_FASE_HUMANA', () => {
 // ============================================
 
 describe('MAPA_NOMES_AGENTES', () => {
-  it('mapeia opener_agent_v11 → OPENER', () => {
-    expect(MAPA_NOMES_AGENTES['opener_agent_v11']).toBe('OPENER');
+  it('mapeia sdr_agent_v1 → SDR', () => {
+    expect(MAPA_NOMES_AGENTES['sdr_agent_v1']).toBe('SDR');
   });
 
-  it('mapeia presenter_agent_v4 → PRESENTER', () => {
-    expect(MAPA_NOMES_AGENTES['presenter_agent_v4']).toBe('PRESENTER');
+  it('mapeia opener_agent_v11 → SDR (legado)', () => {
+    expect(MAPA_NOMES_AGENTES['opener_agent_v11']).toBe('SDR');
   });
 
-  it('mapeia closer_agent_v5 → PRESENTER', () => {
-    expect(MAPA_NOMES_AGENTES['closer_agent_v5']).toBe('PRESENTER');
+  it('mapeia presenter_agent_v4 → SDR (legado)', () => {
+    expect(MAPA_NOMES_AGENTES['presenter_agent_v4']).toBe('SDR');
+  });
+
+  it('mapeia closer_agent_v5 → SDR (legado)', () => {
+    expect(MAPA_NOMES_AGENTES['closer_agent_v5']).toBe('SDR');
   });
 
   it('mapeia admin_agent_v4 → ADMIN', () => {
     expect(MAPA_NOMES_AGENTES['admin_agent_v4']).toBe('ADMIN');
   });
 
-  it('mapeia knowledge_agent → OPENER', () => {
-    expect(MAPA_NOMES_AGENTES['knowledge_agent']).toBe('OPENER');
+  it('mapeia knowledge_agent → SDR', () => {
+    expect(MAPA_NOMES_AGENTES['knowledge_agent']).toBe('SDR');
   });
 
-  it('mapeia opener_agent_v12 → OPENER', () => {
-    expect(MAPA_NOMES_AGENTES['opener_agent_v12']).toBe('OPENER');
+  it('mapeia opener_agent_v12 → SDR (legado)', () => {
+    expect(MAPA_NOMES_AGENTES['opener_agent_v12']).toBe('SDR');
   });
 
-  it('mapeia presenter_agent_v5 → PRESENTER', () => {
-    expect(MAPA_NOMES_AGENTES['presenter_agent_v5']).toBe('PRESENTER');
+  it('mapeia presenter_agent_v5 → SDR (legado)', () => {
+    expect(MAPA_NOMES_AGENTES['presenter_agent_v5']).toBe('SDR');
   });
 });
 
@@ -193,22 +193,19 @@ describe('criarCadeiaAgentes', () => {
   };
 
   beforeEach(() => {
-    // Reset handoff arrays para cada teste
-    mockOpenerAgent.handoffs = [];
-    mockPresenterAgent.handoffs = [];
+    mockSdrAgent.handoffs = [];
     jest.clearAllMocks();
   });
 
-  it('retorna objeto com OPENER, PRESENTER e ADMIN', () => {
-    const cadeia = criarCadeiaAgentes(config as any, contexto);
-    expect(cadeia).toHaveProperty('OPENER');
-    expect(cadeia).toHaveProperty('PRESENTER');
+  it('retorna objeto com SDR e ADMIN', () => {
+    const cadeia = criarCadeiaAgentes(config as any);
+    expect(cadeia).toHaveProperty('SDR');
     expect(cadeia).toHaveProperty('ADMIN');
   });
 
-  it('chama criarOpenerAgent com config correta', () => {
-    criarCadeiaAgentes(config as any, contexto);
-    expect(criarOpenerAgent).toHaveBeenCalledWith(
+  it('chama criarSdrAgent com config correta', () => {
+    criarCadeiaAgentes(config as any);
+    expect(criarSdrAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         nomeAgente: 'Sofia',
         genero: 'feminino',
@@ -220,50 +217,32 @@ describe('criarCadeiaAgentes', () => {
     );
   });
 
-  it('chama criarPresenterAgent com diferenciais e situação', () => {
-    criarCadeiaAgentes(config as any, { ...contexto, situacaoAtual: 'sozinho' });
-    expect(criarPresenterAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        diferenciais: ['Tour 360'],
-        situacaoAtual: 'sozinho',
-      }),
-    );
-  });
-
   it('chama criarAdminAgent com dados de contrato', () => {
-    criarCadeiaAgentes(config as any, {
-      ...contexto,
-      tipoAutorizacao: 'exclusiva',
-      comissaoAcordada: '6%',
-      prazoTrabalho: 90,
-    });
+    criarCadeiaAgentes(config as any);
     expect(criarAdminAgent).toHaveBeenCalledWith(
       expect.objectContaining({
-        tipoAutorizacao: 'exclusiva',
-        comissaoAcordada: '6%',
-        prazoTrabalho: 90,
+        comissaoPadrao: '6%',
+        prazoContrato: 180,
       }),
     );
   });
 
   it('cria knowledge agent e injeta como tool', () => {
-    criarCadeiaAgentes(config as any, contexto);
+    criarCadeiaAgentes(config as any);
     expect(criarKnowledgeAgent).toHaveBeenCalled();
     expect(mockKnowledgeAgent.asTool).toHaveBeenCalled();
   });
 
-  it('configura handoffs bidirecionais no SDK', () => {
-    criarCadeiaAgentes(config as any, contexto);
-    // handoff() é chamado 3 vezes: opener→presenter, presenter→admin, presenter→opener (reverse)
-    expect(handoff).toHaveBeenCalledTimes(3);
+  it('configura handoff SDR→Admin no SDK', () => {
+    criarCadeiaAgentes(config as any);
+    // handoff() é chamado 1 vez: SDR→Admin
+    expect(handoff).toHaveBeenCalledTimes(1);
   });
 
   it('registra lifecycle hooks (agent_start, agent_end) em todos os agentes', () => {
-    criarCadeiaAgentes(config as any, contexto);
-    // Cada agente deve ter 2 chamadas a .on() (agent_start + agent_end)
-    expect(mockOpenerAgent.on).toHaveBeenCalledWith('agent_start', expect.any(Function));
-    expect(mockOpenerAgent.on).toHaveBeenCalledWith('agent_end', expect.any(Function));
-    expect(mockPresenterAgent.on).toHaveBeenCalledWith('agent_start', expect.any(Function));
+    criarCadeiaAgentes(config as any);
+    expect(mockSdrAgent.on).toHaveBeenCalledWith('agent_start', expect.any(Function));
+    expect(mockSdrAgent.on).toHaveBeenCalledWith('agent_end', expect.any(Function));
     expect(mockAdminAgent.on).toHaveBeenCalledWith('agent_start', expect.any(Function));
   });
 
@@ -274,8 +253,8 @@ describe('criarCadeiaAgentes', () => {
       llmApiKey: 'sk-custom',
       llmBaseUrl: 'https://api.deepseek.com/v1',
     };
-    criarCadeiaAgentes(configBYOK as any, contexto);
-    expect(criarOpenerAgent).toHaveBeenCalledWith(
+    criarCadeiaAgentes(configBYOK as any);
+    expect(criarSdrAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'deepseek-chat',
         apiKey: 'sk-custom',
@@ -299,21 +278,14 @@ describe('criarAgente', () => {
   const contexto = { telefone: '5511999990001' };
 
   beforeEach(() => {
-    mockOpenerAgent.handoffs = [];
-    mockPresenterAgent.handoffs = [];
+    mockSdrAgent.handoffs = [];
     jest.clearAllMocks();
   });
 
-  it('retorna agente OPENER quando tipo=OPENER', () => {
-    const agente = criarAgente('OPENER', config as any, contexto);
+  it('retorna agente SDR quando tipo=SDR', () => {
+    const agente = criarAgente('SDR', config as any, contexto);
     expect(agente).toBeDefined();
-    expect(agente.name).toBe('opener_agent_v11');
-  });
-
-  it('retorna agente PRESENTER quando tipo=PRESENTER', () => {
-    const agente = criarAgente('PRESENTER', config as any, contexto);
-    expect(agente).toBeDefined();
-    expect(agente.name).toBe('presenter_agent_v4');
+    expect(agente.name).toBe('sdr_agent_v1');
   });
 
   it('retorna agente ADMIN quando tipo=ADMIN', () => {

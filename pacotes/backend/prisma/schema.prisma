@@ -54,16 +54,17 @@ model Tenant {
 
   // ====================================
   // BYOK - Bring Your Own Key (LLM)
+  // Apenas provedores OpenAI-compatible: "openai", "openrouter"
   // ====================================
-  llmProvedor            String? // "openai", "anthropic", "openrouter", "moonshot"
-  llmModelo              String? // "gpt-4.1", "kimi-k2.5", etc.
+  llmProvedor            String? // "openai", "openrouter"
+  llmModelo              String? // "gpt-4.1", "gpt-4.1-mini", etc.
   llmApiKeyCriptografada String? // API Key criptografada com Fernet
   llmBaseUrl             String? // URL customizada (OpenRouter, proxy, etc.)
 
-  // BYOK Granular - Serviços Exclusivos OpenAI
-  openaiApiKeyCriptografada   String? // Chave secundária para Whisper/Embeddings
-  usarChavePrincipalParaAudio Boolean @default(true) // Herda a chave do llmApiKeyCriptografada
-  usarChavePrincipalParaRag   Boolean @default(true) // Herda a chave do llmApiKeyCriptografada
+  // Campos legados (mantidos para retrocompatibilidade do schema do banco)
+  openaiApiKeyCriptografada   String? // @deprecated — não mais utilizado (chave principal cobre todos os serviços)
+  usarChavePrincipalParaAudio Boolean @default(true) // @deprecated
+  usarChavePrincipalParaRag   Boolean @default(true) // @deprecated
 
   // ====================================
   // BILLING (Créditos + Pagamentos)
@@ -105,6 +106,7 @@ model Tenant {
   criadoEm       DateTime         @default(now())
   atualizadoEm   DateTime         @updatedAt
   LogScraperIPTU LogScraperIPTU[]
+  LogAuditoria   LogAuditoria[]
 
   @@index([slug])
   @@index([status])
@@ -340,19 +342,20 @@ enum StatusConexao {
 // ====================================
 
 model Usuario {
-  id            String       @id @default(uuid())
+  id            String         @id @default(uuid())
   tenantId      String
-  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   email         String
   nome          String
   senha         String
-  papel         PapelUsuario @default(CORRETOR)
+  papel         PapelUsuario   @default(CORRETOR)
   avatar        String?
   telefone      String?
-  estaAtivo     Boolean      @default(true)
-  criadoEm      DateTime     @default(now())
-  atualizadoEm  DateTime     @updatedAt
+  estaAtivo     Boolean        @default(true)
+  criadoEm      DateTime       @default(now())
+  atualizadoEm  DateTime       @updatedAt
   ultimoLoginEm DateTime?
+  LogAuditoria  LogAuditoria[]
 
   @@unique([tenantId, email])
   @@index([email])
@@ -784,31 +787,31 @@ model Lead {
   interesseEm     String? // "vender", "alugar", "ambos"
 
   // Imóvel Assertiva (migrado do Contato na promoção)
-  bairroImovel    String? // Bairro do imóvel
-  nomeEdificio    String? // Nome do empreendimento/condomínio
-  inscricaoIptu   String? // Inscrição IPTU
-  valorVenal      String? // Valor venal (IPTU)
+  bairroImovel  String? // Bairro do imóvel
+  nomeEdificio  String? // Nome do empreendimento/condomínio
+  inscricaoIptu String? // Inscrição IPTU
+  valorVenal    String? // Valor venal (IPTU)
 
   // Dados Pessoais Assertiva (migrado do Contato na promoção)
-  idade           Int?    // Idade do proprietário
-  sexo            String? // Masculino, Feminino
-  rendaEstimada   String? // Renda estimada em string
-  faixaSalarial   String? // Faixa salarial descritiva
-  scoreAssertiva  Int?    // Score Assertiva 0-100
+  idade          Int? // Idade do proprietário
+  sexo           String? // Masculino, Feminino
+  rendaEstimada  String? // Renda estimada em string
+  faixaSalarial  String? // Faixa salarial descritiva
+  scoreAssertiva Int? // Score Assertiva 0-100
 
   // Dados Profissionais (migrado do Contato na promoção)
-  empresaAtual    String?
-  cnpjEmpresa     String?
-  profissao       String?
-  setor           String?
+  empresaAtual String?
+  cnpjEmpresa  String?
+  profissao    String?
+  setor        String?
 
   // Múctiplos Contatos (migrado do Contato na promoção)
-  telefone2       String?
-  telefone3       String?
-  email2          String?
+  telefone2 String?
+  telefone3 String?
+  email2    String?
 
   // Briefing IA (gerado no handoff Presenter → Closer)
-  briefingCloser  String? @db.Text
+  briefingCloser String? @db.Text
 
   // estado de coleta de dados IA/SDR (JSON livre)
   schemaState Json?
@@ -908,6 +911,7 @@ model Lead {
   @@index([tenantId])
   @@index([cpf])
   @@index([status])
+  @@index([tenantId, status, atualizadoEm])
   @@index([telefone])
   @@index([urgencia])
   @@map("leads")
@@ -1019,55 +1023,62 @@ model Imovel {
   codigoEdificio Int? // cdedificio da API
   codigoBairro   Int? // cdbairro da API
 
-  nomeEdificio      String?
-  apartamento       String? // Número do apartamento (ex: 806)
-  bloco             String? // Bloco (ex: B)
-  unidade           String? // Unidade completa (ex: APTO806BL.B)
-  box               String? // Box/garagem (ex: 108)
-  tipoImovel        String? // PREDIAL, TERRITORIAL, etc
+  nomeEdificio String?
+  apartamento  String? // Número do apartamento (ex: 806)
+  bloco        String? // Bloco (ex: B)
+  unidade      String? // Unidade completa (ex: APTO806BL.B)
+  box          String? // Box/garagem (ex: 108)
+  tipoImovel   String? // PREDIAL, TERRITORIAL, etc
 
   // === Geolocalização ===
-  latitude          Float?
-  longitude         Float?
+  latitude  Float?
+  longitude Float?
 
   // === Áreas (m²) ===
-  areaTerreno       Float?
-  areaEdificada     Float?
+  areaTerreno   Float?
+  areaEdificada Float?
 
   // === Cadastro Prefeitura ===
-  dataCadastroPref  DateTime? // dtinclusao
-  nomeEmpresa       String?   // Layer 9
+  dataCadastroPref DateTime? // dtinclusao
+  nomeEmpresa      String? // Layer 9
 
   // === VII - INFORMAÇÕES SOBRE A EDIFICAÇÃO (Layer 3 MUBDG) ===
-  numeroPavimentos   Int? // nrpaviment
-  numeroElevadores   Int? // nrelevador
-  vagasCobertas      Int? // nrvagascob
-  vagasDescobertas   Int? // nrvagasdes
-  numeroGaragens     Int? // nrgaragem
-  
-  // Códigos de Acabamento e Estrutura (Inteiros conforme a base cartográfica)
-  tipoEdificacao1    Int? // tpedif1 (Ex: 2 para Apartamento)
-  tipoEdificacao2    Int? // tpedif2
-  posicaoEdificacao  Int? // posicaoedf
-  estrutura          Int? // estrutura
-  esquadrias         Int? // esquadria
-  piso               Int? // piso
-  forro              Int? // forro
-  instEletrica       Int? // insteletri
-  instSanitaria      Int? // ininstsani
-  revestimentoInt    Int? // revinterno
-  acabamentoInt      Int? // acinterno
-  revestimentoExt    Int? // revexterno
-  acabamentoExt      Int? // acexterno
-  cobertura          Int? // cobertura
-  estadoConservacao  Int? // conserva
+  numeroPavimentos Int? // nrpaviment
+  numeroElevadores Int? // nrelevador
+  vagasCobertas    Int? // nrvagascob
+  vagasDescobertas Int? // nrvagasdes
+  numeroGaragens   Int? // nrgaragem
 
-  certidaoCache      Json?
-  certidaoBuscadaEm  DateTime?
-  leadId             String?
+  // Códigos de Acabamento e Estrutura (Inteiros conforme a base cartográfica)
+  tipoEdificacao1   Int? // tpedif1 (Ex: 2 para Apartamento)
+  tipoEdificacao2   Int? // tpedif2
+  posicaoEdificacao Int? // posicaoedf
+  estrutura         Int? // estrutura
+  esquadrias        Int? // esquadria
+  piso              Int? // piso
+  forro             Int? // forro
+  instEletrica      Int? // insteletri
+  instSanitaria     Int? // ininstsani
+  revestimentoInt   Int? // revinterno
+  acabamentoInt     Int? // acinterno
+  revestimentoExt   Int? // revexterno
+  acabamentoExt     Int? // acexterno
+  cobertura         Int? // cobertura
+  estadoConservacao Int? // conserva
+
+  certidaoCache     Json?
+  certidaoBuscadaEm DateTime?
+  leadId            String?
   lead              Lead?     @relation(fields: [leadId], references: [id])
   statusCaptacao    String    @default("IDENTIFICADO")
   interesse         String?
+
+  // === Rastreamento de Proprietário (detecção de venda) ===
+  // CPF atual do proprietário, verificado na Prefeitura.
+  // Atualizado a cada scraping. Quando muda → imóvel foi vendido.
+  cpfProprietario   String?   // CPF/CNPJ atual do proprietário (Prefeitura)
+  cpfVerificadoEm   DateTime? // Quando foi verificado pela última vez (TTL: 30 dias)
+  histProprietarios Json?     // [{cpf, ate: ISO}] — auditoria de trocas de proprietário
 
   // Relacionamentos Base Local
   dadosEdificio Edificio? @relation(fields: [codigoEdificio], references: [codigo])
@@ -1077,6 +1088,7 @@ model Imovel {
   atualizadoEm DateTime @updatedAt
 
   @@index([inscricaoIptu])
+  @@index([cpfProprietario])
   @@index([bairro])
   @@index([codigoEdificio])
   @@index([codigoBairro])
@@ -1683,4 +1695,27 @@ model LogScraperIPTU {
   @@index([inscricao])
   @@index([status])
   @@map("logs_scraper_iptu")
+}
+
+// ====================================
+// AUDITORIA (LOG SISTEMA GLOBAL)
+// ====================================
+model LogAuditoria {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usuarioId  String? // Pode ser nulo se foi ação do sistema/cron
+  usuario    Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  acao       String // ex: LOGIN, CRIAR_CAMPANHA, MINERACAO_ASSERTIVA
+  entidade   String? // ex: Usuario, Campanha, Lista
+  entidadeId String? // UUID mapeado
+  detalhes   Json? // Tudo q importar pro rastreio (filtros da busca, lead acionado, etc)
+  ip         String?
+  criadoEm   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([usuarioId])
+  @@index([acao])
+  @@index([criadoEm])
+  @@map("logs_auditoria")
 }

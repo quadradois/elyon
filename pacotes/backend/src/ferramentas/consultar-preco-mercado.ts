@@ -16,6 +16,8 @@ import { tool } from '@openai/agents';
 import { z } from 'zod';
 import { prisma } from '../lib/db';
 import { ragEmpreendimentos } from '../servicos/rag-empreendimentos';
+import { sanitizeFloat, sanitizeInt, sanitizeStr } from './tool-sanitize';
+import { wrapToolExecute } from './tool-wrapper';
 
 export const consultarPrecoMercadoTool = tool({
     name: 'consultar_preco_mercado',
@@ -32,15 +34,21 @@ IMPORTANTE: Deixe claro ao lead que é uma estimativa e que uma avaliação pres
 
     parameters: z.object({
         nomeEdificio: z.string().describe('Nome do edifício ou empreendimento'),
-        tipoImovel: z.string().optional().describe('Tipo: apartamento, casa, terreno'),
-        areaM2: z.number().optional().describe('Área em m² (se conhecida)'),
-        quartos: z.number().optional().describe('Número de quartos (se conhecido)'),
-        bairro: z.string().optional().describe('Bairro ou localização'),
+        tipoImovel: z.string().nullable().describe('Tipo: apartamento, casa, terreno'),
+        areaM2: z.number().nullable().describe('Área em m² (se conhecida)'),
+        quartos: z.number().nullable().describe('Número de quartos (se conhecido)'),
+        bairro: z.string().nullable().describe('Bairro ou localização'),
     }),
 
-    execute: async (args) => {
-        try {
-            console.log(`[TOOL] consultar_preco_mercado — Edifício: ${args.nomeEdificio}`);
+    execute: wrapToolExecute('consultar_preco_mercado', async (args: any) => {
+            // Sanitizar inputs (LLM/OpenRouter pode enviar "", null, strings para campos numéricos)
+            const nomeEdificio = args.nomeEdificio;
+            const tipoImovel = sanitizeStr(args.tipoImovel);
+            const areaM2 = sanitizeFloat(args.areaM2);
+            const quartos = sanitizeInt(args.quartos);
+            const bairro = sanitizeStr(args.bairro);
+
+            console.log(`[TOOL] consultar_preco_mercado — Edifício: ${nomeEdificio}`);
 
             const fontes: string[] = [];
             let valorMinimo = 0;
@@ -54,7 +62,7 @@ IMPORTANTE: Deixe claro ao lead que é uma estimativa e que uma avaliação pres
             try {
                 const imoveis = await prisma.imovel.findMany({
                     where: {
-                        nomeEdificio: { contains: args.nomeEdificio, mode: 'insensitive' }
+                        nomeEdificio: { contains: nomeEdificio, mode: 'insensitive' }
                     },
                     take: 20,
                 });
@@ -91,7 +99,7 @@ IMPORTANTE: Deixe claro ao lead que é uma estimativa e que uma avaliação pres
             // ====================================
             try {
                 const ragResultados = await ragEmpreendimentos.buscarSemantico(
-                    `${args.nomeEdificio} ${args.bairro || ''} preço valor`.trim(),
+                    `${nomeEdificio} ${bairro || ''} preço valor`.trim(),
                     3
                 );
 
@@ -131,18 +139,18 @@ IMPORTANTE: Deixe claro ao lead que é uma estimativa e que uma avaliação pres
             // ====================================
 
             // Se tiver preço/m² e área informada, calcular diretamente
-            if (precoM2Medio > 0 && args.areaM2 && args.areaM2 > 0) {
-                const valorEstimado = precoM2Medio * args.areaM2;
+            if (precoM2Medio > 0 && areaM2 && areaM2 > 0) {
+                const valorEstimado = precoM2Medio * areaM2;
                 valorMinimo = valorEstimado * 0.85; // -15%
                 valorMaximo = valorEstimado * 1.15; // +15%
-                fontes.push(`Cálculo: ${args.areaM2}m² × R$ ${precoM2Medio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}/m²`);
+                fontes.push(`Cálculo: ${areaM2}m² × R$ ${precoM2Medio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}/m²`);
                 encontrouDados = true;
             }
 
             if (!encontrouDados) {
                 return JSON.stringify({
                     success: false,
-                    mensagem: `Não encontrei dados suficientes para estimar o valor do ${args.nomeEdificio}. Sugira ao lead uma avaliação presencial gratuita para valor preciso.`,
+                    mensagem: `Não encontrei dados suficientes para estimar o valor do ${nomeEdificio}. Sugira ao lead uma avaliação presencial gratuita para valor preciso.`,
                     fontes: []
                 });
             }
@@ -161,16 +169,7 @@ IMPORTANTE: Deixe claro ao lead que é uma estimativa e que uma avaliação pres
                 },
                 fontes,
                 disclaimer: 'Estimativa baseada em dados públicos. Uma avaliação presencial é necessária para valor preciso.',
-                mensagem: `Com base nos dados disponíveis, o ${args.nomeEdificio} tem uma estimativa de mercado entre ${formatarValor(valorMinimo)} e ${formatarValor(valorMaximo)}${precoM2Medio > 0 ? ` (aprox. R$ ${precoM2Medio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}/m²)` : ''}. Recomende ao lead uma avaliação presencial para valor preciso.`
+                mensagem: `Com base nos dados disponíveis, o ${nomeEdificio} tem uma estimativa de mercado entre ${formatarValor(valorMinimo)} e ${formatarValor(valorMaximo)}${precoM2Medio > 0 ? ` (aprox. R$ ${precoM2Medio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}/m²)` : ''}. Recomende ao lead uma avaliação presencial para valor preciso.`
             });
-
-        } catch (e) {
-            const error = e as Error;
-            console.error('[TOOL] consultar_preco_mercado — Erro:', error);
-            return JSON.stringify({
-                success: false,
-                error: error.message || 'Erro ao consultar preço de mercado'
-            });
-        }
-    }
+    })
 });

@@ -6,6 +6,8 @@
  * 
  * Para adicionar uma nova skill:
  * 1. Crie o arquivo .md na pasta correspondente (opener/, presenter/, compartilhados/)
+ *    Nota: após unificação SDR, opener/ e presenter/ são subpastas organizacionais.
+ *    O SDR Agent tem acesso a TODAS as skills.
  * 2. Adicione a entrada no SKILLS_REGISTRY abaixo
  * 
  * @version 1.0
@@ -43,6 +45,7 @@ export const SKILLS_REGISTRY: Record<string, string> = {
     'presenter/tratativa-exclusividade':      'presenter/tratativa-exclusividade.md',
     'presenter/tratativa-vender-sozinho':     'presenter/tratativa-vender-sozinho.md',
     'presenter/tratativa-comissao':           'presenter/tratativa-comissao.md',
+    'presenter/tratativa-sem-aceite-agendamento': 'presenter/tratativa-sem-aceite-agendamento.md',
     'presenter/escalation-trigger-matrix':    'presenter/escalation-trigger-matrix.md',
 };
 

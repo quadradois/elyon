@@ -22,6 +22,16 @@ jest.mock('openai', () => {
 // Mock do SDK agents (tipo AgentInputItem)
 jest.mock('@openai/agents', () => ({}));
 
+// Mock do byok-resolver (usado via require dinâmico em gerarBriefingHandoff)
+jest.mock('../byok-resolver', () => ({
+    MODELO_PADRAO_AUXILIAR: 'gpt-4.1-mini',
+    MODELO_PADRAO_PRINCIPAL: 'gpt-4.1',
+    resolverChaveAgentes: jest.fn(() => ({
+        apiKey: 'test-key',
+        fonte: 'plataforma',
+    })),
+}));
+
 import {
     filterHistoryByQuery,
     sliceHistoryPreservingSystem,
@@ -106,23 +116,26 @@ describe('sliceHistoryPreservingSystem', () => {
         expect((systemItems[0] as any).content).toBe('System prompt');
     });
 
-    it('exclui tool_call_items do histórico persistido (compatibilidade thinking models)', () => {
-        // tool_call_item e tool_call_output_item são excluídos intencionalmente:
-        // modelos thinking exigem reasoning_content que o SDK não preserva,
-        // causando BadRequestError 400. O contexto já está na resposta text do assistant.
+    it('preserva tool_call_items no histórico (OpenAI-compatible, sem exclusão)', () => {
+        // Com provedores 100% OpenAI-compatible, tool_call_item e tool_call_output_item
+        // são PRESERVADOS (essenciais para function continuity e context fidelity).
+        // A exclusão anterior era workaround para modelos thinking (Moonshot), removido.
         const history = [
             item('system', 'Prompt'),
             item('user', 'Msg 1'),
+            item('assistant', 'Vou qualificar'),
             { role: 'assistant', content: '', type: 'tool_call_item', toolName: 'qualificar_lead' },
             { role: 'assistant', content: '', type: 'tool_call_output_item', toolName: 'qualificar_lead' },
-            ...Array.from({ length: 20 }, (_, i) => item('user', `Msg ${i + 2}`)),
+            item('assistant', 'Qualificado!'),
+            item('user', 'Msg 2'),
+            item('assistant', 'Resp 2'),
         ];
-        const result = sliceHistoryPreservingSystem(history, 5, 'Teste');
+        const result = sliceHistoryPreservingSystem(history, 15, 'Teste');
         const toolItems = result.filter((i: any) =>
             i.type === 'tool_call_item' || i.type === 'tool_call_output_item'
         );
-        // tool_call_items devem ser EXCLUÍDOS para compatibilidade com modelos thinking
-        expect(toolItems).toHaveLength(0);
+        // tool_call_items devem ser PRESERVADOS para OpenAI-compatible providers
+        expect(toolItems).toHaveLength(2);
     });
 
     it('mínimo efetivo 15 turnos mesmo se pedido menor', () => {
@@ -221,7 +234,7 @@ describe('gerarBriefingHandoff', () => {
         ];
         const result = await gerarBriefingHandoff(history, 'Opener', 'Presenter');
         expect(result).not.toBeNull();
-        expect((result as any)?.content).toContain('BRIEFING ESTRATÉGICO');
+        expect((result as any)?.content).toContain('DOSSIÊ DO LEAD');
         expect((result as any)?.content).toContain('Opener → Presenter');
         expect((result as any)?.role).toBe('system');
     });
@@ -257,7 +270,7 @@ describe('gerarBriefingHandoff', () => {
         expect(userMsg).toContain('RESULTADO TOOL: qualificar_lead');
     });
 
-    it('chama GPT-4.1-mini com temperature 0.3', async () => {
+    it('chama modelo auxiliar BYOK com temperature 0.3', async () => {
         const history = [
             item('user', 'Tenho um apartamento de 3 quartos no bairro centro e quero vender'),
             item('assistant', 'Vamos conversar sobre isso!'),

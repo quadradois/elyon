@@ -1,7 +1,7 @@
 export type DeteccaoInteresse = {
   tipoInteresse: 'VENDA' | 'LOCACAO' | 'AMBOS';
   temperatura: 'MORNO' | 'QUENTE';
-  timeline: string;
+  timeline?: string;
 };
 
 export type TelemetriaConversaoStatus = 'nao_elegivel' | 'ja_convertido' | 'convertido' | 'falha_conversao' | 'inconsistente_pos_conversao';
@@ -67,7 +67,7 @@ export function detectarInteresseVendaLocacao(texto: string): DeteccaoInteresse 
   return {
     tipoInteresse: mencionaVenda && mencionaLocacao ? 'AMBOS' : mencionaVenda ? 'VENDA' : 'LOCACAO',
     temperatura: urgenciaAlta ? 'QUENTE' : 'MORNO',
-    timeline: urgenciaAlta ? 'urgente' : 'não informado'
+    timeline: urgenciaAlta ? 'urgente' : undefined
   };
 }
 

@@ -32,7 +32,7 @@ import { ConfiguracaoLLM } from "./paginas/ConfiguracaoLLM";
 import GestaoUsuarios from "./paginas/GestaoUsuarios";
 
 // Páginas Admin
-import { AdminClientes, AdminTransacoes, AdminLeadsVip, AdminPacotes, AdminPlanos } from "./paginas/admin";
+import { AdminClientes, AdminTransacoes, AdminLeadsVip, AdminPacotes, AdminPlanos, AdminAuditoria } from "./paginas/admin";
 
 // Rota Protegida
 function RotaPrivada({ children }: { children: React.ReactNode }) {
@@ -419,6 +419,17 @@ function App() {
             <RotaAdmin>
               <LayoutDashboard>
                 <AdminClientes />
+              </LayoutDashboard>
+            </RotaAdmin>
+          }
+        />
+
+        <Route
+          path="/admin/auditoria"
+          element={
+            <RotaAdmin>
+              <LayoutDashboard>
+                <AdminAuditoria />
               </LayoutDashboard>
             </RotaAdmin>
           }

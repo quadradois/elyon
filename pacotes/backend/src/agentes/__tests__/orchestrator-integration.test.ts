@@ -63,6 +63,9 @@ jest.mock('../../lib/db', () => ({
             findUnique: jest.fn().mockResolvedValue(null),
             update: jest.fn().mockResolvedValue(null),
         },
+        logAuditoria: {
+            create: jest.fn().mockResolvedValue(null),
+        },
     },
 }));
 
@@ -90,6 +93,9 @@ jest.mock('../conversation-cache', () => ({
     getCacheStats: jest.fn(async () => ({ redisKeys: 0, memoryKeys: cacheStore.size })),
     getSchemaState: jest.fn(async (id: string) => undefined),
     setSchemaState: jest.fn(async (id: string, state: any) => {}),
+    getActiveAgent: jest.fn(async (id: string) => lastAgentStore.get(id)),
+    setActiveAgent: jest.fn(async (id: string, agente: string) => { lastAgentStore.set(id, agente); }),
+    clearActiveAgent: jest.fn(async (id: string) => { lastAgentStore.delete(id); }),
 }));
 
 // Mock do OpenAI (para gerarBriefingHandoff)
@@ -177,8 +183,8 @@ beforeEach(() => {
 // CENÁRIO 1: LEAD RECEPTIVO — FLUXO COMPLETO
 // ====================================
 
-describe('Cenário 1: Lead receptivo — fluxo Opener→Presenter→Admin', () => {
-    it('primeiro turno roteia para OPENER quando status é NOVO', async () => {
+describe('Cenário 1: Lead receptivo — fluxo SDR→Admin', () => {
+    it('primeiro turno roteia para SDR quando status é NOVO', async () => {
         const result = await processarMensagemOrquestrada(
             [{ role: 'user', content: 'Oi, quero vender meu apartamento' }],
             CONFIG_BASE,
@@ -187,7 +193,7 @@ describe('Cenário 1: Lead receptivo — fluxo Opener→Presenter→Admin', () =
 
         expect(result.sucesso).toBe(true);
         expect(result.resposta).toBe('Olá! Como posso ajudar?');
-        expect(result.agenteUsado).toBe('OPENER');
+        expect(result.agenteUsado).toBe('SDR');
         expect(run).toHaveBeenCalledTimes(1);
     });
 
@@ -217,23 +223,23 @@ describe('Cenário 1: Lead receptivo — fluxo Opener→Presenter→Admin', () =
         const callArgs = (run as jest.Mock).mock.calls[0];
         // signature: run(agent, inputSDK, options)
         const inputItems: any[] = callArgs[1] || [];
-        const systemMsg = inputItems.find((i: any) => i.role === 'system');
+        const systemMsg = inputItems.find((i: any) => i.role === 'system' && typeof i.content === 'string' && i.content.includes('DADOS EXISTENTES NO LEAD'));
         expect(systemMsg).toBeDefined();
         expect(systemMsg.content).toContain('DADOS EXISTENTES NO LEAD');
         expect(systemMsg.content).toContain('nome: Fulan');
     });
 
-    it('handoff Opener→Presenter detectado e persistido', async () => {
-        // Simular que o SDK fez handoff para Presenter
+    it('handoff SDR→Admin detectado e persistido', async () => {
+        // Simular que o SDK fez handoff SDR→Admin
         mockRunResult = {
-            finalOutput: 'Vou te explicar como funciona nossa avaliação premium!',
-            lastAgent: { name: 'presenter_agent_v4' },
+            finalOutput: { respostaParaOCliente: 'Perfeito! Me passa seu CPF pra gerar o contrato?', proximoPasso: 'coletar_cpf' },
+            lastAgent: { name: 'admin_agent_v4' },
             history: [
-                { role: 'user', content: 'Sim, quero saber mais' },
-                { role: 'assistant', content: 'Vou te explicar como funciona nossa avaliação premium!' },
+                { role: 'user', content: 'Sim, vamos fechar' },
+                { role: 'assistant', content: 'Perfeito! Me passa seu CPF pra gerar o contrato?' },
             ],
             newItems: [
-                { type: 'handoff_call_item', name: 'transfer_to_presenter_agent_v4' },
+                { type: 'handoff_call_item', name: 'transfer_to_admin_agent_v4' },
                 { type: 'handoff_output_item' },
             ],
         };
@@ -242,22 +248,22 @@ describe('Cenário 1: Lead receptivo — fluxo Opener→Presenter→Admin', () =
             [
                 { role: 'user', content: 'Oi' },
                 { role: 'assistant', content: 'Boa tarde! Seu apto é de quantos quartos?' },
-                { role: 'user', content: 'Sim, quero saber mais' },
+                { role: 'user', content: 'Sim, vamos fechar' },
             ],
             CONFIG_BASE,
             CONTEXTO_NOVO,
         );
 
         expect(result.sucesso).toBe(true);
-        expect(result.agenteUsado).toBe('PRESENTER');
+        expect(result.agenteUsado).toBe('ADMIN');
         // Handoff persistido no cache em memória
-        expect(ultimoAgentePorContato.get('contato-integ-001')).toBe('PRESENTER');
+        expect(ultimoAgentePorContato.get('contato-integ-001')).toBe('ADMIN');
     });
 
-    it('handoff Presenter→Admin detectado', async () => {
-        // Lead já está no Presenter (cache)
-        ultimoAgentePorContato.set('contato-integ-001', 'PRESENTER');
-        lastAgentStore.set('contato-integ-001', 'PRESENTER');
+    it('handoff SDR→Admin via cache detectado', async () => {
+        // Lead já está no SDR (cache)
+        ultimoAgentePorContato.set('contato-integ-001', 'SDR');
+        lastAgentStore.set('contato-integ-001', 'SDR');
 
         mockRunResult = {
             finalOutput: { respostaParaOCliente: 'Me passa seu CPF pra eu gerar o contrato?', proximoPasso: 'coletar_cpf' },
@@ -282,34 +288,29 @@ describe('Cenário 1: Lead receptivo — fluxo Opener→Presenter→Admin', () =
 });
 
 // ====================================
-// CENÁRIO 2: REVERSE HANDOFF Presenter→Opener
+// CENÁRIO 2: SDR LEGADO — resolve nome legado para SDR
 // ====================================
 
-describe('Cenário 2: Reverse handoff — lead transferido prematuramente', () => {
-    it('lead desconfiado volta ao Opener após handoff reverso', async () => {
-        // Lead está no Presenter (transferido prematuramente)
-        ultimoAgentePorContato.set('contato-integ-001', 'PRESENTER');
-        lastAgentStore.set('contato-integ-001', 'PRESENTER');
+describe('Cenário 2: Agente legado resolve para SDR', () => {
+    it('opener_agent_v11 legado é mapeado para SDR', async () => {
+        // Cache tem nome legado
+        lastAgentStore.set('contato-integ-001', 'opener_agent_v11');
 
-        // SDK faz reverse handoff para Opener
         mockRunResult = {
-            finalOutput: 'Entendo sua preocupação! Sou a Ana, da Imobiliária Teste. Como soube do seu imóvel?',
-            lastAgent: { name: 'opener_agent_v11' },
+            finalOutput: 'Entendo sua preocupação! Sou a Ana, da Imobiliária Teste.',
+            lastAgent: { name: 'sdr_agent_v1' },
             history: [],
-            newItems: [
-                { type: 'handoff_call_item', name: 'transfer_to_opener_agent_v11' },
-            ],
+            newItems: [],
         };
 
         const result = await processarMensagemOrquestrada(
-            [{ role: 'user', content: 'Quem é você? Como conseguiu meu número?' }],
+            [{ role: 'user', content: 'Quem é você?' }],
             CONFIG_BASE,
             { ...CONTEXTO_NOVO, statusLead: 'QUALIFICADO' },
         );
 
         expect(result.sucesso).toBe(true);
-        expect(result.agenteUsado).toBe('OPENER');
-        expect(ultimoAgentePorContato.get('contato-integ-001')).toBe('OPENER');
+        expect(result.agenteUsado).toBe('SDR');
     });
 });
 
@@ -365,7 +366,7 @@ describe('Cenário 4: Filtro anti-narração de handoff', () => {
     it('remove linhas de narração de handoff da resposta', async () => {
         mockRunResult = {
             finalOutput: 'Transferindo para o especialista.\nVou te explicar como funciona nossa avaliação premium! Qual andar é o seu apartamento?',
-            lastAgent: { name: 'presenter_agent_v4' },
+            lastAgent: { name: 'sdr_agent_v1' },
             history: [],
             newItems: [{ type: 'handoff_call_item' }],
         };
@@ -386,7 +387,7 @@ describe('Cenário 4: Filtro anti-narração de handoff', () => {
         // Resposta é APENAS narração de handoff
         mockRunResult = {
             finalOutput: 'Vou te passar para o próximo agente',
-            lastAgent: { name: 'presenter_agent_v4' },
+            lastAgent: { name: 'sdr_agent_v1' },
             history: [],
             newItems: [{ type: 'handoff_call_item' }],
         };
@@ -481,10 +482,10 @@ describe('Cenário 7: Fallbacks', () => {
         expect(result.resposta!.length).toBeGreaterThan(5);
     });
 
-    it('aplica fallback de transição Opener→Presenter via CoT', async () => {
+    it('aplica fallback de transição via CoT', async () => {
         mockRunResult = {
-            finalOutput: '<cot>Devo transferir para presenter para fazer diagnóstico</cot>',
-            lastAgent: { name: 'opener_agent_v11' },
+            finalOutput: '<cot>Devo avançar para diagnóstico SPIN</cot>',
+            lastAgent: { name: 'sdr_agent_v1' },
             history: [],
             newItems: [],
         };
@@ -500,10 +501,10 @@ describe('Cenário 7: Fallbacks', () => {
         expect(result.resposta!.length).toBeGreaterThan(10);
     });
 
-    it('aplica fallback comercial quando Presenter executa tool crítica e retorna vazio', async () => {
+    it('aplica fallback quando SDR executa tool crítica e retorna vazio', async () => {
         mockRunResult = {
             finalOutput: '',
-            lastAgent: { name: 'presenter_agent_v4' },
+            lastAgent: { name: 'sdr_agent_v1' },
             history: [],
             newItems: [
                 { type: 'function_call', name: 'mover_para_fase' },
@@ -517,8 +518,9 @@ describe('Cenário 7: Fallbacks', () => {
         );
 
         expect(result.sucesso).toBe(true);
-        expect(result.agenteUsado).toBe('PRESENTER');
-        expect(result.resposta).toContain('estratégia aumenta as visitas qualificadas');
+        expect(result.agenteUsado).toBe('SDR');
+        // Fallback contextual gerado
+        expect(result.resposta!.length).toBeGreaterThan(10);
     });
 
     it('aplica fallback de onboarding quando ADMIN faz handoff e resposta é só narração', async () => {
@@ -601,10 +603,10 @@ describe('Cenário 9: Erro do SDK', () => {
         expect(result.erro).toContain('rate limit');
     });
 
-    it('retenta sem cache se erro de reasoning_content', async () => {
-        // Primeiro call falha com reasoning_content, segundo sucede
+    it('retenta sem cache se erro de tool_call_id obsoleto', async () => {
+        // Primeiro call falha com tool_call_id not found, segundo sucede
         (run as jest.Mock)
-            .mockRejectedValueOnce(new Error('reasoning_content is missing'))
+            .mockRejectedValueOnce(Object.assign(new Error('tool_call_id abc123 is not found'), { status: 400 }))
             .mockResolvedValueOnce({
                 finalOutput: 'Oi! Tudo bem?',
                 lastAgent: { name: 'opener_agent_v11' },
@@ -635,12 +637,12 @@ describe('Cenário 9: Erro do SDK', () => {
 // ====================================
 
 describe('Cenário 10: Migração de agente legado', () => {
-    it('migra CLOSER para PRESENTER automaticamente', async () => {
+    it('migra CLOSER para SDR automaticamente', async () => {
         lastAgentStore.set('contato-integ-001', 'CLOSER');
 
         mockRunResult = {
             finalOutput: 'Continuando nosso diagnóstico...',
-            lastAgent: { name: 'presenter_agent_v4' },
+            lastAgent: { name: 'sdr_agent_v1' },
             history: [],
             newItems: [],
         };
@@ -652,6 +654,6 @@ describe('Cenário 10: Migração de agente legado', () => {
         );
 
         expect(result.sucesso).toBe(true);
-        expect(result.agenteUsado).toBe('PRESENTER');
+        expect(result.agenteUsado).toBe('SDR');
     });
 });

@@ -6,7 +6,6 @@
  * - detectarOptout: gatilhos de opt-out
  * - verificarSpam: anti-flood (rate limit)
  * - verificarBlacklist: consulta BD (mock Prisma)
- * - verificarHorarioComercial: lógica de horário (mock Prisma)
  * - executarGuardrails: pipeline completo
  */
 
@@ -24,12 +23,35 @@ jest.mock('../../lib/db', () => ({
     prisma: mockPrisma,
 }));
 
+// Mock do Redis — simula incr/expire in-memory para verificarSpam
+const redisStore = new Map<string, number>();
+const mockRedis = {
+    incr: jest.fn(async (key: string) => {
+        const val = (redisStore.get(key) || 0) + 1;
+        redisStore.set(key, val);
+        return val;
+    }),
+    expire: jest.fn(async () => true),
+};
+jest.mock('../../lib/redis', () => ({
+    getRedisClient: jest.fn(async () => mockRedis),
+}));
+
+// Mock logger
+jest.mock('../../lib/logger', () => ({
+    logger: {
+        debug: jest.fn(),
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+    },
+}));
+
 import {
     detectarComprador,
     detectarOptout,
     verificarSpam,
     verificarBlacklist,
-    verificarHorarioComercial,
     executarGuardrails,
     MensagemContext,
 } from '../guardrails';
@@ -47,6 +69,7 @@ function ctx(overrides: Partial<MensagemContext> = {}): MensagemContext {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    redisStore.clear();
     mockPrisma.telefoneBlacklist.findFirst.mockResolvedValue(null);
     mockPrisma.tenant.findUnique.mockResolvedValue(null);
 });
@@ -136,26 +159,26 @@ describe('detectarOptout', () => {
 // ====================================
 
 describe('verificarSpam', () => {
-    it('NÃO detecta spam na primeira mensagem', () => {
+    it('NÃO detecta spam na primeira mensagem', async () => {
         const tel = `55119${Date.now()}`; // telefone único
-        expect(verificarSpam(tel)).toBe(false);
+        expect(await verificarSpam(tel)).toBe(false);
     });
 
-    it('NÃO detecta spam com 3 mensagens seguidas', () => {
+    it('NÃO detecta spam com 3 mensagens seguidas', async () => {
         const tel = `55118${Date.now()}`;
-        verificarSpam(tel);
-        verificarSpam(tel);
-        expect(verificarSpam(tel)).toBe(false);
+        await verificarSpam(tel);
+        await verificarSpam(tel);
+        expect(await verificarSpam(tel)).toBe(false);
     });
 
-    it('DETECTA spam com 4+ mensagens no intervalo', () => {
+    it('DETECTA spam com 4+ mensagens no intervalo', async () => {
         const tel = `55117${Date.now()}`;
-        verificarSpam(tel);
-        verificarSpam(tel);
-        verificarSpam(tel);
-        verificarSpam(tel);
+        await verificarSpam(tel);
+        await verificarSpam(tel);
+        await verificarSpam(tel);
+        await verificarSpam(tel);
         // 5ª mensagem — há 4 mensagens no intervalo anterior
-        expect(verificarSpam(tel)).toBe(true);
+        expect(await verificarSpam(tel)).toBe(true);
     });
 });
 
@@ -180,191 +203,6 @@ describe('verificarBlacklist', () => {
         mockPrisma.telefoneBlacklist.findFirst.mockRejectedValue(new Error('DB offline'));
         const result = await verificarBlacklist('5511999990001', 'tenant-001');
         expect(result).toBe(false);
-    });
-});
-
-// ====================================
-// VERIFICAR HORÁRIO COMERCIAL
-// ====================================
-
-describe('verificarHorarioComercial', () => {
-    afterEach(() => {
-        jest.useRealTimers();
-    });
-
-    it('permite se tenant não encontrado (fallback seguro)', async () => {
-        mockPrisma.tenant.findUnique.mockResolvedValue(null);
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(true);
-    });
-
-    it('permite se horário simples cobre horário atual', async () => {
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: null,
-            horarioAtendimento: '00:00 às 23:59',
-            atendeFinalDeSemana: true,
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(true);
-    });
-
-    it('permite em caso de erro de BD (fallback seguro)', async () => {
-        mockPrisma.tenant.findUnique.mockRejectedValue(new Error('DB offline'));
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(true);
-    });
-
-    // ---------- EXPEDIENTE SEMANAL ----------
-
-    it('bloqueia dia inativo no expedienteSemanal', async () => {
-        // Terça-feira 10h (dia 2)
-        jest.useFakeTimers({ now: new Date(2026, 2, 3, 10, 0) }); // Ter, 03/Mar/2026 10:00
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: {
-                dias: [
-                    { diaSemana: 1, ativo: true, inicio: '08:00', fim: '18:00' },
-                    { diaSemana: 2, ativo: false }, // Terça inativa
-                ],
-            },
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(false);
-        expect(result.horarioRetorno).toBe('amanhã às 8h');
-    });
-
-    it('permite dentro do expedienteSemanal', async () => {
-        // Segunda-feira 10h (dia 1)
-        jest.useFakeTimers({ now: new Date(2026, 2, 2, 10, 0) }); // Seg, 02/Mar/2026 10:00
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: {
-                dias: [
-                    { diaSemana: 1, ativo: true, inicio: '08:00', fim: '18:00' },
-                ],
-            },
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(true);
-    });
-
-    it('bloqueia antes do horário de início no expedienteSemanal', async () => {
-        // Segunda 06:30 → antes das 08:00
-        jest.useFakeTimers({ now: new Date(2026, 2, 2, 6, 30) });
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: {
-                dias: [{ diaSemana: 1, ativo: true, inicio: '08:00', fim: '18:00' }],
-            },
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(false);
-        expect(result.horarioRetorno).toBe('às 08:00');
-    });
-
-    it('bloqueia após o horário de fim no expedienteSemanal', async () => {
-        // Segunda 19:00 → depois das 18:00
-        jest.useFakeTimers({ now: new Date(2026, 2, 2, 19, 0) });
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: {
-                dias: [{ diaSemana: 1, ativo: true, inicio: '08:00', fim: '18:00' }],
-            },
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(false);
-        expect(result.horarioRetorno).toBe('amanhã às 8h');
-    });
-
-    it('bloqueia durante horário de almoço', async () => {
-        // Segunda 12:30 → almoço 12:00-13:00
-        jest.useFakeTimers({ now: new Date(2026, 2, 2, 12, 30) });
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: {
-                dias: [{ diaSemana: 1, ativo: true, inicio: '08:00', fim: '18:00' }],
-                almocoInicio: '12:00',
-                almocoFim: '13:00',
-            },
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(false);
-        expect(result.horarioRetorno).toBe('às 13:00');
-    });
-
-    it('permite fora do almoço no expedienteSemanal', async () => {
-        // Segunda 14:00 → depois do almoço
-        jest.useFakeTimers({ now: new Date(2026, 2, 2, 14, 0) });
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: {
-                dias: [{ diaSemana: 1, ativo: true, inicio: '08:00', fim: '18:00' }],
-                almocoInicio: '12:00',
-                almocoFim: '13:00',
-            },
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(true);
-    });
-
-    // ---------- HORÁRIO SIMPLES ----------
-
-    it('bloqueia fim de semana se atendeFinalDeSemana=false', async () => {
-        // Sábado 10:00
-        jest.useFakeTimers({ now: new Date(2026, 2, 7, 10, 0) }); // Sáb, 07/Mar/2026
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: null,
-            horarioAtendimento: '08:00 às 18:00',
-            atendeFinalDeSemana: false,
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(false);
-        expect(result.horarioRetorno).toBe('segunda-feira às 8h');
-    });
-
-    it('bloqueia antes do horário simples', async () => {
-        // Segunda 06:00 → horário inicia às 09:00
-        jest.useFakeTimers({ now: new Date(2026, 2, 2, 6, 0) });
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: null,
-            horarioAtendimento: '09:00 às 18:00',
-            atendeFinalDeSemana: true,
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(false);
-        expect(result.horarioRetorno).toBe('às 09:00');
-    });
-
-    it('bloqueia depois do horário simples', async () => {
-        // Segunda 20:00 → horário termina às 18:00
-        jest.useFakeTimers({ now: new Date(2026, 2, 2, 20, 0) });
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: null,
-            horarioAtendimento: '08:00 às 18:00',
-            atendeFinalDeSemana: true,
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(false);
-        expect(result.horarioRetorno).toBe('amanhã às 8h');
-    });
-
-    it('permite se não há horarioAtendimento configurado (usa default 08-18)', async () => {
-        // Segunda 10:00 → sempre dentro do default
-        jest.useFakeTimers({ now: new Date(2026, 2, 2, 10, 0) });
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: null,
-            horarioAtendimento: null,
-            atendeFinalDeSemana: true,
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(true);
-    });
-
-    it('bloqueia dia sem configuração no expedienteSemanal (dias array vazio)', async () => {
-        // Quarta-feira 10h (dia 3) — não está na lista de dias
-        jest.useFakeTimers({ now: new Date(2026, 2, 4, 10, 0) }); // Qua, 04/Mar/2026
-        mockPrisma.tenant.findUnique.mockResolvedValue({
-            expedienteSemanal: {
-                dias: [{ diaSemana: 1, ativo: true, inicio: '08:00', fim: '18:00' }],
-            },
-        });
-        const result = await verificarHorarioComercial('tenant-001');
-        expect(result.permitido).toBe(false);
-        expect(result.horarioRetorno).toBe('amanhã às 8h');
     });
 });
 
@@ -413,7 +251,7 @@ describe('executarGuardrails', () => {
         const tel = `55116${Date.now()}`;
         // Gerar 4 mensagens de spam primeiro
         for (let i = 0; i < 4; i++) {
-            verificarSpam(tel);
+            await verificarSpam(tel);
         }
         const result = await executarGuardrails(ctx({ telefone: tel, conteudo: 'Não me ligue mais' }));
         // Spam é verificado antes do opt-out

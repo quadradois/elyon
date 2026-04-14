@@ -1,0 +1,186 @@
+import { extrairRespostaECot as _extrairRespostaECot } from '../output-extraction';
+import { aplicarFiltrosRespostaOrchestrator } from '../response-filters';
+import { wrapToolExecute } from '../../ferramentas/tool-wrapper';
+import type { EstadoConversa } from '../conversation-state';
+
+const mockPrisma = {
+  contato: {
+    findUnique: jest.fn(),
+    update: jest.fn(),
+  },
+  lead: {
+    findUnique: jest.fn(),
+    update: jest.fn(),
+    create: jest.fn(),
+  },
+  atividade: {
+    create: jest.fn(),
+  },
+};
+
+jest.mock('../../lib/db', () => ({
+  prisma: mockPrisma,
+}));
+
+import { QualificarLeadUseCase } from '../../casos-de-uso/agentes/qualificar-lead.usecase';
+
+// Cast para permitir stubs parciais de resultado de run
+const extrairRespostaECot = _extrairRespostaECot as (result: any) => ReturnType<typeof _extrairRespostaECot>;
+
+describe('GOV-05 — Regressão E2E Ivonet', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('limpa vazamento interno e mantém apenas texto para cliente', () => {
+    const estadoBase: EstadoConversa = {
+      intencao: 'vender',
+      metragem: null,
+      ocupacao: null,
+      valorPretendido: null,
+      jaRespondeuDecisao: true,
+      estaAnunciando: true,
+      timeline: null,
+      perguntasJaFeitas: { prioridade: true, decisaoVenda: true, valor: true },
+    };
+
+    const respostaPoluida = `Sim — trabalho com compradores buscando apartamentos no Reserva Buriti.
+Qual valor você espera pelo seu apartamento?
+
+{
+  "respostaParaOCliente": "Sim — trabalho com compradores buscando apartamentos no Reserva Buriti.\\nQual valor você espera pelo seu apartamento?",
+  "raciocinio": "Fase descoberta",
+  "fase": "DESCOBERTA",
+  "pvam": { "A": "ALTO" },
+  "spin": { "sinalCompra": "ABERTO" }
+}`;
+
+    const extraido = extrairRespostaECot({ finalOutput: respostaPoluida });
+    const filtrado = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: extraido.respostaFinal,
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: extraido.cotLog,
+      nomesToolsTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+    });
+
+    expect(filtrado.respostaLimpa).toBe(
+      'Sim — trabalho com compradores buscando apartamentos no Reserva Buriti.\nQual valor você espera pelo seu apartamento?'
+    );
+    expect(filtrado.respostaLimpa).not.toContain('raciocinio');
+    expect(filtrado.respostaLimpa).not.toContain('"respostaParaOCliente"');
+  });
+
+  it('corrige confusão de valor como área no wrapper de tool', async () => {
+    const wrapped = wrapToolExecute('qualificar_lead', async (args: any) => {
+      return JSON.stringify({ success: true, argsRecebidos: args });
+    });
+
+    const raw = await wrapped({
+      contatoId: 'contato-ivonet-001',
+      temperatura: 'MORNO',
+      interesse: 'Vender',
+      areaImovel: '350mil',
+      valorPretendido: '',
+    });
+
+    const parsed = JSON.parse(raw);
+    expect(parsed.success).toBe(true);
+    expect(parsed.argsRecebidos.valorPretendido).toBe('350mil');
+    expect(parsed.argsRecebidos.areaImovel).toBe('');
+  });
+
+  it('não persiste campos fantasmas na qualificação do caso Ivonet', async () => {
+    mockPrisma.contato.findUnique.mockResolvedValue({
+      id: 'contato-ivonet-001',
+      leadId: 'lead-ivonet-001',
+      campanha: { tenantId: 'tenant-1' },
+      enderecoImovel: 'Reserva Buriti',
+      tipoImovel: 'apartamento',
+    });
+
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      doresIdentificadas: [],
+      status: 'QUALIFICADO',
+      schemaState: {},
+      objecoes: [],
+    });
+
+    mockPrisma.lead.update.mockResolvedValue({
+      interesseEm: 'Vender',
+      tipoImovel: 'apartamento',
+      areaImovel: null,
+      valorPretendido: '350mil',
+      ocupacaoImovel: 'ocupado',
+      doresIdentificadas: ['poucas visitas e curiosos'],
+      situacaoAtual: 'anunciando por conta',
+      motivacaoVenda: 'quer vender',
+      consequencias: null,
+      custosAtuais: null,
+    });
+    mockPrisma.atividade.create.mockResolvedValue({});
+
+    const useCase = new QualificarLeadUseCase();
+    const result = await useCase.execute({
+      contatoId: 'contato-ivonet-001',
+      temperatura: 'MORNO',
+      interesse: 'Vender',
+      areaImovel: '350mil',
+      valorPretendido: '350mil',
+      ocupacaoImovel: 'ocupado',
+      situacaoAtual: 'anunciando por conta',
+      doresIdentificadas: ['poucas visitas e curiosos'],
+      comCorretorAtualmente: false,
+      temDividas: false,
+      pressaoTempo: false,
+      interesseAvaliacao: false,
+      timeline: undefined,
+    });
+
+    expect(result.success).toBe(true);
+    const updateCallDados = mockPrisma.lead.update.mock.calls[0][0];
+    expect(updateCallDados.data.areaImovel).toBeUndefined();
+    expect(updateCallDados.data.valorPretendido).toBe('350mil');
+    expect(updateCallDados.data.temDividas).toBeUndefined();
+    expect(updateCallDados.data.comCorretorAtualmente).toBeUndefined();
+    expect(updateCallDados.data.pressaoTempo).toBeUndefined();
+    expect(updateCallDados.data.interesseAvaliacao).toBeUndefined();
+    expect(updateCallDados.data.prazoDesejado).toBeUndefined();
+    expect(updateCallDados.data.urgencia).toBeUndefined();
+  });
+
+  it('bloqueia follow-up com data inválida e aceita data futura válida', async () => {
+    const wrapped = wrapToolExecute('agendar_followup', async (args: any) => {
+      return JSON.stringify({ success: true, argsRecebidos: args });
+    });
+
+    const passado = await wrapped({
+      contatoId: 'contato-ivonet-001',
+      dataRecontato: '01/01/2020',
+      motivo: 'cliente pediu para falar depois',
+    });
+    const parsedPassado = JSON.parse(passado);
+    expect(parsedPassado.success).toBe(false);
+    expect(parsedPassado.bloqueadoPorValidacao).toBe(true);
+    expect(parsedPassado.error).toContain('passado');
+
+    const amanha = new Date();
+    amanha.setDate(amanha.getDate() + 1);
+    const dd = String(amanha.getDate()).padStart(2, '0');
+    const mm = String(amanha.getMonth() + 1).padStart(2, '0');
+    const yyyy = amanha.getFullYear();
+    const dataFutura = `${dd}/${mm}/${yyyy}`;
+
+    const futuro = await wrapped({
+      contatoId: 'contato-ivonet-001',
+      dataRecontato: dataFutura,
+      motivo: 'lead quer retomar com calma',
+    });
+    const parsedFuturo = JSON.parse(futuro);
+    expect(parsedFuturo.success).toBe(true);
+    expect(parsedFuturo.argsRecebidos.dataRecontato).toBe(dataFutura);
+  });
+});

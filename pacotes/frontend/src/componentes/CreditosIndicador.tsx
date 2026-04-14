@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Coins, AlertTriangle } from "lucide-react";
-import { api } from "../servicos/api";
+import { api, isRequestCanceled } from "../servicos/api";
 import { cn } from "../lib/utils";
 
 interface SaldoCreditos {
@@ -16,11 +16,11 @@ export function CreditosIndicador() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(false);
 
-  const carregarSaldo = async () => {
+  const carregarSaldo = useCallback(async (signal?: AbortSignal) => {
     try {
       setCarregando(true);
       setErro(false);
-      const response = await api.get("/billing/saldo");
+      const response = await api.get("/billing/saldo", { signal });
       // API retorna { sucesso, saldo: { mensais, prepagos, bonus, total }, plano }
       if (response.data?.saldo) {
         setSaldo({
@@ -31,20 +31,25 @@ export function CreditosIndicador() {
         setSaldo(response.data);
       }
     } catch (e) {
+      if (isRequestCanceled(e)) return;
       console.error("Erro ao carregar saldo de créditos:", e);
       setErro(true);
     } finally {
       setCarregando(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    carregarSaldo();
+    const controller = new AbortController();
+    carregarSaldo(controller.signal);
 
     // Atualizar a cada 60 segundos
-    const interval = setInterval(carregarSaldo, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    const interval = setInterval(() => carregarSaldo(), 60000);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, [carregarSaldo]);
 
   // Ouvir evento de créditos consumidos
   useEffect(() => {
@@ -59,7 +64,7 @@ export function CreditosIndicador() {
         handleCreditosConsumidos
       );
     };
-  }, []);
+  }, [carregarSaldo]);
 
   if (carregando && !saldo) {
     return (

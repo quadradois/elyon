@@ -9,10 +9,12 @@
  * @date 23/02/2026
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, Lead } from '@prisma/client';
 import { OpenAIChatCompletionsModel } from '@openai/agents-openai';
 import { OpenAI } from 'openai';
 import { logger } from '../lib/logger';
+import { MODELO_PADRAO_PRINCIPAL } from './byok-resolver';
+import type { SchemaState } from './conversation-state';
 
 // ====================================
 // CONFIGURAÇÃO BYOK (Bring Your Own Key)
@@ -28,51 +30,27 @@ export interface ByokConfig {
  * Cria instância de modelo OpenAI com suporte a BYOK.
  * Se apiKey é fornecida, cria um client customizado.
  * Caso contrário, usa o modelo padrão do ambiente.
+ * 
+ * Nota: Apenas provedores OpenAI-compatible são suportados (OpenAI, OpenRouter).
+ * O customFetch com reasoning_content injection foi REMOVIDO — não há mais
+ * provedores incompatíveis que exigiam esse workaround.
  */
 export function criarModeloBYOK(
     config: ByokConfig,
-    defaultModel: string = 'gpt-4.1'
+    defaultModel: string = MODELO_PADRAO_PRINCIPAL
 ): string | OpenAIChatCompletionsModel {
     const modelName = config.model || defaultModel;
 
     logger.debug({ 
         model: modelName, 
         hasCustomKey: !!config.apiKey,
-        baseUrl: config.baseUrl ? '***(masked)' : 'default' // Nunca vazar a baseURL (CR-04)
+        baseUrl: config.baseUrl ? '***(masked)' : 'default'
     }, '[BYOK] Instanciando modelo');
 
     if (config.apiKey) {
-        // Fetch wrapper para interceptar e injetar reasoning_content de forma segura (Fix CR-03)
-        const customFetch = async (url: RequestInfo | URL, options?: RequestInit) => {
-            if (options && options.body && typeof options.body === 'string') {
-                try {
-                    const bodyObj = JSON.parse(options.body);
-                    if (Array.isArray(bodyObj.messages)) {
-                        bodyObj.messages = bodyObj.messages.map((msg: any) => {
-                            if (
-                                msg.role === 'assistant' &&
-                                Array.isArray(msg.tool_calls) &&
-                                msg.tool_calls.length > 0 &&
-                                msg.reasoning_content == null
-                            ) {
-                                return { ...msg, reasoning_content: '' };
-                            }
-                            return msg;
-                        });
-                        options.body = JSON.stringify(bodyObj);
-                    }
-                } catch (e) {
-                    logger.error({ err: e }, '[BYOK] Erro ao injetar reasoning_content no fetch wrapper');
-                }
-            }
-            // Chama a API de fato com a promise
-            return fetch(url, options);
-        };
-
         const client = new OpenAI({
             apiKey: config.apiKey,
             baseURL: config.baseUrl,
-            fetch: customFetch
         });
 
         return new OpenAIChatCompletionsModel(client, modelName);
@@ -97,7 +75,7 @@ export interface ElyonContext {
     telefone: string;
     ultimaInteracao?: string;
     // toda a ficha CADASTRAL do lead (quando disponível)
-    leadRecord?: any;
+    leadRecord?: Lead | null;
 
     // Status do lead no funil
     statusLead?: string;
@@ -119,8 +97,8 @@ export interface ElyonContext {
     briefingEmpreendimento?: string;
     knowledgeBase?: string;
 
-    // estado persistido de coleta (schema) — livre para qualquer shape
-    schemaState?: any;
+    // estado persistido de coleta (schema)
+    schemaState?: SchemaState;
 
     // Admin-specific
     tipoAutorizacao?: string;

@@ -35,9 +35,6 @@ interface LLMConfig {
     baseUrl: string | null;
     temApiKey: boolean;
     usando_padrao: boolean;
-    temOpenaiApiKey?: boolean;
-    usarChavePrincipalParaAudio?: boolean;
-    usarChavePrincipalParaRag?: boolean;
 }
 
 interface Provedor {
@@ -49,10 +46,7 @@ interface Provedor {
 const LOGOS: Record<string, string> = {
     openai: '🤖',
     openrouter: '🌉',
-    groq: '⚡',
     custom: '🛠️',
-    moonshot: '🌙',
-    anthropic: '🧠'
 };
 
 interface ModeloOpenRouter {
@@ -81,9 +75,6 @@ export function ConfiguracaoLLM() {
         modelo: '',
         apiKey: '',
         baseUrl: '',
-        openaiApiKey: '',
-        usarChavePrincipalParaAudio: true,
-        usarChavePrincipalParaRag: true,
     });
     const [mostrarKey, setMostrarKey] = useState(false);
     const [editando, setEditando] = useState(false);
@@ -106,8 +97,6 @@ export function ConfiguracaoLLM() {
                         provedor: data.config.provedor || '',
                         modelo: data.config.modelo || '',
                         baseUrl: data.config.baseUrl || '',
-                        usarChavePrincipalParaAudio: typeof data.config.usarChavePrincipalParaAudio === 'boolean' ? data.config.usarChavePrincipalParaAudio : true,
-                        usarChavePrincipalParaRag: typeof data.config.usarChavePrincipalParaRag === 'boolean' ? data.config.usarChavePrincipalParaRag : true,
                     }));
                 }
             }
@@ -192,16 +181,13 @@ export function ConfiguracaoLLM() {
                     modelo: form.modelo,
                     apiKey: form.apiKey || undefined,
                     baseUrl: form.baseUrl || undefined,
-                    openaiApiKey: form.openaiApiKey || undefined,
-                    usarChavePrincipalParaAudio: form.usarChavePrincipalParaAudio,
-                    usarChavePrincipalParaRag: form.usarChavePrincipalParaRag,
                 }),
             });
             const data = await res.json();
             if (data.success) {
                 setMensagem({ tipo: 'sucesso', texto: data.message });
                 setEditando(false);
-                setForm(prev => ({ ...prev, apiKey: '', openaiApiKey: '' }));
+                setForm(prev => ({ ...prev, apiKey: '' }));
                 await carregarConfig();
             } else {
                 setMensagem({ tipo: 'erro', texto: data.error });
@@ -242,7 +228,7 @@ export function ConfiguracaoLLM() {
             const data = await res.json();
             if (data.success) {
                 setMensagem({ tipo: 'sucesso', texto: data.message });
-                setForm({ provedor: '', modelo: '', apiKey: '', baseUrl: '', openaiApiKey: '', usarChavePrincipalParaAudio: true, usarChavePrincipalParaRag: true });
+                setForm({ provedor: '', modelo: '', apiKey: '', baseUrl: '' });
                 await carregarConfig();
             }
         } catch {
@@ -269,7 +255,7 @@ export function ConfiguracaoLLM() {
                     <div>
                         <h1 className="text-xl font-bold text-slate-900">Provedor de IA (BYOK)</h1>
                         <p className="text-sm text-slate-500">
-                            Use sua própria chave de API para OpenAI, Anthropic ou OpenRouter
+                            Use sua própria chave de API para OpenAI ou OpenRouter
                         </p>
                     </div>
                 </div>
@@ -433,7 +419,7 @@ export function ConfiguracaoLLM() {
                                     </div>
 
                                     <Input
-                                        placeholder="ID do modelo (ex: anthropic/claude-3.5-sonnet)"
+                                        placeholder="ID do modelo (ex: openai/gpt-4.1)"
                                         value={form.modelo}
                                         onChange={e => setForm(prev => ({ ...prev, modelo: e.target.value }))}
                                         disabled={config?.temApiKey && !editando}
@@ -457,7 +443,7 @@ export function ConfiguracaoLLM() {
                                         placeholder={
                                             config?.temApiKey && !editando
                                                 ? '••••••••••••••••'
-                                                : 'sk-... ou ant-...'
+                                                : 'sk-...'
                                         }
                                         value={form.apiKey}
                                         onChange={e => setForm(prev => ({ ...prev, apiKey: e.target.value }))}
@@ -519,7 +505,7 @@ export function ConfiguracaoLLM() {
                                     ) : config?.temApiKey && editando ? (
                                         <Button
                                             variant="ghost"
-                                            onClick={() => { setEditando(false); carregarConfig(); setForm(prev => ({ ...prev, apiKey: '', openaiApiKey: '' })); }}
+                                            onClick={() => { setEditando(false); carregarConfig(); setForm(prev => ({ ...prev, apiKey: '' })); }}
                                         >
                                             Cancelar
                                         </Button>
@@ -553,91 +539,6 @@ export function ConfiguracaoLLM() {
                         </CardContent>
                     </Card>
 
-                    {/* Serviços Exclusivos OpenAI */}
-                    {form.provedor && form.provedor !== 'openai' && (
-                        <Card className="border-orange-200 bg-orange-50/30">
-                            <CardHeader>
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-2xl">
-                                            ⚠️
-                                        </div>
-                                        <div>
-                                            <CardTitle className="text-base text-orange-900">Serviços Exclusivos (OpenAI)</CardTitle>
-                                            <CardDescription className="text-orange-700/80">
-                                                Transcrição Whisper e Embeddings (RAG) requerem chaves compatíveis nativamente.
-                                                Seu provedor atual ({provedores[form.provedor]?.nome}) não é suportado nestes componentes.
-                                            </CardDescription>
-                                        </div>
-                                    </div>
-                                    {config?.temOpenaiApiKey && !editando && (
-                                        <span className="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
-                                            <CheckCircle2 className="w-3 h-3" />
-                                            Salvo
-                                        </span>
-                                    )}
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="flex items-center gap-4 border border-orange-200/60 p-3 rounded-lg bg-white/50">
-                                    <input 
-                                        type="checkbox" 
-                                        id="ragFallback" 
-                                        className="w-4 h-4 accent-orange-500 rounded"
-                                        checked={form.usarChavePrincipalParaRag}
-                                        onChange={(e) => setForm(prev => ({...prev, usarChavePrincipalParaRag: e.target.checked}))}
-                                        disabled={config?.temApiKey && !editando}
-                                    />
-                                    <div>
-                                        <Label htmlFor="ragFallback" className="font-semibold text-slate-800">Forçar RAG no Provedor Principal?</Label>
-                                        <p className="text-xs text-slate-500">Se o seu modelo não suportar a rota /v1/embeddings, ocorrerão erros nas buscas de conhecimento do Agente.</p>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-4 border border-orange-200/60 p-3 rounded-lg bg-white/50">
-                                    <input 
-                                        type="checkbox" 
-                                        id="audioFallback" 
-                                        className="w-4 h-4 accent-orange-500 rounded"
-                                        checked={form.usarChavePrincipalParaAudio}
-                                        onChange={(e) => setForm(prev => ({...prev, usarChavePrincipalParaAudio: e.target.checked}))}
-                                        disabled={config?.temApiKey && !editando}
-                                    />
-                                    <div>
-                                        <Label htmlFor="audioFallback" className="font-semibold text-slate-800">Forçar Áudio no Provedor Principal?</Label>
-                                        <p className="text-xs text-slate-500">Se o seu modelo não suportar a rota /v1/audio/transcriptions, ocorrerão erros ao receber áudios.</p>
-                                    </div>
-                                </div>
-
-                                {(!form.usarChavePrincipalParaRag || !form.usarChavePrincipalParaAudio) && (
-                                    <div className="pt-2">
-                                        <Label htmlFor="openaiApiKey">
-                                            Chave Autônoma OpenAI {config?.temOpenaiApiKey && !editando ? '(salva)' : ''}
-                                        </Label>
-                                        <div className="relative mt-1">
-                                            <Input
-                                                id="openaiApiKey"
-                                                type={mostrarKey ? 'text' : 'password'}
-                                                placeholder={
-                                                    config?.temOpenaiApiKey && !editando
-                                                        ? '••••••••••••••••'
-                                                        : 'sk-...'
-                                                }
-                                                value={form.openaiApiKey}
-                                                onChange={e => setForm(prev => ({ ...prev, openaiApiKey: e.target.value }))}
-                                                disabled={config?.temApiKey && !editando}
-                                                className="pr-10 border-orange-200 focus-visible:ring-orange-500"
-                                            />
-                                        </div>
-                                        <p className="text-[11px] text-orange-700/80 mt-1">
-                                            Insira a chave oficial da plataforma `platform.openai.com`
-                                        </p>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
-
                     {/* Info */}
                     <Card className="bg-indigo-50 border-indigo-100 shadow-sm">
                         <CardContent className="py-5">
@@ -650,15 +551,15 @@ export function ConfiguracaoLLM() {
                                     </p>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                                         <div className="bg-white/50 p-3 rounded-lg border border-indigo-100">
-                                            <p className="text-xs font-bold text-indigo-800 uppercase mb-1">Dica para Claude/Gemini</p>
+                                            <p className="text-xs font-bold text-indigo-800 uppercase mb-1">OpenAI (Direto)</p>
                                             <p className="text-xs text-slate-600">
-                                                Para usar modelos como <strong>Claude 3.5 Sonnet</strong>, a forma mais estável é via <strong>OpenRouter</strong>, que traduz o sinal para o formato que nossos agentes entendem.
+                                                Use sua chave da <strong>platform.openai.com</strong> para acesso direto aos modelos GPT-4.1, GPT-4o e outros.
                                             </p>
                                         </div>
                                         <div className="bg-white/50 p-3 rounded-lg border border-indigo-100">
-                                            <p className="text-xs font-bold text-indigo-800 uppercase mb-1">Outros Provedores</p>
+                                            <p className="text-xs font-bold text-indigo-800 uppercase mb-1">OpenRouter (Gateway)</p>
                                             <p className="text-xs text-slate-600">
-                                                Serviços como <strong>Groq</strong> ou <strong>Together AI</strong> funcionam nativamente pois já seguem o padrão necessário.
+                                                Via <strong>OpenRouter</strong>, acesse modelos de outros provedores (Claude, Gemini, etc.) traduzidos para o formato OpenAI.
                                             </p>
                                         </div>
                                     </div>

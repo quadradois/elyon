@@ -13,6 +13,7 @@ import { prisma } from '../../lib/db';
 import { consultaCEP } from '../../servicos/cep';
 import { ragEmpreendimentos } from '../../servicos/rag-empreendimentos';
 import { z } from 'zod';
+import { ServicoAuditoria } from '../../servicos/servico-auditoria';
 
 const router = Router();
 
@@ -124,6 +125,16 @@ router.post('/', async (req, res) => {
     });
 
     console.log(`[Campanhas] ✅ Campanha criada (modo manual): ${campanha.id}`);
+
+    ServicoAuditoria.registrar({
+      tenantId: tenant.id,
+      usuarioId: req.headers['x-usuario-id'] as string || undefined,
+      acao: 'CRIAR_CAMPANHA',
+      entidade: 'Campanha',
+      entidadeId: campanha.id,
+      detalhes: { nome: campanha.nome },
+      ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string
+    });
 
     return res.status(201).json({
       sucesso: true,

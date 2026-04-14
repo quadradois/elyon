@@ -1,14 +1,15 @@
 import type { TipoAgente } from './agent-chain';
 import { logger } from '../lib/logger';
+import type { AgentInputItem } from '@openai/agents';
 
 interface ProcessarPosHandoffParams {
   contatoId?: string;
   tipoAgente: TipoAgente;
   agenteQueRespondeuFormatado: TipoAgente;
   atualizarUltimoAgente: (contatoId: string, agente: TipoAgente) => void;
-  getHistoryContato: (contatoId: string) => Promise<any[] | undefined>;
-  setHistoryContato: (contatoId: string, history: any[], lastAgent: TipoAgente) => Promise<void>;
-  gerarBriefing: (history: any[], agenteOrigem: TipoAgente, agenteDestino: TipoAgente) => Promise<any>;
+  getHistoryContato: (contatoId: string) => Promise<AgentInputItem[] | undefined>;
+  setHistoryContato: (contatoId: string, history: AgentInputItem[], lastAgent: TipoAgente) => Promise<void>;
+  gerarBriefing: (history: AgentInputItem[], agenteOrigem: TipoAgente, agenteDestino: TipoAgente) => Promise<AgentInputItem | null>;
 }
 
 interface ProcessarPosHandoffResult {
@@ -48,7 +49,7 @@ export async function processarPosHandoff(
       }
     }
   } catch (briefErr) {
-    logger.warn("[erro capturado]");
+    logger.warn({ err: briefErr }, '[POST-HANDOFF] Erro ao processar briefing pós-handoff');
   }
 
   return { houveHandoff };

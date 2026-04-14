@@ -25,7 +25,7 @@ Identifique as dores concretas. Mínimo de **2 dores** antes de avançar.
 
 ### I — Implicação (custo real do problema)
 Conecte a dor ao impacto financeiro/emocional real.
-- *"Você tá pagando condomínio sem morar lá?"*
+- *"Qual tem sido o principal impacto disso pra você?"*
 - *"Quanto tempo você já perdeu com isso?"*
 - *"Essa situação tá te impedindo de fazer o quê?"*
 
@@ -36,10 +36,9 @@ Deixe o lead verbalizar que precisa de ajuda.
 
 ## Regra de Ouro do SPIN
 
-**SEMPRE justifique uma pergunta com lógica antes de fazê-la:**
-> *"Pergunto isso porque a maioria sofre com X... como tem sido pra você?"*
-
-Isso faz a pergunta parecer consultiva, não um interrogatório.
+Prefira pergunta curta e direta.
+Se precisar contextualizar, use no máximo uma micro-frase curta e sem suposição
+depois de validar o que o lead disse.
 
 ## Trilhas de Diagnóstico por Perfil
 

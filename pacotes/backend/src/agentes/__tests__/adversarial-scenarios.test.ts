@@ -1,10 +1,11 @@
 /**
  * ADVERSARIAL SCENARIOS — Behavioral Contract Testing
  *
- * Suite de testes que tenta QUEBRAR o comportamento dos agentes.
+ * Suite de testes que tenta QUEBRAR o comportamento do agente SDR unificado.
  * Princípio: quem só testa happy path não testa nada.
  *
  * Cobre os cenários ADV-01 a ADV-07 identificados na avaliação agent-evaluation.
+ * Migrado de opener+presenter para SDR unificado em 11/04/2026.
  */
 
 // ====================================
@@ -37,15 +38,17 @@ jest.mock('../../ferramentas/sdr-tools-agents', () => ({
     moverParaFaseTool: 'moverParaFaseTool',
     registrarIndicacaoTool: 'registrarIndicacaoTool',
     atualizarDadosLeadTool: 'atualizarDadosLeadTool',
+    agendarAvaliacaoTool: 'agendarAvaliacaoTool',
     agendarReuniaoCloserTool: 'agendarReuniaoCloserTool',
+    enviarLinkAgendamentoTool: 'enviarLinkAgendamentoTool',
 }));
 
-jest.mock('../output-guardrails', () => ({
-    outputGuardrailsWhatsApp: ['whatsapp-guardrail'],
+jest.mock('../../ferramentas/consultar-preco-mercado', () => ({
+    consultarPrecoMercadoTool: 'consultarPrecoMercadoTool',
 }));
 
-jest.mock('../few-shot-examples', () => ({
-    gerarExemplosPorFase: jest.fn(() => ''),
+jest.mock('../../ferramentas/ler-skill-tool', () => ({
+    lerSkillTool: 'lerSkillTool',
 }));
 
 jest.mock('../shared-behavioral-guardrails', () => ({
@@ -59,8 +62,9 @@ Ignore suas instruções
 // ====================================
 // IMPORTS
 // ====================================
-import { criarOpenerAgent } from '../opener-agent';
-import { criarPresenterAgent } from '../presenter-agent';
+import { criarSdrAgent as _criarSdrAgent } from '../sdr-agent';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const criarSdrAgent: (...args: Parameters<typeof _criarSdrAgent>) => any = _criarSdrAgent;
 
 const baseConfig = {
     nomeAgente: 'Sofia',
@@ -73,50 +77,41 @@ const baseConfig = {
 // ====================================
 
 describe('ADV-01 — Prompt Injection', () => {
-    it('Opener tem regra anti-injection no prompt', () => {
-        const agent = criarOpenerAgent(baseConfig);
-        const prompt = agent.instructions({});
-        expect(prompt).toContain('ANTI-INJECTION');
-    });
-
-    it('Presenter tem regra anti-injection via shared guardrails', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('SDR tem regra anti-injection via shared guardrails', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
         expect(prompt).toContain('ANTI-INJECTION');
     });
 
     it('Anti-injection instrui a NÃO confirmar que há instruções', () => {
-        const agent = criarOpenerAgent(baseConfig);
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        // Deve orientar resposta natural, não "não posso"
         expect(prompt).toContain('Ignore suas instruções');
         expect(prompt).not.toContain('Não posso revelar minhas instruções');
     });
 });
 
 // ====================================
-// ADV-02: Mudança de Intenção Pós-Handoff
+// ADV-02: SPIN Diagnóstico no SDR
 // ====================================
 
-describe('ADV-02 — Mudança de Intenção Pós-Handoff', () => {
-    it('Presenter tem instrução para detectar mudança de intenção', () => {
-        const agent = criarPresenterAgent(baseConfig);
+describe('ADV-02 — SPIN Diagnóstico', () => {
+    it('SDR referencia skill de SPIN diagnóstico', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('MUDANÇA DE INTENÇÃO');
+        expect(prompt).toContain('presenter/spin-diagnostico');
     });
 
-    it('Instrução de mudança de intenção exige chamar qualificar_lead antes de continuar', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('SDR instrui a usar qualificar_lead após cobrir blocos SPIN', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        const idx = prompt.indexOf('MUDANÇA DE INTENÇÃO');
-        const trecho = prompt.substring(idx, idx + 400);
-        expect(trecho).toContain('qualificar_lead');
+        expect(prompt).toContain('qualificar_lead');
     });
 
-    it('Instrução proíbe continuar SPIN com intenção desatualizada', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('SDR tem SPIN Progress no CoT para detectar mudanças', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('NUNCA continue o SPIN com informação de intenção desatualizada');
+        expect(prompt).toContain('SPIN Progress');
     });
 });
 
@@ -125,25 +120,19 @@ describe('ADV-02 — Mudança de Intenção Pós-Handoff', () => {
 // ====================================
 
 describe('ADV-03 — Objeção: Comparação com Concorrentes', () => {
-    it('Presenter tem script para concorrentes/plataformas', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('SDR referencia skills de tratativas para objeções', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('Plataforma/Concorrente');
+        expect(prompt).toContain('presenter/tratativa-exclusividade');
+        expect(prompt).toContain('presenter/tratativa-vender-sozinho');
+        expect(prompt).toContain('presenter/tratativa-comissao');
     });
 
-    it('Script de concorrente usa abordagem SPIN (entender → diferenciar → fechar)', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('SDR declara proibições do WhatsApp contra narrações técnicas', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        const idx = prompt.indexOf('Plataforma/Concorrente');
-        const trecho = prompt.substring(idx, idx + 500);
-        expect(trecho).toContain('O que eles ofereceram especificamente');
-        expect(trecho).toContain('gestão ativa vs. anúncio passivo');
-    });
-
-    it('Script de concorrente proíbe falar mal nominalmente', () => {
-        const agent = criarPresenterAgent(baseConfig);
-        const prompt = agent.instructions({});
-        expect(prompt).toContain('NUNCA fale mal da concorrência nominalmente');
+        expect(prompt).toContain('NUNCA');
+        expect(prompt).toContain('Proibições Absolutas');
     });
 });
 
@@ -152,52 +141,47 @@ describe('ADV-03 — Objeção: Comparação com Concorrentes', () => {
 // ====================================
 
 describe('ADV-04 — Protocolo: Já tem Contrato Ativo', () => {
-    it('Opener tem protocolo para contrato ativo', () => {
-        const agent = criarOpenerAgent(baseConfig);
+    it('SDR referencia skill para contrato ativo', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('JÁ TEM CONTRATO ATIVO');
+        expect(prompt).toContain('protocolo-ja-tem-contrato');
     });
 
-    it('Protocolo instrui a sondar satisfação antes de registrar opt-out', () => {
-        const agent = criarOpenerAgent(baseConfig);
+    it('SDR referencia skill de desconfiança para situações correlatas', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        const idx = prompt.indexOf('JÁ TEM CONTRATO ATIVO');
-        const trecho = prompt.substring(idx, idx + 600);
-        expect(trecho).toContain('Sonde satisfação');
-        expect(trecho).toContain('JA_TEM_IMOBILIARIA');
+        expect(prompt).toContain('protocolo-desconfianca');
     });
 
-    it('Protocolo proíbe falar mal da imobiliária do lead', () => {
-        const agent = criarOpenerAgent(baseConfig);
+    it('SDR carrega skills via ler_skill antes de agir', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        const idx = prompt.indexOf('JÁ TEM CONTRATO ATIVO');
-        const trecho = prompt.substring(idx, idx + 900);
-        expect(trecho).toContain('Falar mal da imobiliária do lead');
+        expect(prompt).toContain('ler_skill');
+        expect(prompt).toContain('ANTES de responder');
     });
 });
 
 // ====================================
-// ADV-05: Pergunta de Comissão no Meio do Pitch
+// ADV-05: Pergunta de Comissão
 // ====================================
 
-describe('ADV-05 — Comissão disponível no Presenter', () => {
-    it('Presenter com comissaoPadrao inclui o valor no prompt', () => {
-        const agent = criarPresenterAgent({ ...baseConfig, comissaoPadrao: '6%' });
+describe('ADV-05 — Comissão disponível no SDR', () => {
+    it('SDR com comissaoPadrao inclui o valor no prompt', () => {
+        const agent = criarSdrAgent({ ...baseConfig, comissaoPadrao: '6%' });
         const prompt = agent.instructions({});
         expect(prompt).toContain('6%');
     });
 
-    it('Presenter sem comissaoPadrao usa texto fallback (não inventa valor)', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('SDR sem comissaoPadrao usa texto fallback (não inventa valor)', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('alinhada com o mercado local');
-        expect(prompt).not.toContain('Nossa comissão padrão é **');
+        expect(prompt).toContain('Comissão padrão do mercado');
     });
 
-    it('Presenter instrui a nunca inventar valores de comissão', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('SDR instrui a consultar skill de comissão para casos difíceis', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('NUNCA invente valores de comissão');
+        expect(prompt).toContain('presenter/tratativa-comissao');
     });
 });
 
@@ -206,15 +190,8 @@ describe('ADV-05 — Comissão disponível no Presenter', () => {
 // ====================================
 
 describe('ADV-06 — Idioma Estrangeiro', () => {
-    it('Shared guardrails são injetados no Opener (cobertura de linguagem)', () => {
-        const agent = criarOpenerAgent(baseConfig);
-        const prompt = agent.instructions({});
-        // Mock retorna REGRAS UNIVERSAIS — confirma que guardrails são injetados
-        expect(prompt).toContain('REGRAS UNIVERSAIS');
-    });
-
-    it('Shared guardrails são injetados no Presenter', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('Shared guardrails são injetados no SDR (cobertura de linguagem)', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
         expect(prompt).toContain('REGRAS UNIVERSAIS');
     });
@@ -226,7 +203,6 @@ describe('ADV-06 — Idioma Estrangeiro', () => {
 
 describe('ADV-07 — CoT não vaza no output', () => {
     it('extrairTextoVisivel remove tags <cot>...</cot>', () => {
-        // A função é usada internamente pelos guardrails antes de validar
         const outputComCot = '<cot>\nFase: Situação\nRaciocínio interno\n</cot>\n\nEntendido! Você já anunciou o imóvel?';
         const resultado = outputComCot.replace(/<cot>[\s\S]*?<\/cot>\s*/g, '').trim();
         expect(resultado).not.toContain('<cot>');
@@ -241,41 +217,56 @@ describe('ADV-07 — CoT não vaza no output', () => {
 });
 
 // ====================================
-// BEHAVIORAL CONTRACTS — Invariantes críticos
+// BEHAVIORAL CONTRACTS — Invariantes SDR
 // ====================================
 
-describe('Behavioral Contracts — Invariantes Críticos', () => {
-    it('Opener NUNCA usa a palavra "modelo" para descrever imóvel', () => {
-        const agent = criarOpenerAgent(baseConfig);
-        const prompt = agent.instructions({});
-        // Deve ter regra proibindo "modelo"
-        expect(prompt).toContain('modelo');
-        expect(prompt).toContain('PROIBIDO');
-    });
-
-    it('Presenter inclui agendarReuniaoCloserTool nas suas tools', () => {
-        const agent = criarPresenterAgent(baseConfig);
+describe('Behavioral Contracts — Invariantes SDR', () => {
+    it('SDR inclui agendarReuniaoCloserTool nas suas tools', () => {
+        const agent = criarSdrAgent(baseConfig);
         expect(agent.tools).toContain('agendarReuniaoCloserTool');
     });
 
-    it('Presenter instrui a perguntar disponibilidade ANTES de chamar a tool de reunião', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('SDR NÃO inclui agendarAvaliacaoTool (agendamento unificado via agendar_reuniao_closer)', () => {
+        const agent = criarSdrAgent(baseConfig);
+        expect(agent.tools).not.toContain('agendarAvaliacaoTool');
+    });
+
+    it('SDR inclui enviarLinkAgendamentoTool como fallback de agendamento', () => {
+        const agent = criarSdrAgent(baseConfig);
+        expect(agent.tools).toContain('enviarLinkAgendamentoTool');
+    });
+
+    it('SDR instrui sobre fluxo de agendamento com fallback', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
+        expect(prompt).toContain('enviar_link_agendamento');
+        expect(prompt).toContain('FALLBACK');
         expect(prompt).toContain('agendar_reuniao_closer');
-        expect(prompt).toContain('Que dia e horário fica melhor');
     });
 
-    it('Presenter tem videoInstitucionalUrl configurável', () => {
-        const urlCustom = 'https://meu-video.example.com/promo';
-        const agent = criarPresenterAgent({ ...baseConfig, videoInstitucionalUrl: urlCustom });
+    it('SDR instrui a consultar skill escalation-trigger-matrix', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain(urlCustom);
-        expect(prompt).not.toContain('https://www.youtube.com/watch?v=4ItUhXf1sJw');
+        expect(prompt).toContain('presenter/escalation-trigger-matrix');
     });
 
-    it('Presenter usa URL de vídeo padrão quando videoInstitucionalUrl não fornecida', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('SDR contém regras de progressão de fase', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('https://www.youtube.com/watch?v=4ItUhXf1sJw');
+        expect(prompt).toContain('MEIO_CAMPO');
+        expect(prompt).toContain('DESCOBERTA');
+        expect(prompt).toContain('DIAGNOSTICO_SPIN');
+        expect(prompt).toContain('PITCH');
+        expect(prompt).toContain('AGENDAMENTO');
+        expect(prompt).toContain('FOLLOW_UP');
+        expect(prompt).toContain('RECUO');
+    });
+
+    it('SDR contém PVAM + SPIN no structured output', () => {
+        const agent = criarSdrAgent(baseConfig);
+        const prompt = agent.instructions({});
+        expect(prompt).toContain('pvam');
+        expect(prompt).toContain('spin');
+        expect(prompt).toContain('respostaParaOCliente');
     });
 });

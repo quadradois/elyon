@@ -52,6 +52,10 @@ COPY --chown=nodejs:nodejs --from=builder /app/src/agentes/skills ./dist/agentes
 # Instalar apenas dependências de produção (sem devDependencies)
 RUN npm install --omit=dev --legacy-peer-deps
 
+# Gerar Prisma Client no estágio de produção
+ENV DATABASE_URL="postgresql://user:password@localhost:5432/db?schema=public"
+RUN npx prisma generate --schema=./prisma/schema.prisma
+
 USER nodejs
 
 # Expor porta

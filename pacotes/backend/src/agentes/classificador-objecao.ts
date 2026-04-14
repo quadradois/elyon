@@ -1,11 +1,12 @@
 import { BIBLIOTECA_OBJECOES, Objecao } from './catalogo-objecoes';
 import { logger } from '../lib/logger';
+import { MODELO_PADRAO_AUXILIAR } from './byok-resolver';
 
 export async function tentarDetectarObjecao(
     mensagem: string, 
     apiKey?: string, 
     baseUrl?: string, 
-    model: string = 'gpt-4o-mini'
+    model: string = MODELO_PADRAO_AUXILIAR
 ): Promise<Objecao | null> {
     if (!apiKey || !mensagem || mensagem.trim().length === 0) return null;
     
@@ -33,20 +34,29 @@ Responda APENAS com o número do ID correspondente (ex: 5). Se não bater claram
             }
         ],
         temperature: 0.0, // Máxima determinística
-        max_tokens: 5     // Só precisa devolver 1 número
+        max_completion_tokens: 5     // Só precisa devolver 1 número
     };
 
     try {
         const url = baseUrl ? `${baseUrl.replace(/\/$/, '')}/chat/completions` : 'https://api.openai.com/v1/chat/completions';
         
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify(requestBody)
-        });
+        const ctrl = new AbortController();
+        const timeoutId = setTimeout(() => ctrl.abort(), 2000); // 2s timeout
+        
+        let response: Response;
+        try {
+            response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(requestBody),
+                signal: ctrl.signal
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
             logger.debug(`[OBJ_CLASSIFIER] Bypass: Falha HTTP ${response.status}`);

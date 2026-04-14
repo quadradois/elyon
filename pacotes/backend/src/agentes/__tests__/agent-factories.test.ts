@@ -1,10 +1,11 @@
 /**
- * Testes: opener-agent.ts, presenter-agent.ts, admin-agent.ts
+ * Testes: sdr-agent.ts, admin-agent.ts
  *
  * Cobre a criação dos agentes SDK:
- * - criarOpenerAgent: retorno Agent com nome, tools, guardrails
- * - criarPresenterAgent: idem + diferenciais
+ * - criarSdrAgent: retorno Agent com nome, tools, resultType (structured output)
  * - criarAdminAgent: idem + resultType (structured output)
+ *
+ * Migrado de opener+presenter para SDR unificado em 11/04/2026.
  */
 
 // Mocks de dependências pesadas
@@ -27,7 +28,12 @@ jest.mock('@openai/agents', () => {
 
 jest.mock('../elyon-context', () => ({
     ElyonContext: jest.fn(),
-    criarModeloBYOK: jest.fn((_cfg: any, fallback: string) => fallback),
+    criarModeloBYOK: jest.fn((_cfg: any, fallback?: string) => fallback || 'modelo-mock-default'),
+}));
+
+jest.mock('../byok-resolver', () => ({
+    MODELO_PADRAO_AUXILIAR: 'gpt-4.1-mini',
+    MODELO_PADRAO_PRINCIPAL: 'gpt-4.1',
 }));
 
 jest.mock('../../ferramentas/sdr-tools-agents', () => ({
@@ -44,25 +50,28 @@ jest.mock('../../ferramentas/sdr-tools-agents', () => ({
     gerarLinkContratoTool: 'gerarLinkContratoTool',
     salvarDadosImovelTool: 'salvarDadosImovelTool',
     enviarParaCrmTool: 'enviarParaCrmTool',
+    enviarLinkAgendamentoTool: 'enviarLinkAgendamentoTool',
 }));
 
-
-jest.mock('../output-guardrails', () => ({
-    outputGuardrailsWhatsApp: ['whatsapp-guardrail'],
+jest.mock('../../ferramentas/consultar-preco-mercado', () => ({
+    consultarPrecoMercadoTool: 'consultarPrecoMercadoTool',
 }));
 
-jest.mock('../few-shot-examples', () => ({
-    gerarExemplosPorFase: jest.fn(() => ''),
+jest.mock('../../ferramentas/ler-skill-tool', () => ({
+    lerSkillTool: 'lerSkillTool',
 }));
 
 jest.mock('../shared-behavioral-guardrails', () => ({
     getSharedBehavioralRules: jest.fn(() => '\n# REGRAS COMPARTILHADAS'),
 }));
 
-import { criarOpenerAgent } from '../opener-agent';
-import { criarPresenterAgent } from '../presenter-agent';
-import { criarAdminAgent } from '../admin-agent';
+import { criarSdrAgent as _criarSdrAgent } from '../sdr-agent';
+import { criarAdminAgent as _criarAdminAgent } from '../admin-agent';
 import { criarModeloBYOK } from '../elyon-context';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const criarSdrAgent: (...args: Parameters<typeof _criarSdrAgent>) => any = _criarSdrAgent;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const criarAdminAgent: (...args: Parameters<typeof _criarAdminAgent>) => any = _criarAdminAgent;
 
 const baseConfig = {
     nomeAgente: 'Sofia',
@@ -71,48 +80,58 @@ const baseConfig = {
 };
 
 // ====================================
-// OPENER AGENT
+// SDR AGENT (unificação Opener + Presenter)
 // ====================================
 
-describe('criarOpenerAgent', () => {
-    it('cria agente com nome opener_agent_v11', () => {
-        const agent = criarOpenerAgent(baseConfig);
-        expect(agent.name).toBe('opener_agent_v11');
+describe('criarSdrAgent', () => {
+    it('cria agente com nome sdr_agent_v1', () => {
+        const agent = criarSdrAgent(baseConfig);
+        expect(agent.name).toBe('sdr_agent_v1');
     });
 
     it('usa criarModeloBYOK para o modelo', () => {
-        criarOpenerAgent(baseConfig);
-        expect(criarModeloBYOK).toHaveBeenCalledWith(baseConfig, 'gpt-4.1');
+        criarSdrAgent(baseConfig);
+        expect(criarModeloBYOK).toHaveBeenCalledWith(baseConfig);
     });
 
-    it('inclui tools core do SDR', () => {
-        const agent = criarOpenerAgent(baseConfig);
+    it('inclui todas as 11 tools do SDR unificado', () => {
+        const agent = criarSdrAgent(baseConfig);
         expect(agent.tools).toContain('converterParaLeadTool');
         expect(agent.tools).toContain('qualificarLeadTool');
         expect(agent.tools).toContain('registrarOptoutTool');
         expect(agent.tools).toContain('agendarFollowupTool');
         expect(agent.tools).toContain('moverParaFaseTool');
         expect(agent.tools).toContain('registrarIndicacaoTool');
+        expect(agent.tools).toContain('atualizarDadosLeadTool');
+        expect(agent.tools).toContain('agendarReuniaoCloserTool');
+        expect(agent.tools).toContain('enviarLinkAgendamentoTool');
+        expect(agent.tools).toContain('consultarPrecoMercadoTool');
+        expect(agent.tools).toContain('lerSkillTool');
+    });
+
+    it('NÃO inclui agendarAvaliacaoTool (agendamento unificado via agendar_reuniao_closer)', () => {
+        const agent = criarSdrAgent(baseConfig);
+        expect(agent.tools).not.toContain('agendarAvaliacaoTool');
     });
 
     it('inclui tools extras quando passados', () => {
-        const customTool = 'meuToolCustom';
-        const agent = criarOpenerAgent({ ...baseConfig, tools: [customTool] });
+        const customTool = 'meuToolCustom' as any;
+        const agent = criarSdrAgent({ ...baseConfig, tools: [customTool] });
         expect(agent.tools).toContain(customTool);
     });
 
-    it('aplica output guardrails WhatsApp', () => {
-        const agent = criarOpenerAgent(baseConfig);
-        expect(agent.outputGuardrails).toBeDefined();
+    it('usa resultType (Structured Output) em vez de outputGuardrails', () => {
+        const agent = criarSdrAgent(baseConfig);
+        expect(agent.resultType).toBeDefined();
+        expect(agent.outputGuardrails).toBeUndefined();
     });
 
     it('gera instructions com cidade e empreendimento', () => {
-        const agent = criarOpenerAgent({
+        const agent = criarSdrAgent({
             ...baseConfig,
             cidade: 'São Paulo',
             empreendimento: 'Ed. Solar',
         });
-        // instructions é uma função
         const prompt = agent.instructions({});
         expect(prompt).toContain('Sofia');
         expect(prompt).toContain('Imob Teste');
@@ -121,19 +140,27 @@ describe('criarOpenerAgent', () => {
     });
 
     it('inclui contexto ultimaInteracao quando presente', () => {
-        const agent = criarOpenerAgent(baseConfig);
-        const prompt = agent.instructions({ ultimaInteracao: 'Lead respondeu ontem' });
+        const agent = criarSdrAgent(baseConfig);
+        const prompt = agent.instructions({ context: { ultimaInteracao: 'Lead respondeu ontem' } });
         expect(prompt).toContain('Lead respondeu ontem');
     });
 
+    it('inclui instrução de saída estruturada no prompt do SDR', () => {
+        const agent = criarSdrAgent(baseConfig);
+        const prompt = agent.instructions({});
+        expect(prompt).toContain('respostaParaOCliente');
+        expect(prompt).toContain('pvam');
+        expect(prompt).toContain('spin');
+    });
+
     it('inclui regras comportamentais compartilhadas', () => {
-        const agent = criarOpenerAgent(baseConfig);
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
         expect(prompt).toContain('REGRAS COMPARTILHADAS');
     });
 
     it('passa BYOK config para criarModeloBYOK', () => {
-        criarOpenerAgent({
+        criarSdrAgent({
             ...baseConfig,
             model: 'deepseek-chat',
             apiKey: 'sk-custom',
@@ -145,36 +172,23 @@ describe('criarOpenerAgent', () => {
                 apiKey: 'sk-custom',
                 baseUrl: 'https://api.deepseek.com/v1',
             }),
-            'gpt-4.1',
         );
     });
-});
 
-// ====================================
-// PRESENTER AGENT
-// ====================================
-
-describe('criarPresenterAgent', () => {
-    it('cria agente com nome presenter_agent_v4', () => {
-        const agent = criarPresenterAgent(baseConfig);
-        expect(agent.name).toBe('presenter_agent_v4');
+    it('inclui regra de comissão quando fornecida', () => {
+        const agent = criarSdrAgent({ ...baseConfig, comissaoPadrao: '5%' });
+        const prompt = agent.instructions({});
+        expect(prompt).toContain('5%');
     });
 
-    it('usa gpt-4.1 como modelo padrão', () => {
-        criarPresenterAgent(baseConfig);
-        expect(criarModeloBYOK).toHaveBeenCalledWith(baseConfig, 'gpt-4.1');
-    });
-
-    it('inclui tools de diagnóstico', () => {
-        const agent = criarPresenterAgent(baseConfig);
-        expect(agent.tools).toContain('moverParaFaseTool');
-        expect(agent.tools).toContain('agendarFollowupTool');
-        expect(agent.tools).toContain('qualificarLeadTool');
-        expect(agent.tools).toContain('atualizarDadosLeadTool');
+    it('SDR sem comissaoPadrao usa texto fallback', () => {
+        const agent = criarSdrAgent(baseConfig);
+        const prompt = agent.instructions({});
+        expect(prompt).toContain('Comissão padrão do mercado');
     });
 
     it('gera prompt com diferenciais quando fornecidos', () => {
-        const agent = criarPresenterAgent({
+        const agent = criarSdrAgent({
             ...baseConfig,
             diferenciais: ['Tour 360', 'Rede de Parceiros'],
         });
@@ -183,45 +197,32 @@ describe('criarPresenterAgent', () => {
         expect(prompt).toContain('Rede de Parceiros');
     });
 
-    it('gera prompt sem diferenciais quando não fornecidos', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('prompt contém as 5 camadas estruturais', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('Sofia');
-        expect(prompt).toContain('Imob Teste');
+        expect(prompt).toContain('CAMADA 1');
+        expect(prompt).toContain('CAMADA 2');
+        expect(prompt).toContain('CAMADA 3');
+        expect(prompt).toContain('CAMADA 4');
+        expect(prompt).toContain('CAMADA 5');
     });
 
-    it('aplica output guardrails WhatsApp', () => {
-        const agent = criarPresenterAgent(baseConfig);
-        expect(agent.outputGuardrails).toBeDefined();
-    });
-
-    it('inclui comissaoPadrao no prompt quando fornecida (ADV-05)', () => {
-        const agent = criarPresenterAgent({ ...baseConfig, comissaoPadrao: '5%' });
+    it('prompt contém CoT com PVAM e SPIN', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('5%');
+        expect(prompt).toContain('<cot>');
+        expect(prompt).toContain('PVAM');
+        expect(prompt).toContain('SPIN');
     });
 
-    it('usa texto fallback de comissão quando comissaoPadrao não fornecida (ADV-05)', () => {
-        const agent = criarPresenterAgent(baseConfig);
+    it('prompt contém regras de progressão de fase', () => {
+        const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('alinhada com o mercado local');
-    });
-
-    it('usa videoInstitucionalUrl customizada quando fornecida (Q3)', () => {
-        const agent = criarPresenterAgent({ ...baseConfig, videoInstitucionalUrl: 'https://custom.video/link' });
-        const prompt = agent.instructions({});
-        expect(prompt).toContain('https://custom.video/link');
-    });
-
-    it('usa URL de vídeo padrão quando videoInstitucionalUrl não fornecida (Q3)', () => {
-        const agent = criarPresenterAgent(baseConfig);
-        const prompt = agent.instructions({});
-        expect(prompt).toContain('https://www.youtube.com/watch?v=4ItUhXf1sJw');
-    });
-
-    it('inclui agendarReuniaoCloserTool nas tools (C1)', () => {
-        const agent = criarPresenterAgent(baseConfig);
-        expect(agent.tools).toContain('agendarReuniaoCloserTool');
+        expect(prompt).toContain('MEIO_CAMPO');
+        expect(prompt).toContain('DESCOBERTA');
+        expect(prompt).toContain('DIAGNOSTICO_SPIN');
+        expect(prompt).toContain('PITCH');
+        expect(prompt).toContain('AGENDAMENTO');
     });
 });
 
@@ -235,7 +236,7 @@ describe('criarAdminAgent', () => {
         expect(agent.name).toBe('admin_agent_v4');
     });
 
-    it('usa gpt-4.1-mini como modelo padrão', () => {
+    it('usa modelo auxiliar BYOK como padrão', () => {
         criarAdminAgent(baseConfig);
         expect(criarModeloBYOK).toHaveBeenCalledWith(baseConfig, 'gpt-4.1-mini');
     });
@@ -245,14 +246,14 @@ describe('criarAdminAgent', () => {
         expect(agent.resultType).toBeDefined();
     });
 
-    it('inclui tools administrativas', () => {
+    it('inclui tools administrativas (sem agendamento)', () => {
         const agent = criarAdminAgent(baseConfig);
         expect(agent.tools).toContain('moverParaFaseTool');
-        expect(agent.tools).toContain('agendarAvaliacaoTool');
         expect(agent.tools).toContain('encaminharCorretorTool');
         expect(agent.tools).toContain('gerarLinkContratoTool');
         expect(agent.tools).toContain('salvarDadosImovelTool');
         expect(agent.tools).toContain('enviarParaCrmTool');
+        expect(agent.tools).not.toContain('agendarAvaliacaoTool');
     });
 
     it('gera prompt com dados de contrato', () => {
@@ -270,7 +271,6 @@ describe('criarAdminAgent', () => {
 
     it('não tem outputGuardrails (incompatível com resultType)', () => {
         const agent = criarAdminAgent(baseConfig);
-        // Admin não usa outputGuardrails por ser Structured Output
         expect(agent.outputGuardrails).toBeUndefined();
     });
 

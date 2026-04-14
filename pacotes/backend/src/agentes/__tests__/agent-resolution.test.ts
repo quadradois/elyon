@@ -1,9 +1,14 @@
+// Mock do logger ANTES de importar o módulo
+const mockLogger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+jest.mock('../../lib/logger', () => ({ logger: mockLogger }));
+
 import { logAgenteResolvido, resolverAgenteFinal } from '../agent-resolution';
 
 describe('agent-resolution', () => {
   const mapa = {
-    opener_agent_v11: 'OPENER',
-    presenter_agent_v4: 'PRESENTER',
+    opener_agent_v13: 'SDR',
+    presenter_agent_v6: 'SDR',
+    sdr_agent_v1: 'SDR',
     admin_agent_v4: 'ADMIN',
   } as const;
 
@@ -13,16 +18,16 @@ describe('agent-resolution', () => {
 
   it('resolve agente via mapa quando lastAgent.name existe', () => {
     const result = resolverAgenteFinal({
-      nomeRealAgenteRespondeu: 'presenter_agent_v4',
-      tipoAgenteInicial: 'OPENER',
+      nomeRealAgenteRespondeu: 'presenter_agent_v6',
+      tipoAgenteInicial: 'SDR',
       mapaNomesAgentes: mapa as any,
     });
 
-    expect(result.nomeAgenteResposta).toBe('presenter_agent_v4');
-    expect(result.agenteQueRespondeuFormatado).toBe('PRESENTER');
+    expect(result.nomeAgenteResposta).toBe('presenter_agent_v6');
+    expect(result.agenteQueRespondeuFormatado).toBe('SDR');
   });
 
-  it('usa fallback OPENER quando lastAgent.name não mapeia', () => {
+  it('usa fallback SDR quando lastAgent.name não mapeia', () => {
     const result = resolverAgenteFinal({
       nomeRealAgenteRespondeu: 'agente_desconhecido',
       tipoAgenteInicial: 'ADMIN',
@@ -30,26 +35,24 @@ describe('agent-resolution', () => {
     });
 
     expect(result.nomeAgenteResposta).toBe('agente_desconhecido');
-    expect(result.agenteQueRespondeuFormatado).toBe('OPENER');
+    expect(result.agenteQueRespondeuFormatado).toBe('SDR');
   });
 
   it('mantém agente inicial quando lastAgent.name não existe', () => {
     const result = resolverAgenteFinal({
-      tipoAgenteInicial: 'PRESENTER',
+      tipoAgenteInicial: 'SDR',
       mapaNomesAgentes: mapa as any,
     });
 
-    expect(result.nomeAgenteResposta).toBe('PRESENTER');
-    expect(result.agenteQueRespondeuFormatado).toBe('PRESENTER');
+    expect(result.nomeAgenteResposta).toBe('SDR');
+    expect(result.agenteQueRespondeuFormatado).toBe('SDR');
   });
 
   it('loga linha padronizada do agente resolvido', () => {
-    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    logAgenteResolvido('sdr_agent_v1', 'SDR');
 
-    logAgenteResolvido('presenter_agent_v4', 'PRESENTER');
-
-    expect(logSpy).toHaveBeenCalledWith(
-      '[ORCHESTRATOR] ✅ Resposta gerada por: presenter_agent_v4 (Mapeado: PRESENTER)'
+    expect(mockLogger.debug).toHaveBeenCalledWith(
+      '[ORCHESTRATOR] ✅ Resposta gerada por: sdr_agent_v1 (Mapeado: SDR)'
     );
   });
 });

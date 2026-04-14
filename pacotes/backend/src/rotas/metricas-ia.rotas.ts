@@ -14,17 +14,30 @@
  * @date 02/04/2026
  */
 
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/db';
+import { responderErro } from '../utilitarios/resposta';
 
 const router = Router();
+
+const obterTenantId = (req: Request): string | null => {
+  const tenantDoContexto = typeof req.tenantId === 'string' ? req.tenantId : '';
+  const tenantDoHeader = typeof req.headers['x-tenant-id'] === 'string'
+    ? req.headers['x-tenant-id']
+    : '';
+  const tenantId = (tenantDoContexto || tenantDoHeader).trim();
+  return tenantId.length > 0 ? tenantId : null;
+};
 
 // ====================================
 // GET /resumo — Performance geral dos agentes
 // ====================================
-router.get('/resumo', async (req, res) => {
+router.get('/resumo', async (req: Request, res: Response) => {
   try {
-    const tenantId = req.tenantId;
+    const tenantId = obterTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 400, 'Tenant ID obrigatório');
+    }
     const diasAtras = parseInt(req.query.dias as string) || 30;
     
     const limiteData = new Date();
@@ -101,9 +114,12 @@ router.get('/resumo', async (req, res) => {
 // ====================================
 // GET /tools — Detalhamento por ferramenta
 // ====================================
-router.get('/tools', async (req, res) => {
+router.get('/tools', async (req: Request, res: Response) => {
   try {
-    const tenantId = req.tenantId;
+    const tenantId = obterTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 400, 'Tenant ID obrigatório');
+    }
     const diasAtras = parseInt(req.query.dias as string) || 7;
     
     const limiteData = new Date();
@@ -164,9 +180,12 @@ router.get('/tools', async (req, res) => {
 // ====================================
 // GET /conversoes — Timeline de conversões
 // ====================================
-router.get('/conversoes', async (req, res) => {
+router.get('/conversoes', async (req: Request, res: Response) => {
   try {
-    const tenantId = req.tenantId;
+    const tenantId = obterTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 400, 'Tenant ID obrigatório');
+    }
     const diasAtras = parseInt(req.query.dias as string) || 30;
 
     const limiteData = new Date();
@@ -206,7 +225,6 @@ router.get('/conversoes', async (req, res) => {
         nome: l.nome,
         temperatura: l.temperatura,
         status: l.status,
-        tipo: l.tipoInteresse,
         data: l.criadoEm,
       })),
     });

@@ -3,6 +3,7 @@ import { prisma } from '../lib/db';
 import { verificarAutenticacao, verificarAdmin } from '../middleware/middleware-auth';
 import { responderErro } from '../utilitarios/resposta';
 import { hashSenha } from '../utilitarios/senha';
+import { ServicoAuditoria } from '../servicos/servico-auditoria';
 
 const router = Router();
 
@@ -57,6 +58,16 @@ router.put('/me', verificarAutenticacao, async (req, res) => {
                 ...(telefone !== undefined && { telefone }),
                 ...(avatar !== undefined && { avatar }),
             },
+        });
+
+        ServicoAuditoria.registrar({
+            tenantId: req.usuario!.tenantId,
+            usuarioId: req.usuario!.id,
+            acao: 'EDITAR_PERFIL_PROPRIO',
+            entidade: 'Usuario',
+            entidadeId: req.usuario!.id,
+            detalhes: { campos: Object.keys(req.body) },
+            ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string
         });
 
         res.json(camposPublicos(usuario));
@@ -148,6 +159,16 @@ router.post('/', verificarAdmin, async (req, res) => {
             },
         });
 
+        ServicoAuditoria.registrar({
+            tenantId,
+            usuarioId: req.usuario!.id,
+            acao: 'CRIAR_USUARIO',
+            entidade: 'Usuario',
+            entidadeId: usuario.id,
+            detalhes: { email: usuario.email, papel: usuario.papel },
+            ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string
+        });
+
         // Retorna a senha temporária APENAS na criação (nunca mais)
         res.status(201).json({
             ...camposPublicos(usuario),
@@ -208,6 +229,16 @@ router.put('/:id', verificarAdmin, async (req, res) => {
             },
         });
 
+        ServicoAuditoria.registrar({
+            tenantId,
+            usuarioId: req.usuario!.id,
+            acao: 'EDITAR_USUARIO',
+            entidade: 'Usuario',
+            entidadeId: id,
+            detalhes: { campos: Object.keys(req.body) },
+            ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string
+        });
+
         res.json(camposPublicos(atualizado));
     } catch (err) {
         console.error('[Usuarios] Erro ao atualizar:', err);
@@ -229,6 +260,16 @@ router.delete('/:id', verificarAdmin, async (req, res) => {
         if (!usuario) return responderErro(res, 404, 'Usuário não encontrado');
 
         await prisma.usuario.update({ where: { id }, data: { estaAtivo: false } });
+        
+        ServicoAuditoria.registrar({
+            tenantId,
+            usuarioId: req.usuario!.id,
+            acao: 'DESATIVAR_USUARIO',
+            entidade: 'Usuario',
+            entidadeId: id,
+            ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string
+        });
+
         res.json({ mensagem: 'Usuário desativado com sucesso' });
     } catch (err) {
         console.error('[Usuarios] Erro ao desativar:', err);
@@ -249,6 +290,15 @@ router.post('/:id/resetar-senha', verificarAdmin, async (req, res) => {
         const senhaHash = await hashSenha(novaSenha);
 
         await prisma.usuario.update({ where: { id }, data: { senha: senhaHash } });
+
+        ServicoAuditoria.registrar({
+            tenantId,
+            usuarioId: req.usuario!.id,
+            acao: 'RESETAR_SENHA',
+            entidade: 'Usuario',
+            entidadeId: id,
+            ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string
+        });
 
         res.json({
             mensagem: 'Senha resetada com sucesso',

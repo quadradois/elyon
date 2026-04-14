@@ -50,6 +50,11 @@ jest.mock('../elyon-context', () => ({
     criarModeloBYOK: (config: any, fallback: string) => mockCriarModeloBYOK(config, fallback),
 }));
 
+jest.mock('../byok-resolver', () => ({
+    MODELO_PADRAO_AUXILIAR: 'gpt-4.1-mini',
+    MODELO_PADRAO_PRINCIPAL: 'gpt-4.1',
+}));
+
 import { criarKnowledgeAgent, knowledgeAgent } from '../knowledge-agent';
 import { Agent } from '@openai/agents';
 import { conhecimentoCuradoService } from '../../servicos/conhecimento-curado';

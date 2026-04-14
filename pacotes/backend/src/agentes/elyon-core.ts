@@ -5,6 +5,7 @@ import { ConverterParaLeadUseCase } from '../casos-de-uso/agentes/converter-para
 import { logger } from '../lib/logger';
 import { OpenAI } from 'openai';
 import { buscarConfiguracaoTenant } from './orchestrator-queries';
+import { resolverChaveAgentes, MODELO_PADRAO_AUXILIAR } from './byok-resolver';
 
 /**
  * ELYON CORE — Funções de Manutenção e Jobs
@@ -37,10 +38,10 @@ export class ElyonCore {
 
       // Processar para RAG em background (não bloqueia)
       ragConversasService.processarConversaFinalizada(conversaId)
-        .catch(err => logger.warn("[erro capturado]"));
+        .catch(err => logger.warn({ err }, '[ELYON-CORE] Erro ao processar conversa para RAG'));
 
     } catch (error) {
-      logger.warn("[erro capturado]");
+      logger.warn({ err: error }, '[ELYON-CORE] Erro ao finalizar conversa');
     }
   }
 
@@ -65,19 +66,28 @@ export class ElyonCore {
 
       logger.debug(`[ELYON] 📋 Encontradas ${conversasInativas.length} conversas inativas`);
 
-      // TASK-CR-10 / CR-13: Processamento em lote assíncrono para conversas
-      const CONCURRENCY = 5;
-      let finalizadas = 0;
-      for (let i = 0; i < conversasInativas.length; i += CONCURRENCY) {
-        const chunk = conversasInativas.slice(i, i + CONCURRENCY);
-        await Promise.allSettled(chunk.map(c => this.finalizarConversa(c.id)));
-        finalizadas += chunk.length;
+      // FIX N+1: Batch update em vez de N updates individuais
+      if (conversasInativas.length > 0) {
+        const ids = conversasInativas.map(c => c.id);
+        await prisma.conversa.updateMany({
+          where: { id: { in: ids } },
+          data: {
+            estadoConversa: 'finalizada',
+            finalizadaEm: new Date()
+          }
+        });
+
+        // RAG em background (fire-and-forget, não bloqueia)
+        for (const c of conversasInativas) {
+          ragConversasService.processarConversaFinalizada(c.id)
+            .catch(err => logger.warn({ err }, '[ELYON-CORE] Erro ao processar conversa para RAG'));
+        }
       }
 
       return conversasInativas.length;
 
     } catch (error) {
-      logger.warn("[erro capturado]");
+      logger.warn({ err: error }, '[ELYON-CORE] Erro ao processar conversas inativas');
       return 0;
     }
   }
@@ -128,29 +138,62 @@ export class ElyonCore {
 
       logger.debug(`[ELYON] 📋 Encontrados ${contatosPendentes.length} contatos pendentes de análise`);
 
+      // ── FIX N+1 #1: Batch de conversas (antes: 1 findFirst por contato → agora: 1 findMany) ──
+      const contatoIds = contatosPendentes.map(c => c.id);
+      const telefones = contatosPendentes.map(c => c.telefone).filter(Boolean) as string[];
+
+      const todasConversas = await prisma.conversa.findMany({
+        where: {
+          OR: [
+            { leadId: { in: contatoIds } },
+            { lead: { telefone: { in: telefones } } }
+          ]
+        },
+        include: {
+          mensagens: {
+            orderBy: { enviadaEm: 'desc' },
+            take: 20
+          },
+          lead: { select: { telefone: true } }
+        }
+      });
+
+      // Indexar por leadId e telefone para lookup O(1)
+      const conversaPorLeadId = new Map<string, typeof todasConversas[0]>();
+      const conversaPorTelefone = new Map<string, typeof todasConversas[0]>();
+      for (const c of todasConversas) {
+        if (c.leadId) conversaPorLeadId.set(c.leadId, c);
+        if (c.lead?.telefone) conversaPorTelefone.set(c.lead.telefone, c);
+      }
+
+      // ── FIX N+1 #2: Batch de configs de tenant (antes: 1 findUnique por tenant → agora: 1 batch) ──
+      const tenantIdsUnicos = [...new Set(
+        contatosPendentes.map(c => c.campanha?.tenantId).filter(Boolean)
+      )] as string[];
+
+      // Pré-carregar todos os clients BYOK de uma vez
+      if (tenantIdsUnicos.length > 0) {
+        const configs = await Promise.all(
+          tenantIdsUnicos.map(tid => buscarConfiguracaoTenant(tid).then(cfg => ({ tid, cfg })))
+        );
+        for (const { tid, cfg } of configs) {
+          const byok = resolverChaveAgentes(cfg ?? null);
+          openaiClients.set(tid, new OpenAI({
+            apiKey: byok.apiKey || process.env.OPENAI_API_KEY,
+            baseURL: byok.baseUrl || undefined
+          }));
+        }
+      }
+
       for (const contato of contatosPendentes) {
         resultado.analisadas++;
 
         try {
-          // Buscar histórico de mensagens do contato
-          const conversa = await prisma.conversa.findFirst({
-            where: {
-              OR: [
-                { leadId: contato.id },
-                // Buscar por telefone também
-                { lead: { telefone: contato.telefone } }
-              ]
-            },
-            include: {
-              mensagens: {
-                orderBy: { enviadaEm: 'desc' },
-                take: 20
-              }
-            }
-          });
+          // Lookup instantâneo (sem query)
+          const conversa = conversaPorLeadId.get(contato.id)
+                        || (contato.telefone ? conversaPorTelefone.get(contato.telefone) : undefined);
 
           if (!conversa || conversa.mensagens.length === 0) {
-            // Sem histórico, pular
             continue;
           }
 
@@ -168,22 +211,13 @@ export class ElyonCore {
           let activeClient = basePlatformClient;
 
           if (tenantId) {
-              if (!openaiClients.has(tenantId)) {
-                  const configTenant = await buscarConfiguracaoTenant(tenantId);
-                  const resolver = require('./byok-resolver');
-                  const byok = resolver.resolverChaveAgentes((configTenant as any) || null);
-                  openaiClients.set(tenantId, new OpenAI({
-                      apiKey: byok.apiKey || process.env.OPENAI_API_KEY,
-                      baseURL: byok.baseUrl || undefined
-                  }));
-              }
               activeClient = openaiClients.get(tenantId) || basePlatformClient;
           }
 
           if (activeClient) {
               try {
                   const openaiResult = await activeClient.chat.completions.create({
-                      model: 'gpt-4o-mini',
+                      model: MODELO_PADRAO_AUXILIAR,
                       temperature: 0,
                       messages: [
                           {
@@ -196,7 +230,7 @@ export class ElyonCore {
                   const avaliacao = openaiResult.choices[0]?.message?.content?.trim().toUpperCase() || 'NAO';
                   leadAceitou = avaliacao.includes('SIM');
               } catch (e) {
-                  logger.warn("[erro capturado]");
+                  logger.warn({ err: e }, '[ELYON-CORE] Erro na avaliação LLM de aceitação do lead');
                   leadAceitou = fallbackRegex.test(mensagensLead);
               }
           } else {
@@ -225,7 +259,7 @@ export class ElyonCore {
                 motivacaoVenda: `[FISCALIZAÇÃO ELYON] Conversão automática: LLM Detectou resposta positiva à oferta de transição na triagem.`
               });
 
-              logger.warn("[erro capturado]");
+              logger.debug('[ELYON-CORE] Conversão automática realizada com sucesso');
               resultado.convertidas++;
 
               // Registrar métrica de correção
@@ -249,13 +283,13 @@ export class ElyonCore {
               });
 
             } catch (convError) {
-              logger.warn("[erro capturado]");
+              logger.warn({ err: convError }, '[ELYON-CORE] Erro ao converter lead automático');
               resultado.erros++;
             }
           }
 
         } catch (contatoError) {
-          logger.warn("[erro capturado]");
+          logger.warn({ err: contatoError }, '[ELYON-CORE] Erro ao processar contato na fiscalização');
           resultado.erros++;
         }
       }
@@ -265,7 +299,7 @@ export class ElyonCore {
       return resultado;
 
     } catch (error) {
-      logger.warn("[erro capturado]");
+      logger.warn({ err: error }, '[ELYON-CORE] Erro geral na fiscalização');
       return resultado;
     }
   }

@@ -20,6 +20,14 @@ describe('MoverParaFaseUseCase', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      status: 'NOVO',
+      doresIdentificadas: ['poucas visitas', 'sem retorno de corretores'],
+      situacaoAtual: 'anunciado no OLX há 3 meses',
+      motivacaoVenda: 'mudança de cidade',
+      consequencias: 'perda de oportunidades',
+      custosAtuais: null,
+    });
   });
 
   it('retorna erro para fase inválida', async () => {
@@ -56,6 +64,7 @@ describe('MoverParaFaseUseCase', () => {
 
   it('ao mover para CAPTADO cria cliente quando não existe', async () => {
     mockPrisma.lead.findUnique.mockResolvedValueOnce({
+      status: 'ONBOARDING',
       doresIdentificadas: ['poucas visitas', 'sem retorno de corretores'],
       situacaoAtual: 'anunciado no OLX há 3 meses',
       motivacaoVenda: 'mudança de cidade',
@@ -100,6 +109,7 @@ describe('MoverParaFaseUseCase', () => {
 
   it('ao mover para CAPTADO não cria cliente se já existir', async () => {
     mockPrisma.lead.findUnique.mockResolvedValueOnce({
+      status: 'ONBOARDING',
       doresIdentificadas: ['poucas visitas', 'sem retorno de corretores'],
       situacaoAtual: 'anunciado no OLX há 3 meses',
       motivacaoVenda: 'mudança de cidade',
@@ -121,13 +131,6 @@ describe('MoverParaFaseUseCase', () => {
   });
 
   it('retorna erro quando lead.update lança exceção', async () => {
-    mockPrisma.lead.findUnique.mockResolvedValueOnce({
-      doresIdentificadas: ['poucas visitas', 'sem retorno de corretores'],
-      situacaoAtual: 'anunciado no OLX há 3 meses',
-      motivacaoVenda: 'mudança de cidade',
-      consequencias: null,
-      custosAtuais: 'condomínio + IPTU mensal',
-    });
     mockPrisma.lead.update.mockRejectedValue(new Error('Erro inesperado'));
 
     const result = await useCase.execute({
@@ -143,6 +146,7 @@ describe('MoverParaFaseUseCase', () => {
 
   it('bloqueia mover para FASE3 quando qualificação SPIN está incompleta', async () => {
     mockPrisma.lead.findUnique.mockResolvedValue({
+      status: 'TENTATIVA_AGENDAMENTO',
       doresIdentificadas: ['poucas visitas'],
       situacaoAtual: null,
       motivacaoVenda: 'precisa vender rápido',
@@ -166,6 +170,29 @@ describe('MoverParaFaseUseCase', () => {
         'implicacao(custosAtuais|consequencias)'
       ])
     );
+    expect(mockPrisma.lead.update).not.toHaveBeenCalled();
+  });
+
+  it('bloqueia salto de etapa quando tenta pular de FASE1 direto para FASE3', async () => {
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      status: 'NOVO',
+      doresIdentificadas: ['dor 1', 'dor 2'],
+      situacaoAtual: 'anunciando',
+      motivacaoVenda: 'mudança',
+      consequencias: 'custo mensal',
+      custosAtuais: null,
+    });
+
+    const result = await useCase.execute({
+      leadId: 'lead-salto',
+      faseDestino: 'FASE3',
+      motivo: 'Tentativa de pular etapa',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.reasonCode).toBe('PHASE_TRANSITION_BLOCKED');
+    expect(result.error).toBe('Transição de fase bloqueada pelo gate de governança');
+    expect(result.gateDetalhes).toContain('NOVO -> DOCUMENTACAO');
     expect(mockPrisma.lead.update).not.toHaveBeenCalled();
   });
 

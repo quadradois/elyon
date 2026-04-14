@@ -49,6 +49,20 @@ const JOB_TTL_SECONDS = 3600; // 1 hora
 const BATCH_SIZE = 10;
 const DELAY_ENTRE_BATCHES = 500;
 
+// Compatibilidade temporária: algumas branches estão com o Prisma Client
+// sem os campos de rastreamento de proprietário em `Imovel`.
+// Este adapter mantém o fluxo funcionando até a regeneração do client alinhada ao schema.
+type ImovelRastreamentoOwner = {
+    cpfProprietario: string | null;
+    cpfVerificadoEm: Date | null;
+    histProprietarios: unknown;
+};
+
+const imovelModelRastreamento = prisma.imovel as unknown as {
+    findFirst(args: any): Promise<ImovelRastreamentoOwner | null>;
+    updateMany(args: any): Promise<{ count: number }>;
+};
+
 // ============================================
 // FUNÇÕES DO SERVIÇO
 // ============================================
@@ -220,6 +234,10 @@ async function processarJobEmBackground(jobId: string, tenantId: string): Promis
 
     console.log(`[JobMineracao] Job ${jobId}: ${imoveis.length} imóveis em ${batches.length} batches`);
 
+    // Cache de CPFs já processados neste job (escopo global do job, não do batch).
+    // Evita que o mesmo proprietário seja raspado múltiplas vezes quando possui imóveis em batches diferentes.
+    const cacheJob = new Map<string, any>();
+
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         // Verificar se foi cancelado
         const jobAtual = await obterStatusJob(jobId);
@@ -229,15 +247,6 @@ async function processarJobEmBackground(jobId: string, tenantId: string): Promis
         }
 
         const batch = batches[batchIndex];
-
-        // Cache em memória para o job atual (deduplicação de BOXes)
-        // Se já achamos o CPF "123" neste job, não precisamos raspar de novo
-        // apenas reaproveitamos os dados.
-        // Como o `scraperIPTU.consultarProprietario` é o gargalo, vamos fazer sequencial ou 
-        // em lote controlado para usar o `cacheJob`.
-        
-        // Mantido no escopo do batch, mas seria ideal subir para o escopo do Job
-        const cacheJob = new Map<string, any>();
         const resultadosBatch = [];
 
         for (const imovel of batch) {
@@ -285,21 +294,85 @@ async function processarJobEmBackground(jobId: string, tenantId: string): Promis
                     continue;
                 }
 
-                // 2. Se não tem cache global, faz o scraping
+                // 2. Verificar Layer 1 (IPTU → CPF, TTL 30 dias via imoveis.cpfVerificadoEm)
+                // Se o CPF do proprietário foi raspado recentemente, evita nova consulta à Prefeitura.
+                const TTL_L1_MS = 30 * 24 * 60 * 60 * 1000;
+                const imovelDb = await imovelModelRastreamento.findFirst({
+                    where: { inscricaoIptu: imovel.nrinscr },
+                    select: { cpfProprietario: true, cpfVerificadoEm: true, histProprietarios: true }
+                });
+                const cpfL1 = imovelDb?.cpfProprietario ?? null;
+                const verificadoEm = imovelDb?.cpfVerificadoEm ?? null;
+                const cpfL1Fresco = verificadoEm
+                    ? (Date.now() - new Date(verificadoEm).getTime()) < TTL_L1_MS
+                    : false;
+
+                if (cpfL1 && cpfL1Fresco) {
+                    // CPF verificado nos últimos 30 dias → pular scraping
+                    if (cacheJob.has(cpfL1)) {
+                        console.log(`[JobMineracao] IPTU ${imovel.nrinscr}: CPF L1 ${cpfL1} já no job. Ignorando duplicata.`);
+                        continue;
+                    }
+                    cacheJob.set(cpfL1, true);
+                    console.log(`[JobMineracao] Cache L1 HIT para IPTU ${imovel.nrinscr} → CPF ${cpfL1} (verificado em ${verificadoEm?.toISOString()})`);
+                    sucessos++;
+                    resultadosBatch.push({ ...imovel, cpf: cpfL1, origem: 'CACHE_L1', cached: true });
+                    continue;
+                }
+
+                // 3. Sem cache L1 fresco → raspar prefeitura
                 console.log(`[JobMineracao] Raspando IPTU ${imovel.nrinscr}...`);
                 const dadosScraper = await scraperIPTU.consultarProprietario(imovel.nrinscr);
-                
-                // 3. Deduplicação Intra-Job (Após Scraping)
+
+                // 4. Deduplicação Intra-Job (Após Scraping)
                 const cpfRetornado = dadosScraper.cpf || (dadosScraper as any).cpfCnpj;
-                
+
                 if (cpfRetornado && cacheJob.has(cpfRetornado)) {
                     console.log(`[JobMineracao] IPTU ${imovel.nrinscr}: CPF ${cpfRetornado} recém raspado já existe neste job. Ignorando duplicata.`);
-                    // Não incrementamos sucessos nem adicionamos em resultadosBatch pois é repetido
                     continue;
                 }
 
                 if (cpfRetornado) {
                     cacheJob.set(cpfRetornado, true);
+                }
+
+                // 5. Detecção de venda: comparar CPF raspado com o último CPF armazenado (Layer 1)
+                if (cpfRetornado) {
+                    const vendaDetectada = cpfL1 && cpfL1 !== cpfRetornado;
+
+                    if (vendaDetectada) {
+                        console.log(`[JobMineracao] 🔄 VENDA DETECTADA IPTU ${imovel.nrinscr}: CPF ${cpfL1} → ${cpfRetornado}`);
+
+                        // Expirar cache_cpf do proprietário antigo imediatamente (Layer 2)
+                        await prisma.cacheCpf.updateMany({
+                            where: { cpf: cpfL1! },
+                            data: { expiraEm: new Date() }
+                        }).catch(e => console.error(`[JobMineracao] Falha ao expirar cacheCpf antigo (${cpfL1}):`, e));
+
+                        // Registrar no histórico de proprietários
+                        const histAtual: { cpf: string; ate: string }[] = Array.isArray(imovelDb?.histProprietarios)
+                            ? (imovelDb?.histProprietarios as { cpf: string; ate: string }[])
+                            : [];
+                        const novoHist = [...histAtual, { cpf: cpfL1!, ate: new Date().toISOString() }];
+
+                        await imovelModelRastreamento.updateMany({
+                            where: { inscricaoIptu: imovel.nrinscr },
+                            data: {
+                                cpfProprietario: cpfRetornado,
+                                cpfVerificadoEm: new Date(),
+                                histProprietarios: novoHist
+                            }
+                        }).catch(e => console.error(`[JobMineracao] Falha ao atualizar Layer 1 (venda):`, e));
+                    } else {
+                        // Mesmo proprietário ou primeira vez → atualizar CPF e timestamp
+                        await imovelModelRastreamento.updateMany({
+                            where: { inscricaoIptu: imovel.nrinscr },
+                            data: {
+                                cpfProprietario: cpfRetornado,
+                                cpfVerificadoEm: new Date()
+                            }
+                        }).catch(e => console.error(`[JobMineracao] Falha ao atualizar Layer 1:`, e));
+                    }
                 }
 
                 // 4. MERGE INTELIGENTE (Associação de Box da Etapa 01)

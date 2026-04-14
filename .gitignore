@@ -48,6 +48,7 @@ ssl/*.key
 
 # Backups
 backups/
+*_bak_*
 
 # Temp
 temp/
@@ -57,3 +58,4 @@ tmp/
 # Uploads
 uploads/
 secrets/
+erros.txt

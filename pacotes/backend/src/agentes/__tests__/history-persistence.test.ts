@@ -31,18 +31,18 @@ describe('persistirHistoricoSdk', () => {
         { type: 'tool_call_item', name: 'qualificar_lead' },
         { type: 'handoff_call_item' },
       ],
-    });
+    } as any);
 
     expect(mockRemoveHandoffNarration).toHaveBeenCalled();
     expect(mockSliceHistoryPreservingSystem).toHaveBeenCalledWith(
       [{ role: 'user', content: 'Oi' }],
-      20,
+      40,
       'Persistência Orchestrator'
     );
     expect(mockSetHistory).toHaveBeenCalledWith(
       'contato-1',
       [{ role: 'user', content: 'Oi' }],
-      'PRESENTER'
+      'SDR'
     );
 
     expect(result).toEqual({
@@ -55,7 +55,7 @@ describe('persistirHistoricoSdk', () => {
   it('retorna zeros quando history não existe', async () => {
     const result = await persistirHistoricoSdk('contato-2', {
       history: null,
-    });
+    } as any);
 
     expect(mockSetHistory).not.toHaveBeenCalled();
     expect(result).toEqual({
@@ -72,7 +72,7 @@ describe('persistirHistoricoSdk', () => {
       history: [{ role: 'user', content: 'Oi' }],
       lastAgent: { name: 'opener_agent_v11' },
       newItems: [{ type: 'tool_call_item', name: 'buscar_contexto' }],
-    });
+    } as any);
 
     expect(result).toEqual({
       nomesToolsTurno: [],

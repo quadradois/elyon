@@ -3,6 +3,7 @@ import { Router, Request } from 'express';
 import { prisma } from '../lib/db';
 import { z } from 'zod';
 import { verificarAutenticacao } from '../middleware/middleware-auth';
+import { googleCalendarService } from '../servicos/google-calendar';
 
 const router = Router();
 
@@ -412,3 +413,90 @@ router.put('/expediente', verificarAutenticacao, async (req, res) => {
 });
 
 export default router;
+
+// ====================================
+// GET /api/agenda/google-calendar/status — Health Check
+// ====================================
+router.get('/google-calendar/status', verificarAutenticacao, async (_req, res) => {
+    try {
+        const status = await googleCalendarService.healthCheck();
+        res.json(status);
+    } catch (error) {
+        console.error('[Agenda] Erro no health check Google Calendar:', error);
+        responderErro(res, 500, 'Erro interno');
+    }
+});
+
+// ====================================
+// GET /api/agenda/google-calendar/slots — Slots Livres
+// ====================================
+const SlotsQuerySchema = z.object({
+    dataInicio: z.string().datetime().optional(),
+    dataFim: z.string().datetime().optional(),
+    duracaoMinutos: z.coerce.number().min(15).max(120).optional(),
+});
+
+router.get('/google-calendar/slots', verificarAutenticacao, async (req, res) => {
+    try {
+        if (!googleCalendarService.isConfigurado()) {
+            return responderErro(res, 503, 'Google Calendar não configurado neste tenant.');
+        }
+
+        const query = SlotsQuerySchema.parse(req.query);
+        const slots = await googleCalendarService.consultarSlotsLivres({
+            dataInicio: query.dataInicio ? new Date(query.dataInicio) : undefined,
+            dataFim: query.dataFim ? new Date(query.dataFim) : undefined,
+            duracaoMinutos: query.duracaoMinutos,
+        });
+
+        res.json({
+            total: slots.length,
+            slots,
+            formatado: googleCalendarService.formatarSlotsParaWhatsApp(slots),
+        });
+    } catch (error: any) {
+        console.error('[Agenda] Erro ao buscar slots Google Calendar:', error);
+        if (error instanceof z.ZodError) {
+            return responderErro(res, 400, 'Parâmetros inválidos', { detalhes: error.errors });
+        }
+        responderErro(res, 500, error.message || 'Erro interno');
+    }
+});
+
+// ====================================
+// GET /api/agenda/google-calendar/disponibilidade — Verificar horário específico
+// ====================================
+router.get('/google-calendar/disponibilidade', verificarAutenticacao, async (req, res) => {
+    try {
+        if (!googleCalendarService.isConfigurado()) {
+            return responderErro(res, 503, 'Google Calendar não configurado.');
+        }
+
+        const horario = req.query.horario as string;
+        if (!horario) return responderErro(res, 400, 'Parâmetro "horario" é obrigatório (ISO 8601).');
+
+        const resultado = await googleCalendarService.verificarDisponibilidade(
+            new Date(horario),
+            req.query.duracao ? Number(req.query.duracao) : undefined
+        );
+
+        res.json(resultado);
+    } catch (error: any) {
+        console.error('[Agenda] Erro ao verificar disponibilidade:', error);
+        responderErro(res, 500, error.message || 'Erro interno');
+    }
+});
+
+// ====================================
+// GET /api/agenda/google-calendar/link-agendamento — Link público de agendamento
+// ====================================
+router.get('/google-calendar/link-agendamento', verificarAutenticacao, async (req, res) => {
+    try {
+        const titulo = (req.query.titulo as string) || 'Reunião com Consultor Imobiliário';
+        const link = googleCalendarService.gerarLinkAgendamento({ titulo });
+        res.json({ link });
+    } catch (error: any) {
+        console.error('[Agenda] Erro ao gerar link agendamento:', error);
+        responderErro(res, 500, error.message || 'Erro interno');
+    }
+});

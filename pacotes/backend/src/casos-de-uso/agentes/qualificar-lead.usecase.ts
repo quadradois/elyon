@@ -1,10 +1,17 @@
 import { prisma } from '../../lib/db';
+import { mergeSchemaStateComSources } from './source-of-truth';
+import {
+    aplicarBooleanComEvidencia,
+    normalizarPrazoEUrgencia,
+    temTexto,
+    valorComEvidencia
+} from './governanca-campos';
 
 export interface QualificarLeadInput {
     contatoId: string;
     temperatura: 'FRIO' | 'MORNO' | 'QUENTE';
     interesse: string;
-    timeline: string;
+    timeline?: string;
     observacoes?: string;
     // Dados SPIN coletados na conversa
     // S - Situação
@@ -12,6 +19,7 @@ export interface QualificarLeadInput {
     tempoDecisao?: string;
     tentativasAnteriores?: string;
     comCorretorAtualmente?: boolean;
+    comCorretorAtualmenteEvidencia?: string;
     // P - Problema
     doresIdentificadas?: string[];
     motivacaoVenda?: string;
@@ -20,10 +28,12 @@ export interface QualificarLeadInput {
     consequencias?: string;
     custosAtuais?: string;
     pressaoTempo?: boolean;
+    pressaoTempoEvidencia?: string;
     // N - Necessidade
     expectativaServico?: string;
     objecoes?: string[];
     interesseAvaliacao?: boolean;
+    interesseAvaliacaoEvidencia?: string;
     // Dados do imóvel
     enderecoImovel?: string;
     tipoImovel?: string;
@@ -36,6 +46,7 @@ export interface QualificarLeadInput {
     estadoConservacao?: string;
     situacaoFinanceira?: string;
     temDividas?: boolean;
+    temDividasEvidencia?: string;
 }
 
 export interface QualificarLeadOutput {
@@ -43,6 +54,7 @@ export interface QualificarLeadOutput {
     leadId?: string;
     leadCriado?: boolean;
     temperatura?: string;
+    statusLead?: string;
     prontidaoQualificacao?: 'PARCIAL' | 'COMPLETA';
     camposAtualizados?: string[];
     camposFaltantesCriticos?: string[];
@@ -50,8 +62,23 @@ export interface QualificarLeadOutput {
     error?: string;
 }
 
-function temTexto(valor?: string | null): boolean {
-    return typeof valor === 'string' && valor.trim().length > 0;
+function pareceValorMonetario(texto?: string | null): boolean {
+    const t = (texto || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+    if (!t) return false;
+
+    if (/r\$\s*\d/.test(t)) return true;
+    if (/\b\d+(?:[.,]\d+)?\s*(k|mil|mi|milhao|milhoes|reais?)\b/.test(t)) return true;
+    if (
+        /\b\d{1,3}(?:\.\d{3})+(?:,\d{2})?\b/.test(t)
+        && !/\b(m2|m²|metros?|metro\s+quadrado|metros\s+quadrados)\b/.test(t)
+    ) {
+        return true;
+    }
+    return false;
 }
 
 function camposCriticosFaltantes(snapshot: {
@@ -83,20 +110,6 @@ function camposCriticosFaltantes(snapshot: {
     return faltantes;
 }
 
-/**
- * Derivar urgência do timeline
- */
-function derivarUrgencia(timeline: string): 'BAIXA' | 'MEDIA' | 'ALTA' {
-    const tl = timeline.toLowerCase();
-    if (tl.includes('urgente') || tl.includes('imediato') || tl.includes('1 mês') || tl.includes('1 mes') || tl.includes('já') || tl.includes('ja')) {
-        return 'ALTA';
-    }
-    if (tl.includes('2') || tl.includes('3') || tl.includes('trimestre') || tl.includes('breve')) {
-        return 'MEDIA';
-    }
-    return 'BAIXA';
-}
-
 export class QualificarLeadUseCase {
     async execute(input: QualificarLeadInput): Promise<QualificarLeadOutput> {
         try {
@@ -115,6 +128,55 @@ export class QualificarLeadUseCase {
                 return { success: false, error: 'Contato não encontrado' };
             }
 
+            const areaImovelInformada = temTexto(input.areaImovel) ? input.areaImovel!.trim() : undefined;
+            const areaPareceValor = pareceValorMonetario(areaImovelInformada);
+            const areaImovelNormalizada = areaPareceValor ? undefined : areaImovelInformada;
+            const valorPretendidoNormalizado = temTexto(input.valorPretendido)
+                ? input.valorPretendido!.trim()
+                : areaPareceValor
+                    ? areaImovelInformada
+                    : undefined;
+            const enderecoImovelNormalizado = input.enderecoImovel || contato.enderecoImovel || undefined;
+            const tipoImovelNormalizado = input.tipoImovel || contato.tipoImovel || undefined;
+            const { timelineEhConfiavel, prazoDesejadoNormalizado, urgencia } = normalizarPrazoEUrgencia({
+                timeline: input.timeline,
+                prazoDesejado: input.prazoDesejado
+            });
+
+            const schemaUpdatesToolBase: Record<string, unknown> = {
+                temperatura: input.temperatura,
+                interesseEm: input.interesse,
+                prazoDesejado: prazoDesejadoNormalizado,
+                urgencia,
+                situacaoAtual: input.situacaoAtual,
+                tempoDecisao: input.tempoDecisao,
+                tentativasAnteriores: input.tentativasAnteriores,
+                comCorretorAtualmente: valorComEvidencia(input.comCorretorAtualmente, input.comCorretorAtualmenteEvidencia),
+                doresIdentificadas: input.doresIdentificadas?.length ? input.doresIdentificadas : undefined,
+                motivacaoVenda: input.motivacaoVenda,
+                consequencias: input.consequencias,
+                custosAtuais: input.custosAtuais,
+                pressaoTempo: valorComEvidencia(input.pressaoTempo, input.pressaoTempoEvidencia),
+                expectativaServico: input.expectativaServico,
+                objecoes: input.objecoes?.length ? input.objecoes : undefined,
+                interesseAvaliacao: valorComEvidencia(input.interesseAvaliacao, input.interesseAvaliacaoEvidencia),
+                observacoesSpin: input.observacoes,
+                enderecoImovel: input.enderecoImovel,
+                tipoImovel: input.tipoImovel,
+                areaImovel: areaImovelNormalizada,
+                quartosImovel: input.quartosImovel,
+                vagasImovel: input.vagasImovel,
+                valorPretendido: valorPretendidoNormalizado,
+                ocupacaoImovel: input.ocupacaoImovel,
+                estadoConservacao: input.estadoConservacao,
+                situacaoFinanceira: input.situacaoFinanceira,
+                temDividas: valorComEvidencia(input.temDividas, input.temDividasEvidencia),
+            };
+            const schemaUpdatesBriefing: Record<string, unknown> = {
+                enderecoImovel: !input.enderecoImovel ? contato.enderecoImovel : undefined,
+                tipoImovel: !input.tipoImovel ? contato.tipoImovel : undefined,
+            };
+
             // Se contato já tem Lead, usar esse ID
             if (contato.leadId) {
                 leadId = contato.leadId;
@@ -130,19 +192,31 @@ export class QualificarLeadUseCase {
                         enderecoPrincipal: contato.enderecoImovel || contato.endereco,
                         origem: 'prospeccao_ativa',
                         campanhaOrigemId: contato.campanhaId,
-                        status: 'QUALIFICADO',
+                        // Governança: o status final será definido pela prontidão da qualificação
+                        status: 'NOVO',
                         temperatura: input.temperatura,
                         estagio: 'qualificado_sdr',
                         primeiroContato: contato.criadoEm,
                         ultimaInteracao: new Date(),
                         // Dados do imóvel (conversa + fallback Contato)
-                        enderecoImovel: input.enderecoImovel || contato.enderecoImovel || undefined,
-                        tipoImovel: input.tipoImovel || contato.tipoImovel || undefined,
-                        areaImovel: input.areaImovel || undefined,
+                        enderecoImovel: enderecoImovelNormalizado,
+                        tipoImovel: tipoImovelNormalizado,
+                        areaImovel: areaImovelNormalizada || undefined,
                         quartosImovel: input.quartosImovel || undefined,
                         vagasImovel: input.vagasImovel || undefined,
-                        valorPretendido: input.valorPretendido || undefined,
+                        valorPretendido: valorPretendidoNormalizado || undefined,
                         ocupacaoImovel: input.ocupacaoImovel || undefined,
+                        schemaState: mergeSchemaStateComSources(
+                            mergeSchemaStateComSources(
+                                undefined,
+                                schemaUpdatesToolBase,
+                                'tool_confirmada',
+                                'coletado em qualificar_lead'
+                            ),
+                            schemaUpdatesBriefing,
+                            'briefing',
+                            'fallback de dados do contato'
+                        ) as any,
                     }
                 });
 
@@ -185,24 +259,28 @@ export class QualificarLeadUseCase {
                     comCorretorAtualmente: true,
                     interesseAvaliacao: true,
                     prazoDesejado: true,
-                    urgencia: true
+                    urgencia: true,
+                    schemaState: true,
+                    status: true
                 }
             });
-
-            // Derivar urgência
-            const urgencia = derivarUrgencia(input.timeline);
 
             // Montar update com todos os dados disponíveis
             const updateData: any = {
                 temperatura: input.temperatura,
-                status: 'QUALIFICADO',
                 ultimaInteracao: new Date(),
                 interesseEm: input.interesse,
-                urgencia,
-                prazoDesejado: input.prazoDesejado || input.timeline,
             };
 
-            const camposAtualizados = ['temperatura', 'status', 'interesseEm', 'urgencia', 'prazoDesejado'];
+            const camposAtualizados = ['temperatura', 'interesseEm'];
+            if (urgencia) {
+                updateData.urgencia = urgencia;
+                camposAtualizados.push('urgencia');
+            }
+            if (prazoDesejadoNormalizado) {
+                updateData.prazoDesejado = prazoDesejadoNormalizado;
+                camposAtualizados.push('prazoDesejado');
+            }
 
             // Dados SPIN (só atualiza se fornecido)
             if (input.doresIdentificadas?.length) {
@@ -230,10 +308,14 @@ export class QualificarLeadUseCase {
                 updateData.expectativaServico = input.expectativaServico;
                 camposAtualizados.push('expectativaServico');
             }
-            if (input.comCorretorAtualmente !== undefined) {
-                updateData.comCorretorAtualmente = input.comCorretorAtualmente;
-                camposAtualizados.push('comCorretorAtualmente');
-            }
+            aplicarBooleanComEvidencia({
+                campo: 'comCorretorAtualmente',
+                valor: input.comCorretorAtualmente,
+                evidencia: input.comCorretorAtualmenteEvidencia,
+                updateData,
+                camposAtualizados,
+                warningTag: 'GOV-03B',
+            });
             if (input.tentativasAnteriores) {
                 updateData.tentativasAnteriores = input.tentativasAnteriores;
                 camposAtualizados.push('tentativasAnteriores');
@@ -242,19 +324,27 @@ export class QualificarLeadUseCase {
                 updateData.tempoDecisao = input.tempoDecisao;
                 camposAtualizados.push('tempoDecisao');
             }
-            if (input.pressaoTempo !== undefined) {
-                updateData.pressaoTempo = input.pressaoTempo;
-                camposAtualizados.push('pressaoTempo');
-            }
+            aplicarBooleanComEvidencia({
+                campo: 'pressaoTempo',
+                valor: input.pressaoTempo,
+                evidencia: input.pressaoTempoEvidencia,
+                updateData,
+                camposAtualizados,
+                warningTag: 'GOV-04',
+            });
             if (input.objecoes?.length) {
                 const anterioresObj = Array.isArray((leadAtual as any)?.objecoes) ? (leadAtual as any).objecoes : [];
                 updateData.objecoes = Array.from(new Set([...anterioresObj, ...input.objecoes]));
                 camposAtualizados.push('objecoes');
             }
-            if (input.interesseAvaliacao !== undefined) {
-                updateData.interesseAvaliacao = input.interesseAvaliacao;
-                camposAtualizados.push('interesseAvaliacao');
-            }
+            aplicarBooleanComEvidencia({
+                campo: 'interesseAvaliacao',
+                valor: input.interesseAvaliacao,
+                evidencia: input.interesseAvaliacaoEvidencia,
+                updateData,
+                camposAtualizados,
+                warningTag: 'GOV-04',
+            });
             if (input.observacoes) {
                 updateData.observacoesSpin = input.observacoes;
                 camposAtualizados.push('observacoesSpin');
@@ -269,8 +359,8 @@ export class QualificarLeadUseCase {
                 updateData.tipoImovel = input.tipoImovel;
                 camposAtualizados.push('tipoImovel');
             }
-            if (input.areaImovel) {
-                updateData.areaImovel = input.areaImovel;
+            if (areaImovelNormalizada) {
+                updateData.areaImovel = areaImovelNormalizada;
                 camposAtualizados.push('areaImovel');
             }
             if (input.quartosImovel !== undefined) {
@@ -281,8 +371,8 @@ export class QualificarLeadUseCase {
                 updateData.vagasImovel = input.vagasImovel;
                 camposAtualizados.push('vagasImovel');
             }
-            if (input.valorPretendido) {
-                updateData.valorPretendido = input.valorPretendido;
+            if (valorPretendidoNormalizado) {
+                updateData.valorPretendido = valorPretendidoNormalizado;
                 camposAtualizados.push('valorPretendido');
             }
             if (input.ocupacaoImovel) {
@@ -297,10 +387,14 @@ export class QualificarLeadUseCase {
                 updateData.situacaoFinanceira = input.situacaoFinanceira;
                 camposAtualizados.push('situacaoFinanceira');
             }
-            if (input.temDividas !== undefined) {
-                updateData.temDividas = input.temDividas;
-                camposAtualizados.push('temDividas');
-            }
+            aplicarBooleanComEvidencia({
+                campo: 'temDividas',
+                valor: input.temDividas,
+                evidencia: input.temDividasEvidencia,
+                updateData,
+                camposAtualizados,
+                warningTag: 'GOV-03B',
+            });
 
             // Atualizar lead
             const leadAtualizado = await db.lead.update({
@@ -319,6 +413,47 @@ export class QualificarLeadUseCase {
                     custosAtuais: true
                 }
             });
+            const schemaUpdatesTool = Object.fromEntries(
+                Object.entries(updateData).filter(([campo, valor]) => campo !== 'ultimaInteracao' && valor !== undefined)
+            );
+            let schemaStateAtualizado = mergeSchemaStateComSources(
+                leadAtual?.schemaState,
+                schemaUpdatesTool,
+                'tool_confirmada',
+                'coletado em qualificar_lead'
+            );
+            if (updateData.comCorretorAtualmente !== undefined && temTexto(input.comCorretorAtualmenteEvidencia)) {
+                schemaStateAtualizado = mergeSchemaStateComSources(
+                    schemaStateAtualizado,
+                    { comCorretorAtualmente: updateData.comCorretorAtualmente },
+                    'tool_confirmada',
+                    input.comCorretorAtualmenteEvidencia!.trim()
+                );
+            }
+            if (updateData.temDividas !== undefined && temTexto(input.temDividasEvidencia)) {
+                schemaStateAtualizado = mergeSchemaStateComSources(
+                    schemaStateAtualizado,
+                    { temDividas: updateData.temDividas },
+                    'tool_confirmada',
+                    input.temDividasEvidencia!.trim()
+                );
+            }
+            if (updateData.pressaoTempo !== undefined && temTexto(input.pressaoTempoEvidencia)) {
+                schemaStateAtualizado = mergeSchemaStateComSources(
+                    schemaStateAtualizado,
+                    { pressaoTempo: updateData.pressaoTempo },
+                    'tool_confirmada',
+                    input.pressaoTempoEvidencia!.trim()
+                );
+            }
+            if (updateData.interesseAvaliacao !== undefined && temTexto(input.interesseAvaliacaoEvidencia)) {
+                schemaStateAtualizado = mergeSchemaStateComSources(
+                    schemaStateAtualizado,
+                    { interesseAvaliacao: updateData.interesseAvaliacao },
+                    'tool_confirmada',
+                    input.interesseAvaliacaoEvidencia!.trim()
+                );
+            }
 
             const faltantesCriticos = camposCriticosFaltantes({
                 interesseEm: leadAtualizado.interesseEm,
@@ -334,19 +469,64 @@ export class QualificarLeadUseCase {
             });
 
             const prontidaoQualificacao: 'PARCIAL' | 'COMPLETA' = faltantesCriticos.length === 0 ? 'COMPLETA' : 'PARCIAL';
+            const statusAtual = (leadAtual as any)?.status as string | undefined;
+            const statusNaoRebaixar = new Set([
+                'TENTATIVA_AGENDAMENTO',
+                'VISITA_AGENDADA',
+                'AVALIACAO_EM_ANDAMENTO',
+                'DOCUMENTACAO',
+                'EM_NEGOCIACAO',
+                'ONBOARDING',
+                'CAPTADO',
+                'PERDIDO',
+                'ARQUIVADO',
+            ]);
+
+            let statusLead: string = statusAtual || 'NOVO';
+            if (prontidaoQualificacao === 'COMPLETA') {
+                if (!statusAtual || !statusNaoRebaixar.has(statusAtual)) {
+                    statusLead = 'QUALIFICADO';
+                }
+            } else if (leadCriado) {
+                // Novo lead com dados incompletos deve permanecer como NOVO até completar SPIN.
+                statusLead = 'NOVO';
+            }
+
+            if (statusLead !== statusAtual) {
+                await db.lead.update({
+                    where: { id: leadId },
+                    data: { status: statusLead }
+                });
+                camposAtualizados.push('status');
+                schemaStateAtualizado = mergeSchemaStateComSources(
+                    schemaStateAtualizado,
+                    { status: statusLead },
+                    'sistema',
+                    'status calculado por prontidão de qualificação'
+                );
+            }
+
+            if (Object.keys(schemaUpdatesTool).length > 0 || statusLead !== statusAtual) {
+                await db.lead.update({
+                    where: { id: leadId },
+                    data: { schemaState: schemaStateAtualizado as any }
+                });
+            }
 
             // Registrar atividade com detalhes completos
             const detalhes = [
                 `Interesse: ${input.interesse}`,
-                `Timeline: ${input.timeline}`,
-                `Urgência: ${urgencia}`,
+                `Prontidão: ${prontidaoQualificacao}`,
+                `Status Lead: ${statusLead}`,
             ];
+            if (timelineEhConfiavel) detalhes.push(`Timeline: ${input.timeline}`);
+            if (urgencia) detalhes.push(`Urgência: ${urgencia}`);
             if (input.doresIdentificadas?.length) detalhes.push(`Dores: ${input.doresIdentificadas.join(', ')}`);
             if (input.motivacaoVenda) detalhes.push(`Motivação: ${input.motivacaoVenda}`);
             if (input.situacaoAtual) detalhes.push(`Situação: ${input.situacaoAtual}`);
             if (input.tipoImovel) detalhes.push(`Imóvel: ${input.tipoImovel}`);
             if (input.quartosImovel) detalhes.push(`Quartos: ${input.quartosImovel}`);
-            if (input.valorPretendido) detalhes.push(`Valor pretendido: ${input.valorPretendido}`);
+            if (valorPretendidoNormalizado) detalhes.push(`Valor pretendido: ${valorPretendidoNormalizado}`);
             if (input.observacoes) detalhes.push(`Obs: ${input.observacoes}`);
 
             await db.atividade.create({
@@ -367,10 +547,11 @@ export class QualificarLeadUseCase {
                 leadId,
                 leadCriado,
                 temperatura: input.temperatura,
+                statusLead,
                 prontidaoQualificacao,
                 camposAtualizados: Array.from(new Set(camposAtualizados)),
                 camposFaltantesCriticos: faltantesCriticos,
-                message: `Lead ${leadCriado ? 'criado e ' : ''}qualificado como ${input.temperatura}. Prontidão: ${prontidaoQualificacao}.`
+                message: `Lead ${leadCriado ? 'criado e ' : ''}processado como ${input.temperatura}. Prontidão: ${prontidaoQualificacao}. Status: ${statusLead}.`
             };
         } catch (error: any) {
             console.error('[UseCase] qualificar_lead - Erro:', error);

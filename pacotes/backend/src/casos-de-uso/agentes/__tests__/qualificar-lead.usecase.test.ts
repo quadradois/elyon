@@ -49,6 +49,7 @@ describe('QualificarLeadUseCase', () => {
 
     mockPrisma.lead.findUnique.mockResolvedValue({
       doresIdentificadas: [],
+      status: 'QUALIFICADO',
     });
 
     mockPrisma.lead.update.mockResolvedValue({
@@ -75,6 +76,7 @@ describe('QualificarLeadUseCase', () => {
     expect(result.leadId).toBe('lead-1');
     expect(result.leadCriado).toBe(false);
     expect(result.prontidaoQualificacao).toBe('PARCIAL');
+    expect(result.statusLead).toBe('QUALIFICADO');
     expect(result.camposFaltantesCriticos).toEqual(
       expect.arrayContaining(['tipoImovel', 'areaImovel', 'implicacao'])
     );
@@ -105,6 +107,7 @@ describe('QualificarLeadUseCase', () => {
 
     mockPrisma.lead.findUnique.mockResolvedValue({
       doresIdentificadas: ['falta tempo'],
+      status: 'NOVO',
     });
 
     mockPrisma.lead.update.mockResolvedValue({
@@ -133,12 +136,17 @@ describe('QualificarLeadUseCase', () => {
       areaImovel: '85m2',
       valorPretendido: 'R$ 700.000',
       ocupacaoImovel: 'Ocupado',
+      pressaoTempo: true,
+      pressaoTempoEvidencia: 'Preciso vender rápido por causa da transferência.',
+      interesseAvaliacao: true,
+      interesseAvaliacaoEvidencia: 'Pode marcar a avaliação sim.',
     });
 
     expect(result.success).toBe(true);
     expect(result.leadCriado).toBe(true);
     expect(result.leadId).toBe('lead-novo');
     expect(result.prontidaoQualificacao).toBe('COMPLETA');
+    expect(result.statusLead).toBe('QUALIFICADO');
 
     expect(mockPrisma.lead.create).toHaveBeenCalledTimes(1);
     expect(mockPrisma.contato.update).toHaveBeenCalledWith({
@@ -157,6 +165,8 @@ describe('QualificarLeadUseCase', () => {
           urgencia: 'ALTA',
           interesseEm: 'Vender apartamento',
           doresIdentificadas: ['falta tempo', 'não sabe precificar'],
+          pressaoTempo: true,
+          interesseAvaliacao: true,
         }),
       })
     );
@@ -185,6 +195,7 @@ describe('QualificarLeadUseCase', () => {
 
     mockPrisma.lead.findUnique.mockResolvedValue({
       doresIdentificadas: ['sem visitas'],
+      status: 'NOVO',
     });
 
     mockPrisma.lead.update.mockResolvedValue({
@@ -211,6 +222,7 @@ describe('QualificarLeadUseCase', () => {
       estadoConservacao: 'bom',
       situacaoFinanceira: 'quitado',
       temDividas: false,
+      temDividasEvidencia: 'Não tenho dívidas, está tudo em dia.',
     });
 
     expect(result.success).toBe(true);
@@ -225,6 +237,148 @@ describe('QualificarLeadUseCase', () => {
           situacaoFinanceira: 'quitado',
           temDividas: false,
         }),
+      })
+    );
+  });
+
+  it('não persiste temDividas/comCorretorAtualmente sem evidência explícita', async () => {
+    mockPrisma.contato.findUnique.mockResolvedValue({
+      id: 'contato-6a',
+      leadId: 'lead-6a',
+      campanha: { tenantId: 'tenant-1' },
+    });
+
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      doresIdentificadas: [],
+      status: 'NOVO',
+      schemaState: {},
+    });
+
+    mockPrisma.lead.update.mockResolvedValue({
+      interesseEm: 'Vender',
+      tipoImovel: null,
+      areaImovel: null,
+      valorPretendido: null,
+      ocupacaoImovel: null,
+      doresIdentificadas: [],
+      situacaoAtual: null,
+      motivacaoVenda: null,
+      consequencias: null,
+      custosAtuais: null,
+    });
+
+    const result = await useCase.execute({
+      contatoId: 'contato-6a',
+      temperatura: 'MORNO',
+      interesse: 'Vender',
+      timeline: '3 meses',
+      temDividas: false,
+      comCorretorAtualmente: false,
+      pressaoTempo: true,
+      interesseAvaliacao: true,
+    });
+
+    expect(result.success).toBe(true);
+    const updateCallDados = mockPrisma.lead.update.mock.calls[0][0];
+    expect(updateCallDados.data.temDividas).toBeUndefined();
+    expect(updateCallDados.data.comCorretorAtualmente).toBeUndefined();
+    expect(updateCallDados.data.pressaoTempo).toBeUndefined();
+    expect(updateCallDados.data.interesseAvaliacao).toBeUndefined();
+  });
+
+  it('não persiste prazo/urgência quando timeline não é temporalmente confiável', async () => {
+    mockPrisma.contato.findUnique.mockResolvedValue({
+      id: 'contato-6b',
+      leadId: 'lead-6b',
+      campanha: { tenantId: 'tenant-1' },
+    });
+
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      doresIdentificadas: [],
+      status: 'NOVO',
+      schemaState: {},
+    });
+
+    mockPrisma.lead.update.mockResolvedValue({
+      interesseEm: 'Vender',
+      tipoImovel: null,
+      areaImovel: null,
+      valorPretendido: null,
+      ocupacaoImovel: null,
+      doresIdentificadas: [],
+      situacaoAtual: null,
+      motivacaoVenda: null,
+      consequencias: null,
+      custosAtuais: null,
+    });
+
+    const result = await useCase.execute({
+      contatoId: 'contato-6b',
+      temperatura: 'MORNO',
+      interesse: 'Vender',
+      timeline: 'sem prazo definido',
+    });
+
+    expect(result.success).toBe(true);
+    const updateCallDados = mockPrisma.lead.update.mock.calls[0][0];
+    expect(updateCallDados.data.prazoDesejado).toBeUndefined();
+    expect(updateCallDados.data.urgencia).toBeUndefined();
+  });
+
+  it('mantém lead novo como NOVO quando prontidão de qualificação é parcial', async () => {
+    mockPrisma.contato.findUnique.mockResolvedValue({
+      id: 'contato-6',
+      leadId: null,
+      campanhaId: 'camp-1',
+      criadoEm: new Date('2026-01-01'),
+      nome: 'João',
+      telefone: '5511888888888',
+      email: 'joao@teste.com',
+      cpf: '98765432100',
+      endereco: 'Rua C',
+      campanha: { tenantId: 'tenant-1' },
+    });
+
+    mockPrisma.lead.create.mockResolvedValue({ id: 'lead-parcial' });
+    mockPrisma.contato.update.mockResolvedValue({});
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      doresIdentificadas: [],
+      status: 'NOVO',
+    });
+    mockPrisma.lead.update.mockResolvedValue({
+      interesseEm: 'Vender',
+      tipoImovel: null,
+      areaImovel: null,
+      valorPretendido: null,
+      ocupacaoImovel: null,
+      doresIdentificadas: [],
+      situacaoAtual: null,
+      motivacaoVenda: null,
+      consequencias: null,
+      custosAtuais: null,
+    });
+
+    const result = await useCase.execute({
+      contatoId: 'contato-6',
+      temperatura: 'MORNO',
+      interesse: 'Vender',
+      timeline: '6 meses',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.leadCriado).toBe(true);
+    expect(result.prontidaoQualificacao).toBe('PARCIAL');
+    expect(result.statusLead).toBe('NOVO');
+    expect(mockPrisma.lead.update).toHaveBeenCalledTimes(2);
+    const updateCallDados = mockPrisma.lead.update.mock.calls[0][0];
+    expect(updateCallDados.where).toEqual({ id: 'lead-parcial' });
+    expect(updateCallDados.data.status).toBeUndefined();
+
+    const updateCallSchema = mockPrisma.lead.update.mock.calls[1][0];
+    expect(updateCallSchema.where).toEqual({ id: 'lead-parcial' });
+    expect(updateCallSchema.data).toEqual(
+      expect.objectContaining({
+        schemaState: expect.any(Object),
       })
     );
   });

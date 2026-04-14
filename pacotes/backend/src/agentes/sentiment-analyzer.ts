@@ -43,7 +43,7 @@ const PADROES_IRRITADO: RegExp[] = [
   /\b(irritad[oa]|raiv[oa]|furios[oa]|brav[oa]|puto|estressad[oa]|enojad[oa])\b/i,
   /😡|🤬|😤|💢|🖕/,
   /[!?]{3,}/, // Excesso de pontuação
-  /[A-ZÁÉÍÓÚÃÕÇÊ\s]{15,}/, // Texto em CAPS LOCK extenso
+  /[A-ZÁÉÍÓÚÃÕÇÊ]{4,}(\s+[A-ZÁÉÍÓÚÃÕÇÊ]{3,}){2,}/, // Múltiplas palavras consecutivas em CAPS LOCK
 ];
 
 // ====================================

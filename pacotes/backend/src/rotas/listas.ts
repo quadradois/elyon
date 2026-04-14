@@ -3,6 +3,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/db';
 import { z } from 'zod';
 import { Lista } from '@prisma/client';
+import { ServicoAuditoria } from '../servicos/servico-auditoria';
 
 const router = Router();
 
@@ -261,6 +262,16 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     console.log(`[Listas] ✅ Lista "${lista.nome}" criada com ${contatos.length} contatos`);
+
+    ServicoAuditoria.registrar({
+      tenantId,
+      usuarioId: req.headers['x-usuario-id'] as string || undefined,
+      acao: 'CRIAR_LISTA',
+      entidade: 'Lista',
+      entidadeId: lista.id,
+      detalhes: { nome: lista.nome, totalContatos: contatos.length },
+      ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string
+    });
 
     return res.status(201).json({
       sucesso: true,

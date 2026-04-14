@@ -7,8 +7,8 @@ describe('processarPosHandoff', () => {
 
     const result = await processarPosHandoff({
       contatoId: 'contato-1',
-      tipoAgente: 'OPENER',
-      agenteQueRespondeuFormatado: 'OPENER',
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
       atualizarUltimoAgente,
       getHistoryContato,
       setHistoryContato: jest.fn(),
@@ -20,13 +20,13 @@ describe('processarPosHandoff', () => {
     expect(getHistoryContato).not.toHaveBeenCalled();
   });
 
-  it('atualiza cache de último agente quando houve handoff', async () => {
+  it('atualiza cache de último agente quando houve handoff SDR→ADMIN', async () => {
     const atualizarUltimoAgente = jest.fn();
 
     const result = await processarPosHandoff({
       contatoId: 'contato-1',
-      tipoAgente: 'OPENER',
-      agenteQueRespondeuFormatado: 'PRESENTER',
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'ADMIN',
       atualizarUltimoAgente,
       getHistoryContato: jest.fn().mockResolvedValue(undefined),
       setHistoryContato: jest.fn(),
@@ -34,7 +34,7 @@ describe('processarPosHandoff', () => {
     });
 
     expect(result.houveHandoff).toBe(true);
-    expect(atualizarUltimoAgente).toHaveBeenCalledWith('contato-1', 'PRESENTER');
+    expect(atualizarUltimoAgente).toHaveBeenCalledWith('contato-1', 'ADMIN');
   });
 
   it('injeta briefing no topo do histórico quando disponível', async () => {
@@ -49,8 +49,8 @@ describe('processarPosHandoff', () => {
 
     await processarPosHandoff({
       contatoId: 'contato-1',
-      tipoAgente: 'OPENER',
-      agenteQueRespondeuFormatado: 'PRESENTER',
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'ADMIN',
       atualizarUltimoAgente,
       getHistoryContato,
       setHistoryContato,
@@ -59,8 +59,8 @@ describe('processarPosHandoff', () => {
 
     expect(gerarBriefing).toHaveBeenCalledWith(
       [{ role: 'message', content: 'hist-1' }],
-      'OPENER',
-      'PRESENTER'
+      'SDR',
+      'ADMIN'
     );
     expect(setHistoryContato).toHaveBeenCalledWith(
       'contato-1',
@@ -68,7 +68,7 @@ describe('processarPosHandoff', () => {
         { role: 'system', content: 'briefing' },
         { role: 'message', content: 'hist-1' },
       ],
-      'PRESENTER'
+      'ADMIN'
     );
   });
 
@@ -78,7 +78,7 @@ describe('processarPosHandoff', () => {
     await expect(
       processarPosHandoff({
         contatoId: 'contato-1',
-        tipoAgente: 'PRESENTER',
+        tipoAgente: 'SDR',
         agenteQueRespondeuFormatado: 'ADMIN',
         atualizarUltimoAgente,
         getHistoryContato: jest.fn().mockRejectedValue(new Error('falhou cache')),

@@ -26,6 +26,7 @@ import {
   Briefcase,
   Calendar,
   UserCog,
+  ShieldCheck,
 } from "lucide-react";
 
 // ... (código intermediário omitido, vou usar replace separado para o ícone e menu se for longe)
@@ -245,6 +246,11 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
       icon: Package,
       label: "Pacotes",
       path: "/admin/pacotes",
+    },
+    {
+      icon: ShieldCheck,
+      label: "Auditoria",
+      path: "/admin/auditoria",
     },
     {
       icon: Coins,

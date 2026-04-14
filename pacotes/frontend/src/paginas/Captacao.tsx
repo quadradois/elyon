@@ -149,6 +149,7 @@ export function Captacao() {
   const [listaId, setListaId] = useState<string | null>(null);
   const [criarCampanha, setCriarCampanha] = useState(true);
   const [nomeCampanha, setNomeCampanha] = useState("");
+  const [campanhaIdCriado, setCampanhaIdCriado] = useState<string | null>(null);
 
   // Modal de créditos insuficientes
   const [mostrarModalCreditos, setMostrarModalCreditos] = useState(false);
@@ -859,6 +860,7 @@ export function Captacao() {
         const campanhaId = campResponse.data.id || campResponse.data.campanha?.id;
         
         if (campanhaId) {
+          setCampanhaIdCriado(campanhaId); // Salva o ID para usar no BotaoPesquisaManus (etapa 5)
           addLog("Vinculando lista à campanha...");
           // No backend, a vinculação é feita a partir da lista
           await api.post(`/listas/${lista.id}/adicionar-campanha`, {
@@ -1990,6 +1992,7 @@ export function Captacao() {
                   bairro: localSelecionado?.bairro || "",
                   cidade: "Goiânia",
                   estado: "GO",
+                  campanhaId: campanhaIdCriado || undefined,
                 }}
                 variant="default"
               />
@@ -2028,6 +2031,7 @@ export function Captacao() {
                   setModoBusca("local");
                   setLeadsGerados([]);
                   setListaId(null);
+                  setCampanhaIdCriado(null);
                 }}
                 className="text-brand hover:underline text-sm transition-colors"
               >

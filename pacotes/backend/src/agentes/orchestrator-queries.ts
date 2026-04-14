@@ -39,16 +39,16 @@ export async function buscarConfiguracaoTenant(tenantId: string): Promise<Config
         const agente = tenant.agentes[0];
         const diferenciais = resolverDiferenciais(tenant.diferenciais as string[] || []);
 
-        const perfilVenda = tenant.perfilVenda as any || {};
+        const perfilVenda = (tenant.perfilVenda as Record<string, unknown>) || {};
 
         // RAG do perfil: prioriza o do agente (mais completo), fallback para o do tenant
-        const ragPerfilTexto = (agente as any)?.ragPerfilTexto || (tenant as any).ragPerfilTexto || undefined;
+        const ragPerfilTexto = agente?.ragPerfilTexto || tenant.ragPerfilTexto || undefined;
 
         // BYOK: descriptografar API Key do tenant, se configurada (Para retrocompatibilidade no context-builder)
         let llmApiKey: string | undefined;
-        if ((tenant as any).llmApiKeyCriptografada) {
+        if (tenant.llmApiKeyCriptografada) {
             try {
-                llmApiKey = descriptografar((tenant as any).llmApiKeyCriptografada);
+                llmApiKey = descriptografar(tenant.llmApiKeyCriptografada);
             } catch {
                 logger.warn('[ORCHESTRATOR] ⚠️ Falha ao descriptografar llmApiKey do tenant — usando padrão');
             }
@@ -61,25 +61,22 @@ export async function buscarConfiguracaoTenant(tenantId: string): Promise<Config
             nomeImobiliaria: tenant.nome || 'Imobiliária',
             cidade: tenant.cidade || undefined,
             diferenciais,
-            comissaoPadrao: resolverComissaoPadrao(perfilVenda),
-            prazoContrato: resolverPrazoContrato(perfilVenda),
+            comissaoPadrao: resolverComissaoPadrao(perfilVenda.comissaoPadrao as string | number | null | undefined),
+            prazoContrato: resolverPrazoContrato(perfilVenda.prazoContrato as string | number | null | undefined),
             ragPerfilTexto,
 
             // Retrocompatibilidade de chaves prontas para as chains antigas
             llmApiKey,
 
-            // BYOK Granular Pass-through (para byok-resolver)
-            llmProvedor: (tenant as any).llmProvedor,
-            llmModelo: (tenant as any).llmModelo,
-            llmApiKeyCriptografada: (tenant as any).llmApiKeyCriptografada,
-            llmBaseUrl: (tenant as any).llmBaseUrl,
-            openaiApiKeyCriptografada: (tenant as any).openaiApiKeyCriptografada,
-            usarChavePrincipalParaAudio: (tenant as any).usarChavePrincipalParaAudio,
-            usarChavePrincipalParaRag: (tenant as any).usarChavePrincipalParaRag,
+            // BYOK Pass-through (para byok-resolver)
+            llmProvedor: tenant.llmProvedor,
+            llmModelo: tenant.llmModelo,
+            llmApiKeyCriptografada: tenant.llmApiKeyCriptografada,
+            llmBaseUrl: tenant.llmBaseUrl,
         };
 
     } catch (error) {
-        logger.warn("[erro capturado]");
+        logger.warn({ err: error }, '[ORCHESTRATOR-QUERIES] Erro ao buscar configuração do tenant');
         return null;
     }
 }
@@ -135,7 +132,7 @@ export async function buscarContextoConversa(
         };
 
     } catch (error) {
-        logger.warn("[erro capturado]");
+        logger.warn({ err: error }, '[ORCHESTRATOR-QUERIES] Erro ao buscar contexto da conversa');
         return { telefone };
     }
 }

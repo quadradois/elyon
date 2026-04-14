@@ -1149,7 +1149,7 @@ router.post('/', async (req, res) => {
                       deveMarcarLoteComoProcessado = true;
 
                       // Carregar Histórico
-                      const historicoMensagens = await carregarHistoricoMensagens(contatoProspeccao.id, 20);
+                      const historicoMensagens = await carregarHistoricoMensagens(contatoProspeccao.id, 50);
 
                       // Configuração do Agente e Processamento
                       const tenantId = contatoProspeccao.campanha?.tenantId;
@@ -1197,10 +1197,13 @@ router.post('/', async (req, res) => {
 
                       const contextoRAG = partesRAG.length > 0 ? partesRAG.join('\n\n') : undefined;
 
-                      const USAR_ORQUESTRADOR = process.env.USAR_ORQUESTRADOR_4_AGENTES === 'true';
+                      // Governança de config:
+                      // - Preferir USAR_ORQUESTRADOR (nome atual)
+                      // - Manter fallback para USAR_ORQUESTRADOR_4_AGENTES (legado)
+                      const usarOrquestrador = (process.env.USAR_ORQUESTRADOR ?? process.env.USAR_ORQUESTRADOR_4_AGENTES ?? 'true') === 'true';
                       let resposta: string | undefined;
 
-                    if (!USAR_ORQUESTRADOR) {
+                    if (!usarOrquestrador) {
                       registrarIgnorado(telefone, 'outbound_only:orchestrator_desativado', contatoProspeccao.id);
                       return true;
                     }
@@ -1290,6 +1293,48 @@ router.post('/', async (req, res) => {
         } catch (msgError) {
           console.error('[Webhook] Erro msg:', msgError);
         }
+      }
+    }
+
+    // ====================================
+    // CONNECTION_UPDATE — sincroniza status da sessão WhatsApp no DB
+    // ====================================
+    if (eventType === 'CONNECTION_UPDATE' || eventType === 'connection.update') {
+      try {
+        const state = data?.state || data?.status || data?.action;
+        console.log(`[Webhook] 🔄 CONNECTION_UPDATE para ${instanceName}: state=${state}`);
+
+        const sessao = await prisma.sessaoWhatsapp.findFirst({
+          where: { instanceName }
+        });
+
+        if (sessao) {
+          let novoStatus: 'CONECTADO' | 'CONECTANDO' | 'DESCONECTADO' | null = null;
+
+          if (state === 'open') {
+            novoStatus = 'CONECTADO';
+          } else if (state === 'connecting') {
+            novoStatus = 'CONECTANDO';
+          } else if (state === 'close') {
+            novoStatus = 'DESCONECTADO';
+          }
+
+          if (novoStatus && novoStatus !== sessao.status) {
+            await prisma.sessaoWhatsapp.update({
+              where: { id: sessao.id },
+              data: {
+                status: novoStatus,
+                ultimoStatus: new Date(),
+                ...(novoStatus === 'DESCONECTADO' ? { numeroWhatsapp: null, nomeWhatsapp: null } : {})
+              }
+            });
+            console.log(`[Webhook] ✅ Status sessão ${instanceName} atualizado: ${sessao.status} → ${novoStatus}`);
+          }
+        } else {
+          console.warn(`[Webhook] ⚠️ CONNECTION_UPDATE para instância desconhecida: ${instanceName}`);
+        }
+      } catch (connErr) {
+        console.error('[Webhook] Erro ao processar CONNECTION_UPDATE:', connErr);
       }
     }
 

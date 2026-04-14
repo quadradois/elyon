@@ -1,18 +1,8 @@
-import type { TipoAgente } from './agent-chain';
+import { TipoAgente, MAPA_NOMES_AGENTES } from './agent-chain';
 import { logger } from '../lib/logger';
 
-const MAPA_AGENTE_PERSISTIDO: Record<string, TipoAgente> = {
-  OPENER: 'OPENER',
-  PRESENTER: 'PRESENTER',
-  ADMIN: 'ADMIN',
-  CLOSER: 'PRESENTER',
-  opener_agent_v11: 'OPENER',
-  opener_agent_v12: 'OPENER',
-  presenter_agent_v4: 'PRESENTER',
-  presenter_agent_v5: 'PRESENTER',
-  closer_agent_v5: 'PRESENTER',
-  admin_agent_v4: 'ADMIN',
-};
+/** Mapa unificado — reutiliza a fonte de verdade de agent-chain */
+const MAPA_AGENTE_PERSISTIDO = MAPA_NOMES_AGENTES;
 
 interface ResolverAgentePersistidoParams {
   contatoId?: string;
@@ -39,7 +29,9 @@ export async function resolverAgentePersistido(
 
   if (agenteNormalizado) {
     if (ultimoPersistido === 'CLOSER' || ultimoPersistido === 'closer_agent_v5') {
-      logger.debug('[ORCHESTRATOR] ♻️ Agente legado CLOSER encontrado no cache. Migrando para PRESENTER.');
+      logger.debug('[ORCHESTRATOR] ♻️ Agente legado CLOSER encontrado no cache. Migrando para SDR.');
+    } else if (ultimoPersistido === 'OPENER' || ultimoPersistido === 'PRESENTER' || ultimoPersistido.startsWith('opener_') || ultimoPersistido.startsWith('presenter_')) {
+      logger.debug(`[ORCHESTRATOR] ♻️ Agente legado ${ultimoPersistido} encontrado no cache. Migrando para SDR.`);
     }
 
     atualizarUltimoAgente(contatoId, agenteNormalizado);

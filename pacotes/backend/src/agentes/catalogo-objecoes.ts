@@ -1,224 +1,224 @@
 export interface Objecao {
   id: number;
-  fase: 'Opener' | 'Presenter' | 'Closer';
+  fase: 'SDR';
   gatilhos: string[];
   contorno: string;
 }
 
 export const BIBLIOTECA_OBJECOES: Objecao[] = [
-  // ================= OPENER =================
+  // ================= SDR (PROSPECÇÃO) =================
   {
     id: 1,
-    fase: 'Opener',
+    fase: 'SDR',
     gatilhos: ["não tenho pressa", "sem pressa", "sem urgência para vender"],
-    contorno: "Faz sentido! Sem pressa dá pra fazer isso do jeito certo e garantir um valor melhor. Posso só entender melhor o seu imóvel pra ver se faz sentido conversarmos?"
+    contorno: "Faz sentido! Na verdade, quem não tem pressa consegue vender pelo valor ideal, sem precisar aceitar a primeira proposta que aparecer. Posso te fazer só umas perguntas rápidas sobre o apartamento? Sem compromisso nenhum, só pra entender o cenário!"
   },
   {
     id: 2,
-    fase: 'Opener',
+    fase: 'SDR',
     gatilhos: ["esperar o mercado", "esperar melhorar", "momento ruim do mercado"],
-    contorno: "Entendo! A gente pode deixar tudo preparado enquanto espera — quando o mercado virar, você já tá na frente. Faz sentido?"
+    contorno: "Entendo! Mas te dou uma dica: quem sai na frente é quem já está posicionado quando o mercado aquece. A gente pode deixar tudo preparado — fotos, precificação, estratégia — pra você não perder o timing certo. Faz sentido conversar um pouco sobre isso?"
   },
   {
     id: 3,
-    fase: 'Opener',
+    fase: 'SDR',
     gatilhos: ["tô vendo outras", "considerando outras opções", "estudando outras imobiliárias"],
-    contorno: "Claro, faz sentido avaliar tudo. Posso te mostrar em 2 minutos como a gente trabalha diferente? Aí você decide com mais informação."
+    contorno: "Ótimo, faz muito sentido avaliar as opções! Posso te explicar rapidinho como funciona nosso modelo de gestão compartilhada? A gente trabalha junto com outras imobiliárias, então não é uma coisa excludente. Vale conhecer antes de decidir!"
   },
   {
     id: 4,
-    fase: 'Opener',
+    fase: 'SDR',
     gatilhos: ["não acho que seja um bom momento", "momento agora não é bom"],
-    contorno: "Entendo! Posso fazer uma análise rápida do mercado pra você ver se faz sentido agora ou planejar pro futuro. Te ajuda?"
+    contorno: "Entendo a cautela! Se quiser, posso te passar um panorama rápido de como está o mercado na região do seu apartamento agora — sem compromisso. Assim você tem dados reais pra decidir o melhor momento. Topa uma conversa rápida?"
   },
   {
     id: 5,
-    fase: 'Opener',
+    fase: 'SDR',
     gatilhos: ["preocupado com o processo", "processo chato", "não quero me estressar"],
-    contorno: "Faz total sentido essa preocupação. A gente cuida de tudo — avaliação, fotos, visitas, negociação. Você não precisa se preocupar com nada. Posso te explicar como funciona?"
+    contorno: "É exatamente por isso que a gente existe! A gente filtra os curiosos, cuida de toda a burocracia e só te chama quando tem uma proposta concreta na mesa. Seu único trabalho é dizer sim ou não. Bem mais tranquilo assim, né?"
   },
   {
     id: 6,
-    fase: 'Opener',
+    fase: 'SDR',
     gatilhos: ["já trabalho com outra", "tenho outra imobiliária", "já tem gente anunciando"],
-    contorno: "Que ótimo que já tá movimentando! Há quanto tempo tá anunciado? Tá recebendo visitas? (Nota interna ao agente: identifique a dor e tente redirecionar sem bater de frente)"
+    contorno: "Que bom que já deu o primeiro passo! Só uma curiosidade: eles estão trazendo compradores com crédito aprovado, ou tem aparecido mais gente sem condição real de compra? Pergunto porque a gente tem um processo de pré-qualificação dos compradores que faz bastante diferença."
   },
   {
     id: 7,
-    fase: 'Opener',
+    fase: 'SDR',
     gatilhos: ["esperar para ver a evolução", "vou aguardar um pouco"],
-    contorno: "Com certeza! Posso te mandar análises periódicas do mercado pra você acompanhar. Enquanto isso, você toparia a gente só entender melhor o seu imóvel?"
+    contorno: "Claro, sem pressão! Só pra eu não te incomodar sem necessidade depois — posso te fazer só umas perguntas rápidas sobre o apartamento agora? Assim, quando você decidir avançar, a gente já tem tudo mapeado e agiliza muito."
   },
   {
     id: 8,
-    fase: 'Opener',
+    fase: 'SDR',
     gatilhos: ["experiência ruim anterior", "outra imobiliária me enganou", "tive muito problema"],
-    contorno: "Sinto muito, isso é frustrante demais. O que aconteceu? Ficou sem retorno, sem visitas? (Nota interna ao agente: colete a dor e valide o sentimento.)"
+    contorno: "Poxa, que chato! Infelizmente é mais comum do que deveria. Me conta o que aconteceu? Quero entender onde deu errado pra te mostrar como a gente trabalha diferente."
   },
   {
     id: 9,
-    fase: 'Opener',
+    fase: 'SDR',
     gatilhos: ["não precisa de divulgação", "meu imóvel vende sozinho", "não precisa muito anúncio"],
-    contorno: "Entendo! Mas imóvel bem apresentado e com mais visibilidade vende mais rápido e por um valor melhor. Posso te mostrar um exemplo rápido?"
+    contorno: "Com certeza um bom imóvel tem apelo natural! Mas o que a gente vê no mercado é que com uma estratégia de mídia forte, o imóvel recebe mais de uma proposta ao mesmo tempo — e aí você consegue negociar pra cima, não pra baixo. Vale a pena pelo menos conhecer a estratégia?"
   },
   {
     id: 10,
-    fase: 'Opener',
+    fase: 'SDR',
     gatilhos: ["como conseguiu meu número", "quem te passou meu contato"],
-    contorno: "Seu contato chegou por uma base pública de inteligência da região. Tudo sem compromisso nenhum! Posso continuar? 😊"
+    contorno: "Seu contato faz parte de uma base de dados pública de proprietários da região. A gente usa isso de forma bem direcionada, sem spam. Mas se preferir que eu não entre mais em contato, é só falar que eu respeito!"
   },
   {
     id: 11,
-    fase: 'Opener',
+    fase: 'SDR',
     gatilhos: ["para de mandar mensagem", "não tenho interesse e não quero saber", "sai daqui"],
-    contorno: "Desculpa o incômodo! Não vou mais entrar em contato. Boa semana! 🙏 (Nota interna ao agente: pare completamente o contato)."
+    contorno: "Peço desculpas pelo incômodo! Vou registrar seu contato aqui pra não te incomodar mais. Tenha uma ótima semana! 🙏 (Nota interna: pare o contato)."
   },
 
-  // ================= PRESENTER =================
+  // ================= SDR (APRESENTAÇÃO) =================
   {
     id: 12,
-    fase: 'Presenter',
+    fase: 'SDR',
     gatilhos: ["corretor de confiança", "amigo corretor", "já tem um que faz tudo"],
-    contorno: "Faz sentido ter alguém de confiança! Me conta: esse corretor tá anunciando em quantos portais? Tá tendo retorno frequente pra você? (Nota: identifique gargalos logísticos sem atacar a índole do corretor.)"
+    contorno: "Ótimo, ter alguém de confiança faz toda diferença! E a boa notícia é que a gente não compete com ele — muito pelo contrário. Nosso modelo permite que ele participe da venda e seja remunerado por isso. A gente entra com a parte operacional: fotos, mídia, gestão dos demais corretores. Faz sentido os dois trabalharem juntos?"
   },
   {
     id: 13,
-    fase: 'Presenter',
+    fase: 'SDR',
     gatilhos: ["pra que IA preificar", "não confio em avaliação de computador", "IA pra imóvel?"],
-    contorno: "Faz sentido questionar! A IA não substitui a experiência humana — ela garante que o preço que a gente sugere tá ancorado em dados matemáticos do mercado real, protegendo o valor do seu imóvel contra 'achismos'. Faz diferença isso na prática?"
+    contorno: "Concordo que o olhar do corretor experiente é insubstituível! A IA entra como apoio: ela cruza dados reais de vendas fechadas na região, sem achismo. Isso evita dois erros comuns — pedir abaixo do mercado e perder dinheiro, ou pedir acima e o imóvel ficar parado. O corretor usa esses dados como base e aplica o bom senso em cima. Faz sentido?"
   },
   {
     id: 14,
-    fase: 'Presenter',
+    fase: 'SDR',
     gatilhos: ["não quero pagar fotos", "pra que vídeo de drone", "meu celular já tira foto"],
-    contorno: "Entendo! E o melhor: esses serviços profissionais já estão INCLUSOS na nossa operação da gestão, você não paga nada a mais antes. Imóvel com foto profissional e drone vende em média 40% mais rápido. Vale a pena usarmos as nossas câmeras, né?"
+    contorno: "Boa notícia: você não paga nada disso! Todo o investimento em fotos, vídeo e mídia é por nossa conta. A gente só recebe quando o imóvel é vendido. E os dados mostram que imóveis com mídia profissional vendem até 40% mais rápido — então compensa muito pra gente investir nisso."
   },
   {
     id: 15,
-    fase: 'Presenter',
+    fase: 'SDR',
     gatilhos: ["não gosto de compartilhar", "ficar passando meu imóvel pros outros", "rede de corretores espalha tudo"],
-    contorno: "Entendo a preocupação! A diferença é que com a gente não tem bagunça solta no mercado — é uma rede organizada e coordenada pelo nosso contrato de gestão central. Preço fixado, material limpo e padronizado, mas multiplicado em alcance. Faz sentido?"
+    contorno: "Entendo! E pra ser transparente: no nosso modelo, quem gerencia tudo isso somos nós. Você não recebe ligação de dezenas de corretores — tem só eu como ponto de contato. A gente distribui o imóvel internamente e centraliza tudo. Você fica em paz e recebe só atualizações organizadas. Faz sentido?"
   },
   {
     id: 16,
-    fase: 'Presenter',
-    gatilhos: ["já tive experiência negativa com gestão", "deixei sob gestão e foi ruim"],
-    contorno: "Que situação chata, sinto muito. O que aconteceu na época? Ficou sem receber feedback, ou o imóvel ficou totalmente parado? (Nota: faça a escuta ativa para usar as dores antigas no nosso roteiro.)"
+    fase: 'SDR',
+    gatilhos: ["já tive experiência negativa com gestão", "deixei sob gestão e foi ruim", "exclusividade não prestou"],
+    contorno: "Faz total sentido a ressalva! O modelo antigo de exclusividade era exatamente isso: o corretor guardava o imóvel pra si e limitava as chances de venda. O que a gente faz é diferente — chamamos de Gestão Colaborativa. Colocamos o imóvel pra circular em toda a rede, mas com organização central. O que especificamente deu errado antes? Quero entender pra te mostrar como seria diferente aqui."
   },
   {
     id: 17,
-    fase: 'Presenter',
+    fase: 'SDR',
     gatilhos: ["vender mais rápido não é bom", "quem tem pressa vende barato", "não quero queimar"],
-    contorno: "Faz total sentido! Mas vender rápido não significa leiloar pra baixo — pelo contrário. Imóvel que empaca por meses no portal é que queima o preço no mercado porque os compradores desabam as propostas. A ideia da agilidade é garantir que todo mundo veja no pico do lançamento, vendendo rápido e pelo melhor valor."
+    contorno: "Concordo totalmente! Vender com desespero sempre prejudica o preço. Mas existe uma diferença entre pressa e posicionamento estratégico. Quando a gente gera demanda de forma organizada — múltiplos interessados ao mesmo tempo — os compradores competem pra cima, não pra baixo. O objetivo é exatamente vender pelo valor máximo, não pelo mínimo."
   },
   {
     id: 18,
-    fase: 'Presenter',
+    fase: 'SDR',
     gatilhos: ["eu gosto de controlar", "eu atendo os clientes", "eu não solto o osso da venda"],
-    contorno: "Com certeza, e você vai continuar 100% no controle! A gente só blinda você do cansaço operacional — tirar as fotos, bater na porta pra visitar, filtrar as documentações furadas. Mas você só decide aceitar e bater o martelo na hora certa. Como soa isso pra você?"
+    contorno: "Perfeito, e isso não muda! A decisão final sempre é sua — nenhuma proposta é aceita sem o seu aval. O que a gente assume é a parte operacional: filtrar curiosos, agendar visitas, lidar com a burocracia. Você só entra quando tem algo concreto na mesa. Fica mais tranquilo assim?"
   },
   {
     id: 19,
-    fase: 'Presenter',
+    fase: 'SDR',
     gatilhos: ["meu imóvel é super único", "meu imóvel não é igual aos outros", "método padrão não serve pra mim"],
-    contorno: "Concordo 100%! Exatamente por ser tão único é que a gente faz um diagnóstico detalhado. Cada estratégia de anúncio e direcionamento que usamos é montada do zero pra combinar só com a cara do seu imóvel. Posso te mostrar como traçamos esse alvo na prática?"
+    contorno: "Exatamente por isso que um tratamento padrão não funciona! Imóvel diferenciado precisa de uma comunicação cirúrgica — fotos que destacam os diferenciais, texto que fala com o comprador certo, e canais que alcançam quem realmente tem perfil pra esse tipo de imóvel. O nosso trabalho é justamente extrair o máximo de valor dessas particularidades."
   },
   {
     id: 20,
-    fase: 'Presenter',
+    fase: 'SDR',
     gatilhos: ["custa quanto", "taxa de vocês", "qual a porcentagem de comissão", "comissão e honorários"],
-    contorno: "Trabalhamos com a media de mercado padrão de 6%. E a mágica: você só paga quando a gente fechar o dinheiro na sua conta. Zero custo antes. Posso continuar te explicando a montanha de serviços inclusos pra justificar o seu ROI?"
+    contorno: "A comissão segue a tabela padrão do mercado. E o que vale destacar: todo o investimento em mídia, fotos e gestão é por nossa conta — você não paga nada antes da venda. A comissão só acontece quando o negócio é fechado. Então não tem nenhum risco pro seu bolso."
   },
   {
     id: 21,
-    fase: 'Presenter',
+    fase: 'SDR',
     gatilhos: ["comunicação bagunçada", "muitos corretores e ninguém dá retorno", "todo mundo sumiu"],
-    contorno: "Isso é exatamente a doença que nós curamos. Com a Gestão da Venda da Quadra Dois você tem um único ponto de contato: nós mesmos. A gente cobra todos os nossos parceiros da cidade que visitaram, consolida os dados e te manda a atualização filtrada direto no seu WhatsApp. Gestão técnica de verdade."
+    contorno: "É uma dor muito comum no mercado, infelizmente. No nosso modelo, você tem um único ponto de contato — eu. Nada de múltiplos corretores te ligando ou sumindo. A gente centraliza tudo e te mantém atualizado de forma organizada. Bem diferente do caos que você descreveu."
   },
   {
     id: 22,
-    fase: 'Presenter',
+    fase: 'SDR',
     gatilhos: ["eu vou tentar sozinho um tempo", "vender por conta própria primeiro", "colocar placa e ver no que dá"],
-    contorno: "Faz muito sentido querer testar sozinho! Só me diz algo importante: quando aparecer um cara dizendo que quer pagar à vista, você tem a estrutura pra qualificar o crédito dele e a documentação na Receita antes de perder um final de semana? Tem muita dor de cabeça solta na negociação direta que te fazemos pular."
+    contorno: "Faz sentido querer tentar! Mas só um alerta: a parte mais difícil não é encontrar o comprador — é o processo depois: análise de crédito, documentação, financiamento, escritura. Qualquer erro nessa etapa pode custar caro ou fazer a venda cair. A gente existe pra garantir que tudo isso rode certinho e o dinheiro caia na sua conta sem surpresa. Vale ao menos saber como funciona antes de decidir?"
   },
 
-  // ================= CLOSER =================
+  // ================= SDR (OBJEÇÕES CONTRATO) =================
   {
     id: 23,
-    fase: 'Closer',
+    fase: 'SDR',
     gatilhos: ["acho a taxa muito alta", "6 por cento é muito", "achei a comissão cara"],
-    contorno: "Entendo! Mas olha pelo prisma do que cobrimos: fotos, drone, portais vitrine (ZAP, VivaReal), setor jurídico robusto nas costas e o ecossistema inteiro engajado no seu imóvel. Tudo isso sairia do seu bolso antes da venda se fosse solto. A gente paga essa fatura, vende até mais caro pro repasse compensar, e você só paga na festa do sucesso!"
+    contorno: "Entendo que a taxa chame atenção! Mas pensa comigo: todo o investimento em marketing, fotos, vídeo e gestão jurídica sai do nosso bolso, não do seu. Além disso, como a gente repassa o imóvel pra toda a rede de corretores da cidade, a concorrência entre compradores evita que você precise dar desconto na hora de fechar. Esse desconto que você não dá costuma ser bem maior que a taxa. Faz sentido?"
   },
   {
     id: 24,
-    fase: 'Closer',
+    fase: 'SDR',
     gatilhos: ["vi um cobrando 4%", "outra é mais barata", "fulano cobra menos comissão"],
-    contorno: "Sempre faça a conta do barato que custa meses. Imobiliária com taxa baixa só joga no portal e reza pra vender. A gente compartilha ganhos com os parceiros ativamente (daí a sustentação da comissão de 6%) e bota dinheiro de verdade em tráfego focado pros clientes certos. Custo baixo é economia na etapa da vitrine, que depois custa caríssimo em rebaixamento no preço final de negociação."
+    contorno: "É bem comum encontrar isso! Mas taxa baixa geralmente significa que eles não repassam o imóvel pra outros corretores — guardam só pra eles. Com menos gente vendendo, a demanda cai e as propostas chegam lá embaixo. Aí você acaba dando um desconto na venda que supera qualquer economia na taxa. A comissão padrão é exatamente o que garante que todo mundo vai querer vender o seu."
   },
   {
     id: 25,
-    fase: 'Closer',
+    fase: 'SDR',
     gatilhos: ["prefiro pagar um valor fixo", "comissão fixa e deu"],
-    contorno: "Compreendo, mas valor fixo tira o nosso 'sangue no olho' de brigar com os compradores pelo preço MÁXIMO da venda (já que a gente ganharia o mesmo se baixar, né?). Com a base de %, nós mesmos viramos os 'donos ansiosos' tentando subir as propostas pra garantir também que nossos honorários rendam."
+    contorno: "Entendo a lógica! Mas o problema do valor fixo é que o consultor perde o incentivo de brigar pelo melhor preço pra você — vai receber o mesmo independente do resultado. Na comissão percentual, nossos interesses ficam alinhados: quanto mais caro você vender, melhor pra nós dois. Eu vou batalhar pelo valor máximo porque isso impacta diretamente meu resultado também."
   },
   {
     id: 26,
-    fase: 'Closer',
+    fase: 'SDR',
     gatilhos: ["não posso pagar agora", "não tenho dinheiro antes da venda"],
-    contorno: "Excelente notícia: NENHUM real sai do seu bolso agora. A taxa sai 100% da verba final depositada pelo comprador lá na assinatura da escritura. O aceite no contrato inicial é de R$ 0,00."
+    contorno: "Boa notícia: você não desembolsa nada antes da venda! Todo o custo com anúncios, vídeo, tráfego pago e gestão é por nossa conta. A gente assume esse risco porque acredita no trabalho que faz. Você só paga a comissão no fechamento, e esse valor já sai do pagamento do comprador. Não tem nenhum custo inicial pro seu bolso."
   },
   {
     id: 27,
-    fase: 'Closer',
+    fase: 'SDR',
     gatilhos: ["o serviço não vale isso tudo", "é dinheiro demais e não fazem nada"],
-    contorno: "É extremamente plausível sua dúvida. Se fossemos separar: uma filmagem e fotos com drone de mercado = R$400, portais em Destaque Alto pra não cair no buraco do Zap = R$ 1.200 todo mês. Minutas no Jurídico = + de R$1k de consultoria. Isso fora o tempo, ligações chatas e canceladas. Com o contrato ativado agora, a pressão inteira vai pras nossas costas, por 0 reais iniciais."
+    contorno: "Faz sentido questionar! As antigas imobiliárias realmente cobravam caro pra pouco — uma foto de celular num portal e sumiam. No nosso modelo, a gente assume toda a operação: filtragem de compradores, acompanhamento jurídico, mídia profissional e gestão de todo o processo até a assinatura. Você recebe o dinheiro sem precisar se preocupar com nada pelo caminho. É exatamente isso que justifica o valor."
   },
   {
     id: 28,
-    fase: 'Closer',
+    fase: 'SDR',
     gatilhos: ["estou bem com minha imobiliária", "estou feliz onde está"],
-    contorno: "Que espetáculo, fico feliz por você. Só curiosidade técnica: está tendo retorno bom de visitas qualificadas com crédito pré-aprovado da parte deles? (Nota tática: tente cavar apenas uma fissura nessa proteção, se tiver fissura aponte a Gestão, se não, não force fechamento)."
+    contorno: "Que ótimo, fidelidade e bom atendimento são raros no mercado! Só uma reflexão: o fluxo de compradores qualificados está sendo constante, com gente que já tem crédito aprovado? Ou o imóvel está mais parado, esperando alguém aparecer? Pergunto porque faz diferença ter uma estratégia ativa de geração de demanda, não só uma placa no portal."
   },
   {
     id: 29,
-    fase: 'Closer',
-    gatilhos: ["contrato muito longo", "quero assinar por 30 meses", "prefiro tirar em 3 meses"],
-    contorno: "Tempo de exclusividade assusta mesmo! O modelo padrão técnico no mercado aponta 180 dias porque o processo de financiamento da Caixa, visitas e cartório come boa parte da janela. Porém, pra você me provar, vamos levar pra coordenação e calibrar isso pra nos sentirmos mais confortáveis. Qual limite você sugere ser um teste justo pra gente provar a tese de venda?"
+    fase: 'SDR',
+    gatilhos: ["contrato muito longo", "quero assinar por 30 meses", "prefiro tirar em 3 meses", "quero 60 dias"],
+    contorno: "Entendo a preocupação! O prazo padrão de 180 dias existe por uma razão técnica: o processo de financiamento bancário sozinho costuma levar de 45 a 90 dias. Com um prazo muito curto, o comprador se sente pressionado e usa isso pra pedir desconto. O prazo mais longo protege o seu preço. Mas vou deixar essa questão anotada pra o nosso consultor humano conversar com você diretamente, tudo bem?"
   },
   {
     id: 30,
-    fase: 'Closer',
+    fase: 'SDR',
     gatilhos: ["não acho que a venda vá andar mais rápido", "tudo balela", "não adianta nada centralizar"],
-    contorno: "Complicado acreditar em discursos no imóvel solto. Mas se você observar matemática seca: o fato matemático de ter fotos/filmes melhores e uma Gestão abrindo as chaves até finais de semana pra toda a base vizinha parceira é o que faz o cronômetro do seu imóvel rodar x5 mais rápido do que anúncios amadores no marketplace."
+    contorno: "Respeito o ceticismo! Mas a diferença do nosso modelo é justamente essa: a gente não espera o comprador aparecer — a gente vai atrás. Mídia paga, rede de corretores ativa e qualificação dos interessados antes da visita. O resultado é que o imóvel recebe mais propostas ao mesmo tempo, o que cria disputa entre compradores e mantém o preço lá em cima. Não é promessa, é o processo que a gente executa."
   },
   {
     id: 31,
-    fase: 'Closer',
+    fase: 'SDR',
     gatilhos: ["já gastei tempo e dinheiro", "reforma", "não quero despender mais nada"],
-    contorno: "Então somos o parceiro que blinda exatamente essa dor. A gente vem pra segurar 100% da linha de investimento em marketing nas nossas contas e recuperar a margem dessa reforma sem dores de cabeça nas negociações picadas. Perca zero e garanta só o estorno final."
+    contorno: "Faz total sentido não querer gastar mais depois de tudo que já investiu! E é exatamente por isso que o nosso modelo encaixa aqui: você não investe mais nada. A gente banca toda a divulgação e gestão. O objetivo é justamente resgatar esse investimento que você já fez, vendendo pelo valor que o imóvel merece. Você descansa, a gente trabalha."
   },
   {
     id: 32,
-    fase: 'Closer',
+    fase: 'SDR',
     gatilhos: ["não vou assinar agora", "não quero fechar", "tô resistente ao contrato"],
-    contorno: "Eu escuto isso todo dia, não se preocupe! Mas de curiosidade genuína: o que te freia agora mesmo sabendo das fotos profissionais a 0 reais pro seu bolso? É o pânico do prazo de fidelidade de 180 dias, o número % da comissão, ou ainda precisa pensar em alguma burocracia do papel?"
+    contorno: "Tudo bem, decisão nenhuma precisa ser tomada agora! Só pra eu entender melhor e poder te ajudar da forma certa: a resistência é mais em relação ao prazo do contrato, ou tem alguma dúvida sobre como funciona o repasse e a comissão? Assim eu consigo ou te esclarecer direto, ou já passo pro nosso consultor humano retomar esse ponto com você."
   },
   {
     id: 33,
-    fase: 'Closer',
-    gatilhos: ["não dou meu cpf pra fazer contrato pelo whatsapp", "não confio no zang zang", "na internet não rola"],
-    contorno: "Eu estaria igualzinho a você. Fique absolutamente tranquilo, a assinatura não precisa e nem deve ser mandada pelo WhatsApp. Tem segurança biométrica! A gente te solta um link oficial do portal ClickSign blindado nas diretrizes do Gov.Br pra você abrir da sua máquina criptografado e validado formalmente."
+    fase: 'SDR',
+    gatilhos: ["não dou meu cpf pra fazer contrato pelo whatsapp", "não confio no link", "na internet não rola"],
+    contorno: "Faz sentido ter esse cuidado, é um ativo importante! Só pra tranquilizar: a gente não pede dado nenhum por aqui. O contrato é assinado pela plataforma Clicksign, que é criptografada e tem validade jurídica reconhecida, integrada ao Gov.br. É o mesmo padrão que bancos e cartórios usam. Mas se preferir assinar pessoalmente, também conseguimos agendar. Como você prefere?"
   },
   {
     id: 34,
-    fase: 'Closer',
+    fase: 'SDR',
     gatilhos: ["exclusividade não", "autorização não quero amarras", "não de novo exclusividade"],
-    contorno: "A gente sabe, a palavra tá suja no mercado! Mas me diz a quente: dos tantos outros corretores com quem seu imóvel deve estar sem documento na gaveta, quantos ligaram sábado pra agendar lead com aprovação na Caixa? No Gestão você concentra, organiza, exige nossa prestação de contas judicial e distribui na mesma. Não feche as portas, coloque a tranca pra ser sua."
+    contorno: "Entendo muito bem! A palavra 'exclusividade' ficou marcada como sinônimo de imóvel parado na gaveta de um único corretor. O que a gente faz é diferente: o contrato de gestão existe pra proteger o processo juridicamente e garantir que a gente possa investir em mídia com segurança. Na prática, o imóvel fica disponível pra toda a rede de corretores da cidade vender. Não é fechar pra um só — é abrir com organização."
   },
   {
     id: 35,
-    fase: 'Closer',
+    fase: 'SDR',
     gatilhos: ["vou ver e te aviso", "deixa eu analisar fds", "pensar sobre", "falo amanhã"],
-    contorno: "Super em paz, casa e imóvel exigem reflexão. Posso te fazer uma pergunta pontual rapidinho? Como 90% dos proprietários que me respondem 'vou pensar' acabaram perdendo ótimas ondas de liquidez, me responde franco para eu não pecar de omissão com você: o ponto que pesa agora é taxa de serviço %, os prazos do documento comercial, ou puramente conversas com a sua família e donos também?"
+    contorno: "Claro, sem pressão! Decisão assim merece ser pensada com calma, às vezes até conversar com a família antes. Só pra eu organizar melhor: a dúvida que ficou é mais em relação ao prazo do contrato ou à parte financeira da comissão? Assim eu já deixo as informações certas preparadas pra quando você voltar."
   }
 ];

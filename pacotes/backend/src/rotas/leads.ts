@@ -4,6 +4,11 @@ import { prisma } from '../lib/db';
 import crypto from 'crypto';
 import { getTenantId } from '../utils/tenant';
 import { cascadeDeleteLeads } from '../utils/cascade-delete';
+import {
+  camposCriticosFaltantes,
+  extrairFieldSources,
+  obterLastSourceUpdateAt,
+} from '../agentes/governanca-qualificacao';
 
 const router = Router();
 
@@ -423,6 +428,22 @@ router.get('/:id', async (req, res) => {
 
     // Cast para any temporário (Prisma Client ainda com cache antigo)
     const l: any = lead;
+    const faltantesGovernanca = camposCriticosFaltantes({
+      interesseEm: l.interesseEm,
+      tipoImovel: l.tipoImovel,
+      areaImovel: l.areaImovel,
+      ocupacaoImovel: l.ocupacaoImovel,
+      valorPretendido: l.valorPretendido,
+      doresIdentificadas: l.doresIdentificadas,
+      situacaoAtual: l.situacaoAtual,
+      motivacaoVenda: l.motivacaoVenda,
+      consequencias: l.consequencias,
+      custosAtuais: l.custosAtuais,
+    });
+    const totalCamposCriticos = 9;
+    const preenchidosCriticos = totalCamposCriticos - faltantesGovernanca.length;
+    const fieldSources = extrairFieldSources(l.schemaState);
+    const lastSourceUpdateAt = obterLastSourceUpdateAt(l.schemaState);
 
     // Formatar resposta estruturada
     const resposta = {
@@ -483,6 +504,21 @@ router.get('/:id', async (req, res) => {
           interesseAvaliacao: l.interesseAvaliacao
         },
         observacoes: l.observacoesSpin
+      },
+
+      // Governança da qualificação (source_of_truth + completude)
+      governanca: {
+        prontidaoQualificacao: faltantesGovernanca.length === 0 ? 'COMPLETA' : 'PARCIAL',
+        camposCriticos: {
+          total: totalCamposCriticos,
+          preenchidos: preenchidosCriticos,
+          faltantes: faltantesGovernanca,
+        },
+        sourceOfTruth: {
+          lastSourceUpdateAt,
+          totalCamposRastreados: fieldSources.length,
+          fields: fieldSources,
+        },
       },
 
       // ====================================

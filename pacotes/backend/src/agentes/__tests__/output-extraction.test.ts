@@ -1,4 +1,7 @@
-import { extrairRespostaECot } from '../output-extraction';
+import { extrairRespostaECot as _extrairRespostaECot } from '../output-extraction';
+
+// Cast para permitir stubs de teste com objetos parciais
+const extrairRespostaECot = _extrairRespostaECot as (result: any) => ReturnType<typeof _extrairRespostaECot>;
 
 describe('extrairRespostaECot', () => {
   it('usa string finalOutput diretamente', () => {
@@ -22,6 +25,29 @@ describe('extrairRespostaECot', () => {
     expect(result.respostaFinal).toBe('CPF anotado! Me passa o e-mail?');
     expect(result.structuredOutputDetectado).toBe(true);
     expect(result.proximoPasso).toBe('coletar_email');
+  });
+
+  it('preserva dadosEstruturados e raciocinio do structured output', () => {
+    const result = extrairRespostaECot({
+      finalOutput: {
+        respostaParaOCliente: 'Entendi, já anunciou antes?',
+        raciocinio: 'Lead parece receptivo, fase Descoberta',
+        proximoPasso: 'DESCOBERTA',
+        pvamInferido: {
+          preco: 'DESCONHECIDO',
+          veto: 'DECIDE_SOZINHO',
+          ativador: 'INTERESSE_LEVE',
+          momento: 'DESCONHECIDO',
+        },
+      },
+    });
+
+    expect(result.respostaFinal).toBe('Entendi, já anunciou antes?');
+    expect(result.structuredOutputDetectado).toBe(true);
+    expect(result.cotLog).toBe('Lead parece receptivo, fase Descoberta');
+    expect(result.proximoPasso).toBe('DESCOBERTA');
+    expect(result.dadosEstruturados).toBeDefined();
+    expect((result.dadosEstruturados as any).pvamInferido.ativador).toBe('INTERESSE_LEVE');
   });
 
   it('remove bloco CoT da resposta final', () => {
@@ -75,5 +101,90 @@ describe('extrairRespostaECot', () => {
     });
 
     expect(result.respostaFinal).toBe('Boa! 😊 Já conheço o empreendimento.\n\nVocê tem valor em mente?');
+  });
+
+  // ──── Testes para Caminho 2.5: Structured Output em formato string ────
+  
+  it('extrai respostaParaOCliente de JSON string (SDK devolveu string em vez de objeto)', () => {
+    const json = JSON.stringify({
+      respostaParaOCliente: 'Perfeito, você quer vender ou alugar?',
+      raciocinio: 'Fase Descoberta, lead interessado',
+      proximoPasso: 'DESCOBERTA',
+      pvamInferido: { preco: 'DESCONHECIDO' },
+    });
+
+    const result = extrairRespostaECot({ finalOutput: json });
+
+    expect(result.respostaFinal).toBe('Perfeito, você quer vender ou alugar?');
+    expect(result.structuredOutputDetectado).toBe(true);
+    expect(result.cotLog).toBe('Fase Descoberta, lead interessado');
+    expect(result.proximoPasso).toBe('DESCOBERTA');
+  });
+
+  it('extrai respostaParaOCliente de formato texto "key: value" (modelo sem JSON)', () => {
+    const textoModelo = `respostaParaOCliente: Perfeito, Ivonet — você quer vender ou alugar o imóvel no Reserva Buriti?
+
+raciocinio: Fase Descoberta. Lead interessado.
+
+proximoPasso: coletar_tipo_interesse
+
+pvamInferido: {temperatura: "MORNO"}`;
+
+    const result = extrairRespostaECot({ finalOutput: textoModelo });
+
+    expect(result.respostaFinal).toBe('Perfeito, Ivonet — você quer vender ou alugar o imóvel no Reserva Buriti?');
+    expect(result.structuredOutputDetectado).toBe(true);
+    expect(result.cotLog).toBe('Fase Descoberta. Lead interessado.');
+    expect(result.proximoPasso).toBe('coletar_tipo_interesse');
+  });
+
+  it('extrai respostaParaOCliente quando o modelo envia texto + JSON interno no final', () => {
+    const textoPoluido = `Sim — trabalho com compradores buscando apartamentos no Reserva Buriti.
+Qual valor você espera pelo seu apartamento?
+
+{
+  "respostaParaOCliente": "Sim — trabalho com compradores buscando apartamentos no Reserva Buriti.\\nQual valor você espera pelo seu apartamento?",
+  "raciocinio": "Fase descoberta",
+  "fase": "DESCOBERTA",
+  "pvam": { "A": "ALTO" },
+  "spin": { "sinalCompra": "ABERTO" }
+}`;
+
+    const result = extrairRespostaECot({ finalOutput: textoPoluido });
+
+    expect(result.respostaFinal).toBe(
+      'Sim — trabalho com compradores buscando apartamentos no Reserva Buriti.\nQual valor você espera pelo seu apartamento?'
+    );
+    expect(result.structuredOutputDetectado).toBe(true);
+    expect(result.cotLog).toBe('Fase descoberta');
+  });
+
+  it('não confunde texto normal que menciona "respostaParaOCliente" como campo', () => {
+    const result = extrairRespostaECot({
+      finalOutput: 'Olá, tudo bem?',
+    });
+
+    expect(result.respostaFinal).toBe('Olá, tudo bem?');
+    expect(result.structuredOutputDetectado).toBe(false);
+  });
+
+  it('remove bloco textual de metadados internos mesmo sem campo respostaParaOCliente', () => {
+    const result = extrairRespostaECot({
+      finalOutput: `Tranquilo, faz sentido não saber na hora.
+Isso tem atrapalhado algum plano seu (mudança/compra de outro imóvel) ou é mais só incômodo com visitas curiosas?
+
+raciocinio: Lead respondeu não saber a implicação; abordagem deve ser empática.
+
+fase: "DIAGNOSTICO_SPIN"
+
+pvam: { "P": "DESCONHECIDO", "V": "DESCONHECIDO", "A": "ALTA", "M": "DESCONHECIDO" }
+
+spin: { "dorFinanceira": "BAIXO", "necessidadeGestao": "ALTA", "sinalCompra": "ABERTO" }`,
+    });
+
+    expect(result.respostaFinal).toBe(
+      'Tranquilo, faz sentido não saber na hora.\nIsso tem atrapalhado algum plano seu (mudança/compra de outro imóvel) ou é mais só incômodo com visitas curiosas?'
+    );
+    expect(result.structuredOutputDetectado).toBe(false);
   });
 });

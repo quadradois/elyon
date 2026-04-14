@@ -2,13 +2,15 @@ import {
   normalizarTexto,
   extrairEstadoConversa,
   respostaPositivaCurta,
-  deveForcarTransicaoParaPresenter,
   respostaRepetePerguntaCritica,
   gerarFallbackContextual,
   atualizarSchemaState,
-  enriquecerEstadoComLeadRecord,
+  enriquecerEstadoComLeadRecord as _enriquecerEstadoComLeadRecord,
   EstadoConversa,
 } from '../conversation-state';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const enriquecerEstadoComLeadRecord = _enriquecerEstadoComLeadRecord as (estado: EstadoConversa, lead: any) => EstadoConversa;
 
 // ============================================
 // normalizarTexto
@@ -93,6 +95,27 @@ describe('extrairEstadoConversa', () => {
     expect(estado.ocupacao).toBe('ocupado');
   });
 
+  it('detecta ocupação "alugado" por "alugado"', () => {
+    const estado = extrairEstadoConversa([
+      { role: 'user', content: 'Meu apartamento tá alugado' },
+    ]);
+    expect(estado.ocupacao).toBe('alugado');
+  });
+
+  it('detecta ocupação "alugado" por "inquilino"', () => {
+    const estado = extrairEstadoConversa([
+      { role: 'user', content: 'Tenho inquilino lá ainda' },
+    ]);
+    expect(estado.ocupacao).toBe('alugado');
+  });
+
+  it('detecta ocupação "alugado" por "locado"', () => {
+    const estado = extrairEstadoConversa([
+      { role: 'user', content: 'Está locado há 2 anos' },
+    ]);
+    expect(estado.ocupacao).toBe('alugado');
+  });
+
   it('extrai valor pretendido com "k"', () => {
     const estado = extrairEstadoConversa([
       { role: 'user', content: 'Estou pensando em uns 500k' },
@@ -105,6 +128,22 @@ describe('extrairEstadoConversa', () => {
       { role: 'user', content: 'Acho que vale R$ 450.000' },
     ]);
     expect(estado.valorPretendido).toContain('450.000');
+  });
+
+  it('não confunde preço com metragem quando usuário informa valor do anúncio', () => {
+    const estado = extrairEstadoConversa([
+      { role: 'user', content: 'Já estou anunciando por R$350.000' },
+    ]);
+    expect(estado.valorPretendido).toContain('350.000');
+    expect(estado.metragem).toBeNull();
+  });
+
+  it('não confunde preço com metragem quando usuário informa valor em "mil"', () => {
+    const estado = extrairEstadoConversa([
+      { role: 'user', content: 'Sim, estou anunciando ele por 350mil!' },
+    ]);
+    expect(estado.valorPretendido).toContain('350mil');
+    expect(estado.metragem).toBeNull();
   });
 
   it('detecta decisão de venda (com acentos)', () => {
@@ -158,6 +197,14 @@ describe('extrairEstadoConversa', () => {
     ]);
     expect(estado.estaAnunciando).toBe(true);
     expect(estado.jaRespondeuDecisao).toBe(true);
+    expect(estado.origemAnuncio).toBe('conta_propria');
+  });
+
+  it('detecta origem do anúncio com imobiliária/corretores', () => {
+    const estado = extrairEstadoConversa([
+      { role: 'user', content: 'estou com 3 corretores e uma imobiliária' },
+    ]);
+    expect(estado.origemAnuncio).toBe('imobiliaria_corretores');
   });
 
   it('detecta timeline de venda em dias', () => {
@@ -174,6 +221,7 @@ describe('extrairEstadoConversa', () => {
     ]);
     expect(estado.timeline).toBeTruthy();
     expect(estado.timeline).toContain('3 meses');
+    expect(estado.metragem).toBeNull();
   });
 
   it('não marca estaAnunciando para conversa genérica', () => {
@@ -258,53 +306,6 @@ describe('respostaPositivaCurta', () => {
 });
 
 // ============================================
-// deveForcarTransicaoParaPresenter
-// ============================================
-
-describe('deveForcarTransicaoParaPresenter', () => {
-  it('retorna true quando assistant fez pergunta de prioridade e user respondeu positivo', () => {
-    const msgs: Array<{ role: 'user' | 'assistant'; content: string }> = [
-      { role: 'assistant', content: 'Posso te fazer uma pergunta rápida?' },
-      { role: 'user', content: 'Pode sim' },
-    ];
-    expect(deveForcarTransicaoParaPresenter(msgs)).toBe(true);
-  });
-
-  it('retorna false quando user respondeu negativamente', () => {
-    const msgs: Array<{ role: 'user' | 'assistant'; content: string }> = [
-      { role: 'assistant', content: 'Posso te fazer uma pergunta rápida?' },
-      { role: 'user', content: 'Agora não' },
-    ];
-    expect(deveForcarTransicaoParaPresenter(msgs)).toBe(false);
-  });
-
-  it('retorna false sem mensagens suficientes', () => {
-    expect(deveForcarTransicaoParaPresenter([])).toBe(false);
-    expect(deveForcarTransicaoParaPresenter([{ role: 'user', content: 'oi' }])).toBe(false);
-  });
-
-  it('retorna false quando assistant não fez pergunta de prioridade', () => {
-    const msgs: Array<{ role: 'user' | 'assistant'; content: string }> = [
-      { role: 'assistant', content: 'Olá, tudo bem?' },
-      { role: 'user', content: 'Sim' },
-    ];
-    expect(deveForcarTransicaoParaPresenter(msgs)).toBe(false);
-  });
-
-  it('funciona com conversa longa (pega a última interação)', () => {
-    const msgs: Array<{ role: 'user' | 'assistant'; content: string }> = [
-      { role: 'assistant', content: 'Olá!' },
-      { role: 'user', content: 'Oi' },
-      { role: 'assistant', content: 'Qual seu imóvel?' },
-      { role: 'user', content: 'Apartamento 120m²' },
-      { role: 'assistant', content: 'Posso te fazer uma pergunta rápida?' },
-      { role: 'user', content: 'Claro' },
-    ];
-    expect(deveForcarTransicaoParaPresenter(msgs)).toBe(true);
-  });
-});
-
-// ============================================
 // respostaRepetePerguntaCritica
 // ============================================
 
@@ -354,10 +355,10 @@ describe('gerarFallbackContextual', () => {
       timeline: null,
       perguntasJaFeitas: { prioridade: false, decisaoVenda: false, valor: false },
     };
-    expect(gerarFallbackContextual(estado, 'OPENER')).toContain('vender ou alugar');
+    expect(gerarFallbackContextual(estado, 'SDR')).toContain('vender ou alugar');
   });
 
-  it('pergunta sobre ocupação quando tem intenção mas falta ocupação', () => {
+  it('prioriza pergunta de valor quando intenção já está confirmada e valor ainda falta', () => {
     const estado: EstadoConversa = {
       intencao: 'vender',
       metragem: null,
@@ -368,7 +369,7 @@ describe('gerarFallbackContextual', () => {
       timeline: null,
       perguntasJaFeitas: { prioridade: false, decisaoVenda: false, valor: false },
     };
-    expect(gerarFallbackContextual(estado, 'OPENER')).toContain('ocupado ou vazio');
+    expect(gerarFallbackContextual(estado, 'SDR')).toContain('valor em mente');
   });
 
   it('pergunta sobre valor quando tem intenção e ocupação', () => {
@@ -382,7 +383,7 @@ describe('gerarFallbackContextual', () => {
       timeline: null,
       perguntasJaFeitas: { prioridade: false, decisaoVenda: false, valor: false },
     };
-    const fallback = gerarFallbackContextual(estado, 'OPENER');
+    const fallback = gerarFallbackContextual(estado, 'SDR');
     expect(fallback).toContain('valor');
   });
 
@@ -397,8 +398,7 @@ describe('gerarFallbackContextual', () => {
       timeline: null,
       perguntasJaFeitas: { prioridade: false, decisaoVenda: false, valor: false },
     };
-    // temIntencao && temValor → empurra pra apresentação
-    expect(gerarFallbackContextual(estado, 'OPENER')).toContain('compradores qualificados');
+    expect(gerarFallbackContextual(estado, 'SDR')).toContain('compradores qualificados');
   });
 
   it('empurra para apresentação quando tem dados suficientes', () => {
@@ -412,7 +412,7 @@ describe('gerarFallbackContextual', () => {
       timeline: null,
       perguntasJaFeitas: { prioridade: true, decisaoVenda: true, valor: true },
     };
-    expect(gerarFallbackContextual(estado, 'OPENER')).toContain('compradores qualificados');
+    expect(gerarFallbackContextual(estado, 'SDR')).toContain('compradores qualificados');
   });
 
   it('empurra para apresentação quando tem intenção + já decidiu', () => {
@@ -426,21 +426,22 @@ describe('gerarFallbackContextual', () => {
       timeline: null,
       perguntasJaFeitas: { prioridade: false, decisaoVenda: false, valor: false },
     };
-    expect(gerarFallbackContextual(estado, 'OPENER')).toContain('compradores qualificados');
+    expect(gerarFallbackContextual(estado, 'SDR')).toContain('valor em mente');
   });
 
-  it('empurra para apresentação direto quando lead já está anunciando', () => {
+  it('quando lead já está anunciando, exige origem do anúncio antes de avançar', () => {
     const estado: EstadoConversa = {
       intencao: 'vender',
-      metragem: null,
-      ocupacao: null,
-      valorPretendido: null,
+      metragem: 58,
+      ocupacao: 'ocupado',
+      valorPretendido: 'R$ 350.000',
+      origemAnuncio: null,
       jaRespondeuDecisao: false,
       estaAnunciando: true,
       timeline: null,
       perguntasJaFeitas: { prioridade: false, decisaoVenda: false, valor: false },
     };
-    expect(gerarFallbackContextual(estado, 'OPENER')).toContain('compradores qualificados');
+    expect(gerarFallbackContextual(estado, 'SDR')).toContain('conta própria ou com imobiliária/corretores');
   });
 });
 
@@ -509,6 +510,21 @@ describe('enriquecerEstadoComLeadRecord', () => {
   it('extrai número de areaImovel string', () => {
     const resultado = enriquecerEstadoComLeadRecord(estadoVazio, { areaImovel: '92m²' });
     expect(resultado.metragem).toBe(92);
+  });
+
+  it('não extrai metragem de areaImovel quando string parece valor monetário', () => {
+    const resultado = enriquecerEstadoComLeadRecord(estadoVazio, { areaImovel: 'R$ 350.000' });
+    expect(resultado.metragem).toBeNull();
+  });
+
+  it('não extrai metragem de areaImovel quando valor vem como "350mil"', () => {
+    const resultado = enriquecerEstadoComLeadRecord(estadoVazio, { areaImovel: '350mil' });
+    expect(resultado.metragem).toBeNull();
+  });
+
+  it('não extrai metragem de areaImovel quando texto representa timeline em meses', () => {
+    const resultado = enriquecerEstadoComLeadRecord(estadoVazio, { areaImovel: 'em 3 meses' });
+    expect(resultado.metragem).toBeNull();
   });
 
   it('não sobrescreve metragem já existente', () => {

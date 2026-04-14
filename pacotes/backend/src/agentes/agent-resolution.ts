@@ -16,7 +16,7 @@ export function resolverAgenteFinal(params: ResolverAgenteFinalParams): Resolver
   const { nomeRealAgenteRespondeu, tipoAgenteInicial, mapaNomesAgentes } = params;
 
   const agenteQueRespondeuFormatado = nomeRealAgenteRespondeu
-    ? (mapaNomesAgentes[nomeRealAgenteRespondeu] || 'OPENER')
+    ? (mapaNomesAgentes[nomeRealAgenteRespondeu] || 'SDR')
     : tipoAgenteInicial;
 
   return {

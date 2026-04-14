@@ -14,8 +14,10 @@
 
 import { getRedisClient } from '../lib/redis';
 import { logger } from '../lib/logger';
+import type { AgentInputItem } from '@openai/agents';
+import type { SchemaState } from './conversation-state';
 
-type ConversationHistory = any[];
+type ConversationHistory = AgentInputItem[];
 
 interface CacheEntry {
     history: ConversationHistory;
@@ -25,17 +27,16 @@ interface CacheEntry {
 
 // schema cache stored under a secondary key
 interface SchemaEntry {
-    schema: any;
+    schema: SchemaState;
     lastAccess: number;
 }
 
 const CACHE_TTL_SECONDS = 6 * 60 * 60; // 6 horas
-const MAX_HISTORY_ITEMS = 50;
+const MAX_HISTORY_ITEMS = 80;
 const REDIS_PREFIX = 'elyon:conv:';
 
 // Fallback em memória caso Redis esteja indisponível
-// entry pode ser CacheEntry (histórico) ou SchemaEntry (state), então usamos any
-const memoryFallback = new Map<string, { entry: any; lastAccess: number }>();
+const memoryFallback = new Map<string, { entry: CacheEntry | SchemaEntry; lastAccess: number }>();
 
 /**
  * Recupera o histórico SDK de uma conversa.
@@ -56,8 +57,8 @@ export async function getHistory(contatoId: string): Promise<ConversationHistory
         const mem = memoryFallback.get(contatoId);
         if (mem && Date.now() - mem.lastAccess < CACHE_TTL_SECONDS * 1000) {
             mem.lastAccess = Date.now();
-            logger.debug(`[CONV-CACHE] 💾 Memory fallback: ${mem.entry.history.length} itens para ${contatoId.substring(0, 8)}...`);
-            return mem.entry.history;
+            logger.debug(`[CONV-CACHE] 💾 Memory fallback: ${(mem.entry as CacheEntry).history.length} itens para ${contatoId.substring(0, 8)}...`);
+            return (mem.entry as CacheEntry).history;
         }
         return undefined;
     }
@@ -68,7 +69,7 @@ export async function getHistory(contatoId: string): Promise<ConversationHistory
 /**
  * Retrieves stored schema state for a conversation.
  */
-export async function getSchemaState(contatoId: string): Promise<any | undefined> {
+export async function getSchemaState(contatoId: string): Promise<SchemaState | undefined> {
     const key = `${REDIS_PREFIX}${contatoId}:schema`;
     try {
         const redis = await getRedisClient();
@@ -83,7 +84,7 @@ export async function getSchemaState(contatoId: string): Promise<any | undefined
         if (mem && Date.now() - mem.lastAccess < CACHE_TTL_SECONDS * 1000) {
             mem.lastAccess = Date.now();
             logger.debug(`[CONV-CACHE] 💾 Memory fallback (schema) para ${contatoId.substring(0, 8)}...`);
-            return mem.entry.schema;
+            return (mem.entry as SchemaEntry).schema;
         }
     }
     return undefined;
@@ -92,17 +93,16 @@ export async function getSchemaState(contatoId: string): Promise<any | undefined
 /**
  * Stores schema state for a conversation.
  */
-export async function setSchemaState(contatoId: string, schema: any): Promise<void> {
+export async function setSchemaState(contatoId: string, schema: SchemaState): Promise<void> {
     const key = `${REDIS_PREFIX}${contatoId}:schema`;
-    const entry = { schema };
+    const entry: SchemaEntry = { schema, lastAccess: Date.now() };
     try {
         const redis = await getRedisClient();
         await redis.setEx(key, CACHE_TTL_SECONDS, JSON.stringify(entry));
-        // also update memory fallback
-        memoryFallback.set(key, { entry: entry as any, lastAccess: Date.now() });
+        // FIX MEMORY LEAK: NÃO escrever no memoryFallback quando Redis está OK
         logger.debug(`[CONV-CACHE] 📡 Redis save (schema) para ${contatoId.substring(0, 8)}...`);
     } catch (err) {
-        memoryFallback.set(key, { entry: entry as any, lastAccess: Date.now() });
+        memoryFallback.set(key, { entry, lastAccess: Date.now() });
         logger.debug(`[CONV-CACHE] 💾 Memory save (schema) para ${contatoId.substring(0, 8)}...`);
     }
 }
@@ -151,7 +151,7 @@ export async function getLastAgent(contatoId: string): Promise<string | undefine
         }
     } catch {
         const mem = memoryFallback.get(contatoId);
-        return mem?.entry.lastAgent;
+        return (mem?.entry as CacheEntry | undefined)?.lastAgent;
     }
     return undefined;
 }

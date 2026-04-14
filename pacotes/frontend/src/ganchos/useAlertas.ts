@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { websocketService, AlertaEvento } from '../servicos/websocket';
-import { api } from '../servicos/api';
+import { api, isRequestCanceled } from '../servicos/api';
 
 interface UseAlertasReturn {
   alertas: AlertaEvento[];
@@ -25,14 +25,15 @@ export function useAlertas(): UseAlertasReturn {
   const [carregando, setCarregando] = useState(true);
   
   // Carregar alertas iniciais via API
-  const carregarAlertas = useCallback(async () => {
+  const carregarAlertas = useCallback(async (signal?: AbortSignal) => {
     try {
       setCarregando(true);
-      const response = await api.get('/alertas?status=pendente&limite=20');
+      const response = await api.get('/alertas?status=pendente&limite=20', { signal });
       if (response.data.sucesso) {
         setAlertas(response.data.alertas || []);
       }
     } catch (error) {
+      if (isRequestCanceled(error)) return;
       console.error('[useAlertas] Erro ao carregar:', error);
     } finally {
       setCarregando(false);
@@ -57,11 +58,13 @@ export function useAlertas(): UseAlertasReturn {
       return;
     }
     
+    const controller = new AbortController();
+    
     // Conectar ao WebSocket
     websocketService.conectar(tenantId);
     
     // Carregar alertas iniciais
-    carregarAlertas();
+    carregarAlertas(controller.signal);
     
     // Registrar callbacks
     const unsubConexao = websocketService.onConexao((status) => {
@@ -96,6 +99,7 @@ export function useAlertas(): UseAlertasReturn {
     
     // Cleanup
     return () => {
+      controller.abort();
       unsubConexao();
       unsubNovoAlerta();
       unsubAtualizado();

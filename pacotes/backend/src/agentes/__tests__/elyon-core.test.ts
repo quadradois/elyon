@@ -1,6 +1,7 @@
 const mockPrisma = {
   conversa: {
     update: jest.fn(),
+    updateMany: jest.fn(),
     findMany: jest.fn(),
     findFirst: jest.fn(),
   },
@@ -38,7 +39,43 @@ jest.mock('../../casos-de-uso/agentes/converter-para-lead.usecase', () => ({
   ConverterParaLeadUseCase: MockConverterParaLeadUseCase,
 }));
 
+// Mock OpenAI — retorna "SIM" por padrão (aceitação detectada)
+const mockOpenAICreate = jest.fn().mockResolvedValue({
+  choices: [{ message: { content: 'SIM' } }],
+});
+jest.mock('openai', () => ({
+  OpenAI: jest.fn().mockImplementation(() => ({
+    chat: { completions: { create: mockOpenAICreate } },
+  })),
+}));
+
+// Mock orchestrator-queries (buscarConfiguracaoTenant)
+jest.mock('../orchestrator-queries', () => ({
+  buscarConfiguracaoTenant: jest.fn().mockResolvedValue(null),
+  buscarContextoConversa: jest.fn(),
+}));
+
+// Mock byok-resolver
+jest.mock('../byok-resolver', () => ({
+  resolverChaveAgentes: jest.fn().mockReturnValue({ apiKey: 'fake-key', baseUrl: undefined }),
+}));
+
+// Mock logger
+jest.mock('../../lib/logger', () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}));
+
 import { ElyonCore } from '../elyon-core';
+
+// Garantir OPENAI_API_KEY para que basePlatformClient não seja null
+const ORIG_KEY = process.env.OPENAI_API_KEY;
+beforeAll(() => { process.env.OPENAI_API_KEY = 'test-key'; });
+afterAll(() => { process.env.OPENAI_API_KEY = ORIG_KEY; });
 
 describe('ElyonCore', () => {
   const core = new ElyonCore();
@@ -73,9 +110,9 @@ describe('ElyonCore', () => {
   });
 
   describe('processarConversasInativas', () => {
-    it('busca conversas inativas e finaliza cada uma', async () => {
+    it('busca conversas inativas e finaliza em batch via updateMany', async () => {
       mockPrisma.conversa.findMany.mockResolvedValue([{ id: 'c1' }, { id: 'c2' }]);
-      const spyFinalizar = jest.spyOn(core, 'finalizarConversa').mockResolvedValue(undefined);
+      mockPrisma.conversa.updateMany.mockResolvedValue({ count: 2 });
 
       const result = await core.processarConversasInativas(12);
 
@@ -86,11 +123,11 @@ describe('ElyonCore', () => {
           take: 50,
         })
       );
-      expect(spyFinalizar).toHaveBeenCalledTimes(2);
-      expect(spyFinalizar).toHaveBeenNthCalledWith(1, 'c1');
-      expect(spyFinalizar).toHaveBeenNthCalledWith(2, 'c2');
-
-      spyFinalizar.mockRestore();
+      expect(mockPrisma.conversa.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['c1', 'c2'] } },
+        data: expect.objectContaining({ estadoConversa: 'finalizada' }),
+      });
+      expect(mockRagConversasService.processarConversaFinalizada).toHaveBeenCalledTimes(2);
     });
 
     it('retorna 0 quando busca de conversas inativas falha', async () => {
@@ -105,11 +142,11 @@ describe('ElyonCore', () => {
   describe('fiscalizarConversoesPendentes', () => {
     it('retorna zerado quando não há contatos pendentes', async () => {
       mockPrisma.contato.findMany.mockResolvedValue([]);
+      mockPrisma.conversa.findMany.mockResolvedValue([]);
 
       const result = await core.fiscalizarConversoesPendentes();
 
       expect(result).toEqual({ analisadas: 0, convertidas: 0, erros: 0 });
-      expect(mockPrisma.conversa.findFirst).not.toHaveBeenCalled();
       expect(mockConverterExecute).not.toHaveBeenCalled();
     });
 
@@ -123,14 +160,17 @@ describe('ElyonCore', () => {
         },
       ]);
 
-      mockPrisma.conversa.findFirst.mockResolvedValue({
+      // Batch findMany retorna conversa associada ao contato-1
+      mockPrisma.conversa.findMany.mockResolvedValue([{
         id: 'conv-1',
+        leadId: 'contato-1',
+        lead: { telefone: '5511999991111' },
         mensagens: [
           { remetente: 'usuario', conteudo: 'Podemos agendar dia 10/03 às 10:30?' },
           { remetente: 'usuario', conteudo: 'Apartamento com 3 quartos' },
           { remetente: 'agente', conteudo: 'Perfeito' },
         ],
-      });
+      }]);
 
       const result = await core.fiscalizarConversoesPendentes();
 
@@ -156,6 +196,11 @@ describe('ElyonCore', () => {
     });
 
     it('não tenta converter quando não há sinais de fechamento', async () => {
+      // LLM retorna "NAO" — sem sinal de aceitação
+      mockOpenAICreate.mockResolvedValueOnce({
+        choices: [{ message: { content: 'NAO' } }],
+      });
+
       mockPrisma.contato.findMany.mockResolvedValue([
         {
           id: 'contato-2',
@@ -165,12 +210,14 @@ describe('ElyonCore', () => {
         },
       ]);
 
-      mockPrisma.conversa.findFirst.mockResolvedValue({
+      mockPrisma.conversa.findMany.mockResolvedValue([{
         id: 'conv-2',
+        leadId: 'contato-2',
+        lead: { telefone: '5511988887777' },
         mensagens: [
           { remetente: 'usuario', conteudo: 'Vou pensar e te aviso depois.' },
         ],
-      });
+      }]);
 
       const result = await core.fiscalizarConversoesPendentes();
 
@@ -189,10 +236,12 @@ describe('ElyonCore', () => {
         },
       ]);
 
-      mockPrisma.conversa.findFirst.mockResolvedValue({
+      mockPrisma.conversa.findMany.mockResolvedValue([{
         id: 'conv-3',
+        leadId: 'contato-3',
+        lead: { telefone: '5511977776666' },
         mensagens: [{ remetente: 'usuario', conteudo: 'Fechado, pode anunciar.' }],
-      });
+      }]);
 
       mockConverterExecute.mockRejectedValue(new Error('Erro conversão'));
 
@@ -201,7 +250,7 @@ describe('ElyonCore', () => {
       expect(result).toEqual({ analisadas: 1, convertidas: 0, erros: 1 });
     });
 
-    it('retorna parcialmente com erro quando análise de contato falha', async () => {
+    it('contabiliza erro quando LLM de avaliação falha e regex também não detecta', async () => {
       mockPrisma.contato.findMany.mockResolvedValue([
         {
           id: 'contato-4',
@@ -211,7 +260,14 @@ describe('ElyonCore', () => {
         },
       ]);
 
-      mockPrisma.conversa.findFirst.mockRejectedValue(new Error('Erro consulta conversa'));
+      mockPrisma.conversa.findMany.mockResolvedValue([{
+        id: 'conv-4',
+        leadId: 'contato-4',
+        lead: { telefone: '5511966665555' },
+        mensagens: [{ remetente: 'usuario', conteudo: 'Aceito a proposta, pode anunciar.' }],
+      }]);
+
+      mockConverterExecute.mockRejectedValueOnce(new Error('Erro conversão'));
 
       const result = await core.fiscalizarConversoesPendentes();
 

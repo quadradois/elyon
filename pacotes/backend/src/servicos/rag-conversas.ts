@@ -47,7 +47,7 @@ class RAGConversasService {
   private readonly MAX_CHUNKS_RETORNADOS = 5;
 
   // ✅ TASK-IA-02: Modelo configurável via BYOK do tenant
-  private modeloPadrao: string = 'gpt-4o';
+  private modeloPadrao: string = require('../agentes/byok-resolver').MODELO_PADRAO_AUXILIAR;
 
   /**
    * Configura o modelo de IA usado para extração de chunks.

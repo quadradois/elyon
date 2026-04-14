@@ -17,13 +17,13 @@ describe('getSharedBehavioralRules', () => {
     expect(rules).toContain('ESPELHAMENTO DE LINGUAGEM');
   });
 
-  it('inclui seção HANDOFF TRIGGER MATRIX com gatilhos PVAM', () => {
+  it('inclui seção de trigger matrix com gatilhos PVAM e regra de governança de fase', () => {
     const rules = getSharedBehavioralRules();
 
-    expect(rules).toContain('HANDOFF TRIGGER MATRIX');
-    expect(rules).toContain('converter_para_lead');
+    expect(rules).toContain('TRIGGER MATRIX DE PRIORIDADE');
     expect(rules).toContain('PVAM-M');
     expect(rules).toContain('PVAM-A');
     expect(rules).toContain('registrar_optout');
+    expect(rules).toContain('sem quebrar a ordem de fases');
   });
 });

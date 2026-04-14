@@ -200,6 +200,37 @@ describe('ConverterParaLeadUseCase', () => {
     );
   });
 
+  it('não persiste prazo/urgência com timeline sem marcador temporal confiável', async () => {
+    mockPrisma.contato.findUnique.mockResolvedValue({
+      id: 'contato-3b',
+      nome: 'Carlos',
+      telefone: '5511966666666',
+      email: null,
+      cpf: null,
+      endereco: 'Rua C',
+      campanhaId: 'camp-3',
+      criadoEm: new Date('2026-01-03'),
+      virouLead: false,
+      campanha: { tenantId: 'tenant-3' },
+    });
+
+    mockPrisma.lead.create.mockResolvedValue({ id: 'lead-3b' });
+    mockPrisma.contato.update.mockResolvedValue({});
+    mockPrisma.atividade.create.mockResolvedValue({});
+
+    const result = await useCase.execute({
+      contatoId: 'contato-3b',
+      temperatura: 'MORNO',
+      tipoInteresse: 'VENDA',
+      timeline: 'sem prazo definido',
+    });
+
+    expect(result.success).toBe(true);
+    const createArg = mockPrisma.lead.create.mock.calls[0][0];
+    expect(createArg.data.prazoDesejado).toBeUndefined();
+    expect(createArg.data.urgencia).toBeUndefined();
+  });
+
   it('retorna erro quando ocorre exceção na criação do lead', async () => {
     mockPrisma.contato.findUnique.mockResolvedValue({
       id: 'contato-4',

@@ -3,13 +3,15 @@ import { z } from 'zod';
 import { conhecimentoCuradoService } from '../servicos/conhecimento-curado';
 import { ragEmpreendimentos } from '../servicos/rag-empreendimentos';
 import { ElyonContext, criarModeloBYOK } from './elyon-context';
+import { MODELO_PADRAO_AUXILIAR } from './byok-resolver';
 import { logger } from '../lib/logger';
+import type { ElyonAgent } from './types';
 
 /**
  * AGENTE ESTRATEGISTA DE VENDAS (Sub-Agente de Conhecimento)
  * 
  * Especialista em psicologia de vendas, contorno de objeções e SPIN Selling.
- * Atua como um consultor interno para os agentes Opener, Presenter e Closer.
+ * Atua como um consultor interno para os agentes SDR e Admin.
  * 
  * @version 3.0 — conectado ao RAG de Empreendimentos (02/04/2026)
  */
@@ -20,7 +22,7 @@ const buscarConhecimentoInternoTool = tool({
     description: 'Busca na base de dados curada de táticas de venda imobiliária.',
     parameters: z.object({
         perguntaOuObjecao: z.string().describe('A dúvida ou objeção do lead'),
-        faseAtual: z.string().optional().describe('Fase do funil (Opener, Presenter, Closer)')
+        faseAtual: z.string().optional().describe('Fase do funil (SDR ou Admin)')
     }),
     execute: async (args) => {
         const resultados = await conhecimentoCuradoService.buscar({
@@ -59,7 +61,7 @@ Exemplos: "quanto custa?", "onde fica?", "tem varanda gourmet?", "quantos quarto
                 return "Nenhum empreendimento encontrado na base de dados. Oriente o agente a perguntar mais detalhes ao lead ou consultar o corretor responsável.";
             }
 
-            return JSON.stringify(resultados.map((r: any) => ({
+            return JSON.stringify(resultados.map((r: Record<string, unknown>) => ({
                 nome: r.nome,
                 localizacao: r.localizacao,
                 tipo: r.tipo,
@@ -70,7 +72,7 @@ Exemplos: "quanto custa?", "onde fica?", "tem varanda gourmet?", "quantos quarto
                 similaridade: r.similaridade,
             })));
         } catch (error) {
-            logger.warn("[erro capturado]");
+            logger.warn({ err: error }, '[KNOWLEDGE-AGENT] Erro ao buscar dados');
             return "Erro ao consultar base de empreendimentos. Continue a conversa normalmente.";
         }
     }
@@ -84,8 +86,8 @@ export function criarKnowledgeAgent(config?: {
     model?: string;
     apiKey?: string;
     baseUrl?: string;
-}): any {
-    const modelInstance = config ? criarModeloBYOK(config, 'gpt-4.1-mini') : 'gpt-4.1-mini';
+}): ElyonAgent {
+    const modelInstance = config ? criarModeloBYOK(config, MODELO_PADRAO_AUXILIAR) : MODELO_PADRAO_AUXILIAR;
 
     return new Agent<ElyonContext>({
         name: 'knowledge_agent',
@@ -111,4 +113,4 @@ export function criarKnowledgeAgent(config?: {
 }
 
 /** @deprecated Use criarKnowledgeAgent() — mantido para retrocompatibilidade */
-export const knowledgeAgent: any = criarKnowledgeAgent();
+export const knowledgeAgent: ElyonAgent = criarKnowledgeAgent();

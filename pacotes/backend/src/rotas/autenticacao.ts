@@ -5,6 +5,7 @@ import { prisma } from '../lib/db';
 import { compararSenha } from '../utilitarios/senha';
 import { gerarToken, gerarRefreshToken, validarRefreshToken, revogarRefreshToken } from '../utilitarios/token';
 import { verificarAdmin } from '../middleware/middleware-auth';
+import { ServicoAuditoria } from '../servicos/servico-auditoria';
 import { z } from 'zod';
 
 const router = Router();
@@ -13,6 +14,12 @@ const servicoAuth = new ServicoAutenticacao();
 router.post('/login', async (req, res) => {
   try {
     const resultado = await servicoAuth.login(req.body);
+    ServicoAuditoria.registrar({
+      tenantId: resultado.tenant?.id || 'GLOBAL',
+      usuarioId: resultado.usuario.id,
+      acao: 'LOGIN',
+      ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string
+    });
     res.json(resultado);
   } catch (erro: any) {
     responderErro(res, 401, 'Erro de validação ou processamento');
@@ -127,6 +134,14 @@ router.post('/admin-login', async (req, res) => {
       data: { ultimoLoginEm: new Date() }
     });
     
+    ServicoAuditoria.registrar({
+      tenantId: usuario.tenantId,
+      usuarioId: usuario.id,
+      acao: 'LOGIN',
+      entidade: 'SUPER_ADMIN',
+      ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string
+    });
+
     res.json({
       token,
       refreshToken,

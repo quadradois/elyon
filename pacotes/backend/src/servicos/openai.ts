@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { MODELO_PADRAO_AUXILIAR } from '../agentes/byok-resolver';
 
 export class OpenAIService {
   private getClient(apiKey?: string, baseURL?: string): OpenAI {
@@ -54,9 +55,9 @@ export class OpenAIService {
       const client = this.getClient(options?.apiKey, options?.baseURL);
       const completion = await client.chat.completions.create({
         messages: mensagens,
-        model: options?.model || 'gpt-4o-mini',
+        model: options?.model || MODELO_PADRAO_AUXILIAR,
         temperature: options?.temperature ?? 0.7,
-        max_tokens: options?.maxTokens,
+        max_completion_tokens: options?.maxTokens,
         response_format: options?.json ? { type: 'json_object' } : undefined
       });
 

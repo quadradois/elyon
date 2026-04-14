@@ -10,6 +10,11 @@ jest.mock('@openai/agents-openai', () => ({
   })),
 }));
 
+jest.mock('../byok-resolver', () => ({
+  MODELO_PADRAO_PRINCIPAL: 'gpt-4.1',
+  MODELO_PADRAO_AUXILIAR: 'gpt-4.1-mini',
+}));
+
 import { criarModeloBYOK } from '../elyon-context';
 import { OpenAI } from 'openai';
 import { OpenAIChatCompletionsModel } from '@openai/agents-openai';

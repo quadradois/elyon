@@ -30,7 +30,7 @@ describe('resolverAgentePersistido', () => {
     expect(atualizarUltimoAgente).toHaveBeenCalledWith('contato-1', 'ADMIN');
   });
 
-  it('mapeia nome do SDK para tipo interno', async () => {
+  it('mapeia nome do SDK para tipo interno (presenter_agent_v4 → SDR)', async () => {
     const getLastAgentFn = jest.fn().mockResolvedValue('presenter_agent_v4');
     const atualizarUltimoAgente = jest.fn();
 
@@ -40,11 +40,11 @@ describe('resolverAgentePersistido', () => {
       atualizarUltimoAgente,
     });
 
-    expect(result).toBe('PRESENTER');
-    expect(atualizarUltimoAgente).toHaveBeenCalledWith('contato-1', 'PRESENTER');
+    expect(result).toBe('SDR');
+    expect(atualizarUltimoAgente).toHaveBeenCalledWith('contato-1', 'SDR');
   });
 
-  it('migra CLOSER legado para PRESENTER', async () => {
+  it('migra CLOSER legado para SDR', async () => {
     const getLastAgentFn = jest.fn().mockResolvedValue('CLOSER');
     const atualizarUltimoAgente = jest.fn();
 
@@ -54,8 +54,8 @@ describe('resolverAgentePersistido', () => {
       atualizarUltimoAgente,
     });
 
-    expect(result).toBe('PRESENTER');
-    expect(atualizarUltimoAgente).toHaveBeenCalledWith('contato-1', 'PRESENTER');
+    expect(result).toBe('SDR');
+    expect(atualizarUltimoAgente).toHaveBeenCalledWith('contato-1', 'SDR');
   });
 
   it('retorna undefined para valor não reconhecido', async () => {
