@@ -5,6 +5,24 @@ Todas as mudanças notáveis deste projeto serão documentadas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.2.3] - 2026-04-14
+
+### Melhorado
+- Cadência de follow-up de prospecção ativa refinada para maior velocidade comercial:
+  - 1º follow-up em **2 horas** após a primeira mensagem sem resposta.
+  - 2º follow-up em **24 horas** após o primeiro follow-up.
+  - Tentativas adicionais mantidas com janela em dias (configurável).
+- Motor de disparo atualizado com parâmetros configuráveis por campanha para janelas de follow-up:
+  - `horasEntrePrimeiroFollowup`
+  - `horasEntreSegundoFollowup`
+  - `diasEntreTentativas`
+
+### Alterado
+- Templates de follow-up ajustados para mensagens mais curtas e objetivas no WhatsApp.
+
+### Adicionado
+- Teste dedicado da cadência de follow-up em `disparo-campanha.followup.test.ts` para evitar regressões.
+
 ## [0.2.2] - 2026-03-04
 
 ### Refatorado
@@ -95,4 +113,5 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 [0.2.0]: https://github.com/quadradois/elyon/compare/v0.1.0...v0.2.0
 [0.2.1]: https://github.com/quadradois/elyon/compare/v0.2.0...v0.2.1
 [0.2.2]: https://github.com/quadradois/elyon/compare/v0.2.1...v0.2.2
+[0.2.3]: https://github.com/quadradois/elyon/compare/v0.2.2...v0.2.3
 [0.1.0]: https://github.com/quadradois/elyon/releases/tag/v0.1.0

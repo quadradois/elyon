@@ -73,6 +73,8 @@ const CONFIG_PADRAO = {
 
   // Limites
   MAX_TENTATIVAS: 3,
+  HORAS_ENTRE_PRIMEIRO_FOLLOWUP: 2, // 1º follow-up: 2h após primeira mensagem
+  HORAS_ENTRE_SEGUNDO_FOLLOWUP: 24, // 2º follow-up: 24h após o primeiro follow-up
   DIAS_ENTRE_TENTATIVAS: 2, // Esperar 2 dias entre follow-ups
 
   // Tamanho do lote
@@ -103,6 +105,9 @@ interface ConfigDisparo {
   mensagensPorMinuto?: number;
   atrasoEntreMensagens?: number;
   maxTentativas?: number;
+  horasEntrePrimeiroFollowup?: number;
+  horasEntreSegundoFollowup?: number;
+  diasEntreTentativas?: number;
   horarioInicio?: string;
   horarioFim?: string;
   diasSemana?: string[];
@@ -237,12 +242,35 @@ function calcularTempoAteProximaJanela(config: ConfigDisparo): number {
  */
 function podeEnviarFollowUp(contato: Contato, maxTentativas: number = CONFIG_PADRAO.MAX_TENTATIVAS): boolean {
   if (!contato.ultimaTentativa) return true;
+  if (contato.tentativasContato >= maxTentativas) return false;
+
+  // Primeiro follow-up (tentativa 2): janela curta de 2 horas
+  if (contato.tentativasContato === 1) {
+    const horasDesdeUltima = (Date.now() - contato.ultimaTentativa.getTime()) / (1000 * 60 * 60);
+    return horasDesdeUltima >= CONFIG_PADRAO.HORAS_ENTRE_PRIMEIRO_FOLLOWUP;
+  }
+
+  // Segundo follow-up (tentativa 3): 24 horas após o primeiro follow-up
+  if (contato.tentativasContato === 2) {
+    const horasDesdeUltima = (Date.now() - contato.ultimaTentativa.getTime()) / (1000 * 60 * 60);
+    return horasDesdeUltima >= CONFIG_PADRAO.HORAS_ENTRE_SEGUNDO_FOLLOWUP;
+  }
 
   const diasDesdeUltima = Math.floor(
     (Date.now() - contato.ultimaTentativa.getTime()) / (1000 * 60 * 60 * 24)
   );
 
   return diasDesdeUltima >= CONFIG_PADRAO.DIAS_ENTRE_TENTATIVAS;
+}
+
+/**
+ * Retorna a janela mínima (em horas) entre tentativas, de acordo com a tentativa anterior.
+ * tentativasContato=1 => 2h, tentativasContato=2 => 24h, demais => dias configurados.
+ */
+export function obterAtrasoMinimoFollowupHoras(tentativasContato: number): number {
+  if (tentativasContato <= 1) return CONFIG_PADRAO.HORAS_ENTRE_PRIMEIRO_FOLLOWUP;
+  if (tentativasContato === 2) return CONFIG_PADRAO.HORAS_ENTRE_SEGUNDO_FOLLOWUP;
+  return CONFIG_PADRAO.DIAS_ENTRE_TENTATIVAS * 24;
 }
 
 /**
@@ -324,7 +352,8 @@ export class DisparoCampanhaService {
   async buscarContatosParaDisparo(
     campanhaId: string,
     limite: number = CONFIG_PADRAO.TAMANHO_LOTE,
-    maxTentativas: number = CONFIG_PADRAO.MAX_TENTATIVAS
+    maxTentativas: number = CONFIG_PADRAO.MAX_TENTATIVAS,
+    configFollowup?: Pick<ConfigDisparo, 'horasEntrePrimeiroFollowup' | 'horasEntreSegundoFollowup' | 'diasEntreTentativas'>
   ): Promise<Contato[]> {
     // Contatos AGUARDANDO (nunca contatados)
     const aguardando = await prisma.contato.findMany({
@@ -344,8 +373,22 @@ export class DisparoCampanhaService {
 
     // Se não tiver suficiente, buscar para follow-up
     const restante = limite - aguardando.length;
-    const dataLimite = new Date();
-    dataLimite.setDate(dataLimite.getDate() - CONFIG_PADRAO.DIAS_ENTRE_TENTATIVAS);
+    const horasPrimeiroFollowup = configFollowup?.horasEntrePrimeiroFollowup ?? CONFIG_PADRAO.HORAS_ENTRE_PRIMEIRO_FOLLOWUP;
+    const horasSegundoFollowup = configFollowup?.horasEntreSegundoFollowup ?? CONFIG_PADRAO.HORAS_ENTRE_SEGUNDO_FOLLOWUP;
+    const diasDemaisFollowups = configFollowup?.diasEntreTentativas ?? CONFIG_PADRAO.DIAS_ENTRE_TENTATIVAS;
+
+    const dataLimitePrimeiroFollowup = new Date();
+    dataLimitePrimeiroFollowup.setHours(
+      dataLimitePrimeiroFollowup.getHours() - horasPrimeiroFollowup
+    );
+    const dataLimiteSegundoFollowup = new Date();
+    dataLimiteSegundoFollowup.setHours(
+      dataLimiteSegundoFollowup.getHours() - horasSegundoFollowup
+    );
+    const dataLimiteDemaisFollowups = new Date();
+    dataLimiteDemaisFollowups.setDate(
+      dataLimiteDemaisFollowups.getDate() - diasDemaisFollowups
+    );
 
     const paraFollowUp = await prisma.contato.findMany({
       where: {
@@ -353,7 +396,19 @@ export class DisparoCampanhaService {
         statusProspeccao: 'CONTATANDO',
         respondeu: false,
         tentativasContato: { lt: maxTentativas },
-        ultimaTentativa: { lt: dataLimite },
+        OR: [
+          {
+            tentativasContato: 1,
+            ultimaTentativa: { lt: dataLimitePrimeiroFollowup },
+          },
+          {
+            tentativasContato: { gt: 1 },
+            OR: [
+              { tentativasContato: 2, ultimaTentativa: { lt: dataLimiteSegundoFollowup } },
+              { tentativasContato: { gt: 2 }, ultimaTentativa: { lt: dataLimiteDemaisFollowups } },
+            ],
+          },
+        ],
         telefone: { not: null },
         modoAtendimento: 'IA'
       },
@@ -426,12 +481,36 @@ export class DisparoCampanhaService {
       }
 
       // 🆕 Buscar sessão WhatsApp ativa do tenant
-      const sessao = await prisma.sessaoWhatsapp.findFirst({
+      let sessao = await prisma.sessaoWhatsapp.findFirst({
         where: {
           tenantId: tenantId,
           status: 'CONECTADO'
         }
       });
+
+      // Fallback: se não achou CONECTADO no DB, verificar na Evolution API
+      // (protege contra status stale — DB diz CONECTANDO mas Evolution está open)
+      if (!sessao) {
+        const sessaoCandidata = await prisma.sessaoWhatsapp.findFirst({
+          where: { tenantId: tenantId, status: { in: ['CONECTANDO', 'DESCONECTADO'] } }
+        });
+        if (sessaoCandidata) {
+          try {
+            const service = getWhatsAppService(sessaoCandidata.instanceName);
+            const statusReal = await service.verificarStatus();
+            if (statusReal?.instance?.state === 'open') {
+              await prisma.sessaoWhatsapp.update({
+                where: { id: sessaoCandidata.id },
+                data: { status: 'CONECTADO', ultimoStatus: new Date() }
+              });
+              sessao = { ...sessaoCandidata, status: 'CONECTADO' } as typeof sessaoCandidata;
+              console.log(`[Disparo] 🔄 Sessão ${sessaoCandidata.instanceName} status corrigido: ${sessaoCandidata.status} → CONECTADO`);
+            }
+          } catch (evoErr) {
+            console.warn(`[Disparo] ⚠️ Erro ao verificar Evolution para ${sessaoCandidata.instanceName}:`, evoErr);
+          }
+        }
+      }
 
       if (!sessao) {
         console.log(`[Disparo] ⚠️ Nenhuma sessão WhatsApp conectada para tenant ${tenantId}`);
@@ -597,7 +676,16 @@ export class DisparoCampanhaService {
     const maxTentativas = config.maxTentativas || CONFIG_PADRAO.MAX_TENTATIVAS;
 
     // Buscar contatos elegíveis
-    const contatos = await this.buscarContatosParaDisparo(campanhaId, mensagensPorMinuto, maxTentativas);
+    const contatos = await this.buscarContatosParaDisparo(
+      campanhaId,
+      mensagensPorMinuto,
+      maxTentativas,
+      {
+        horasEntrePrimeiroFollowup: config.horasEntrePrimeiroFollowup,
+        horasEntreSegundoFollowup: config.horasEntreSegundoFollowup,
+        diasEntreTentativas: config.diasEntreTentativas,
+      }
+    );
 
     if (contatos.length === 0) {
       const status = await this.obterStatusCampanha(campanhaId);

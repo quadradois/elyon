@@ -80,13 +80,13 @@ Faz sentido pra você? Sem compromisso 🙏`
 
 export const FOLLOWUP_1: TemplateProspeccao = {
   id: 'fu1_v2',
-  nome: 'Follow-up 48h — Mensagem perdida',
-  descricao: 'Enviado 2-3 dias após primeira mensagem sem resposta',
+  nome: 'Follow-up 2h — Mensagem perdida',
+  descricao: 'Enviado cerca de 2h após primeira mensagem sem resposta',
   tipo: 'FOLLOWUP_1',
   variaveis: ['nome', 'empreendimento'],
-  mensagem: `Oi, {nome}! Tudo bem? 😊
+  mensagem: `Oi, {nome}! 😊
 
-Vi que minha mensagem pode ter se perdido. Só queria fazer uma pergunta rápida sobre seu imóvel no {empreendimento} — tem 1 minutinho?`
+Passando rapidinho: minha mensagem sobre o imóvel no {empreendimento} chegou pra você?`
 };
 
 export const FOLLOWUP_2: TemplateProspeccao = {
@@ -95,11 +95,9 @@ export const FOLLOWUP_2: TemplateProspeccao = {
   descricao: 'Última tentativa. Se ignorar, encerrar o contato.',
   tipo: 'FOLLOWUP_2',
   variaveis: ['nome', 'empreendimento'],
-  mensagem: `{nome}, só pra fechar por aqui! 😊
+  mensagem: `{nome}, tudo bem? 😊 Só pra fechar por aqui:
 
-Caso no futuro pense em vender ou alugar seu imóvel no {empreendimento}, pode me chamar sem compromisso.
-
-Desejo uma ótima semana! 🙏`
+Se fizer sentido, posso te chamar outro dia sobre seu imóvel no {empreendimento}. Prefere que eu retome depois?`
 };
 
 // ============================================

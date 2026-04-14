@@ -1,12 +1,14 @@
 {
   "name": "@elyon/backend",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "scripts": {
     "dev": "tsx watch src/servidor.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/servidor.js",
     "test": "jest",
+    "test:governanca:release": "bash ./scripts/gov-release-gate.sh",
+    "test:governanca:release:full": "bash ./scripts/gov-release-gate.sh --full",
     "test:watch": "jest --watch",
     "migrar": "prisma migrate dev",
     "migrar:deploy": "prisma migrate deploy",
@@ -32,6 +34,7 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rate-limit": "^8.3.1",
+    "googleapis": "^171.4.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
