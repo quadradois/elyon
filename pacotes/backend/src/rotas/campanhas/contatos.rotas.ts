@@ -1263,6 +1263,93 @@ router.post('/:id/limpar-todos-historicos', async (req, res) => {
 // ============================================
 
 /**
+ * POST /:id/contatos/controle-envio
+ * Controle em massa da elegibilidade de envio na campanha
+ */
+router.post('/:id/contatos/controle-envio', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tenantId = getTenantId(req);
+
+    const campanha = await verificarCampanhaTenant(id, tenantId);
+    if (campanha === null) {
+      return responderErro(res, 404, 'Campanha não encontrada');
+    }
+    if (campanha === 'forbidden') {
+      return responderErro(res, 403, 'Acesso negado');
+    }
+
+    const schema = z.object({
+      acao: z.enum(['pausar', 'reincluir-ia', 'assumir-humano']),
+      contatoIds: z.array(z.string()).optional(),
+      statusProspeccao: z.array(z.string()).optional(),
+      atendente: z.string().optional(),
+      motivo: z.string().optional()
+    });
+
+    const { acao, contatoIds, statusProspeccao, atendente, motivo } = schema.parse(req.body || {});
+
+    const where: Record<string, any> = {
+      campanhaId: id,
+    };
+
+    if (contatoIds && contatoIds.length > 0) {
+      where.id = { in: contatoIds };
+    }
+
+    if (statusProspeccao && statusProspeccao.length > 0) {
+      where.statusProspeccao = { in: statusProspeccao };
+    }
+
+    let data: Record<string, any>;
+    let mensagem = '';
+
+    if (acao === 'pausar') {
+      data = {
+        modoAtendimento: 'PAUSADO',
+        pausadoEm: new Date(),
+        motivoPausa: motivo || 'Pausa operacional em massa'
+      };
+      mensagem = 'Contatos pausados para envio automático';
+    } else if (acao === 'reincluir-ia') {
+      data = {
+        modoAtendimento: 'IA',
+        atendidoPor: null,
+        pausadoEm: null,
+        motivoPausa: null
+      };
+      mensagem = 'Contatos reincluídos no envio automático';
+    } else {
+      data = {
+        modoAtendimento: 'HUMANO',
+        atendidoPor: atendente || 'Corretor',
+        pausadoEm: new Date(),
+        motivoPausa: motivo || 'Atendimento manual em massa'
+      };
+      mensagem = 'Contatos transferidos para atendimento humano';
+    }
+
+    const resultado = await prisma.contato.updateMany({
+      where,
+      data
+    });
+
+    return res.json({
+      sucesso: true,
+      mensagem,
+      acao,
+      contatosAfetados: resultado.count
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return responderErro(res, 400, 'Dados inválidos', { detalhes: error.errors });
+    }
+    logger.error('Erro');
+    return responderErro(res, 500, 'Erro ao aplicar controle de envio em massa');
+  }
+});
+
+/**
  * POST /:id/contatos/:contatoId/assumir-humano
  * Corretor assume a conversa - pausa o SDR
  */

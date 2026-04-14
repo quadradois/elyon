@@ -121,6 +121,42 @@ export interface Lead {
     // Briefing IA (Dossiê do Closer)
     briefingCloser?: string | null;
 
+    // Dados avançados do imóvel (onboarding/admin)
+    imovelDetalhes?: {
+        suites?: number | null;
+        banheiros?: number | null;
+        areaTotal?: number | null;
+        andar?: number | null;
+        caracteristicas?: string[];
+        descricao?: string | null;
+        fotos?: string[];
+        valorLocacao?: number | null;
+        valorCondominio?: number | null;
+        valorIPTU?: number | null;
+        coletadosEm?: string | null;
+    };
+
+    // Status de integração CRM para o lead
+    crm?: {
+        proprietarioId?: number | null;
+        propertyId?: number | null;
+        propertyCode?: string | null;
+        syncStatus?: string | null;
+        syncError?: string | null;
+        enviadoEm?: string | null;
+    };
+
+    // Imóveis relacionados da mineração
+    imoveisMineracao?: Array<{
+        id: string;
+        endereco: string;
+        tipo: string | null;
+        area: number | null;
+        edificio: string | null;
+        apartamento: string | null;
+        statusCaptacao: string | null;
+    }>;
+
     // Relacionamentos
     atividades: Atividade[];
     conversas: Conversa[];

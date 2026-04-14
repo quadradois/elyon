@@ -27,14 +27,14 @@ router.get('/', verificarAutenticacao, async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, error: 'Tenant ID obrigatório' });
         }
 
-        const integracoes = await prisma.configuracaoIntegracao.findMany({
+        const integracoesRaw = await prisma.configuracaoIntegracao.findMany({
             where: { tenantId },
             select: {
                 id: true,
                 tipo: true,
                 nome: true,
                 apiUrl: true,
-                // Não retorna apiKeyCriptografada por segurança
+                apiKeyCriptografada: true,
                 tenantIdDestino: true,
                 ativo: true,
                 ultimoTesteEm: true,
@@ -47,6 +47,14 @@ router.get('/', verificarAutenticacao, async (req: Request, res: Response) => {
                 criadoEm: true,
                 atualizadoEm: true
             }
+        });
+
+        const integracoes = integracoesRaw.map((integracao) => {
+            const { apiKeyCriptografada, ...resto } = integracao;
+            return {
+                ...resto,
+                temApiKey: Boolean(apiKeyCriptografada)
+            };
         });
 
         return res.json({

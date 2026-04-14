@@ -137,7 +137,7 @@ export function CampanhaDetalhes() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
+      <div className="mx-auto w-full max-w-[1440px] px-2 md:px-4 flex justify-center items-center h-96">
         <Loader2 className="w-8 h-8 animate-spin text-brand" />
       </div>
     );
@@ -145,7 +145,7 @@ export function CampanhaDetalhes() {
 
   if (erro || !campanha) {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto w-full max-w-[1440px] px-2 md:px-4 space-y-4">
         <Button
           variant="ghost"
           onClick={() => navigate("/dashboard/campanhas")}
@@ -166,9 +166,10 @@ export function CampanhaDetalhes() {
   const confiabilidade = parseFloat(campanha.briefingConfiabilidade || "0");
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-[1440px] px-2 md:px-4 space-y-5 md:space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-indigo-50/70 p-4 md:p-6 card-premium">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="space-y-1">
           <Button
             variant="ghost"
@@ -179,9 +180,9 @@ export function CampanhaDetalhes() {
             Voltar para Campanhas
           </Button>
           <h1 className="text-2xl font-bold text-slate-900">{campanha.nome}</h1>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span
-              className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(campanha.status)}`}
+              className={`px-3 py-1 rounded-full text-xs font-medium border badge-pulse ${getStatusColor(campanha.status)}`}
             >
               {campanha.status}
             </span>
@@ -194,7 +195,7 @@ export function CampanhaDetalhes() {
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 xl:justify-end">
           {/* Botão Importar de Lista */}
           <Button 
             variant="outline" 
@@ -218,9 +219,9 @@ export function CampanhaDetalhes() {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[550px]">
               <DialogHeader>
-                <DialogTitle>Importar Contatos</DialogTitle>
+                <DialogTitle>Importar contatos</DialogTitle>
                 <DialogDescription>
-                  Importe contatos via arquivo CSV ou cole manualmente.
+                  Envie sua base por CSV ou cole os contatos manualmente.
                 </DialogDescription>
               </DialogHeader>
               
@@ -265,7 +266,7 @@ export function CampanhaDetalhes() {
                 ) : (
                   <div className="space-y-4">
                     <p className="text-sm text-slate-600">
-                      Cole sua lista no formato: <strong>Nome, Telefone</strong> (um por linha)
+                      Cole no formato <strong>Nome, Telefone</strong> (um contato por linha).
                     </p>
                     <textarea
                       className="w-full h-48 p-3 border rounded-md font-mono text-sm focus:ring-2 focus:ring-brand focus:outline-none"
@@ -287,7 +288,7 @@ export function CampanhaDetalhes() {
                             Importando...
                           </>
                         ) : (
-                          "Importar Contatos"
+                          "Importar contatos"
                         )}
                       </Button>
                     </DialogFooter>
@@ -339,13 +340,15 @@ export function CampanhaDetalhes() {
           </Button>
         </div>
       </div>
+      </div>
 
       {/* Métricas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+        <Card className="card-premium border-slate-200/90">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-slate-600">
+            <CardTitle className="text-sm font-medium text-slate-600 flex items-center justify-between">
               Total de Contatos
+              <Users className="w-4 h-4 text-brand" />
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -353,15 +356,16 @@ export function CampanhaDetalhes() {
               <span className="text-3xl font-bold text-slate-900">
                 {campanha.totalContatos}
               </span>
-              <Users className="w-8 h-8 text-brand" />
+              <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">Base ativa</span>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="card-premium border-emerald-200/80 bg-gradient-to-br from-white to-emerald-50/60">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-slate-600">
+            <CardTitle className="text-sm font-medium text-slate-600 flex items-center justify-between">
               Leads Qualificados
+              <Target className="w-4 h-4 text-emerald-600" />
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -369,20 +373,21 @@ export function CampanhaDetalhes() {
               <span className="text-3xl font-bold text-slate-900">
                 {campanha.totalLeads}
               </span>
-              <Target className="w-8 h-8 text-emerald-600" />
+              <span className="text-xs text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full">Qualificação</span>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="card-premium border-violet-200/80 bg-gradient-to-br from-white to-violet-50/60">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-slate-600">
+            <CardTitle className="text-sm font-medium text-slate-600 flex items-center justify-between">
               Taxa de Conversão
+              <TrendingUp className="w-4 h-4 text-violet-600" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <span className="text-3xl font-bold text-slate-900">
+              <span className="text-3xl font-bold text-slate-900 gradient-text">
                 {campanha.totalContatos > 0
                   ? Math.round(
                       (campanha.totalLeads / campanha.totalContatos) * 100
@@ -390,21 +395,21 @@ export function CampanhaDetalhes() {
                   : 0}
                 %
               </span>
-              <TrendingUp className="w-8 h-8 text-violet-600" />
+              <span className="text-xs text-violet-700 bg-violet-100 px-2 py-1 rounded-full">Eficiência</span>
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Abas */}
-      <div className="border-b border-slate-200">
-        <nav className="flex gap-4" aria-label="Tabs">
+      <div className="rounded-xl border border-slate-200 bg-white p-1.5 card-premium">
+        <nav className="flex gap-1 overflow-x-auto" aria-label="Tabs">
           <button
             onClick={() => setAbaAtiva('visao-geral')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               abaAtiva === 'visao-geral' 
-                ? 'border-brand text-brand' 
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                ? 'bg-indigo-50 text-brand shadow-sm' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
             }`}
           >
             <span className="flex items-center gap-2">
@@ -414,10 +419,10 @@ export function CampanhaDetalhes() {
           </button>
           <button
             onClick={() => setAbaAtiva('contatos')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               abaAtiva === 'contatos' 
-                ? 'border-brand text-brand' 
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                ? 'bg-indigo-50 text-brand shadow-sm' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
             }`}
           >
             <span className="flex items-center gap-2">
@@ -432,10 +437,10 @@ export function CampanhaDetalhes() {
           </button>
           <button
             onClick={() => setAbaAtiva('empreendimento')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               abaAtiva === 'empreendimento' 
-                ? 'border-brand text-brand' 
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                ? 'bg-indigo-50 text-brand shadow-sm' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
             }`}
           >
             <span className="flex items-center gap-2">
@@ -445,10 +450,10 @@ export function CampanhaDetalhes() {
           </button>
           <button
             onClick={() => setAbaAtiva('disparos')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
               abaAtiva === 'disparos' 
-                ? 'border-brand text-brand' 
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                ? 'bg-indigo-50 text-brand shadow-sm' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
             }`}
           >
             <span className="flex items-center gap-2">
@@ -463,28 +468,32 @@ export function CampanhaDetalhes() {
       
       {/* ABA: Visão Geral */}
       {abaAtiva === 'visao-geral' && (
-        <AbaVisaoGeral 
-          campanha={campanha} 
-          estatisticasContatos={estatisticasContatos} 
-        />
+        <div className="animate-fade-in">
+          <AbaVisaoGeral 
+            campanha={campanha} 
+            estatisticasContatos={estatisticasContatos} 
+          />
+        </div>
       )}
 
       {/* ABA: Contatos */}
       {abaAtiva === 'contatos' && (
-        <AbaContatos
-          contatos={contatos}
-          loadingContatos={loadingContatos}
-          paginaAtual={paginaAtual}
-          totalContatos={totalContatos}
-          totalPaginas={totalPaginas}
-          filtroStatus={filtroStatus}
-          campanhaId={id || ''}
-          onFiltroChange={(status) => { setFiltroStatus(status); setPaginaAtual(1); }}
-          onPaginaChange={setPaginaAtual}
-          onExportar={exportarContatos}
-          onVerContato={(contatoId) => navigate(`/dashboard/campanhas/${id}/contatos/${contatoId}`)}
-          onRecarregar={carregarContatos}
-        />
+        <div className="animate-fade-in">
+          <AbaContatos
+            contatos={contatos}
+            loadingContatos={loadingContatos}
+            paginaAtual={paginaAtual}
+            totalContatos={totalContatos}
+            totalPaginas={totalPaginas}
+            filtroStatus={filtroStatus}
+            campanhaId={id || ''}
+            onFiltroChange={(status) => { setFiltroStatus(status); setPaginaAtual(1); }}
+            onPaginaChange={setPaginaAtual}
+            onExportar={exportarContatos}
+            onVerContato={(contatoId) => navigate(`/dashboard/campanhas/${id}/contatos/${contatoId}`)}
+            onRecarregar={carregarContatos}
+          />
+        </div>
       )}
 
       {/* ABA: Empreendimento - Editor Completo */}
@@ -541,11 +550,13 @@ export function CampanhaDetalhes() {
 
       {/* ABA: Disparos - Controle de Prospecção Ativa */}
       {abaAtiva === 'disparos' && (
-        <PainelDisparo
-          campanhaId={id || ''}
-          campanhaStatus={campanha.status}
-          onStatusChange={carregarCampanha}
-        />
+        <div className="animate-fade-in">
+          <PainelDisparo
+            campanhaId={id || ''}
+            campanhaStatus={campanha.status}
+            onStatusChange={carregarCampanha}
+          />
+        </div>
       )}
 
       {/* Modal de Importar de Lista */}

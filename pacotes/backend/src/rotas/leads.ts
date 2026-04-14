@@ -1,9 +1,12 @@
 import { responderErro } from '../utilitarios/resposta';
 import { Router, Request } from 'express';
 import { prisma } from '../lib/db';
+import { TipoIntegracao } from '@prisma/client';
 import crypto from 'crypto';
 import { getTenantId } from '../utils/tenant';
 import { cascadeDeleteLeads } from '../utils/cascade-delete';
+import { enviarParaCrm, reenviarParaCrm, verificarStatusCrm } from '../servicos/crm-service';
+import { ServicoAuditoria } from '../servicos/servico-auditoria';
 import {
   camposCriticosFaltantes,
   extrairFieldSources,
@@ -155,6 +158,149 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Erro ao listar leads:', error);
     responderErro(res, 500, 'Erro interno ao listar leads');
+  }
+});
+
+// ============================================
+// GET /api/leads/cockpit-metricas - Painel executivo consolidado do cockpit
+// ============================================
+router.get('/cockpit-metricas', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
+    const periodoParam = Number(req.query.periodoDias || 30);
+    const periodoDias = Number.isFinite(periodoParam) ? Math.min(365, Math.max(1, periodoParam)) : 30;
+    const dataInicio = new Date(Date.now() - (periodoDias * 24 * 60 * 60 * 1000));
+
+    const logs = await prisma.logAuditoria.findMany({
+      where: {
+        tenantId,
+        acao: { startsWith: 'COCKPIT_' },
+        criadoEm: { gte: dataInicio }
+      },
+      orderBy: { criadoEm: 'desc' },
+      take: 5000,
+      include: {
+        usuario: {
+          select: { id: true, nome: true, email: true }
+        }
+      }
+    });
+
+    const eventos = logs.map((log) => ({
+      acao: log.acao,
+      detalhes: (log.detalhes || {}) as any,
+      criadoEm: log.criadoEm,
+      usuario: log.usuario || null,
+    }));
+
+    const resultados = eventos.filter((e) => e.acao === 'COCKPIT_DECISAO_RESULTADO' || e.acao === 'COCKPIT_CRM_RESULTADO');
+    const sucessos = resultados.filter((e) => e.detalhes?.sucesso === true);
+
+    const funil = {
+      cliquesDecisao: eventos.filter((e) => e.acao === 'COCKPIT_DECISAO_CLICK').length,
+      acoesCrm: eventos.filter((e) => e.acao === 'COCKPIT_CRM_ACAO').length,
+      resultadosDecisao: eventos.filter((e) => e.acao === 'COCKPIT_DECISAO_RESULTADO').length,
+      resultadosCrm: eventos.filter((e) => e.acao === 'COCKPIT_CRM_RESULTADO').length,
+      sucessosDecisao: eventos.filter((e) => e.acao === 'COCKPIT_DECISAO_RESULTADO' && e.detalhes?.sucesso === true).length,
+      sucessosCrm: eventos.filter((e) => e.acao === 'COCKPIT_CRM_RESULTADO' && e.detalhes?.sucesso === true).length,
+    };
+
+    const porUsuario = new Map<string, {
+      usuarioId: string;
+      nome: string;
+      email: string;
+      totalAcoes: number;
+      totalResultados: number;
+      totalSucessos: number;
+    }>();
+
+    const porAcao = new Map<string, {
+      acao: string;
+      totalAcoes: number;
+      totalResultados: number;
+      totalSucessos: number;
+    }>();
+
+    for (const evento of eventos) {
+      const usuarioId = evento.usuario?.id || 'sistema';
+      const nome = evento.usuario?.nome || 'Sistema';
+      const email = evento.usuario?.email || 'sistema@elyon.local';
+      const tipoAcao = String(evento.detalhes?.acao || evento.detalhes?.tipo || 'geral');
+
+      const registroUsuario = porUsuario.get(usuarioId) || {
+        usuarioId,
+        nome,
+        email,
+        totalAcoes: 0,
+        totalResultados: 0,
+        totalSucessos: 0,
+      };
+
+      const registroAcao = porAcao.get(tipoAcao) || {
+        acao: tipoAcao,
+        totalAcoes: 0,
+        totalResultados: 0,
+        totalSucessos: 0,
+      };
+
+      if (evento.acao === 'COCKPIT_DECISAO_CLICK' || evento.acao === 'COCKPIT_CRM_ACAO') {
+        registroUsuario.totalAcoes += 1;
+        registroAcao.totalAcoes += 1;
+      }
+
+      if (evento.acao === 'COCKPIT_DECISAO_RESULTADO' || evento.acao === 'COCKPIT_CRM_RESULTADO') {
+        registroUsuario.totalResultados += 1;
+        registroAcao.totalResultados += 1;
+        if (evento.detalhes?.sucesso === true) {
+          registroUsuario.totalSucessos += 1;
+          registroAcao.totalSucessos += 1;
+        }
+      }
+
+      porUsuario.set(usuarioId, registroUsuario);
+      porAcao.set(tipoAcao, registroAcao);
+    }
+
+    const rankingUsuarios = Array.from(porUsuario.values())
+      .map((item) => ({
+        ...item,
+        taxaSucesso: item.totalResultados > 0
+          ? Math.round((item.totalSucessos / item.totalResultados) * 100)
+          : 0
+      }))
+      .sort((a, b) => b.totalSucessos - a.totalSucessos || b.totalResultados - a.totalResultados)
+      .slice(0, 8);
+
+    const rankingAcoes = Array.from(porAcao.values())
+      .map((item) => ({
+        ...item,
+        taxaSucesso: item.totalResultados > 0
+          ? Math.round((item.totalSucessos / item.totalResultados) * 100)
+          : 0
+      }))
+      .sort((a, b) => b.totalResultados - a.totalResultados || b.totalAcoes - a.totalAcoes)
+      .slice(0, 10);
+
+    return res.json({
+      sucesso: true,
+      periodoDias,
+      totalEventos: eventos.length,
+      totalResultados: resultados.length,
+      totalSucessos: sucessos.length,
+      taxaSucesso: resultados.length > 0
+        ? Math.round((sucessos.length / resultados.length) * 100)
+        : 0,
+      funil,
+      rankingUsuarios,
+      rankingAcoes,
+    });
+  } catch (error) {
+    console.error('Erro ao buscar métricas executivas do cockpit:', error);
+    responderErro(res, 500, 'Erro interno ao buscar métricas executivas');
   }
 });
 
@@ -576,6 +722,31 @@ router.get('/:id', async (req, res) => {
       // Briefing IA (Dossiê do Closer gerado no handoff)
       briefingCloser: l.briefingCloser,
 
+      // Dados avançados do imóvel (onboarding/admin)
+      imovelDetalhes: {
+        suites: l.imovelSuites,
+        banheiros: l.imovelBanheiros,
+        areaTotal: l.imovelAreaTotal,
+        andar: l.imovelAndar,
+        caracteristicas: l.imovelCaracteristicas || [],
+        descricao: l.imovelDescricao,
+        fotos: l.imovelFotos || [],
+        valorLocacao: l.imovelValorLocacao,
+        valorCondominio: l.imovelValorCondominio,
+        valorIPTU: l.imovelValorIPTU,
+        coletadosEm: l.dadosImovelColetadosEm,
+      },
+
+      // Status de integração CRM (Quadra Dois)
+      crm: {
+        proprietarioId: l.crmProprietarioId,
+        propertyId: l.crmPropertyId,
+        propertyCode: l.crmPropertyCode,
+        syncStatus: l.crmSyncStatus,
+        syncError: l.crmSyncError,
+        enviadoEm: l.enviadoParaCrmEm,
+      },
+
       // Imóveis relacionados (da mineração)
       imoveisMineracao: l.imoveis.map((imovel: any) => ({
         id: imovel.id,
@@ -638,6 +809,331 @@ router.get('/:id', async (req, res) => {
 });
 
 // ============================================
+// GET /api/leads/:id/cockpit-admin - Status operacional (Agente + CRM)
+// ============================================
+router.get('/:id/cockpit-admin', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
+    const { id } = req.params;
+
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        tenantId: true,
+        status: true,
+        crmProprietarioId: true,
+        crmPropertyId: true,
+        crmPropertyCode: true,
+        crmSyncStatus: true,
+        crmSyncError: true,
+        enviadoParaCrmEm: true,
+      }
+    });
+
+    if (!lead) {
+      return responderErro(res, 404, 'Lead não encontrado');
+    }
+    if (lead.tenantId !== tenantId) {
+      return responderErro(res, 403, 'Acesso negado');
+    }
+
+    const [agenteAdmin, integracaoCRM] = await Promise.all([
+      prisma.configuracaoAgente.findFirst({
+        where: { tenantId },
+        select: {
+          id: true,
+          nome: true,
+          tipoAgente: true,
+          status: true,
+          estaAtivo: true,
+          sessaoWhatsapp: {
+            select: {
+              id: true,
+              nome: true,
+              numeroWhatsapp: true,
+              status: true,
+            }
+          }
+        }
+      }),
+      prisma.configuracaoIntegracao.findUnique({
+        where: {
+          tenantId_tipo: {
+            tenantId,
+            tipo: TipoIntegracao.CRM_QUADRADOIS
+          }
+        },
+        select: {
+          id: true,
+          ativo: true,
+          apiUrl: true,
+          apiKeyCriptografada: true,
+          tenantIdDestino: true,
+          ultimoTesteEm: true,
+          ultimoTesteOk: true,
+          ultimoErro: true,
+          totalEnvios: true,
+          totalSucessos: true,
+          totalFalhas: true,
+          ultimoEnvioEm: true,
+        }
+      })
+    ]);
+
+    res.json({
+      agenteAdmin: agenteAdmin || null,
+      integracaoCRM: integracaoCRM
+        ? (() => {
+            const { apiKeyCriptografada, ...restoIntegracao } = integracaoCRM;
+            return {
+              ...restoIntegracao,
+              temApiKey: Boolean(apiKeyCriptografada),
+            };
+          })()
+        : null,
+      crmLead: {
+        statusLead: lead.status,
+        proprietarioId: lead.crmProprietarioId,
+        propertyId: lead.crmPropertyId,
+        propertyCode: lead.crmPropertyCode,
+        syncStatus: lead.crmSyncStatus,
+        syncError: lead.crmSyncError,
+        enviadoEm: lead.enviadoParaCrmEm,
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao buscar cockpit admin:', error);
+    responderErro(res, 500, 'Erro interno ao buscar cockpit admin');
+  }
+});
+
+// ============================================
+// POST /api/leads/:id/crm/enviar - Envio manual para CRM
+// ============================================
+router.post('/:id/crm/enviar', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
+    const { id } = req.params;
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: { id: true, tenantId: true }
+    });
+
+    if (!lead) return responderErro(res, 404, 'Lead não encontrado');
+    if (lead.tenantId !== tenantId) return responderErro(res, 403, 'Acesso negado');
+
+    const resultado = await enviarParaCrm(id);
+    if (!resultado.success) {
+      return res.status(400).json({
+        sucesso: false,
+        erro: resultado.error || 'Falha no envio para CRM',
+        resultado
+      });
+    }
+
+    return res.json({
+      sucesso: true,
+      mensagem: 'Lead enviado para CRM com sucesso',
+      resultado
+    });
+  } catch (error) {
+    console.error('Erro ao enviar lead para CRM:', error);
+    responderErro(res, 500, 'Erro interno ao enviar para CRM');
+  }
+});
+
+// ============================================
+// POST /api/leads/:id/crm/reenviar - Reenvio manual para CRM
+// ============================================
+router.post('/:id/crm/reenviar', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
+    const { id } = req.params;
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: { id: true, tenantId: true }
+    });
+
+    if (!lead) return responderErro(res, 404, 'Lead não encontrado');
+    if (lead.tenantId !== tenantId) return responderErro(res, 403, 'Acesso negado');
+
+    const resultado = await reenviarParaCrm(id);
+    if (!resultado.success) {
+      return res.status(400).json({
+        sucesso: false,
+        erro: resultado.error || 'Falha no reenvio para CRM',
+        resultado
+      });
+    }
+
+    return res.json({
+      sucesso: true,
+      mensagem: 'Lead reenviado para CRM com sucesso',
+      resultado
+    });
+  } catch (error) {
+    console.error('Erro ao reenviar lead para CRM:', error);
+    responderErro(res, 500, 'Erro interno ao reenviar para CRM');
+  }
+});
+
+// ============================================
+// GET /api/leads/:id/crm/status - Verificar status no CRM externo
+// ============================================
+router.get('/:id/crm/status', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
+    const { id } = req.params;
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: { id: true, tenantId: true }
+    });
+
+    if (!lead) return responderErro(res, 404, 'Lead não encontrado');
+    if (lead.tenantId !== tenantId) return responderErro(res, 403, 'Acesso negado');
+
+    const resultado = await verificarStatusCrm(id);
+    return res.json({
+      sucesso: Boolean(resultado.success),
+      resultado
+    });
+  } catch (error) {
+    console.error('Erro ao verificar status no CRM:', error);
+    responderErro(res, 500, 'Erro interno ao verificar status no CRM');
+  }
+});
+
+// ============================================
+// POST /api/leads/:id/cockpit-evento - Registrar telemetria do cockpit
+// ============================================
+router.post('/:id/cockpit-evento', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
+    const { id } = req.params;
+    const { acao, detalhes } = req.body;
+
+    if (!acao || typeof acao !== 'string') {
+      return responderErro(res, 400, 'Campo "acao" é obrigatório');
+    }
+
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: { id: true, tenantId: true, status: true }
+    });
+
+    if (!lead) return responderErro(res, 404, 'Lead não encontrado');
+    if (lead.tenantId !== tenantId) return responderErro(res, 403, 'Acesso negado');
+
+    const usuarioId = (req as any).usuario?.id || null;
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+      || req.socket.remoteAddress
+      || undefined;
+
+    ServicoAuditoria.registrar({
+      tenantId,
+      usuarioId: usuarioId || undefined,
+      acao: `COCKPIT_${acao.toUpperCase()}`,
+      entidade: 'Lead',
+      entidadeId: id,
+      detalhes: {
+        origem: 'lead_detalhes',
+        statusLead: lead.status,
+        ...((detalhes && typeof detalhes === 'object') ? detalhes : {}),
+      },
+      ip,
+    });
+
+    return res.json({ sucesso: true });
+  } catch (error) {
+    console.error('Erro ao registrar telemetria do cockpit:', error);
+    responderErro(res, 500, 'Erro interno ao registrar telemetria');
+  }
+});
+
+// ============================================
+// GET /api/leads/:id/cockpit-eventos - Listar telemetria recente do cockpit
+// ============================================
+router.get('/:id/cockpit-eventos', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
+    const { id } = req.params;
+    const limiteParam = Number(req.query.limite || 30);
+    const limite = Number.isFinite(limiteParam) ? Math.min(200, Math.max(1, limiteParam)) : 30;
+
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: { id: true, tenantId: true }
+    });
+
+    if (!lead) return responderErro(res, 404, 'Lead não encontrado');
+    if (lead.tenantId !== tenantId) return responderErro(res, 403, 'Acesso negado');
+
+    const eventos = await prisma.logAuditoria.findMany({
+      where: {
+        tenantId,
+        entidade: 'Lead',
+        entidadeId: id,
+        acao: {
+          startsWith: 'COCKPIT_'
+        }
+      },
+      orderBy: { criadoEm: 'desc' },
+      take: limite,
+      include: {
+        usuario: {
+          select: {
+            id: true,
+            nome: true,
+            email: true,
+          }
+        }
+      }
+    });
+
+    return res.json({
+      sucesso: true,
+      eventos: eventos.map((evento) => ({
+        id: evento.id,
+        acao: evento.acao,
+        detalhes: evento.detalhes,
+        criadoEm: evento.criadoEm,
+        usuario: evento.usuario
+          ? { id: evento.usuario.id, nome: evento.usuario.nome, email: evento.usuario.email }
+          : null,
+      }))
+    });
+  } catch (error) {
+    console.error('Erro ao listar telemetria do cockpit:', error);
+    responderErro(res, 500, 'Erro interno ao listar telemetria');
+  }
+});
+
+// ============================================
 // PATCH /api/leads/:id - Atualizar lead
 // ============================================
 router.patch('/:id', async (req, res) => {
@@ -682,6 +1178,11 @@ router.patch('/:id', async (req, res) => {
       'contratoUrl', 'dataAssinatura', 'vigenciaInicio', 'vigenciaFim',
       // Tracking IA
       'ultimaAcaoIA', 'ultimaAcaoIAEm',
+      // Dados avançados do imóvel (Admin/Onboarding)
+      'imovelSuites', 'imovelBanheiros', 'imovelAreaTotal', 'imovelAndar',
+      'imovelCaracteristicas', 'imovelDescricao', 'imovelFotos',
+      'imovelValorLocacao', 'imovelValorCondominio', 'imovelValorIPTU',
+      'dadosImovelColetadosEm',
       // Perda
       'motivoPerda'
     ];

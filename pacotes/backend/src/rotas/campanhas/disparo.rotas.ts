@@ -28,7 +28,23 @@ const router = Router();
 router.post('/:id/disparar', async (req, res) => {
   try {
     const { id } = req.params;
-    const { modo = 'lote', ignorarValidacaoBriefing = false } = req.body;
+    const schemaBody = z.object({
+      modo: z.enum(['lote', 'continuo']).optional(),
+      ignorarValidacaoBriefing: z.boolean().optional(),
+      config: z.object({
+        mensagensPorMinuto: z.number().min(1).max(60).optional(),
+        atrasoEntreMensagens: z.number().min(1000).max(60000).optional(),
+        maxTentativas: z.number().min(1).max(10).optional(),
+        horarioInicio: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+        horarioFim: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+        diasSemana: z.array(z.enum(['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'])).optional(),
+      }).optional()
+    });
+    const {
+      modo = 'lote',
+      ignorarValidacaoBriefing = false,
+      config
+    } = schemaBody.parse(req.body || {});
     
     const campanha = await prisma.campanha.findUnique({ where: { id } });
     
@@ -67,7 +83,7 @@ router.post('/:id/disparar', async (req, res) => {
         modo: 'continuo'
       });
     } else {
-      const resultado = await disparoCampanhaService.dispararLote(id);
+      const resultado = await disparoCampanhaService.dispararLote(id, config);
       return res.json({ sucesso: resultado.iniciado, ...resultado });
     }
     
@@ -133,8 +149,10 @@ router.get('/:id/status-disparo', async (req, res) => {
     const { id } = req.params;
     const status = await disparoCampanhaService.obterStatusCampanha(id);
     
-    const taxaResposta = status.total > 0 
-      ? ((status.respondeu + status.semInteresse + status.interessado) / status.contatando * 100).toFixed(1)
+    const totalDisparados = status.contatando + status.respondeu + status.semInteresse + status.interessado + status.optout + status.falha;
+
+    const taxaResposta = totalDisparados > 0
+      ? ((status.respondeu + status.semInteresse + status.interessado) / totalDisparados * 100).toFixed(1)
       : '0';
     
     const taxaConversao = status.total > 0

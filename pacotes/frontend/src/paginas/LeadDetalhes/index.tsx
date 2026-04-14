@@ -5,7 +5,7 @@
  * Alinhada ao Playbook de Captação MVP (4 Etapas).
  */
 
-import { useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import {
     ArrowLeft,
     Loader2,
@@ -15,26 +15,28 @@ import {
     Check,
     MessageSquare,
     Home,
-    User,
-    Clock,
     RefreshCw,
     CheckCircle2,
-    XCircle,
     Target,
     AlertTriangle,
-    TrendingUp,
     Trophy,
     XOctagon,
     Save,
     Building2,
-    Users,
+    Bot,
+    Link2,
+    ExternalLink,
+    Edit,
 } from "lucide-react";
 import { Button } from "../../componentes/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../componentes/ui/card";
 import { Badge } from "../../componentes/ui/badge";
+import { Progress } from "../../componentes/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../componentes/ui/tabs";
 import { Input } from "../../componentes/ui/input";
 import { Textarea } from "../../componentes/ui/textarea";
+import { api } from "../../servicos/api";
+import { toast } from "sonner";
 import {
     Dialog,
     DialogContent,
@@ -56,7 +58,6 @@ import { useLeadDetalhes } from "./hooks/useLeadDetalhes";
 import { formatarData, formatarDataHora, tempoRelativo, formatarCNPJ } from "./utils";
 import {
     statusAgendamentoConfig,
-    tipoAtividadeConfig,
     motivosPerdaOptions,
     tipoAutorizacaoOptions,
     situacaoFinanceiraOptions,
@@ -74,9 +75,10 @@ import {
     CardTrackingIA,
     CardBriefingIA,
     CardProprietario,
-    InfoItem,
     FaseChecklist,
 } from "./componentes";
+
+const ChatModal = lazy(() => import("../../componentes/ChatModal").then((m) => ({ default: m.ChatModal })));
 
 // ============================================
 // COMPONENTE PRINCIPAL
@@ -117,6 +119,90 @@ export default function LeadDetalhes() {
     const [modalCaptado, setModalCaptado] = useState(false);
     const [modalArquivar, setModalArquivar] = useState(false);
     const [modalAtividade, setModalAtividade] = useState(false);
+    const [abaPrincipal, setAbaPrincipal] = useState("atendimento");
+    const [abaAtendimento, setAbaAtendimento] = useState("cockpit");
+    const [chatOpen, setChatOpen] = useState(false);
+
+    const [cockpitAdmin, setCockpitAdmin] = useState<{
+        agenteAdmin: {
+            id: string;
+            nome: string;
+            tipoAgente: string;
+            status: string;
+            estaAtivo: boolean;
+            sessaoWhatsapp?: {
+                id: string;
+                nome: string;
+                numeroWhatsapp: string | null;
+                status: string;
+            } | null;
+        } | null;
+        integracaoCRM: {
+            id: string;
+            ativo: boolean;
+            apiUrl: string;
+            temApiKey: boolean;
+            tenantIdDestino: number | null;
+            ultimoTesteEm: string | null;
+            ultimoTesteOk: boolean | null;
+            ultimoErro: string | null;
+            totalEnvios: number;
+            totalSucessos: number;
+            totalFalhas: number;
+            ultimoEnvioEm: string | null;
+        } | null;
+        crmLead: {
+            statusLead: string;
+            proprietarioId: number | null;
+            propertyId: number | null;
+            propertyCode: string | null;
+            syncStatus: string | null;
+            syncError: string | null;
+            enviadoEm: string | null;
+        };
+    } | null>(null);
+    const [carregandoCockpitAdmin, setCarregandoCockpitAdmin] = useState(false);
+    const [processandoCrm, setProcessandoCrm] = useState<null | "enviar" | "reenviar" | "status">(null);
+    const [eventosCockpit, setEventosCockpit] = useState<Array<{
+        id: string;
+        acao: string;
+        detalhes?: any;
+        criadoEm: string;
+        usuario?: { id: string; nome?: string | null; email?: string | null } | null;
+    }>>([]);
+    const [carregandoEventosCockpit, setCarregandoEventosCockpit] = useState(false);
+    const [filtroPeriodoTelemetria, setFiltroPeriodoTelemetria] = useState<"7d" | "30d" | "90d" | "all">("30d");
+    const [filtroTipoTelemetria, setFiltroTipoTelemetria] = useState<"todos" | "decisao" | "crm">("todos");
+    const [filtroSucessoTelemetria, setFiltroSucessoTelemetria] = useState<"todos" | "sucesso" | "falha">("todos");
+    const [metricasExecutivas, setMetricasExecutivas] = useState<{
+        periodoDias: number;
+        taxaSucesso: number;
+        funil: {
+            cliquesDecisao: number;
+            acoesCrm: number;
+            resultadosDecisao: number;
+            resultadosCrm: number;
+            sucessosDecisao: number;
+            sucessosCrm: number;
+        };
+        rankingUsuarios: Array<{
+            usuarioId: string;
+            nome: string;
+            email: string;
+            totalAcoes: number;
+            totalResultados: number;
+            totalSucessos: number;
+            taxaSucesso: number;
+        }>;
+        rankingAcoes: Array<{
+            acao: string;
+            totalAcoes: number;
+            totalResultados: number;
+            totalSucessos: number;
+            taxaSucesso: number;
+        }>;
+    } | null>(null);
+    const [carregandoMetricasExecutivas, setCarregandoMetricasExecutivas] = useState(false);
 
     // Estado para modal de exclusão com confirmação
     const [dadosVinculados, setDadosVinculados] = useState<{
@@ -159,6 +245,123 @@ export default function LeadDetalhes() {
         setModalArquivar(open);
     };
 
+    const carregarCockpitAdmin = async (leadId: string) => {
+        try {
+            setCarregandoCockpitAdmin(true);
+            const response = await api.get(`/leads/${leadId}/cockpit-admin`);
+            setCockpitAdmin(response.data);
+        } catch (error) {
+            console.error('Erro ao carregar cockpit admin:', error);
+        } finally {
+            setCarregandoCockpitAdmin(false);
+        }
+    };
+
+    const executarAcaoCrm = async (acao: "enviar" | "reenviar" | "status") => {
+        if (!lead?.id) return;
+
+        try {
+            setProcessandoCrm(acao);
+            await registrarEventoCockpit("CRM_ACAO", {
+                tipo: acao,
+                etapa: "inicio",
+            });
+
+            if (acao === "status") {
+                const response = await api.get(`/leads/${lead.id}/crm/status`);
+                if (response.data?.sucesso) {
+                    toast.success("Status do CRM atualizado.");
+                    await registrarEventoCockpit("CRM_RESULTADO", {
+                        tipo: acao,
+                        sucesso: true,
+                        resposta: "Status atualizado",
+                    });
+                } else {
+                    toast.warning(response.data?.resultado?.error || "CRM retornou sem confirmação.");
+                    await registrarEventoCockpit("CRM_RESULTADO", {
+                        tipo: acao,
+                        sucesso: false,
+                        resposta: response.data?.resultado?.error || "Sem confirmação",
+                    });
+                }
+            } else {
+                const endpoint = acao === "enviar" ? "enviar" : "reenviar";
+                const response = await api.post(`/leads/${lead.id}/crm/${endpoint}`);
+                if (response.data?.sucesso) {
+                    toast.success(response.data?.mensagem || "Operação no CRM concluída.");
+                    await registrarEventoCockpit("CRM_RESULTADO", {
+                        tipo: acao,
+                        sucesso: true,
+                        resposta: response.data?.mensagem || "Concluído",
+                    });
+                } else {
+                    toast.error(response.data?.erro || "Falha ao operar CRM.");
+                    await registrarEventoCockpit("CRM_RESULTADO", {
+                        tipo: acao,
+                        sucesso: false,
+                        resposta: response.data?.erro || "Falha",
+                    });
+                }
+            }
+
+            await Promise.all([carregarLead(), carregarCockpitAdmin(lead.id), carregarEventosCockpit(lead.id)]);
+        } catch (error: any) {
+            toast.error(error.response?.data?.erro || "Erro ao executar ação CRM");
+            await registrarEventoCockpit("CRM_RESULTADO", {
+                tipo: acao,
+                sucesso: false,
+                resposta: error.response?.data?.erro || "Erro interno",
+            });
+        } finally {
+            setProcessandoCrm(null);
+        }
+    };
+
+    const carregarEventosCockpit = async (leadId: string) => {
+        try {
+            setCarregandoEventosCockpit(true);
+            const response = await api.get(`/leads/${leadId}/cockpit-eventos?limite=120`);
+            setEventosCockpit(response.data?.eventos || []);
+        } catch (error) {
+            console.error("Erro ao carregar eventos do cockpit:", error);
+        } finally {
+            setCarregandoEventosCockpit(false);
+        }
+    };
+
+    const carregarMetricasExecutivas = async (periodoDias: number) => {
+        try {
+            setCarregandoMetricasExecutivas(true);
+            const response = await api.get(`/leads/cockpit-metricas?periodoDias=${periodoDias}`);
+            if (response.data?.sucesso) {
+                setMetricasExecutivas(response.data);
+            }
+        } catch (error) {
+            console.error("Erro ao carregar métricas executivas do cockpit:", error);
+        } finally {
+            setCarregandoMetricasExecutivas(false);
+        }
+    };
+
+    const registrarEventoCockpit = async (acao: string, detalhes?: Record<string, any>) => {
+        if (!lead?.id) return;
+        try {
+            await api.post(`/leads/${lead.id}/cockpit-evento`, { acao, detalhes });
+        } catch (error) {
+            console.error("Erro ao registrar evento do cockpit:", error);
+        }
+    };
+
+    useEffect(() => {
+        if (!lead?.id) return;
+        const periodoDias = filtroPeriodoTelemetria === "7d" ? 7 : filtroPeriodoTelemetria === "30d" ? 30 : filtroPeriodoTelemetria === "90d" ? 90 : 365;
+        Promise.all([
+            carregarCockpitAdmin(lead.id),
+            carregarEventosCockpit(lead.id),
+            carregarMetricasExecutivas(periodoDias),
+        ]);
+    }, [lead?.id, filtroPeriodoTelemetria]);
+
     // Loading State
     if (carregando) {
         return (
@@ -188,6 +391,481 @@ export default function LeadDetalhes() {
         );
     }
 
+    const diasNoPipeline = (() => {
+        const base = lead.primeiroContato || lead.criadoEm;
+        const inicio = new Date(base);
+        const agora = new Date();
+        const diffMs = Math.max(0, agora.getTime() - inicio.getTime());
+        return Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+    })();
+
+    const mensagensWhatsapp = (() => {
+        const conversaWhatsapp = lead.conversas.find((c) => c.canal?.toUpperCase() === "WHATSAPP") || lead.conversas[0];
+        if (!conversaWhatsapp?.mensagens?.length) return [];
+        const ordenadas = [...conversaWhatsapp.mensagens].sort(
+            (a: any, b: any) => new Date(a.enviadaEm).getTime() - new Date(b.enviadaEm).getTime()
+        );
+        return ordenadas.slice(-6);
+    })();
+
+    const scoreLead = (() => {
+        let pontos = 40;
+        if (lead.status === "QUALIFICADO" || lead.status === "TENTATIVA_AGENDAMENTO" || lead.status === "VISITA_AGENDADA") pontos += 12;
+        if (lead.imovel?.interesseEm) pontos += 8;
+        if (lead.imovel?.valorPretendido) pontos += 10;
+        if (lead.proximaAtividade?.agendadoPara) pontos += 10;
+        if (lead.ultimaInteracao) pontos += 8;
+        if ((lead.spin?.problema?.doresIdentificadas?.length || 0) > 0) pontos += 6;
+        if (lead.tipoAutorizacao === "exclusiva") pontos += 6;
+        return Math.max(0, Math.min(100, pontos));
+    })();
+
+    const intencaoPercentual = (() => {
+        let pontos = 0;
+        if (lead.imovel?.interesseEm) pontos += 30;
+        if (lead.imovel?.tipo || lead.imovel?.quartos) pontos += 20;
+        if (lead.imovel?.area || lead.imovel?.ocupacao) pontos += 20;
+        if (lead.imovel?.valorPretendido) pontos += 30;
+        return pontos;
+    })();
+
+    const totalInteracoes = lead.conversas.reduce((acc, conversa) => acc + (conversa.mensagens?.length || 0), 0);
+
+    const engajamentoPercentual = (() => {
+        if (totalInteracoes >= 8) return 90;
+        if (totalInteracoes >= 5) return 70;
+        if (totalInteracoes >= 3) return 55;
+        if (totalInteracoes >= 1) return 35;
+        return 15;
+    })();
+
+    const resumoExecutivo = (() => {
+        if (lead.briefingCloser) {
+            const linhas = lead.briefingCloser
+                .split("\n")
+                .map((l) => l.trim())
+                .filter((l) => l.length > 0 && !/^[#🏠🔥💢🎯📋⚡💰🚨🤝👤]/.test(l));
+            return linhas.slice(0, 3).join(" ") || "Lead com briefing de IA disponível para handoff.";
+        }
+
+        return "Lead em acompanhamento. Complete o checklist e registre a próxima ação para avançar o playbook.";
+    })();
+
+    const insightsRapidos = (() => {
+        const itens: { texto: string; tipo: "ok" | "alerta" }[] = [];
+
+        if (lead.imovel?.ocupacao?.toLowerCase() === "vazio") {
+            itens.push({ texto: "Imóvel desocupado, potencial de visita imediata.", tipo: "ok" });
+        }
+        if (lead.imovel?.valorPretendido) {
+            itens.push({ texto: "Valor pretendido informado, negociação mais objetiva.", tipo: "ok" });
+        } else {
+            itens.push({ texto: "Valor pretendido ainda não confirmado com o lead.", tipo: "alerta" });
+        }
+        if ((lead.spin?.necessidade?.objecoes?.length || 0) > 0) {
+            itens.push({ texto: "Existem objeções registradas, preparar argumentação antes da abordagem.", tipo: "alerta" });
+        }
+        if ((lead.spin?.problema?.doresIdentificadas?.length || 0) > 0) {
+            itens.push({ texto: "Dores de negócio identificadas pela IA, usar no pitch de valor.", tipo: "ok" });
+        }
+
+        return itens.slice(0, 4);
+    })();
+
+    const acoesRecomendadas = (() => {
+        const acoes: { titulo: string; detalhe: string; prioridade: "alta" | "media"; acao: "confirmar_agendamento" | "propor_exclusividade" | "confirmar_valor" | "nova_atividade" }[] = [];
+
+        if (lead.proximaAtividade?.agendadoPara) {
+            acoes.push({
+                titulo: "Confirmar presença no agendamento",
+                detalhe: "Alta prioridade · validar comparecimento do lead",
+                prioridade: "alta",
+                acao: "confirmar_agendamento",
+            });
+        }
+
+        if (!lead.tipoAutorizacao) {
+            acoes.push({
+                titulo: "Apresentar proposta de exclusividade",
+                detalhe: "Alta prioridade · fase de negociação",
+                prioridade: "alta",
+                acao: "propor_exclusividade",
+            });
+        }
+
+        if (!lead.imovel?.valorPretendido) {
+            acoes.push({
+                titulo: "Confirmar valor pretendido",
+                detalhe: "Média prioridade · concluir qualificação",
+                prioridade: "media",
+                acao: "confirmar_valor",
+            });
+        }
+
+        acoes.push({
+            titulo: "Registrar próxima atividade",
+            detalhe: "Média prioridade · manter cadência operacional",
+            prioridade: "media",
+            acao: "nova_atividade",
+        });
+
+        return acoes.slice(0, 3);
+    })();
+
+    const executarAcaoRecomendada = (acao: "confirmar_agendamento" | "propor_exclusividade" | "confirmar_valor" | "nova_atividade") => {
+        void registrarEventoCockpit("DECISAO_CLICK", { acao });
+
+        if (acao === "confirmar_agendamento") {
+            setAbaPrincipal("atendimento");
+            setChatOpen(true);
+            toast.info("Use o chat para confirmar presença com o lead.");
+            void registrarEventoCockpit("DECISAO_RESULTADO", { acao, sucesso: true, destino: "chat_whatsapp" });
+            return;
+        }
+
+        if (acao === "confirmar_valor") {
+            setAbaPrincipal("atendimento");
+            setChatOpen(true);
+            toast.info("Pergunte o valor pretendido diretamente no WhatsApp.");
+            void registrarEventoCockpit("DECISAO_RESULTADO", { acao, sucesso: true, destino: "chat_whatsapp" });
+            return;
+        }
+
+        if (acao === "propor_exclusividade") {
+            setFormAtividade({
+                tipo: "REUNIAO",
+                titulo: "Apresentar proposta de exclusividade",
+                descricao: "Ação sugerida pelo Cockpit de Decisão.",
+                agendadoPara: "",
+            });
+            setModalAtividade(true);
+            void registrarEventoCockpit("DECISAO_RESULTADO", { acao, sucesso: true, destino: "atividade_pre_preenchida" });
+            return;
+        }
+
+        setFormAtividade({
+            tipo: "TAREFA",
+            titulo: "Definir próxima ação do lead",
+            descricao: "Ação criada a partir das recomendações do cockpit.",
+            agendadoPara: "",
+        });
+        setModalAtividade(true);
+        void registrarEventoCockpit("DECISAO_RESULTADO", { acao, sucesso: true, destino: "atividade_pre_preenchida" });
+    };
+
+    const eventosCockpitFiltrados = (() => {
+        const agora = Date.now();
+        const diasFiltro = filtroPeriodoTelemetria === "7d"
+            ? 7
+            : filtroPeriodoTelemetria === "30d"
+                ? 30
+                : filtroPeriodoTelemetria === "90d"
+                    ? 90
+                    : null;
+
+        return eventosCockpit.filter((evento) => {
+            if (diasFiltro !== null) {
+                const diffDias = (agora - new Date(evento.criadoEm).getTime()) / (1000 * 60 * 60 * 24);
+                if (diffDias > diasFiltro) return false;
+            }
+
+            if (filtroTipoTelemetria === "decisao" && !evento.acao.includes("DECISAO")) return false;
+            if (filtroTipoTelemetria === "crm" && !evento.acao.includes("CRM")) return false;
+            if (filtroSucessoTelemetria === "sucesso") {
+                return evento.detalhes?.sucesso === true;
+            }
+            if (filtroSucessoTelemetria === "falha") {
+                return evento.detalhes?.sucesso === false;
+            }
+            return true;
+        });
+    })();
+
+    const metricasTelemetria = (() => {
+        const totalAcoesDisparadas = eventosCockpitFiltrados.filter(
+            (e) => e.acao === "COCKPIT_DECISAO_CLICK" || e.acao === "COCKPIT_CRM_ACAO"
+        ).length;
+        const totalResultados = eventosCockpitFiltrados.filter((e) =>
+            e.acao === "COCKPIT_DECISAO_RESULTADO" || e.acao === "COCKPIT_CRM_RESULTADO"
+        );
+        const totalSucessos = totalResultados.filter((e) => e.detalhes?.sucesso === true).length;
+        const taxaSucesso = totalResultados.length > 0
+            ? Math.round((totalSucessos / totalResultados.length) * 100)
+            : 0;
+
+        const porAcao = new Map<string, { disparos: number; resultados: number; sucessos: number }>();
+
+        for (const evento of eventosCockpitFiltrados) {
+            const chave = evento.detalhes?.acao || evento.detalhes?.tipo || "geral";
+            const atual = porAcao.get(chave) || { disparos: 0, resultados: 0, sucessos: 0 };
+
+            if (evento.acao === "COCKPIT_DECISAO_CLICK" || evento.acao === "COCKPIT_CRM_ACAO") {
+                atual.disparos += 1;
+            }
+            if (evento.acao === "COCKPIT_DECISAO_RESULTADO" || evento.acao === "COCKPIT_CRM_RESULTADO") {
+                atual.resultados += 1;
+                if (evento.detalhes?.sucesso === true) atual.sucessos += 1;
+            }
+
+            porAcao.set(chave, atual);
+        }
+
+        const rankingAcoes = Array.from(porAcao.entries())
+            .map(([acao, dados]) => ({
+                acao,
+                ...dados,
+                taxa: dados.resultados > 0 ? Math.round((dados.sucessos / dados.resultados) * 100) : 0,
+            }))
+            .sort((a, b) => b.resultados - a.resultados || b.disparos - a.disparos)
+            .slice(0, 6);
+
+        return { totalAcoesDisparadas, totalResultados: totalResultados.length, totalSucessos, taxaSucesso, rankingAcoes };
+    })();
+
+    const alertasOperacionais = (() => {
+        const agora = Date.now();
+        const janela24hInicio = agora - (24 * 60 * 60 * 1000);
+        const janela48hInicio = agora - (48 * 60 * 60 * 1000);
+
+        const resultados24h = eventosCockpit.filter((e) =>
+            (e.acao === "COCKPIT_DECISAO_RESULTADO" || e.acao === "COCKPIT_CRM_RESULTADO") &&
+            new Date(e.criadoEm).getTime() >= janela24hInicio
+        );
+        const resultados24hAnterior = eventosCockpit.filter((e) => {
+            if (e.acao !== "COCKPIT_DECISAO_RESULTADO" && e.acao !== "COCKPIT_CRM_RESULTADO") return false;
+            const timestamp = new Date(e.criadoEm).getTime();
+            return timestamp >= janela48hInicio && timestamp < janela24hInicio;
+        });
+
+        const taxa24h = resultados24h.length > 0
+            ? Math.round((resultados24h.filter((e) => e.detalhes?.sucesso === true).length / resultados24h.length) * 100)
+            : null;
+        const taxa24hAnterior = resultados24hAnterior.length > 0
+            ? Math.round((resultados24hAnterior.filter((e) => e.detalhes?.sucesso === true).length / resultados24hAnterior.length) * 100)
+            : null;
+
+        const falhasCrm24h = eventosCockpit.filter((e) =>
+            e.acao === "COCKPIT_CRM_RESULTADO" &&
+            e.detalhes?.sucesso === false &&
+            new Date(e.criadoEm).getTime() >= janela24hInicio
+        ).length;
+
+        const ultimaAcaoOperacional = eventosCockpit
+            .filter((e) => e.acao === "COCKPIT_DECISAO_CLICK" || e.acao === "COCKPIT_CRM_ACAO")
+            .map((e) => new Date(e.criadoEm).getTime())
+            .sort((a, b) => b - a)[0];
+
+        const semAcao24h = !ultimaAcaoOperacional || ultimaAcaoOperacional < janela24hInicio;
+
+        const alertas: Array<{
+            tipo: "critico" | "atencao";
+            titulo: string;
+            detalhe: string;
+            recomendacao: string;
+            acaoRapida?: "verificar_crm" | "abrir_chat" | "criar_atividade";
+            labelAcao?: string;
+        }> = [];
+
+        if (
+            taxa24h !== null &&
+            taxa24hAnterior !== null &&
+            resultados24h.length >= 3 &&
+            (taxa24hAnterior - taxa24h) >= 20
+        ) {
+            alertas.push({
+                tipo: "critico",
+                titulo: "Queda de conversão nas últimas 24h",
+                detalhe: `Taxa caiu de ${taxa24hAnterior}% para ${taxa24h}%`,
+                recomendacao: "Revisar abordagem no WhatsApp e priorizar ações de alta intenção.",
+                acaoRapida: "abrir_chat",
+                labelAcao: "Abrir chat",
+            });
+        }
+
+        if (falhasCrm24h >= 2) {
+            alertas.push({
+                tipo: "critico",
+                titulo: "Falhas recorrentes de CRM",
+                detalhe: `${falhasCrm24h} falhas de integração registradas em 24h`,
+                recomendacao: "Executar verificação de status no CRM e validar configuração em Integrações.",
+                acaoRapida: "verificar_crm",
+                labelAcao: "Verificar CRM",
+            });
+        }
+
+        if (semAcao24h && !isPerdidoOuArquivado && !isCaptado) {
+            alertas.push({
+                tipo: "atencao",
+                titulo: "Lead sem ação operacional recente",
+                detalhe: "Nenhuma ação de decisão/CRM registrada nas últimas 24h",
+                recomendacao: "Dispare uma ação recomendada para manter o lead em movimento.",
+                acaoRapida: "criar_atividade",
+                labelAcao: "Criar atividade",
+            });
+        }
+
+        if (metricasTelemetria.totalResultados >= 5 && metricasTelemetria.taxaSucesso < 60) {
+            alertas.push({
+                tipo: "atencao",
+                titulo: "Eficiência abaixo da meta",
+                detalhe: `Taxa de sucesso atual em ${metricasTelemetria.taxaSucesso}%`,
+                recomendacao: "Focar em ações com maior conversão no ranking e reduzir tentativas de baixa resposta.",
+            });
+        }
+
+        return alertas.slice(0, 3);
+    })();
+
+    const executarAcaoAlerta = async (acao?: "verificar_crm" | "abrir_chat" | "criar_atividade") => {
+        if (!acao) return;
+        if (acao === "verificar_crm") {
+            await executarAcaoCrm("status");
+            return;
+        }
+        if (acao === "abrir_chat") {
+            setChatOpen(true);
+            return;
+        }
+        setFormAtividade({
+            tipo: "TAREFA",
+            titulo: "Mitigar alerta operacional do cockpit",
+            descricao: "Ação criada a partir de alerta automático.",
+            agendadoPara: "",
+        });
+        setModalAtividade(true);
+    };
+
+    const metricasSLA = (() => {
+        const agora = Date.now();
+        const ultimoEvento = eventosCockpit
+            .map((e) => new Date(e.criadoEm).getTime())
+            .sort((a, b) => b - a)[0];
+        const horasSemAcao = ultimoEvento ? Math.round((agora - ultimoEvento) / (1000 * 60 * 60)) : null;
+
+        const ultimaMensagem = mensagensWhatsapp.length > 0
+            ? mensagensWhatsapp[mensagensWhatsapp.length - 1]
+            : null;
+        const horasSemMensagem = ultimaMensagem
+            ? Math.round((agora - new Date(ultimaMensagem.enviadaEm).getTime()) / (1000 * 60 * 60))
+            : null;
+
+        const horasParaProximaAtividade = lead.proximaAtividade?.agendadoPara
+            ? Math.round((new Date(lead.proximaAtividade.agendadoPara).getTime() - agora) / (1000 * 60 * 60))
+            : null;
+
+        return { horasSemAcao, horasSemMensagem, horasParaProximaAtividade };
+    })();
+
+    const playbookInteligente = (() => {
+        const status = lead.status;
+        if (status === "NOVO") {
+            return {
+                fase: "Qualificação Inicial",
+                foco: "Confirmar intenção, tipologia e valor para acelerar handoff.",
+                acoes: ["confirmar_valor", "nova_atividade"] as const,
+            };
+        }
+        if (status === "TENTATIVA_AGENDAMENTO" || status === "VISITA_AGENDADA") {
+            return {
+                fase: "Agendamento",
+                foco: "Garantir presença e reduzir no-show com contato ativo.",
+                acoes: ["confirmar_agendamento", "nova_atividade"] as const,
+            };
+        }
+        if (status === "DOCUMENTACAO") {
+            return {
+                fase: "Documentação",
+                foco: "Validar pendências e manter sincronismo com CRM.",
+                acoes: ["nova_atividade"] as const,
+            };
+        }
+        return {
+            fase: "Operação",
+            foco: "Manter ritmo de follow-up e registrar evolução no cockpit.",
+            acoes: ["nova_atividade"] as const,
+        };
+    })();
+
+    const timelineUnificada = (() => {
+        const itens: Array<{ id: string; tipo: string; titulo: string; descricao?: string; quando: string }> = [];
+
+        lead.atividades.slice(0, 8).forEach((atividade) => {
+            itens.push({
+                id: `atividade-${atividade.id}`,
+                tipo: "atividade",
+                titulo: atividade.titulo,
+                descricao: atividade.statusAgendamento || atividade.tipo,
+                quando: atividade.agendadoPara || atividade.criadoEm,
+            });
+        });
+
+        mensagensWhatsapp.slice(-8).forEach((msg: any) => {
+            itens.push({
+                id: `mensagem-${msg.id}`,
+                tipo: "whatsapp",
+                titulo: "Mensagem WhatsApp",
+                descricao: String(msg.conteudo || "").slice(0, 80),
+                quando: msg.enviadaEm,
+            });
+        });
+
+        eventosCockpit.slice(0, 10).forEach((evento) => {
+            itens.push({
+                id: `cockpit-${evento.id}`,
+                tipo: "cockpit",
+                titulo: evento.acao.replace("COCKPIT_", ""),
+                descricao: evento.detalhes?.acao || evento.detalhes?.tipo || "",
+                quando: evento.criadoEm,
+            });
+        });
+
+        if (lead.crm?.enviadoEm) {
+            itens.push({
+                id: "crm-sync",
+                tipo: "crm",
+                titulo: "Sincronização CRM",
+                descricao: lead.crm?.syncStatus || "enviado",
+                quando: lead.crm.enviadoEm,
+            });
+        }
+
+        return itens
+            .sort((a, b) => new Date(b.quando).getTime() - new Date(a.quando).getTime())
+            .slice(0, 16);
+    })();
+
+    const quadroAtividades = (() => {
+        const atividades = lead.atividades || [];
+        const pendentes = atividades.filter((a) => !a.completadoEm && a.statusAgendamento !== "NAO_COMPARECEU").slice(0, 4);
+        const concluidas = atividades.filter((a) => Boolean(a.completadoEm) && a.statusAgendamento !== "NAO_COMPARECEU").slice(0, 4);
+        const naoCompareceu = atividades.filter((a) => a.statusAgendamento === "NAO_COMPARECEU").slice(0, 4);
+        return { pendentes, concluidas, naoCompareceu };
+    })();
+
+    const exportarTelemetriaCSV = () => {
+        const linhas = [
+            ["data_hora", "acao", "acao_detalhe", "tipo", "sucesso", "usuario"].join(","),
+            ...eventosCockpitFiltrados.map((evento) => {
+                const data = formatarDataHora(evento.criadoEm).replace(",", "");
+                const acao = evento.acao.replace("COCKPIT_", "");
+                const acaoDetalhe = String(evento.detalhes?.acao || "").replace(/,/g, " ");
+                const tipo = String(evento.detalhes?.tipo || "").replace(/,/g, " ");
+                const sucesso = typeof evento.detalhes?.sucesso === "boolean" ? (evento.detalhes.sucesso ? "sim" : "nao") : "";
+                const usuario = (evento.usuario?.nome || evento.usuario?.email || "").replace(/,/g, " ");
+                return [data, acao, acaoDetalhe, tipo, sucesso, usuario].join(",");
+            })
+        ];
+
+        const blob = new Blob([linhas.join("\n")], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `cockpit_lead_${lead.id}_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+        toast.success("Exportação CSV concluída.");
+    };
+
     return (
         <div className="space-y-6">
             {/* HEADER */}
@@ -215,392 +893,858 @@ export default function LeadDetalhes() {
                 isCaptado={isCaptado}
             />
 
-            {/* CHECKLIST DE EXECUÇÃO */}
-            <FaseChecklist lead={lead} />
+            {/* PAINEL DE DECISÃO RÁPIDA */}
+            {!isPerdidoOuArquivado && !isCaptado && abaPrincipal === "atendimento" && (
+                <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <Card className="card-premium">
+                            <CardContent className="pt-5">
+                                <p className="text-xs uppercase tracking-wider text-slate-500">Score do Lead</p>
+                                <p className="text-3xl font-bold text-slate-900 mt-1">{scoreLead}</p>
+                                <p className="text-sm text-emerald-600 mt-1">{scoreLead >= 75 ? "Alto potencial" : "Potencial em evolução"}</p>
+                            </CardContent>
+                        </Card>
+                        <Card className="card-premium">
+                            <CardContent className="pt-5">
+                                <p className="text-xs uppercase tracking-wider text-slate-500">Dias no Pipeline</p>
+                                <p className="text-3xl font-bold text-slate-900 mt-1">{diasNoPipeline}</p>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    Desde {formatarData(lead.primeiroContato || lead.criadoEm)}
+                                </p>
+                            </CardContent>
+                        </Card>
+                        <Card className="card-premium">
+                            <CardContent className="pt-5">
+                                <p className="text-xs uppercase tracking-wider text-slate-500">Intenção Detectada</p>
+                                <p className="text-lg font-semibold text-slate-900 mt-1">{lead.imovel?.interesseEm || "Em qualificação"}</p>
+                                <Progress value={intencaoPercentual} className="h-2 mt-3" />
+                                <p className="text-xs text-slate-500 mt-2">{intencaoPercentual}% de confirmação da qualificação</p>
+                            </CardContent>
+                        </Card>
+                        <Card className="card-premium">
+                            <CardContent className="pt-5">
+                                <p className="text-xs uppercase tracking-wider text-slate-500">Engajamento</p>
+                                <p className="text-lg font-semibold text-slate-900 mt-1">{totalInteracoes} interações</p>
+                                <Progress value={engajamentoPercentual} className="h-2 mt-3" />
+                                <p className="text-xs text-slate-500 mt-2">{engajamentoPercentual}% de atividade recente</p>
+                            </CardContent>
+                        </Card>
+                    </div>
 
-
-
-            {/* DOSSIÊ IA - sempre no topo quando disponível */}
-            <CardBriefingIA lead={lead} />
-
-            {/* CARD TRACKING IA */}
-            <CardTrackingIA lead={lead} />
-
-            {/* PRÓXIMA ATIVIDADE */}
-            {lead.proximaAtividade && !isPerdidoOuArquivado && !isCaptado && (
-                <Card className="border-l-4 border-l-orange-500 bg-orange-50/50">
-                    <CardContent className="py-4">
-                        <div className="flex items-center justify-between flex-wrap gap-3">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-orange-100 rounded-lg">
-                                    <Calendar className="w-5 h-5 text-orange-600" />
-                                </div>
-                                <div>
-                                    <p className="font-medium text-slate-900">{lead.proximaAtividade.titulo}</p>
-                                    <p className="text-sm text-slate-600">
-                                        {lead.proximaAtividade.agendadoPara
-                                            ? formatarDataHora(lead.proximaAtividade.agendadoPara)
-                                            : 'Sem data definida'}
-                                        {lead.proximaAtividade.statusAgendamento && (
-                                            <span className={`ml-2 px-2 py-0.5 rounded text-xs ${statusAgendamentoConfig[lead.proximaAtividade.statusAgendamento]?.color || ''}`}>
-                                                {statusAgendamentoConfig[lead.proximaAtividade.statusAgendamento]?.label}
-                                            </span>
-                                        )}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => acaoAtividade(lead.proximaAtividade!.id, 'nao_compareceu')}
-                                >
-                                    Não compareceu
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    onClick={() => acaoAtividade(lead.proximaAtividade!.id, 'completar')}
-                                >
-                                    <Check className="w-4 h-4 mr-1" />
-                                    Realizada
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* ============================================ */}
-            {/* GRID PRINCIPAL */}
-            {/* ============================================ */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                {/* COLUNA ESQUERDA (2/3) */}
-                <div className="lg:col-span-2 space-y-6">
-
-                    {/* Card Imóvel */}
-                    <CardImovel
-                        lead={lead}
-                        isPerdidoOuArquivado={isPerdidoOuArquivado}
-                        isCaptado={isCaptado}
-                        onEditar={() => setModalEditar(true)}
-                    />
-
-                    {/* Card Proprietário (dados Assertiva) */}
-                    <CardProprietario lead={lead} />
-
-                    {/* Card Negociação (Fase 3) */}
-                    <CardNegociacao lead={lead} />
-
-                    {/* Card Contrato (Fase 4) */}
-                    <CardContrato lead={lead} />
-
-                    {/* Card Dados da Empresa (CNPJ) */}
-                    {lead.cnpjEmpresa && (
-                        <Card>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <Card className="lg:col-span-2 card-premium">
                             <CardHeader className="pb-3">
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <Building2 className="w-5 h-5 text-slate-500" />
-                                    Dados da Empresa
+                                <CardTitle className="text-lg flex items-center justify-between">
+                                    <span className="flex items-center gap-2">
+                                        <MessageSquare className="w-5 h-5 text-brand" />
+                                        Resumo do Agente Elyon
+                                    </span>
+                                    <Badge className="bg-indigo-100 text-indigo-700">IA Gerado</Badge>
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="col-span-full">
-                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Razão Social / Nome Fantasia</p>
-                                        <p className="font-medium text-lg">{lead.empresaAtual || lead.nome}</p>
-                                    </div>
-
-                                    <div>
-                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">CNPJ</p>
-                                        <p className="font-medium font-mono bg-slate-100 px-2 py-1 rounded inline-block text-sm">
-                                            {formatarCNPJ(lead.cnpjEmpresa)}
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Porte</p>
-                                        <Badge variant="outline">{lead.setor || 'Não informado'}</Badge>
-                                    </div>
-
-                                    <div className="col-span-full">
-                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Atividade Principal (CNAE)</p>
-                                        <p className="font-medium text-sm text-slate-700">{lead.profissao || 'Não informado'}</p>
-                                    </div>
-
-                                    {lead.participacoesEmpresas && lead.participacoesEmpresas.length > 0 && (
-                                        <div className="col-span-full mt-2 pt-4 border-t border-slate-100">
-                                            <p className="text-xs text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1">
-                                                <Users className="w-3 h-3" /> Quadro Societário
-                                            </p>
-                                            <div className="space-y-2">
-                                                {lead.participacoesEmpresas.map((socio, idx) => (
-                                                    <div key={idx} className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-100">
-                                                        <div className="flex items-center gap-2">
-                                                            <User className="w-4 h-4 text-slate-400" />
-                                                            <span className="text-sm font-medium">{socio.razaoSocial}</span>
-                                                        </div>
-                                                        <Badge variant="secondary" className="text-xs">{socio.participacao}</Badge>
-                                                    </div>
-                                                ))}
+                            <CardContent className="space-y-4">
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <p className="text-sm text-slate-700 leading-relaxed">{resumoExecutivo}</p>
+                                </div>
+                                <div className="space-y-2">
+                                    {insightsRapidos.length > 0 ? (
+                                        insightsRapidos.map((insight, idx) => (
+                                            <div
+                                                key={`${insight.texto}-${idx}`}
+                                                className={`rounded-lg border px-3 py-2 text-sm ${
+                                                    insight.tipo === "ok"
+                                                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                                        : "border-amber-200 bg-amber-50 text-amber-800"
+                                                }`}
+                                            >
+                                                {insight.texto}
                                             </div>
-                                        </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-sm text-slate-500">Sem insights adicionais no momento.</p>
                                     )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="card-premium">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-lg">Ações recomendadas</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                                {acoesRecomendadas.map((acao, idx) => (
+                                    <button
+                                        key={`${acao.titulo}-${idx}`}
+                                        type="button"
+                                        className={`w-full text-left rounded-lg border p-3 transition-colors ${
+                                            acao.prioridade === "alta"
+                                                ? "border-emerald-300 bg-emerald-50 hover:bg-emerald-100"
+                                                : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                                        }`}
+                                        onClick={() => executarAcaoRecomendada(acao.acao)}
+                                    >
+                                        <p className={`font-medium ${acao.prioridade === "alta" ? "text-emerald-800" : "text-slate-800"}`}>
+                                            {acao.titulo}
+                                        </p>
+                                        <p className="text-xs text-slate-600 mt-1">{acao.detalhe}</p>
+                                    </button>
+                                ))}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </>
+            )}
+
+            <Tabs value={abaPrincipal} onValueChange={setAbaPrincipal} className="w-full">
+                <TabsList className="grid w-full grid-cols-3 max-w-3xl">
+                    <TabsTrigger value="atendimento">Dados do Atendimento</TabsTrigger>
+                    <TabsTrigger value="cliente">Dados do Cliente</TabsTrigger>
+                    <TabsTrigger value="imovel">Dados do Imóvel</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="atendimento" className="mt-6 space-y-6">
+                    <Tabs value={abaAtendimento} onValueChange={setAbaAtendimento} className="w-full">
+                        <TabsList className="grid w-full grid-cols-2 max-w-xl">
+                            <TabsTrigger value="cockpit">Cockpit de Decisão</TabsTrigger>
+                            <TabsTrigger value="contexto">Contexto e IA (Legado)</TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="cockpit" className="mt-4 space-y-6">
+
+                    {lead.proximaAtividade && !isPerdidoOuArquivado && !isCaptado && (
+                        <Card className="border-l-4 border-l-orange-500 bg-orange-50/50">
+                            <CardContent className="py-4">
+                                <div className="flex items-center justify-between flex-wrap gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-orange-100 rounded-lg">
+                                            <Calendar className="w-5 h-5 text-orange-600" />
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-slate-900">{lead.proximaAtividade.titulo}</p>
+                                            <p className="text-sm text-slate-600">
+                                                {lead.proximaAtividade.agendadoPara
+                                                    ? formatarDataHora(lead.proximaAtividade.agendadoPara)
+                                                    : 'Sem data definida'}
+                                                {lead.proximaAtividade.statusAgendamento && (
+                                                    <span className={`ml-2 px-2 py-0.5 rounded text-xs ${statusAgendamentoConfig[lead.proximaAtividade.statusAgendamento]?.color || ''}`}>
+                                                        {statusAgendamentoConfig[lead.proximaAtividade.statusAgendamento]?.label}
+                                                    </span>
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => acaoAtividade(lead.proximaAtividade!.id, 'nao_compareceu')}
+                                        >
+                                            Não compareceu
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => acaoAtividade(lead.proximaAtividade!.id, 'completar')}
+                                        >
+                                            <Check className="w-4 h-4 mr-1" />
+                                            Realizada
+                                        </Button>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>
                     )}
 
-                    {/* TABS SPIN */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <Target className="w-5 h-5 text-slate-500" />
-                                Qualificação SPIN
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <Tabs defaultValue="implicacao" className="w-full">
-                                <TabsList className="grid w-full grid-cols-4">
-                                    <TabsTrigger value="situacao" className="text-xs sm:text-sm">Situação</TabsTrigger>
-                                    <TabsTrigger value="problema" className="text-xs sm:text-sm">Problema</TabsTrigger>
-                                    <TabsTrigger value="implicacao" className="text-xs sm:text-sm">Implicação</TabsTrigger>
-                                    <TabsTrigger value="necessidade" className="text-xs sm:text-sm">Necessidade</TabsTrigger>
-                                </TabsList>
-
-                                <TabsContent value="situacao" className="mt-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <InfoItem label="Situação Atual" value={lead.spin.situacao.situacaoAtual} icon={<User className="w-4 h-4" />} />
-                                        <InfoItem label="Tempo para Decisão" value={lead.spin.situacao.tempoDecisao} icon={<Clock className="w-4 h-4" />} />
-                                        <InfoItem label="Tentativas Anteriores" value={lead.spin.situacao.tentativasAnteriores} icon={<RefreshCw className="w-4 h-4" />} />
-                                        <InfoItem
-                                            label="Com Corretor Atualmente"
-                                            value={lead.spin.situacao.comCorretorAtualmente === null ? null : lead.spin.situacao.comCorretorAtualmente ? 'Sim' : 'Não'}
-                                            icon={lead.spin.situacao.comCorretorAtualmente ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-                                        />
-                                    </div>
-                                </TabsContent>
-
-                                <TabsContent value="problema" className="mt-4 space-y-4">
-                                    <InfoItem label="Motivação da Venda" value={lead.spin.problema.motivacaoVenda} icon={<AlertTriangle className="w-4 h-4" />} fullWidth />
-                                    <div>
-                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Dores Identificadas</p>
-                                        {lead.spin.problema.doresIdentificadas.length > 0 ? (
-                                            <div className="flex flex-wrap gap-2">
-                                                {lead.spin.problema.doresIdentificadas.map((dor, i) => (
-                                                    <Badge key={i} variant="secondary" className="bg-red-50 text-red-700">{dor}</Badge>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <p className="text-slate-400 text-sm">Nenhuma dor identificada</p>
-                                        )}
-                                    </div>
-                                </TabsContent>
-
-                                <TabsContent value="implicacao" className="mt-4 space-y-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <InfoItem label="Prazo Desejado" value={lead.spin.implicacao.prazoDesejado} icon={<Calendar className="w-4 h-4" />} />
-                                        <div>
-                                            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Urgência</p>
-                                            {lead.spin.implicacao.urgencia ? (
-                                                <Badge className={
-                                                    lead.spin.implicacao.urgencia === 'ALTA' ? 'bg-red-100 text-red-700' :
-                                                        lead.spin.implicacao.urgencia === 'MEDIA' ? 'bg-amber-100 text-amber-700' :
-                                                            'bg-emerald-100 text-emerald-700'
-                                                }>
-                                                    {lead.spin.implicacao.urgencia}
-                                                </Badge>
-                                            ) : (
-                                                <span className="text-slate-400">Não informado</span>
-                                            )}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 space-y-6">
+                            <Card className="card-premium">
+                                <CardHeader className="pb-3">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-lg">Conversa WhatsApp no CRM</CardTitle>
+                                        <div className="flex items-center gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => setChatOpen(true)}>
+                                                <MessageSquare className="w-4 h-4 mr-1" />
+                                                Abrir chat
+                                            </Button>
+                                            <Button variant="outline" size="sm" onClick={() => setModalAtividade(true)}>
+                                                <Plus className="w-4 h-4 mr-1" />
+                                                Nova atividade
+                                            </Button>
                                         </div>
                                     </div>
-                                    <InfoItem label="Consequências de Não Vender" value={lead.spin.implicacao.consequencias} icon={<TrendingUp className="w-4 h-4" />} fullWidth />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <InfoItem label="Custos Atuais" value={lead.spin.implicacao.custosAtuais} icon={<AlertTriangle className="w-4 h-4" />} />
-                                        <InfoItem label="Pressão de Tempo" value={lead.spin.implicacao.pressaoTempo} icon={<Clock className="w-4 h-4" />} />
-                                    </div>
-                                </TabsContent>
-
-                                <TabsContent value="necessidade" className="mt-4 space-y-4">
-                                    <InfoItem label="Expectativa do Serviço" value={lead.spin.necessidade.expectativaServico} icon={<Target className="w-4 h-4" />} fullWidth />
-                                    <div>
-                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Objeções</p>
-                                        {lead.spin.necessidade.objecoes.length > 0 ? (
-                                            <div className="flex flex-wrap gap-2">
-                                                {lead.spin.necessidade.objecoes.map((obj, i) => (
-                                                    <Badge key={i} variant="secondary" className="bg-orange-50 text-orange-700">{obj}</Badge>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <p className="text-slate-400 text-sm">Nenhuma objeção registrada</p>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Interesse em Avaliação</p>
-                                        {lead.spin.necessidade.interesseAvaliacao === null ? (
-                                            <span className="text-slate-400">Não informado</span>
-                                        ) : lead.spin.necessidade.interesseAvaliacao ? (
-                                            <Badge className="bg-emerald-100 text-emerald-700"><CheckCircle2 className="w-3 h-3 mr-1" />Sim</Badge>
-                                        ) : (
-                                            <Badge className="bg-red-100 text-red-700"><XCircle className="w-3 h-3 mr-1" />Não</Badge>
-                                        )}
-                                    </div>
-                                </TabsContent>
-                            </Tabs>
-
-                            {lead.spin.observacoes && (
-                                <div className="mt-6 pt-4 border-t">
-                                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Observações Gerais</p>
-                                    <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg">{lead.spin.observacoes}</p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* COLUNA DIREITA (1/3) */}
-                <div className="space-y-6">
-
-                    {/* Info Card */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-lg">Informações</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div>
-                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Origem</p>
-                                <p className="font-medium">{lead.origem || 'Não informado'}</p>
-                            </div>
-                            {lead.campanhaOrigem && (
-                                <div>
-                                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Campanha</p>
-                                    <p className="font-medium">{lead.campanhaOrigem.nome}</p>
-                                </div>
-                            )}
-                            <div>
-                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Primeiro Contato</p>
-                                <p className="font-medium">{lead.primeiroContato ? formatarData(lead.primeiroContato) : 'Não registrado'}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Última Interação</p>
-                                <p className="font-medium">{lead.ultimaInteracao ? tempoRelativo(lead.ultimaInteracao) : 'Nenhuma'}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Criado em</p>
-                                <p className="font-medium">{formatarData(lead.criadoEm)}</p>
-                            </div>
-                            {lead.motivoPerda && (
-                                <div className="pt-2 border-t">
-                                    <p className="text-xs text-red-500 uppercase tracking-wider mb-1">Motivo da Perda</p>
-                                    <p className="font-medium text-red-600">{lead.motivoPerda}</p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Timeline de Atividades */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg">Atividades</CardTitle>
-                                {!isPerdidoOuArquivado && !isCaptado && (
-                                    <Button size="sm" variant="ghost" onClick={() => setModalAtividade(true)}>
-                                        <Plus className="w-4 h-4" />
-                                    </Button>
-                                )}
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            {lead.atividades.length > 0 ? (
-                                <div className="space-y-4 max-h-[400px] overflow-y-auto">
-                                    {lead.atividades.map((atividade, index) => {
-                                        const tipoConfig = tipoAtividadeConfig[atividade.tipo] || tipoAtividadeConfig.OUTRO;
-                                        const statusAg = atividade.statusAgendamento ? statusAgendamentoConfig[atividade.statusAgendamento] : null;
-
-                                        return (
-                                            <div key={atividade.id} className="relative group">
-                                                {index < lead.atividades.length - 1 && (
-                                                    <div className="absolute left-[15px] top-8 bottom-0 w-0.5 bg-slate-200" />
-                                                )}
-                                                <div className="flex gap-3">
-                                                    <div className={`flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center ${tipoConfig.color}`}>
-                                                        {tipoConfig.icon}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0 pb-4">
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <div className="flex-1">
-                                                                <p className="font-medium text-sm text-slate-900">{atividade.titulo}</p>
-                                                                {atividade.descricao && (
-                                                                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{atividade.descricao}</p>
-                                                                )}
-                                                            </div>
-                                                            {statusAg && (
-                                                                <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded ${statusAg.color}`}>
-                                                                    {statusAg.label}
-                                                                </span>
-                                                            )}
+                                </CardHeader>
+                                <CardContent>
+                                    {mensagensWhatsapp.length > 0 ? (
+                                        <div className="space-y-3">
+                                            {mensagensWhatsapp.map((mensagem: any) => {
+                                                const enviadaPeloAgente = ["assistente", "sistema", "ASSISTENTE", "SISTEMA"].includes(String(mensagem.remetente));
+                                                return (
+                                                    <div key={mensagem.id} className={`flex ${enviadaPeloAgente ? "justify-end" : "justify-start"}`}>
+                                                        <div
+                                                            className={`max-w-[85%] rounded-2xl px-4 py-2 ${
+                                                                enviadaPeloAgente
+                                                                    ? "bg-indigo-600 text-white"
+                                                                    : "bg-slate-100 text-slate-800"
+                                                            }`}
+                                                        >
+                                                            <p className="text-sm leading-relaxed">{mensagem.conteudo}</p>
+                                                            <p className={`text-[11px] mt-1 ${enviadaPeloAgente ? "text-indigo-100" : "text-slate-500"}`}>
+                                                                {formatarDataHora(mensagem.enviadaEm)}
+                                                            </p>
                                                         </div>
-                                                        <p className="text-xs text-slate-400 mt-1">
-                                                            {atividade.agendadoPara ? formatarDataHora(atividade.agendadoPara) : formatarDataHora(atividade.criadoEm)}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-6 text-slate-500">
+                                            <MessageSquare className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                                            <p className="text-sm">Sem mensagens para pré-visualização</p>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            <Card className="card-premium">
+                                <CardHeader className="pb-3">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-lg">Quadro de Atividades</CardTitle>
+                                        {!isPerdidoOuArquivado && !isCaptado && (
+                                            <Button size="sm" variant="ghost" onClick={() => setModalAtividade(true)}>
+                                                <Plus className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    {lead.atividades.length > 0 ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <p className="text-xs font-semibold text-slate-700">Pendentes</p>
+                                                    <Badge variant="outline">{quadroAtividades.pendentes.length}</Badge>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {quadroAtividades.pendentes.length > 0 ? quadroAtividades.pendentes.map((atividade) => (
+                                                        <div key={atividade.id} className="rounded-md border border-slate-200 bg-white p-2">
+                                                            <p className="text-xs font-medium text-slate-800 line-clamp-2">{atividade.titulo}</p>
+                                                            <p className="text-[11px] text-slate-500 mt-1">
+                                                                {atividade.agendadoPara ? formatarDataHora(atividade.agendadoPara) : formatarDataHora(atividade.criadoEm)}
+                                                            </p>
+                                                        </div>
+                                                    )) : (
+                                                        <p className="text-xs text-slate-500">Sem pendências.</p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <p className="text-xs font-semibold text-emerald-800">Concluídas</p>
+                                                    <Badge className="bg-emerald-100 text-emerald-700">{quadroAtividades.concluidas.length}</Badge>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {quadroAtividades.concluidas.length > 0 ? quadroAtividades.concluidas.map((atividade) => (
+                                                        <div key={atividade.id} className="rounded-md border border-emerald-200 bg-white p-2">
+                                                            <p className="text-xs font-medium text-slate-800 line-clamp-2">{atividade.titulo}</p>
+                                                            <p className="text-[11px] text-slate-500 mt-1">
+                                                                {atividade.completadoEm ? formatarDataHora(atividade.completadoEm) : formatarDataHora(atividade.criadoEm)}
+                                                            </p>
+                                                        </div>
+                                                    )) : (
+                                                        <p className="text-xs text-emerald-700">Sem concluídas ainda.</p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <p className="text-xs font-semibold text-amber-800">Não compareceu</p>
+                                                    <Badge className="bg-amber-100 text-amber-700">{quadroAtividades.naoCompareceu.length}</Badge>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {quadroAtividades.naoCompareceu.length > 0 ? quadroAtividades.naoCompareceu.map((atividade) => (
+                                                        <div key={atividade.id} className="rounded-md border border-amber-200 bg-white p-2">
+                                                            <p className="text-xs font-medium text-slate-800 line-clamp-2">{atividade.titulo}</p>
+                                                            <p className="text-[11px] text-slate-500 mt-1">
+                                                                {atividade.completadoEm ? formatarDataHora(atividade.completadoEm) : formatarDataHora(atividade.criadoEm)}
+                                                            </p>
+                                                        </div>
+                                                    )) : (
+                                                        <p className="text-xs text-amber-700">Nenhum registro.</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-6 text-slate-500">
+                                            <Calendar className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                                            <p className="text-sm">Nenhuma atividade registrada</p>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <div className="space-y-6">
+                            <Card className="card-premium border-indigo-200/80">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <Bot className="w-5 h-5 text-brand" />
+                                        Cockpit Admin & CRM
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {carregandoCockpitAdmin ? (
+                                        <div className="text-sm text-slate-500">Carregando status operacional...</div>
+                                    ) : (
+                                        <>
+                                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                                <p className="text-xs uppercase tracking-wider text-slate-500">Agente Admin</p>
+                                                <p className="font-medium text-slate-800">
+                                                    {cockpitAdmin?.agenteAdmin?.nome || "Não configurado"}
+                                                </p>
+                                                <p className="text-xs text-slate-600">
+                                                    Status: {cockpitAdmin?.agenteAdmin?.status || "Sem agente ativo"}
+                                                </p>
+                                                <p className="text-xs text-slate-600">
+                                                    Sessão WhatsApp: {cockpitAdmin?.agenteAdmin?.sessaoWhatsapp?.nome || "Não vinculada"}
+                                                </p>
+                                            </div>
+
+                                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                                <p className="text-xs uppercase tracking-wider text-slate-500">Integração CRM Quadra Dois</p>
+                                                <p className="font-medium text-slate-800">
+                                                    {cockpitAdmin?.integracaoCRM?.ativo ? "Ativa" : "Não configurada"}
+                                                </p>
+                                                <p className="text-xs text-slate-600">
+                                                    Último teste: {cockpitAdmin?.integracaoCRM?.ultimoTesteEm ? formatarDataHora(cockpitAdmin.integracaoCRM.ultimoTesteEm) : "Não testado"}
+                                                </p>
+                                                {cockpitAdmin?.integracaoCRM?.ultimoErro && (
+                                                    <p className="text-xs text-red-600">{cockpitAdmin.integracaoCRM.ultimoErro}</p>
+                                                )}
+                                            </div>
+
+                                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                                <p className="text-xs uppercase tracking-wider text-slate-500">Status do Lead no CRM</p>
+                                                <p className="text-sm font-medium text-slate-800">
+                                                    Sync: {lead.crm?.syncStatus || cockpitAdmin?.crmLead?.syncStatus || "não enviado"}
+                                                </p>
+                                                {lead.crm?.propertyCode && (
+                                                    <p className="text-xs text-slate-600">Property Code: {lead.crm.propertyCode}</p>
+                                                )}
+                                                {(lead.crm?.syncError || cockpitAdmin?.crmLead?.syncError) && (
+                                                    <p className="text-xs text-red-600">{lead.crm?.syncError || cockpitAdmin?.crmLead?.syncError}</p>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-2">
+                                                <Button variant="outline" className="justify-start" onClick={() => setChatOpen(true)}>
+                                                    <MessageSquare className="w-4 h-4 mr-2" />
+                                                    Falar com cliente no CRM
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    className="justify-start"
+                                                    disabled={processandoCrm !== null}
+                                                    onClick={() => executarAcaoCrm("status")}
+                                                >
+                                                    {processandoCrm === "status" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Link2 className="w-4 h-4 mr-2" />}
+                                                    Verificar status no CRM
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    className="justify-start"
+                                                    disabled={processandoCrm !== null}
+                                                    onClick={() => executarAcaoCrm("enviar")}
+                                                >
+                                                    {processandoCrm === "enviar" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                                                    Enviar lead para CRM
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    className="justify-start"
+                                                    disabled={processandoCrm !== null}
+                                                    onClick={() => executarAcaoCrm("reenviar")}
+                                                >
+                                                    {processandoCrm === "reenviar" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                                                    Reenviar lead para CRM
+                                                </Button>
+                                                <Button variant="outline" className="justify-start" onClick={() => window.location.href = "/dashboard/integracoes"}>
+                                                    <ExternalLink className="w-4 h-4 mr-2" />
+                                                    Abrir Integrações
+                                                </Button>
+                                                <Button variant="outline" className="justify-start" onClick={() => window.location.href = "/dashboard/agentes"}>
+                                                    <Bot className="w-4 h-4 mr-2" />
+                                                    Abrir Agente Admin
+                                                </Button>
+                                            </div>
+                                        </>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            <Card className="card-premium">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg">Informações</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div>
+                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Origem</p>
+                                        <p className="font-medium">{lead.origem || 'Não informado'}</p>
+                                    </div>
+                                    {lead.campanhaOrigem && (
+                                        <div>
+                                            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Campanha</p>
+                                            <p className="font-medium">{lead.campanhaOrigem.nome}</p>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Primeiro Contato</p>
+                                        <p className="font-medium">{lead.primeiroContato ? formatarData(lead.primeiroContato) : 'Não registrado'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Última Interação</p>
+                                        <p className="font-medium">{lead.ultimaInteracao ? tempoRelativo(lead.ultimaInteracao) : 'Nenhuma'}</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="card-premium">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg">Telemetria do Cockpit</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                            <p className="text-[11px] text-slate-500">Ações</p>
+                                            <p className="font-semibold text-slate-800">{metricasTelemetria.totalAcoesDisparadas}</p>
+                                        </div>
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                            <p className="text-[11px] text-slate-500">Resultados</p>
+                                            <p className="font-semibold text-slate-800">{metricasTelemetria.totalResultados}</p>
+                                        </div>
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                            <p className="text-[11px] text-slate-500">Taxa de Sucesso</p>
+                                            <p className="font-semibold text-emerald-700">{metricasTelemetria.taxaSucesso}%</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-semibold text-slate-700">Alertas automáticos</p>
+                                        {alertasOperacionais.length > 0 ? (
+                                            alertasOperacionais.map((alerta, idx) => (
+                                                <div
+                                                    key={`${alerta.titulo}-${idx}`}
+                                                    className={`rounded-lg border p-3 ${
+                                                        alerta.tipo === "critico"
+                                                            ? "border-red-200 bg-red-50"
+                                                            : "border-amber-200 bg-amber-50"
+                                                    }`}
+                                                >
+                                                    <p className={`text-xs font-semibold ${
+                                                        alerta.tipo === "critico" ? "text-red-700" : "text-amber-700"
+                                                    }`}>
+                                                        {alerta.titulo}
+                                                    </p>
+                                                    <p className="text-xs text-slate-700 mt-1">{alerta.detalhe}</p>
+                                                    <p className="text-xs text-slate-600 mt-1">{alerta.recomendacao}</p>
+                                                    {alerta.acaoRapida && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="mt-2 h-7 text-xs"
+                                                            onClick={() => executarAcaoAlerta(alerta.acaoRapida)}
+                                                        >
+                                                            {alerta.labelAcao || "Executar ação"}
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                                                <p className="text-xs font-semibold text-emerald-700">Operação estável</p>
+                                                <p className="text-xs text-emerald-800 mt-1">Sem alertas críticos para este lead no momento.</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <Tabs defaultValue="resumo" className="w-full">
+                                        <TabsList className="grid w-full grid-cols-2">
+                                            <TabsTrigger value="resumo">Resumo</TabsTrigger>
+                                            <TabsTrigger value="detalhado">Detalhado</TabsTrigger>
+                                        </TabsList>
+
+                                        <TabsContent value="resumo" className="mt-3 space-y-3">
+                                            <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+                                                <p className="text-xs font-semibold text-slate-700">Playbook inteligente</p>
+                                                <p className="text-xs text-slate-600">Fase: <span className="font-medium text-slate-800">{playbookInteligente.fase}</span></p>
+                                                <p className="text-xs text-slate-600">{playbookInteligente.foco}</p>
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    {playbookInteligente.acoes.map((acao) => (
+                                                        <Button key={acao} size="sm" variant="outline" className="h-7 text-xs" onClick={() => executarAcaoRecomendada(acao)}>
+                                                            {acao}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className="rounded-lg border border-slate-200 p-3">
+                                                <p className="text-xs font-semibold text-slate-700 mb-2">SLA operacional</p>
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    <div className="rounded-md bg-slate-50 p-2">
+                                                        <p className="text-[10px] text-slate-500">Sem ação</p>
+                                                        <p className="text-xs font-semibold text-slate-800">
+                                                            {metricasSLA.horasSemAcao !== null ? `${metricasSLA.horasSemAcao}h` : "—"}
+                                                        </p>
+                                                    </div>
+                                                    <div className="rounded-md bg-slate-50 p-2">
+                                                        <p className="text-[10px] text-slate-500">Sem msg</p>
+                                                        <p className="text-xs font-semibold text-slate-800">
+                                                            {metricasSLA.horasSemMensagem !== null ? `${metricasSLA.horasSemMensagem}h` : "—"}
+                                                        </p>
+                                                    </div>
+                                                    <div className="rounded-md bg-slate-50 p-2">
+                                                        <p className="text-[10px] text-slate-500">Próx. atividade</p>
+                                                        <p className="text-xs font-semibold text-slate-800">
+                                                            {metricasSLA.horasParaProximaAtividade !== null ? `${metricasSLA.horasParaProximaAtividade}h` : "—"}
                                                         </p>
                                                     </div>
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <div className="text-center py-6 text-slate-500">
-                                    <Calendar className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                                    <p className="text-sm">Nenhuma atividade registrada</p>
-                                    {!isPerdidoOuArquivado && !isCaptado && (
-                                        <Button size="sm" variant="outline" className="mt-3" onClick={() => setModalAtividade(true)}>
-                                            <Plus className="w-4 h-4 mr-1" />
-                                            Criar Atividade
-                                        </Button>
-                                    )}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
 
-                    {/* Conversas */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-lg">Conversas</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {lead.conversas.length > 0 ? (
-                                <div className="space-y-3">
-                                    {lead.conversas.map((conversa) => (
-                                        <div
-                                            key={conversa.id}
-                                            className="flex items-center justify-between p-3 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors"
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                                                    <MessageSquare className="w-4 h-4 text-emerald-600" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium text-sm">{conversa.canal}</p>
-                                                    <p className="text-xs text-slate-500">{conversa.mensagens.length} mensagens</p>
+                                            <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+                                                <p className="text-xs font-semibold text-slate-700">Funil de execução</p>
+                                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                                    <div className="rounded-md bg-slate-50 p-2">
+                                                        <p className="text-slate-500">Cliques decisão</p>
+                                                        <p className="font-semibold text-slate-800">{metricasExecutivas?.funil.cliquesDecisao ?? 0}</p>
+                                                    </div>
+                                                    <div className="rounded-md bg-slate-50 p-2">
+                                                        <p className="text-slate-500">Ações CRM</p>
+                                                        <p className="font-semibold text-slate-800">{metricasExecutivas?.funil.acoesCrm ?? 0}</p>
+                                                    </div>
+                                                    <div className="rounded-md bg-slate-50 p-2">
+                                                        <p className="text-slate-500">Resultados decisão</p>
+                                                        <p className="font-semibold text-slate-800">{metricasExecutivas?.funil.resultadosDecisao ?? 0}</p>
+                                                    </div>
+                                                    <div className="rounded-md bg-slate-50 p-2">
+                                                        <p className="text-slate-500">Resultados CRM</p>
+                                                        <p className="font-semibold text-slate-800">{metricasExecutivas?.funil.resultadosCrm ?? 0}</p>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <p className="text-xs text-slate-400">{tempoRelativo(conversa.iniciadaEm)}</p>
+                                        </TabsContent>
+
+                                        <TabsContent value="detalhado" className="mt-3 space-y-3">
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <Select value={filtroPeriodoTelemetria} onValueChange={(v) => setFiltroPeriodoTelemetria(v as "7d" | "30d" | "90d" | "all")}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Período" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                                                        <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                                                        <SelectItem value="90d">Últimos 90 dias</SelectItem>
+                                                        <SelectItem value="all">Período completo</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <Select value={filtroTipoTelemetria} onValueChange={(v) => setFiltroTipoTelemetria(v as "todos" | "decisao" | "crm")}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Tipo" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="todos">Todos</SelectItem>
+                                                        <SelectItem value="decisao">Decisão</SelectItem>
+                                                        <SelectItem value="crm">CRM</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <Select value={filtroSucessoTelemetria} onValueChange={(v) => setFiltroSucessoTelemetria(v as "todos" | "sucesso" | "falha")}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Resultado" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="todos">Todos os resultados</SelectItem>
+                                                        <SelectItem value="sucesso">Somente sucesso</SelectItem>
+                                                        <SelectItem value="falha">Somente falha</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <Button variant="outline" size="sm" className="h-10" onClick={exportarTelemetriaCSV}>
+                                                    Exportar CSV
+                                                </Button>
+                                            </div>
+
+                                            {metricasTelemetria.rankingAcoes.length > 0 && (
+                                                <div className="rounded-lg border border-slate-200 p-3">
+                                                    <p className="text-xs font-semibold text-slate-700 mb-2">Conversão por ação</p>
+                                                    <div className="space-y-2">
+                                                        {metricasTelemetria.rankingAcoes.map((item) => (
+                                                            <div key={item.acao} className="flex items-center justify-between text-xs">
+                                                                <span className="text-slate-700">{item.acao}</span>
+                                                                <span className="text-slate-500">
+                                                                    {item.sucessos}/{item.resultados} ({item.taxa}%)
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+                                                <p className="text-xs font-semibold text-slate-700">Ranking por especialista (tenant)</p>
+                                                {carregandoMetricasExecutivas ? (
+                                                    <p className="text-xs text-slate-500">Carregando ranking...</p>
+                                                ) : (metricasExecutivas?.rankingUsuarios?.length || 0) > 0 ? (
+                                                    metricasExecutivas!.rankingUsuarios.slice(0, 5).map((u) => (
+                                                        <div key={u.usuarioId} className="flex items-center justify-between text-xs">
+                                                            <span className="text-slate-700">{u.nome}</span>
+                                                            <span className="text-slate-500">{u.totalSucessos}/{u.totalResultados} ({u.taxaSucesso}%)</span>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <p className="text-xs text-slate-500">Sem dados suficientes.</p>
+                                                )}
+                                            </div>
+
+                                            {carregandoEventosCockpit ? (
+                                                <p className="text-sm text-slate-500">Carregando eventos...</p>
+                                            ) : eventosCockpitFiltrados.length > 0 ? (
+                                                <div className="space-y-3 max-h-[260px] overflow-y-auto">
+                                                    {eventosCockpitFiltrados.map((evento) => (
+                                                        <div key={evento.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                                            <p className="text-xs font-semibold text-slate-700">{evento.acao.replace("COCKPIT_", "")}</p>
+                                                            <p className="text-[11px] text-slate-500 mt-1">
+                                                                {formatarDataHora(evento.criadoEm)}
+                                                                {evento.usuario?.nome ? ` · ${evento.usuario.nome}` : ""}
+                                                            </p>
+                                                            {evento.detalhes?.acao && (
+                                                                <p className="text-xs text-slate-600 mt-1">Ação: {evento.detalhes.acao}</p>
+                                                            )}
+                                                            {evento.detalhes?.tipo && (
+                                                                <p className="text-xs text-slate-600 mt-1">Tipo: {evento.detalhes.tipo}</p>
+                                                            )}
+                                                            {typeof evento.detalhes?.sucesso === "boolean" && (
+                                                                <p className={`text-xs mt-1 ${evento.detalhes.sucesso ? "text-emerald-700" : "text-red-600"}`}>
+                                                                    Resultado: {evento.detalhes.sucesso ? "Sucesso" : "Falha"}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-slate-500">Sem eventos registrados até o momento.</p>
+                                            )}
+
+                                            <div className="rounded-lg border border-slate-200 p-3">
+                                                <p className="text-xs font-semibold text-slate-700 mb-2">Timeline unificada</p>
+                                                {timelineUnificada.length > 0 ? (
+                                                    <div className="space-y-2 max-h-[240px] overflow-y-auto">
+                                                        {timelineUnificada.map((item) => (
+                                                            <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                                                <p className="text-xs font-semibold text-slate-700">
+                                                                    {item.tipo.toUpperCase()} · {item.titulo}
+                                                                </p>
+                                                                {item.descricao && <p className="text-xs text-slate-600 mt-1">{item.descricao}</p>}
+                                                                <p className="text-[11px] text-slate-500 mt-1">{formatarDataHora(item.quando)}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-slate-500">Sem eventos na timeline.</p>
+                                                )}
+                                            </div>
+                                        </TabsContent>
+                                    </Tabs>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                        </TabsContent>
+
+                        <TabsContent value="contexto" className="mt-4 space-y-6">
+                            <FaseChecklist lead={lead} />
+                            <CardBriefingIA lead={lead} />
+                            <CardTrackingIA lead={lead} />
+                        </TabsContent>
+                    </Tabs>
+                </TabsContent>
+
+                <TabsContent value="cliente" className="mt-6 space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 space-y-6">
+                            <CardProprietario lead={lead} />
+
+                            {lead.cnpjEmpresa && (
+                                <Card className="card-premium">
+                                    <CardHeader className="pb-3">
+                                        <CardTitle className="text-lg flex items-center gap-2">
+                                            <Building2 className="w-5 h-5 text-slate-500" />
+                                            Dados da Empresa
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="col-span-full">
+                                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Razão Social / Nome Fantasia</p>
+                                                <p className="font-medium text-lg">{lead.empresaAtual || lead.nome}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">CNPJ</p>
+                                                <p className="font-medium font-mono bg-slate-100 px-2 py-1 rounded inline-block text-sm">
+                                                    {formatarCNPJ(lead.cnpjEmpresa)}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Porte</p>
+                                                <Badge variant="outline">{lead.setor || 'Não informado'}</Badge>
+                                            </div>
                                         </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-6 text-slate-500">
-                                    <MessageSquare className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                                    <p className="text-sm">Nenhuma conversa registrada</p>
-                                </div>
+                                    </CardContent>
+                                </Card>
                             )}
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
+                        </div>
+
+                        <div className="space-y-6">
+                            <Card className="card-premium">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg">Dados Cadastrais</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <div>
+                                        <p className="text-xs text-slate-500">Nome</p>
+                                        <p className="font-medium text-slate-800">{lead.nome}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-500">CPF</p>
+                                        <p className="font-medium text-slate-800">{lead.cpf || "Não informado"}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-500">Telefone</p>
+                                        <p className="font-medium text-slate-800">{lead.telefone || "Não informado"}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-500">Email</p>
+                                        <p className="font-medium text-slate-800">{lead.email || "Não informado"}</p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="imovel" className="mt-6 space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 space-y-6">
+                            <CardImovel
+                                lead={lead}
+                                isPerdidoOuArquivado={isPerdidoOuArquivado}
+                                isCaptado={isCaptado}
+                                onEditar={() => setModalEditar(true)}
+                            />
+                            <CardNegociacao lead={lead} />
+                            <CardContrato lead={lead} />
+
+                            <Card className="card-premium">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg">Dados técnicos coletados pelo Admin Agent</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
+                                            <p className="text-xs text-slate-500">Suítes</p>
+                                            <p className="font-semibold">{lead.imovelDetalhes?.suites ?? "—"}</p>
+                                        </div>
+                                        <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
+                                            <p className="text-xs text-slate-500">Banheiros</p>
+                                            <p className="font-semibold">{lead.imovelDetalhes?.banheiros ?? "—"}</p>
+                                        </div>
+                                        <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
+                                            <p className="text-xs text-slate-500">Área Total</p>
+                                            <p className="font-semibold">{lead.imovelDetalhes?.areaTotal ? `${lead.imovelDetalhes.areaTotal} m²` : "—"}</p>
+                                        </div>
+                                        <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
+                                            <p className="text-xs text-slate-500">Andar</p>
+                                            <p className="font-semibold">{lead.imovelDetalhes?.andar ?? "—"}</p>
+                                        </div>
+                                    </div>
+                                    {(lead.imovelDetalhes?.caracteristicas?.length || 0) > 0 && (
+                                        <div className="mt-4">
+                                            <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Características</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {lead.imovelDetalhes?.caracteristicas?.map((car, idx) => (
+                                                    <Badge key={`${car}-${idx}`} variant="secondary">{car}</Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <div className="space-y-6">
+                            <Card className="card-premium">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg">Fotos e documentos</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <p className="text-sm text-slate-600">
+                                        Fotos coletadas: <span className="font-semibold text-slate-800">{lead.imovelDetalhes?.fotos?.length || 0}</span>
+                                    </p>
+                                    <p className="text-sm text-slate-600">
+                                        Contrato: <span className="font-semibold text-slate-800">{lead.contratoUrl ? "Disponível" : "Pendente"}</span>
+                                    </p>
+                                    {lead.contratoUrl && (
+                                        <Button variant="outline" className="w-full justify-start" onClick={() => window.open(lead.contratoUrl!, "_blank")}>
+                                            <ExternalLink className="w-4 h-4 mr-2" />
+                                            Visualizar contrato
+                                        </Button>
+                                    )}
+                                    <Button variant="outline" className="w-full justify-start" onClick={() => setModalEditar(true)}>
+                                        <Edit className="w-4 h-4 mr-2" />
+                                        Atualizar dados do imóvel
+                                    </Button>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="card-premium">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg">Mineração vinculada</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {(lead.imoveisMineracao?.length || 0) > 0 ? (
+                                        <div className="space-y-2">
+                                            {lead.imoveisMineracao?.slice(0, 4).map((imovel) => (
+                                                <div key={imovel.id} className="rounded-lg border border-slate-200 p-3 bg-slate-50">
+                                                    <p className="font-medium text-slate-800 text-sm">{imovel.edificio || "Imóvel minerado"}</p>
+                                                    <p className="text-xs text-slate-600 mt-1">{imovel.endereco}</p>
+                                                    <p className="text-xs text-slate-500 mt-1">
+                                                        {imovel.tipo || "Tipo não informado"} · {imovel.area ? `${imovel.area}m²` : "Área n/i"}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-slate-500">Sem imóveis de mineração associados.</p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                </TabsContent>
+            </Tabs>
+
+            <Suspense fallback={null}>
+                <ChatModal
+                    lead={{
+                        id: lead.id,
+                        nome: lead.nome,
+                        telefone: lead.telefone
+                    }}
+                    open={chatOpen}
+                    onOpenChange={setChatOpen}
+                />
+            </Suspense>
 
             {/* ============================================ */}
             {/* MODAIS */}
