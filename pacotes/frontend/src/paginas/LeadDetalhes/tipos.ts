@@ -16,6 +16,11 @@ export interface Lead {
     criadoEm: string;
     atualizadoEm: string;
 
+    // ── Scores unificados (calculados pelo backend) ──
+    scoreQualificacao?: number | null;  // completude do lead (0-100)
+    scoreUrgencia?: number | null;      // urgência operacional (0-100)
+    scoreComposto?: number | null;      // métrica única = qualif×0.4 + urgência×0.6
+
     // Campanha de origem
     campanhaOrigem: {
         id: string;

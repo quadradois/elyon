@@ -12,7 +12,7 @@ import {
   extrairFieldSources,
   obterLastSourceUpdateAt,
 } from '../agentes/governanca-qualificacao';
-import { priorizarLeads } from '../servicos/servico-priorizacao-leads';
+import { priorizarLeads, calcularQualificacao, calcularUrgencia } from '../servicos/servico-priorizacao-leads';
 
 const router = Router();
 
@@ -820,7 +820,62 @@ router.get('/:id', async (req, res) => {
         !a.completadoEm &&
         a.statusAgendamento !== 'CANCELADO' &&
         new Date(a.agendadoPara) >= new Date()
-      ) || null
+      ) || null,
+
+      // ── Scores unificados ──
+      // scoreQualificacao: completude e qualidade do lead (0-100)
+      // scoreUrgencia: urgência operacional / SLA (0-100)
+      // scoreComposto: métrica única = qualif×0.4 + urgência×0.6 (mesma fórmula do Mission Control)
+      scoreQualificacao: (() => {
+        const dadosFlatten = {
+          ...l,
+          interesseEm: l.interesseEm,
+          valorPretendido: l.valorPretendido,
+          tipoImovel: l.tipoImovel,
+          enderecoImovel: l.enderecoImovel,
+          bairroImovel: l.bairroImovel,
+          doresIdentificadas: l.doresIdentificadas,
+          motivacaoVenda: l.motivacaoVenda,
+          prazoDesejado: l.prazoDesejado,
+          situacaoAtual: l.situacaoAtual,
+          tipoAutorizacao: l.tipoAutorizacao,
+          autorizouAnuncio: l.autorizouAnuncio,
+          comissaoAcordada: l.comissaoAcordada,
+          scoreAssertiva: l.scoreAssertiva,
+        };
+        return calcularQualificacao(dadosFlatten);
+      })(),
+      scoreUrgencia: (() => {
+        const proximaAtiv = l.atividades.find((a: any) =>
+          a.agendadoPara && !a.completadoEm && a.statusAgendamento !== 'CANCELADO'
+        );
+        const { pontos } = calcularUrgencia(
+          {
+            ...l,
+            proximaAtividadeData: proximaAtiv?.agendadoPara || null,
+            horasSemResposta: null,
+            urgenciaEnum: l.urgencia,
+          },
+          Date.now()
+        );
+        return pontos;
+      })(),
+      scoreComposto: (() => {
+        const q = calcularQualificacao(l);
+        const proximaAtiv = l.atividades.find((a: any) =>
+          a.agendadoPara && !a.completadoEm && a.statusAgendamento !== 'CANCELADO'
+        );
+        const { pontos: u } = calcularUrgencia(
+          {
+            ...l,
+            proximaAtividadeData: proximaAtiv?.agendadoPara || null,
+            horasSemResposta: null,
+            urgenciaEnum: l.urgencia,
+          },
+          Date.now()
+        );
+        return Math.round(q * 0.4 + u * 0.6);
+      })()
     };
 
     res.json(resposta);

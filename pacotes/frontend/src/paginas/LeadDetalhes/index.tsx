@@ -404,17 +404,35 @@ export default function LeadDetalhes() {
         return ordenadas.slice(-6);
     })();
 
-    const scoreLead = (() => {
-        let pontos = 40;
-        if (lead.status === "QUALIFICADO" || lead.status === "TENTATIVA_AGENDAMENTO" || lead.status === "VISITA_AGENDADA") pontos += 12;
+    // Score Composto vindo do backend (mesmo cálculo do Mission Control)
+    // Fallback para cálculo local enquanto API antiga não retorna o campo
+    const scoreQualificacaoLocal = (() => {
+        let pontos = 0;
+        const statusPesos: Record<string, number> = {
+            NOVO: 5, QUALIFICADO: 8, CONTATANDO: 8,
+            TENTATIVA_AGENDAMENTO: 12, VISITA_AGENDADA: 14,
+            AVALIACAO_EM_ANDAMENTO: 16, DOCUMENTACAO: 18,
+            EM_NEGOCIACAO: 18, ONBOARDING: 20,
+        };
+        pontos += statusPesos[lead.status] || 0;
         if (lead.imovel?.interesseEm) pontos += 8;
         if (lead.imovel?.valorPretendido) pontos += 10;
-        if (lead.proximaAtividade?.agendadoPara) pontos += 10;
-        if (lead.ultimaInteracao) pontos += 8;
-        if ((lead.spin?.problema?.doresIdentificadas?.length || 0) > 0) pontos += 6;
+        if (lead.imovel?.tipo) pontos += 4;
+        if (lead.imovel?.endereco) pontos += 4;
+        const dores = lead.spin?.problema?.doresIdentificadas || [];
+        if (dores.length > 0) pontos += 6;
+        if (dores.length >= 2) pontos += 4;
+        if (lead.spin?.problema?.motivacaoVenda) pontos += 10;
+        if (lead.spin?.implicacao?.prazoDesejado) pontos += 8;
+        if (lead.spin?.situacao?.situacaoAtual) pontos += 4;
+        if (lead.ultimaInteracao) pontos += 5;
         if (lead.tipoAutorizacao === "exclusiva") pontos += 6;
+        if (lead.autorizouAnuncio) pontos += 4;
+        if (lead.comissaoAcordada) pontos += 4;
         return Math.max(0, Math.min(100, pontos));
     })();
+
+    const scoreLead = lead.scoreComposto ?? lead.scoreQualificacao ?? scoreQualificacaoLocal;
 
     const intencaoPercentual = (() => {
         let pontos = 0;
@@ -895,9 +913,17 @@ export default function LeadDetalhes() {
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                         <Card className="card-premium">
                             <CardContent className="pt-5">
-                                <p className="text-xs uppercase tracking-wider text-slate-500">Score do Lead</p>
-                                <p className="text-3xl font-bold text-slate-900 mt-1">{scoreLead}</p>
-                                <p className="text-sm text-emerald-600 mt-1">{scoreLead >= 75 ? "Alto potencial" : "Potencial em evolução"}</p>
+                                <p className="text-xs uppercase tracking-wider text-slate-500" title="Qualificação×40% + Urgência×60% — mesmo critério do Mission Control">Score Composto ⓘ</p>
+                                <p className="text-3xl font-bold text-slate-900 mt-1">{scoreLead}<span className="text-base font-normal text-slate-400">/100</span></p>
+                                <p className="text-sm text-emerald-600 mt-1">{scoreLead >= 60 ? "Alto potencial" : scoreLead >= 35 ? "Potencial em evolução" : "Em qualificação"}</p>
+                                <div className="flex items-center gap-3 mt-2 pt-2 border-t border-slate-100">
+                                    <span className="text-[10px] text-slate-400">
+                                        🎯 Qualif: <strong className="text-slate-600">{lead.scoreQualificacao ?? scoreQualificacaoLocal}</strong>
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">
+                                        ⚡ Urgência: <strong className="text-slate-600">{lead.scoreUrgencia ?? '—'}</strong>
+                                    </span>
+                                </div>
                             </CardContent>
                         </Card>
                         <Card className="card-premium">

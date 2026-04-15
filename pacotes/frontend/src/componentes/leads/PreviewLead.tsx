@@ -183,20 +183,24 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
       <div className="px-4 py-2.5 flex-shrink-0 border-b border-slate-100">
         <div className={`
           flex items-center gap-3 px-3 py-2.5 rounded-xl border
-          ${lead.urgencia >= 50 ? 'bg-red-50 border-red-200' : lead.urgencia >= 25 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}
+          ${lead.scoreComposto >= 60 ? 'bg-emerald-50 border-emerald-200' : lead.scoreComposto >= 35 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}
         `}>
           <div className={`
             w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 font-bold
-            ${lead.urgencia >= 50 ? 'bg-red-500 text-white' : lead.urgencia >= 25 ? 'bg-amber-500 text-white' : 'bg-slate-300 text-white'}
+            ${lead.scoreComposto >= 60 ? 'bg-emerald-500 text-white' : lead.scoreComposto >= 35 ? 'bg-amber-500 text-white' : 'bg-slate-400 text-white'}
           `}>
-            <span className="text-sm leading-none">{lead.urgencia}</span>
+            <span className="text-sm leading-none">{lead.scoreComposto}</span>
             <span className="text-[9px] leading-none opacity-80">pts</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className={`text-xs font-bold ${lead.urgencia >= 50 ? 'text-red-700' : lead.urgencia >= 25 ? 'text-amber-700' : 'text-slate-600'}`}>
-              {lead.urgencia >= 50 ? '🚨 Urgência alta' : lead.urgencia >= 25 ? '⚠️ Atenção' : '✓ Em acompanhamento'}
+            <p className={`text-xs font-bold ${lead.scoreComposto >= 60 ? 'text-emerald-700' : lead.scoreComposto >= 35 ? 'text-amber-700' : 'text-slate-600'}`}>
+              {lead.scoreComposto >= 60 ? '🏆 Alto potencial' : lead.scoreComposto >= 35 ? '⚠️ Potencial em evolução' : '📋 Em qualificação'}
             </p>
-            <p className="text-xs text-slate-500 truncate">{lead.motivoUrgencia}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              🎯 Qualif: <strong>{lead.scoreQualificacao}</strong>
+              &nbsp;·&nbsp;
+              ⚡ Urgência: <strong>{lead.urgencia}</strong>
+            </p>
           </div>
           <div className="text-right flex-shrink-0">
             <p className="text-[10px] text-slate-400">{lead.totalMensagens} msgs</p>

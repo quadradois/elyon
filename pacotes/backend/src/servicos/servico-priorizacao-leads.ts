@@ -1,10 +1,11 @@
 /**
  * Serviço de Priorização de Leads — Mission Control
  *
- * Calcula a urgência operacional de cada lead e retorna ranqueado.
+ * Calcula qualificação (completude do lead) e urgência operacional (SLA),
+ * combina em Score Composto único e retorna ranqueado.
  * Não altera nenhum dado; é somente leitura.
  *
- * v2.0 — Query enriquecida com todos os campos do schema.
+ * v3.0 — Score Composto Unificado: qualidade×0.4 + urgência×0.6
  */
 
 import { prisma } from '../lib/db';
@@ -104,6 +105,8 @@ export interface LeadPriorizado {
 
   // ── Calculados ──
   urgencia: number;
+  scoreQualificacao: number;
+  scoreComposto: number;
   categoriaUrgencia: CategoriaUrgencia;
   motivoUrgencia: string;
   resumoIA: string;
@@ -154,10 +157,80 @@ function getFasePipeline(status: string): keyof PipelineResumo | null {
 }
 
 // ============================================
+// SCORE DE QUALIFICAÇÃO
+// Mede completude e qualidade do lead (0-100)
+// Exportado para reuso no endpoint GET /leads/:id
+// ============================================
+
+export function calcularQualificacao(lead: any): number {
+  let pontos = 0;
+
+  // ── Status por fase (pesos crescentes no pipeline) ──
+  const statusPesos: Record<string, number> = {
+    NOVO: 5,
+    QUALIFICADO: 8,
+    CONTATANDO: 8,
+    TENTATIVA_AGENDAMENTO: 12,
+    VISITA_AGENDADA: 14,
+    AVALIACAO_EM_ANDAMENTO: 16,
+    DOCUMENTACAO: 18,
+    EM_NEGOCIACAO: 18,
+    ONBOARDING: 20,
+  };
+  pontos += statusPesos[lead.status] || 0;
+
+  // ── Imóvel ──
+  // Aceita tanto formato flat (priorização) quanto aninhado (imovel.interesseEm)
+  const interesseEm = lead.interesseEm ?? lead.imovel?.interesseEm;
+  const valorPretendido = lead.valorPretendido ?? lead.imovel?.valorPretendido;
+  const tipoImovel = lead.tipoImovel ?? lead.imovel?.tipo;
+  const enderecoImovel = lead.enderecoImovel ?? lead.imovel?.endereco;
+  const bairroImovel = lead.bairroImovel;
+
+  if (interesseEm)                 pontos += 8;  // intenção clara (vender/alugar)
+  if (valorPretendido)             pontos += 10; // valor preenchido
+  if (tipoImovel)                  pontos += 4;  // tipo do imóvel
+  if (enderecoImovel || bairroImovel) pontos += 4; // localização
+
+  // ── SPIN ──
+  const dores: string[] = lead.doresIdentificadas
+    ?? lead.spin?.problema?.doresIdentificadas
+    ?? [];
+  const motivacaoVenda = lead.motivacaoVenda ?? lead.spin?.problema?.motivacaoVenda;
+  const prazoDesejado  = lead.prazoDesejado  ?? lead.spin?.implicacao?.prazoDesejado;
+  const situacaoAtual  = lead.situacaoAtual  ?? lead.spin?.situacao?.situacaoAtual;
+
+  if (dores.length > 0)  pontos += 6;  // dor identificada
+  if (dores.length >= 2) pontos += 4;  // múltiplas dores
+  if (motivacaoVenda)    pontos += 10; // motivação declarada (novo)
+  if (prazoDesejado)     pontos += 8;  // prazo declarado (novo)
+  if (situacaoAtual)     pontos += 4;  // situação atual descrita
+
+  // ── Engajamento ──
+  const ultimaInteracao = lead.ultimaInteracao;
+  if (ultimaInteracao)   pontos += 5;
+
+  // ── Negociação ──
+  const tipoAutorizacao = lead.tipoAutorizacao;
+  const autorizouAnuncio = lead.autorizouAnuncio ?? lead.autorizouAnuncio;
+  const comissaoAcordada = lead.comissaoAcordada;
+
+  if (tipoAutorizacao === 'exclusiva') pontos += 6;
+  if (autorizouAnuncio === true)       pontos += 4;
+  if (comissaoAcordada)                pontos += 4;
+
+  // ── Perfil (Assertiva) ──
+  const scoreAssertiva = lead.scoreAssertiva;
+  if (scoreAssertiva && scoreAssertiva >= 70) pontos += 5;
+
+  return Math.max(0, Math.min(100, pontos));
+}
+
+// ============================================
 // CÁLCULO DE URGÊNCIA
 // ============================================
 
-function calcularUrgencia(
+export function calcularUrgencia(
   lead: any,
   agora: number
 ): { pontos: number; categoria: CategoriaUrgencia; motivo: string } {
@@ -219,6 +292,28 @@ function calcularUrgencia(
   if (lead.pressaoTempo === true) {
     pontos += 8;
     motivos.push('Lead com pressão de tempo');
+  }
+
+  // ★ NOVO: Estagnação no pipeline (+12)
+  // Lead sem interação há mais de 14 dias merece atenção
+  if (lead.ultimaInteracao) {
+    const diasSemInteracao = (agora - new Date(lead.ultimaInteracao).getTime()) / (1000 * 60 * 60 * 24);
+    if (diasSemInteracao > 14) {
+      pontos += 12;
+      motivos.push(`Sem interação há ${Math.round(diasSemInteracao)} dias`);
+    }
+  }
+
+  // ★ NOVO: Alto valor sem agendamento (+10)
+  // Oportunidade de alto valor passando em branco
+  if (!lead.proximaAtividadeData && lead.valorPretendido) {
+    const valorNumerico = parseFloat(
+      String(lead.valorPretendido).replace(/[^0-9,]/g, '').replace(',', '.')
+    );
+    if (!isNaN(valorNumerico) && valorNumerico > 500000) {
+      pontos += 10;
+      motivos.push(`Alto valor (${lead.valorPretendido}) sem agendamento`);
+    }
   }
 
   // IA processando agora (-20)
@@ -486,6 +581,12 @@ export async function priorizarLeads(
       agora
     );
 
+    // ── Score de qualificação ──
+    const scoreQualificacao = calcularQualificacao(lead);
+
+    // ── Score Composto Unificado: qualidade×0.4 + urgência×0.6 ──
+    const scoreComposto = Math.round(scoreQualificacao * 0.4 + pontos * 0.6);
+
     return {
       // Identificação
       id: lead.id,
@@ -567,6 +668,8 @@ export async function priorizarLeads(
 
       // Calculados
       urgencia: pontos,
+      scoreQualificacao,
+      scoreComposto,
       categoriaUrgencia: categoria,
       motivoUrgencia: motivo,
       resumoIA: gerarResumoIA(lead),

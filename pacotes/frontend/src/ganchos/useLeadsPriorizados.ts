@@ -99,6 +99,8 @@ export interface LeadPriorizado {
 
   // ── Calculados ──
   urgencia: number;
+  scoreQualificacao: number;
+  scoreComposto: number;
   categoriaUrgencia: CategoriaUrgencia;
   motivoUrgencia: string;
   resumoIA: string;
