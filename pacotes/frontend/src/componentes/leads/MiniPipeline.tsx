@@ -1,6 +1,6 @@
 /**
- * Mini pipeline compacto — barras horizontais com contagem por fase.
- * Clicável para filtrar o feed.
+ * Mini pipeline — Design Premium v2.0
+ * Horizontal compacto com barras de progresso e clicável.
  */
 
 import type { PipelineResumo } from '../../ganchos/useLeadsPriorizados';
@@ -12,33 +12,85 @@ interface MiniPipelineProps {
 }
 
 const FASES = [
-  { chave: 'qualificacao' as const, label: 'Qualificação', cor: 'bg-indigo-500', corLight: 'bg-indigo-100' },
-  { chave: 'apresentacao' as const, label: 'Apresentação', cor: 'bg-amber-500', corLight: 'bg-amber-100' },
-  { chave: 'documentacao' as const, label: 'Documentação', cor: 'bg-violet-500', corLight: 'bg-violet-100' },
-  { chave: 'onboarding' as const, label: 'Onboarding', cor: 'bg-emerald-500', corLight: 'bg-emerald-100' },
+  {
+    chave: 'qualificacao' as const,
+    label: 'Qualificação',
+    abrev: 'Qual.',
+    cor: 'bg-indigo-500',
+    corText: 'text-indigo-700',
+    corLight: 'bg-indigo-50',
+    corBorder: 'border-indigo-200',
+    corActive: 'bg-indigo-600 text-white border-indigo-600',
+  },
+  {
+    chave: 'apresentacao' as const,
+    label: 'Apresentação',
+    abrev: 'Apres.',
+    cor: 'bg-amber-500',
+    corText: 'text-amber-700',
+    corLight: 'bg-amber-50',
+    corBorder: 'border-amber-200',
+    corActive: 'bg-amber-600 text-white border-amber-600',
+  },
+  {
+    chave: 'documentacao' as const,
+    label: 'Documentação',
+    abrev: 'Doc.',
+    cor: 'bg-violet-500',
+    corText: 'text-violet-700',
+    corLight: 'bg-violet-50',
+    corBorder: 'border-violet-200',
+    corActive: 'bg-violet-600 text-white border-violet-600',
+  },
+  {
+    chave: 'onboarding' as const,
+    label: 'Onboarding',
+    abrev: 'Onb.',
+    cor: 'bg-emerald-500',
+    corText: 'text-emerald-700',
+    corLight: 'bg-emerald-50',
+    corBorder: 'border-emerald-200',
+    corActive: 'bg-emerald-600 text-white border-emerald-600',
+  },
 ];
 
 export function MiniPipeline({ pipeline, faseSelecionada, onSelecionarFase }: MiniPipelineProps) {
   const total = Object.values(pipeline).reduce((a, b) => a + b, 0);
-  if (total === 0) return null;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Pipeline</h4>
-        {faseSelecionada && (
-          <button
-            onClick={() => onSelecionarFase(null)}
-            className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium"
-          >
-            Limpar filtro
-          </button>
-        )}
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h4 className="text-sm font-bold text-slate-800">Pipeline</h4>
+          <p className="text-[11px] text-slate-400">Clique para filtrar por fase</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="text-xl font-bold text-slate-900">{total}</div>
+          <span className="text-xs text-slate-400">leads</span>
+        </div>
       </div>
-      <div className="space-y-2">
+
+      {/* Barra total de progresso */}
+      {total > 0 && (
+        <div className="flex h-2 rounded-full overflow-hidden mb-4 gap-0.5">
+          {FASES.map((fase) => {
+            const qtd = pipeline[fase.chave];
+            if (qtd === 0) return null;
+            return (
+              <div
+                key={fase.chave}
+                className={`${fase.cor} transition-all duration-500`}
+                style={{ flex: qtd }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Chips clicáveis */}
+      <div className="flex flex-wrap gap-2">
         {FASES.map((fase) => {
           const qtd = pipeline[fase.chave];
-          const percentual = total > 0 ? (qtd / total) * 100 : 0;
           const selecionada = faseSelecionada === fase.chave;
 
           return (
@@ -46,29 +98,32 @@ export function MiniPipeline({ pipeline, faseSelecionada, onSelecionarFase }: Mi
               key={fase.chave}
               onClick={() => onSelecionarFase(selecionada ? null : fase.chave)}
               className={`
-                w-full flex items-center gap-3 group cursor-pointer
-                rounded-lg px-2 py-1.5 transition-all
+                flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all
                 ${selecionada
-                  ? 'bg-slate-100 ring-1 ring-slate-300'
-                  : 'hover:bg-slate-50'
+                  ? fase.corActive
+                  : `${fase.corLight} ${fase.corText} ${fase.corBorder} hover:opacity-80`
                 }
               `}
             >
-              <span className="text-[11px] text-slate-600 w-24 text-left truncate font-medium">
-                {fase.label}
-              </span>
-              <div className="flex-1 h-2 rounded-full overflow-hidden bg-slate-100">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${fase.cor}`}
-                  style={{ width: `${Math.max(percentual, 4)}%` }}
-                />
-              </div>
-              <span className="text-xs font-bold text-slate-800 w-6 text-right">
+              <span>{fase.abrev}</span>
+              <span className={`
+                px-1.5 py-0.5 rounded-md text-[10px] font-bold
+                ${selecionada ? 'bg-white/25' : 'bg-white/70'}
+              `}>
                 {qtd}
               </span>
             </button>
           );
         })}
+
+        {faseSelecionada && (
+          <button
+            onClick={() => onSelecionarFase(null)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-slate-300 text-xs text-slate-500 hover:bg-slate-50 transition-all"
+          >
+            ✕ Limpar filtro
+          </button>
+        )}
       </div>
     </div>
   );

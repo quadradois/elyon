@@ -1,7 +1,6 @@
 /**
- * Mission Control de Leads — Página principal.
- * Substitui a página antiga de lista/kanban por um centro de comando
- * com feed priorizado por IA, preview inline e chat integrado.
+ * Mission Control de Leads — v2.0
+ * Layout em 2 zonas com fundo premium e scroll correto.
  */
 
 import { useState, useCallback, lazy, Suspense } from 'react';
@@ -11,21 +10,23 @@ import { FeedAcoes } from '../componentes/leads/FeedAcoes';
 import { PreviewLead } from '../componentes/leads/PreviewLead';
 import { useLeadsPriorizados, type LeadPriorizado } from '../ganchos/useLeadsPriorizados';
 
-// Lazy load dos componentes legados (Kanban/Lista)
 const KanbanLeads = lazy(() =>
   import('../componentes/KanbanLeads').then((m) => ({ default: m.KanbanLeads }))
 );
 const LeadsLegadoLista = lazy(() =>
   import('./Leads').then((m) => ({ default: m.Leads }))
 );
-
-// Chat modal para expandir
 const ChatModal = lazy(() =>
   import('../componentes/ChatModal').then((m) => ({ default: m.ChatModal }))
 );
 
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center h-64 bg-white rounded-2xl border border-slate-200">
+    <Loader2 className="w-7 h-7 animate-spin text-indigo-500" />
+  </div>
+);
+
 export function MissionControlLeads() {
-  // States de UI
   const [viewMode, setViewMode] = useState<ViewMode>('feed');
   const [termoBusca, setTermoBusca] = useState('');
   const [filtroTemperatura, setFiltroTemperatura] = useState('');
@@ -33,14 +34,13 @@ export function MissionControlLeads() {
   const [fasePipeline, setFasePipeline] = useState<string | null>(null);
   const [chatExpandido, setChatExpandido] = useState(false);
 
-  // Hook de dados priorizados
   const { leads, estatisticas, pipeline, carregando, recarregar } = useLeadsPriorizados({
     temperatura: filtroTemperatura || undefined,
     busca: termoBusca || undefined,
   });
 
   const handleSelecionarLead = useCallback((lead: LeadPriorizado) => {
-    setLeadSelecionado(lead);
+    setLeadSelecionado((prev) => (prev?.id === lead.id ? null : lead));
   }, []);
 
   const handleAbrirChat = useCallback((lead: LeadPriorizado) => {
@@ -53,82 +53,85 @@ export function MissionControlLeads() {
   }, []);
 
   return (
-    <div className="p-6 space-y-6 h-full">
-      {/* BARRA DE COMANDO */}
-      <BarraComando
-        estatisticas={estatisticas}
-        termoBusca={termoBusca}
-        onBuscaChange={setTermoBusca}
-        filtroTemperatura={filtroTemperatura}
-        onFiltroTemperaturaChange={setFiltroTemperatura}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        carregando={carregando}
-        onRecarregar={recarregar}
-        onLeadCriado={recarregar}
-      />
+    <div className="min-h-screen bg-slate-50/70">
+      <div className="max-w-[1600px] mx-auto p-6 space-y-6">
 
-      {/* CONTEÚDO PRINCIPAL */}
-      {viewMode === 'feed' ? (
-        <div className="flex gap-6" style={{ minHeight: 'calc(100vh - 350px)' }}>
-          {/* FEED (esquerda) */}
-          <div className={`${leadSelecionado ? 'w-[58%]' : 'w-full'} transition-all duration-300`}>
-            <FeedAcoes
-              leads={leads}
-              pipeline={pipeline}
-              carregando={carregando}
-              leadSelecionadoId={leadSelecionado?.id ?? null}
-              onSelecionarLead={handleSelecionarLead}
-              onAbrirChat={handleAbrirChat}
-              fasePipeline={fasePipeline}
-              onFasePipelineChange={setFasePipeline}
-            />
-          </div>
+        {/* BARRA DE COMANDO */}
+        <BarraComando
+          estatisticas={estatisticas}
+          termoBusca={termoBusca}
+          onBuscaChange={setTermoBusca}
+          filtroTemperatura={filtroTemperatura}
+          onFiltroTemperaturaChange={setFiltroTemperatura}
+          viewMode={viewMode}
+          onViewModeChange={(modo) => {
+            setViewMode(modo);
+            if (modo !== 'feed') setLeadSelecionado(null);
+          }}
+          carregando={carregando}
+          onRecarregar={recarregar}
+          onLeadCriado={recarregar}
+        />
 
-          {/* PREVIEW (direita) */}
-          {leadSelecionado && (
-            <div className="w-[42%] transition-all duration-300 animate-in slide-in-from-right-4">
-              <div className="sticky top-6" style={{ height: 'calc(100vh - 350px)' }}>
+        {/* CONTEÚDO PRINCIPAL */}
+        {viewMode === 'feed' ? (
+          <div className="flex gap-5 items-start">
+            {/* FEED (esquerda) */}
+            <div
+              className={`transition-all duration-300 ease-out ${
+                leadSelecionado ? 'w-[55%]' : 'w-full max-w-2xl mx-auto'
+              }`}
+            >
+              <FeedAcoes
+                leads={leads}
+                pipeline={pipeline}
+                carregando={carregando}
+                leadSelecionadoId={leadSelecionado?.id ?? null}
+                onSelecionarLead={handleSelecionarLead}
+                onAbrirChat={handleAbrirChat}
+                fasePipeline={fasePipeline}
+                onFasePipelineChange={setFasePipeline}
+              />
+            </div>
+
+            {/* PREVIEW (direita) */}
+            {leadSelecionado && (
+              <div
+                className="w-[45%] flex-shrink-0 sticky top-6"
+                style={{ height: 'calc(100vh - 200px)' }}
+              >
                 <PreviewLead
                   lead={leadSelecionado}
                   onFechar={handleFecharPreview}
                 />
               </div>
-            </div>
-          )}
-        </div>
-      ) : viewMode === 'kanban' ? (
-        <Suspense fallback={
-          <div className="flex justify-center items-center h-64">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+            )}
           </div>
-        }>
-          <KanbanLeads leads={leads as any} onLeadUpdate={recarregar} />
-        </Suspense>
-      ) : (
-        <Suspense fallback={
-          <div className="flex justify-center items-center h-64">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-          </div>
-        }>
-          <LeadsLegadoLista />
-        </Suspense>
-      )}
+        ) : viewMode === 'kanban' ? (
+          <Suspense fallback={<LoadingFallback />}>
+            <KanbanLeads leads={leads as any} onLeadUpdate={recarregar} />
+          </Suspense>
+        ) : (
+          <Suspense fallback={<LoadingFallback />}>
+            <LeadsLegadoLista />
+          </Suspense>
+        )}
 
-      {/* CHAT EXPANDIDO (Modal) */}
-      {leadSelecionado && (
-        <Suspense fallback={null}>
-          <ChatModal
-            lead={{
-              id: leadSelecionado.id,
-              nome: leadSelecionado.nome || 'Lead',
-              telefone: leadSelecionado.telefone,
-            }}
-            open={chatExpandido}
-            onOpenChange={setChatExpandido}
-          />
-        </Suspense>
-      )}
+        {/* CHAT EXPANDIDO */}
+        {leadSelecionado && (
+          <Suspense fallback={null}>
+            <ChatModal
+              lead={{
+                id: leadSelecionado.id,
+                nome: leadSelecionado.nome || 'Lead',
+                telefone: leadSelecionado.telefone,
+              }}
+              open={chatExpandido}
+              onOpenChange={setChatExpandido}
+            />
+          </Suspense>
+        )}
+      </div>
     </div>
   );
 }

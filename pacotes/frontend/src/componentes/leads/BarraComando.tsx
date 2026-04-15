@@ -1,5 +1,6 @@
 /**
- * Barra de comando (topo fixo) — busca, filtros rápidos e score ring.
+ * Barra de comando — Design Premium v2.0
+ * Limpa, objetiva e visualmente forte.
  */
 
 import {
@@ -36,42 +37,38 @@ interface BarraComandoProps {
   onLeadCriado: () => void;
 }
 
-function ChipFiltro({
-  ativo,
-  onClick,
-  icone,
-  label,
-  valor,
-  cor,
-}: {
-  ativo: boolean;
-  onClick: () => void;
+interface StatCardProps {
   icone: React.ReactNode;
+  valor: number | string;
   label: string;
-  valor: number;
   cor: string;
-}) {
+  destaque?: boolean;
+}
+
+function StatCard({ icone, valor, label, cor, destaque }: StatCardProps) {
   return (
-    <button
-      onClick={onClick}
-      className={`
-        flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
-        transition-all duration-200 border
-        ${ativo
-          ? `${cor} shadow-sm scale-105`
-          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-        }
-      `}
-    >
-      {icone}
-      <span>{label}</span>
-      <span className={`
-        px-1.5 py-0.5 rounded-full text-[10px] font-bold
-        ${ativo ? 'bg-white/30 text-white' : 'bg-slate-100 text-slate-700'}
+    <div className={`
+      flex flex-col justify-between p-4 rounded-2xl border transition-all
+      ${destaque
+        ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 border-indigo-500 shadow-lg shadow-indigo-200 text-white'
+        : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+      }
+    `}>
+      <div className={`
+        w-9 h-9 rounded-xl flex items-center justify-center mb-3
+        ${destaque ? 'bg-white/20' : cor}
       `}>
-        {valor}
-      </span>
-    </button>
+        {icone}
+      </div>
+      <div>
+        <p className={`text-2xl font-bold leading-none mb-0.5 ${destaque ? 'text-white' : 'text-slate-900'}`}>
+          {valor}
+        </p>
+        <p className={`text-[11px] font-medium ${destaque ? 'text-indigo-200' : 'text-slate-500'}`}>
+          {label}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -88,172 +85,136 @@ export function BarraComando({
   onLeadCriado,
 }: BarraComandoProps) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Linha 1: Título + Ações */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Mission Control</h1>
-          <p className="text-sm text-slate-500">
-            Leads priorizados por urgência operacional
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-600 to-indigo-700 flex items-center justify-center shadow-md shadow-indigo-200">
+              <Radio className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Mission Control</h1>
+              <p className="text-sm text-slate-500">Feed priorizado por urgência operacional</p>
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
+          <button
             onClick={onRecarregar}
             disabled={carregando}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 transition-all hover:shadow-sm disabled:opacity-50"
           >
-            <RefreshCw className={`h-4 w-4 mr-1.5 ${carregando ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${carregando ? 'animate-spin' : ''}`} />
             Atualizar
-          </Button>
+          </button>
           <NovoLeadDialog onLeadCreated={onLeadCriado} />
         </div>
       </div>
 
-      {/* Linha 2: Busca + Filtros + Views */}
-      <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center">
+      {/* Linha 2: Stat cards */}
+      <div className="grid grid-cols-4 gap-3">
+        <StatCard
+          icone={<Users className="w-5 h-5 text-slate-600" />}
+          valor={estatisticas.total}
+          label="Leads ativos"
+          cor="bg-slate-100"
+          destaque={false}
+        />
+        <StatCard
+          icone={<Flame className="w-5 h-5 text-red-500" />}
+          valor={estatisticas.quentes}
+          label="Leads quentes"
+          cor="bg-red-100"
+          destaque={estatisticas.quentes > 0}
+        />
+        <StatCard
+          icone={<Calendar className="w-5 h-5 text-emerald-600" />}
+          valor={estatisticas.agendamentosHoje}
+          label="Agendados hoje"
+          cor="bg-emerald-100"
+          destaque={false}
+        />
+        <StatCard
+          icone={<TrendingUp className="w-5 h-5 text-violet-600" />}
+          valor={estatisticas.novosHoje}
+          label="Novos hoje"
+          cor="bg-violet-100"
+          destaque={false}
+        />
+      </div>
+
+      {/* Linha 3: Busca + Filtros + Toggle views */}
+      <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
         {/* Busca */}
-        <div className="relative flex-1 max-w-md">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Buscar por nome, telefone ou email..."
             value={termoBusca}
             onChange={(e) => onBuscaChange(e.target.value)}
-            className="pl-10 h-9"
+            className="pl-10 h-10 border-0 bg-slate-50 focus:bg-white rounded-xl text-sm"
           />
           {termoBusca && (
-            <button
-              onClick={() => onBuscaChange('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2"
-            >
-              <X className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600" />
+            <button onClick={() => onBuscaChange('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+              <X className="h-3.5 w-3.5 text-slate-400 hover:text-slate-700" />
             </button>
           )}
         </div>
 
+        {/* Separador */}
+        <div className="h-8 w-px bg-slate-200" />
+
         {/* Chips de temperatura */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <ChipFiltro
-            ativo={filtroTemperatura === 'QUENTE'}
-            onClick={() => onFiltroTemperaturaChange(filtroTemperatura === 'QUENTE' ? '' : 'QUENTE')}
-            icone={<Flame className="w-3.5 h-3.5" />}
-            label="Quente"
-            valor={estatisticas.quentes}
-            cor="bg-red-500 text-white border-red-500"
-          />
-          <ChipFiltro
-            ativo={filtroTemperatura === 'MORNO'}
-            onClick={() => onFiltroTemperaturaChange(filtroTemperatura === 'MORNO' ? '' : 'MORNO')}
-            icone={<Zap className="w-3.5 h-3.5" />}
-            label="Morno"
-            valor={estatisticas.mornos}
-            cor="bg-amber-500 text-white border-amber-500"
-          />
-          <ChipFiltro
-            ativo={filtroTemperatura === 'FRIO'}
-            onClick={() => onFiltroTemperaturaChange(filtroTemperatura === 'FRIO' ? '' : 'FRIO')}
-            icone={<Snowflake className="w-3.5 h-3.5" />}
-            label="Frio"
-            valor={estatisticas.frios}
-            cor="bg-blue-500 text-white border-blue-500"
-          />
+        <div className="flex items-center gap-1.5">
+          {[
+            { key: 'QUENTE', icon: <Flame className="w-3.5 h-3.5" />, label: `${estatisticas.quentes}`, activeClass: 'bg-red-500 text-white shadow-sm shadow-red-200' },
+            { key: 'MORNO', icon: <Zap className="w-3.5 h-3.5" />, label: `${estatisticas.mornos}`, activeClass: 'bg-amber-500 text-white shadow-sm shadow-amber-200' },
+            { key: 'FRIO', icon: <Snowflake className="w-3.5 h-3.5" />, label: `${estatisticas.frios}`, activeClass: 'bg-blue-500 text-white shadow-sm shadow-blue-200' },
+          ].map((chip) => (
+            <button
+              key={chip.key}
+              onClick={() => onFiltroTemperaturaChange(filtroTemperatura === chip.key ? '' : chip.key)}
+              className={`
+                flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all
+                ${filtroTemperatura === chip.key
+                  ? chip.activeClass
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                }
+              `}
+            >
+              {chip.icon}
+              {chip.label}
+            </button>
+          ))}
         </div>
 
         {/* Separador */}
-        <div className="hidden lg:block w-px h-6 bg-slate-200" />
+        <div className="h-8 w-px bg-slate-200" />
 
-        {/* Toggle de views */}
-        <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-          <button
-            onClick={() => onViewModeChange('feed')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              viewMode === 'feed'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <Radio className="w-3.5 h-3.5" />
-            Feed
-          </button>
-          <button
-            onClick={() => onViewModeChange('kanban')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              viewMode === 'kanban'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-            Kanban
-          </button>
-          <button
-            onClick={() => onViewModeChange('lista')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              viewMode === 'lista'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <LayoutList className="w-3.5 h-3.5" />
-            Lista
-          </button>
+        {/* Toggle views */}
+        <div className="flex bg-slate-100 p-1 rounded-xl">
+          {[
+            { key: 'feed' as const, icon: <Radio className="w-4 h-4" />, label: 'Feed' },
+            { key: 'kanban' as const, icon: <LayoutGrid className="w-4 h-4" />, label: 'Kanban' },
+            { key: 'lista' as const, icon: <LayoutList className="w-4 h-4" />, label: 'Lista' },
+          ].map((view) => (
+            <button
+              key={view.key}
+              onClick={() => onViewModeChange(view.key)}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
+                ${viewMode === view.key
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+                }
+              `}
+            >
+              {view.icon}
+              {view.label}
+            </button>
+          ))}
         </div>
-      </div>
-
-      {/* Linha 3: Score Ring compacto */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        <div className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 px-4 py-3">
-          <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-            <Users className="h-5 w-5 text-indigo-600" />
-          </div>
-          <div>
-            <p className="text-xl font-bold text-slate-900">{estatisticas.total}</p>
-            <p className="text-[11px] text-slate-500">Leads ativos</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 px-4 py-3">
-          <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-            <Flame className="h-5 w-5 text-red-500" />
-          </div>
-          <div>
-            <p className="text-xl font-bold text-slate-900">{estatisticas.quentes}</p>
-            <p className="text-[11px] text-slate-500">Quentes</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 px-4 py-3">
-          <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center">
-            <Calendar className="h-5 w-5 text-emerald-600" />
-          </div>
-          <div>
-            <p className="text-xl font-bold text-slate-900">{estatisticas.agendamentosHoje}</p>
-            <p className="text-[11px] text-slate-500">Agendados hoje</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 px-4 py-3">
-          <div className="h-10 w-10 rounded-full bg-violet-100 flex items-center justify-center">
-            <TrendingUp className="h-5 w-5 text-violet-600" />
-          </div>
-          <div>
-            <p className="text-xl font-bold text-slate-900">{estatisticas.novosHoje}</p>
-            <p className="text-[11px] text-slate-500">Novos hoje</p>
-          </div>
-        </div>
-        {estatisticas.iaAtiva > 0 && (
-          <div className="flex items-center gap-3 bg-indigo-50 rounded-xl border border-indigo-200 px-4 py-3">
-            <div className="relative h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-              <Radio className="h-5 w-5 text-indigo-600" />
-              <span className="absolute -top-0.5 -right-0.5 h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500" />
-              </span>
-            </div>
-            <div>
-              <p className="text-xl font-bold text-indigo-900">{estatisticas.iaAtiva}</p>
-              <p className="text-[11px] text-indigo-600">IA ativa</p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
