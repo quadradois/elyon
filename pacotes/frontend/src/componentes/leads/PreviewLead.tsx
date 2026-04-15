@@ -1,39 +1,30 @@
 /**
- * Preview inline do lead — Design Premium v2.0
- * Painel lateral com informação hierarquizada e visual forte.
- * Corrige bug valor "R$ NaN".
+ * Preview inline do lead — v3.0
+ * 4 abas completas: Resumo IA · Chat · Imóvel · Timeline
+ * Exibe TODOS os dados disponíveis no lead.
  */
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  X,
-  Phone,
-  Mail,
-  ExternalLink,
-  Home,
-  Bot,
-  Calendar,
-  MessageSquare,
-  Activity,
-  Copy,
-  Check,
-  Flame,
-  Zap,
-  Snowflake,
-  AlertCircle,
+  X, Phone, Mail, ExternalLink, Home, Bot, Calendar,
+  MessageSquare, Activity, Copy, Check, Flame, Zap,
+  Snowflake, AlertCircle, Clock, UserCheck, Building2,
+  TrendingUp, FileText, BadgeCheck, Users, MapPin,
+  DoorOpen, Layers, Car, Maximize2,
 } from 'lucide-react';
 import { ChatPanel } from './ChatPanel';
-import type { LeadPriorizado } from '../../ganchos/useLeadsPriorizados';
+import type { LeadPriorizado, AtividadePriorizado } from '../../ganchos/useLeadsPriorizados';
 import { toast } from 'sonner';
 
-type AbaPreview = 'resumo' | 'chat' | 'imovel';
+type AbaPreview = 'resumo' | 'chat' | 'imovel' | 'timeline';
 
 interface PreviewLeadProps {
   lead: LeadPriorizado;
   onFechar: () => void;
 }
 
+// ─── helpers ────────────────────────────────────────────────────────────────
 function getStatusConfig(status: string) {
   const mapa: Record<string, { label: string; cor: string }> = {
     NOVO: { label: 'Novo', cor: 'bg-indigo-100 text-indigo-700' },
@@ -53,22 +44,18 @@ function getStatusConfig(status: string) {
 }
 
 function TemperaturaIcon({ temp }: { temp: string | null }) {
-  if (temp === 'QUENTE') return <Flame className="w-4 h-4 text-red-500" />;
-  if (temp === 'MORNO') return <Zap className="w-4 h-4 text-amber-500" />;
-  return <Snowflake className="w-4 h-4 text-blue-400" />;
+  if (temp === 'QUENTE') return <Flame className="w-3.5 h-3.5 text-red-500" />;
+  if (temp === 'MORNO') return <Zap className="w-3.5 h-3.5 text-amber-500" />;
+  return <Snowflake className="w-3.5 h-3.5 text-blue-400" />;
 }
 
-function formatarValor(val: number | string | null | undefined): string {
-  if (!val) return '—';
-  if (typeof val === 'string') {
-    // Já formatado (ex: "R$ 650.000" ou "entre 600-700k")
-    return val.trim() || '—';
-  }
-  if (isNaN(val)) return '—';
-  return `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`;
+function temLabel(temp: string | null) {
+  if (temp === 'QUENTE') return 'Quente';
+  if (temp === 'MORNO') return 'Morno';
+  return 'Frio';
 }
 
-function formatarData(data: string | null | undefined): string {
+function formatarData(data: string | Date | null | undefined): string {
   if (!data) return '—';
   return new Date(data).toLocaleDateString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -76,53 +63,90 @@ function formatarData(data: string | null | undefined): string {
   });
 }
 
+function Campo({ label, valor, icone }: { label: string; valor: string | number | boolean | null | undefined; icone?: React.ReactNode }) {
+  const texto =
+    valor === null || valor === undefined || valor === ''
+      ? null
+      : typeof valor === 'boolean'
+      ? valor ? 'Sim' : 'Não'
+      : String(valor);
+
+  if (!texto) return null;
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1">
+        {icone}
+        {label}
+      </p>
+      <p className="text-sm text-slate-800 font-medium">{texto}</p>
+    </div>
+  );
+}
+
+function SecaoCard({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-slate-200 overflow-hidden">
+      <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
+        <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">{titulo}</p>
+      </div>
+      <div className="p-3 grid grid-cols-2 gap-3">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Componente principal ────────────────────────────────────────────────────
 export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
   const navigate = useNavigate();
   const [aba, setAba] = useState<AbaPreview>('resumo');
-  const [copiado, setCopiado] = useState(false);
+  const [copiado, setCopiado] = useState<string | null>(null);
   const statusCfg = getStatusConfig(lead.status);
 
-  const copiarTelefone = () => {
-    if (lead.telefone) {
-      navigator.clipboard.writeText(lead.telefone);
-      setCopiado(true);
-      toast.success('Telefone copiado!');
-      setTimeout(() => setCopiado(false), 2000);
-    }
+  const copiar = (texto: string, chave: string) => {
+    navigator.clipboard.writeText(texto);
+    setCopiado(chave);
+    toast.success('Copiado!');
+    setTimeout(() => setCopiado(null), 2000);
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
+    <div className="flex flex-col h-full bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
 
       {/* ══ HEADER ══ */}
-      <div className="px-5 pt-5 pb-4 border-b border-slate-100">
-        {/* Nome + fechar */}
-        <div className="flex items-start justify-between mb-3">
+      <div className="px-4 pt-4 pb-3 border-b border-slate-100 flex-shrink-0">
+        <div className="flex items-start justify-between mb-2">
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-bold text-slate-900 leading-tight truncate">
+            <h2 className="text-base font-bold text-slate-900 leading-tight truncate">
               {lead.nome || 'Sem nome'}
             </h2>
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span className={`inline-flex text-[11px] font-bold px-2.5 py-0.5 rounded-full ${statusCfg.cor}`}>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className={`inline-flex text-[11px] font-bold px-2 py-0.5 rounded-full ${statusCfg.cor}`}>
                 {statusCfg.label}
               </span>
               <span className="flex items-center gap-1 text-xs font-medium text-slate-500">
                 <TemperaturaIcon temp={lead.temperatura} />
-                {lead.temperatura === 'QUENTE' ? 'Quente' : lead.temperatura === 'MORNO' ? 'Morno' : 'Frio'}
+                {temLabel(lead.temperatura)}
               </span>
+              {lead.faseSPIN && (
+                <span className="text-[10px] font-medium text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full">
+                  SPIN: {lead.faseSPIN}
+                </span>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-1 ml-2">
+          <div className="flex items-center gap-1 ml-2 flex-shrink-0">
             <button
               onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-200 transition-all"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-200 transition-all"
             >
-              <ExternalLink className="w-3.5 h-3.5" />
+              <ExternalLink className="w-3 h-3" />
               Abrir
             </button>
             <button
               onClick={onFechar}
-              className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors ml-1"
+              className="w-7 h-7 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors"
             >
               <X className="w-4 h-4 text-slate-500" />
             </button>
@@ -130,75 +154,82 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
         </div>
 
         {/* Contatos */}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1">
           {lead.telefone && (
             <button
-              onClick={copiarTelefone}
+              onClick={() => copiar(lead.telefone!, 'tel')}
               className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 group w-fit"
             >
               <Phone className="w-3.5 h-3.5 text-slate-400" />
               <span className="font-medium">{lead.telefone}</span>
-              <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                {copiado
-                  ? <Check className="w-3.5 h-3.5 text-emerald-500" />
-                  : <Copy className="w-3.5 h-3.5 text-slate-400" />
-                }
-              </span>
+              {copiado === 'tel'
+                ? <Check className="w-3 h-3 text-emerald-500" />
+                : <Copy className="w-3 h-3 text-slate-300 group-hover:text-slate-400" />
+              }
+              {lead.telefone2 && <span className="text-slate-400 text-xs">+{lead.telefone2}</span>}
             </button>
           )}
           {lead.email && (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Mail className="w-3.5 h-3.5 text-slate-400" />
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Mail className="w-3 h-3 text-slate-400" />
               <span className="truncate">{lead.email}</span>
+            </div>
+          )}
+          {lead.campanhaOrigem && (
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Users className="w-3 h-3" />
+              <span className="truncate">{lead.campanhaOrigem.nome}</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* ══ SCORE DE URGÊNCIA ══ */}
-      <div className="mx-5 mt-4 mb-2">
+      {/* ══ SCORE BAR ══ */}
+      <div className="px-4 py-2.5 flex-shrink-0 border-b border-slate-100">
         <div className={`
-          flex items-center gap-4 p-3 rounded-2xl border
-          ${lead.urgencia >= 50
-            ? 'bg-red-50 border-red-200'
-            : lead.urgencia >= 25
-            ? 'bg-amber-50 border-amber-200'
-            : 'bg-slate-50 border-slate-200'
-          }
+          flex items-center gap-3 px-3 py-2.5 rounded-xl border
+          ${lead.urgencia >= 50 ? 'bg-red-50 border-red-200' : lead.urgencia >= 25 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}
         `}>
-          {/* Score */}
           <div className={`
-            w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 font-bold
+            w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 font-bold
             ${lead.urgencia >= 50 ? 'bg-red-500 text-white' : lead.urgencia >= 25 ? 'bg-amber-500 text-white' : 'bg-slate-300 text-white'}
           `}>
-            <span className="text-lg leading-none">{lead.urgencia}</span>
+            <span className="text-sm leading-none">{lead.urgencia}</span>
             <span className="text-[9px] leading-none opacity-80">pts</span>
           </div>
-          <div className="min-w-0">
-            <p className={`text-xs font-bold mb-0.5 ${lead.urgencia >= 50 ? 'text-red-700' : lead.urgencia >= 25 ? 'text-amber-700' : 'text-slate-600'}`}>
-              {lead.urgencia >= 50 ? '🚨 Urgência alta' : lead.urgencia >= 25 ? '⚠️ Atenção necessária' : '✓ Em acompanhamento'}
+          <div className="min-w-0 flex-1">
+            <p className={`text-xs font-bold ${lead.urgencia >= 50 ? 'text-red-700' : lead.urgencia >= 25 ? 'text-amber-700' : 'text-slate-600'}`}>
+              {lead.urgencia >= 50 ? '🚨 Urgência alta' : lead.urgencia >= 25 ? '⚠️ Atenção' : '✓ Em acompanhamento'}
             </p>
             <p className="text-xs text-slate-500 truncate">{lead.motivoUrgencia}</p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className="text-[10px] text-slate-400">{lead.totalMensagens} msgs</p>
+            {lead.horasSemResposta && lead.horasSemResposta > 1 && (
+              <p className={`text-[10px] font-bold ${lead.horasSemResposta > 4 ? 'text-red-600' : 'text-amber-600'}`}>
+                {lead.horasSemResposta < 24
+                  ? `${Math.round(lead.horasSemResposta)}h sem resp.`
+                  : `${Math.round(lead.horasSemResposta / 24)}d sem resp.`}
+              </p>
+            )}
           </div>
         </div>
       </div>
 
       {/* ══ TABS ══ */}
-      <div className="flex border-b border-slate-100 mx-2 mt-2">
+      <div className="flex border-b border-slate-100 flex-shrink-0 overflow-x-auto">
         {[
-          { id: 'resumo' as const, label: 'Resumo IA', icone: Bot },
-          { id: 'chat' as const, label: 'Chat', icone: MessageSquare },
+          { id: 'resumo' as const, label: 'IA', icone: Bot },
           { id: 'imovel' as const, label: 'Imóvel', icone: Home },
+          { id: 'timeline' as const, label: 'Timeline', icone: Activity },
+          { id: 'chat' as const, label: 'Chat', icone: MessageSquare },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setAba(tab.id)}
             className={`
-              flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all
-              ${aba === tab.id
-                ? 'border-indigo-500 text-indigo-700'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-              }
+              flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 whitespace-nowrap transition-all flex-shrink-0
+              ${aba === tab.id ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'}
             `}
           >
             <tab.icone className="w-3.5 h-3.5" />
@@ -207,9 +238,11 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
         ))}
       </div>
 
-      {/* ══ CONTEÚDO DAS ABAS ══ */}
+      {/* ══ CONTEÚDO ══ */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {aba === 'resumo' && <AbaResumo lead={lead} />}
+        {aba === 'imovel' && <AbaImovel lead={lead} />}
+        {aba === 'timeline' && <AbaTimeline lead={lead} />}
         {aba === 'chat' && (
           <div className="h-full" style={{ minHeight: '300px' }}>
             <ChatPanel
@@ -219,49 +252,72 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
             />
           </div>
         )}
-        {aba === 'imovel' && <AbaImovel lead={lead} formatarValor={formatarValor} formatarData={formatarData} />}
       </div>
     </div>
   );
 }
 
-// ══════════════════════════════════════
-// ABA RESUMO
-// ══════════════════════════════════════
+// ══════════════════════════════════════════════════
+// ABA RESUMO IA — SPIN completo + dores + ações
+// ══════════════════════════════════════════════════
 function AbaResumo({ lead }: { lead: LeadPriorizado }) {
+  const temSpin = lead.situacaoAtual || lead.motivacaoVenda || lead.prazoDesejado ||
+    lead.consequencias || lead.custosAtuais || lead.expectativaServico;
+
   return (
-    <div className="p-5 space-y-4">
+    <div className="p-4 space-y-4">
+
       {/* Resumo IA */}
-      <div className="rounded-2xl bg-gradient-to-br from-indigo-50 to-slate-50 border border-indigo-100 p-4">
+      <div className="rounded-xl bg-gradient-to-br from-indigo-50 to-slate-50 border border-indigo-100 p-3">
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center">
-            <Bot className="w-3.5 h-3.5 text-white" />
+          <div className="w-5 h-5 rounded-lg bg-indigo-600 flex items-center justify-center">
+            <Bot className="w-3 h-3 text-white" />
           </div>
-          <span className="text-xs font-bold text-indigo-800 uppercase tracking-wide">Resumo IA</span>
+          <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wide">Resumo IA</span>
         </div>
         <p className="text-sm text-slate-700 leading-relaxed">{lead.resumoIA}</p>
         {lead.ultimaAcaoIA && (
-          <div className="mt-2 pt-2 border-t border-indigo-100">
-            <p className="text-[11px] text-indigo-500 font-medium">
-              Última ação: {lead.ultimaAcaoIA}
-            </p>
-          </div>
+          <p className="text-[11px] text-indigo-500 font-medium mt-2 pt-2 border-t border-indigo-100">
+            Última ação IA: {lead.ultimaAcaoIA}
+          </p>
         )}
       </div>
 
-      {/* Dores identificadas */}
+      {/* Próxima atividade em destaque */}
+      {lead.proximaAtividade && (
+        <div className="flex items-start gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center flex-shrink-0">
+            <Calendar className="w-4 h-4 text-white" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-emerald-800">Próxima atividade</p>
+            <p className="text-sm text-emerald-900 font-semibold mt-0.5 truncate">{lead.proximaAtividade.titulo}</p>
+            {lead.proximaAtividade.agendadoPara && (
+              <p className="text-xs text-emerald-600 mt-0.5 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {new Date(lead.proximaAtividade.agendadoPara).toLocaleDateString('pt-BR', {
+                  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                })}
+              </p>
+            )}
+            {lead.proximaAtividade.statusAgendamento && (
+              <span className="mt-1 inline-block text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+                {lead.proximaAtividade.statusAgendamento}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Dores */}
       {lead.doresIdentificadas.length > 0 && (
         <div>
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-            Dores identificadas
+          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" /> Dores identificadas
           </p>
           <div className="flex flex-wrap gap-1.5">
             {lead.doresIdentificadas.map((d, i) => (
-              <span
-                key={i}
-                className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200 font-medium"
-              >
-                <AlertCircle className="w-3 h-3 text-amber-500" />
+              <span key={i} className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200 font-medium">
                 {d}
               </span>
             ))}
@@ -272,9 +328,7 @@ function AbaResumo({ lead }: { lead: LeadPriorizado }) {
       {/* Objeções */}
       {lead.objecoes.length > 0 && (
         <div>
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-            Objeções
-          </p>
+          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Objeções</p>
           <div className="flex flex-wrap gap-1.5">
             {lead.objecoes.map((o, i) => (
               <span key={i} className="text-xs bg-red-50 text-red-700 px-2.5 py-1 rounded-lg border border-red-200 font-medium">
@@ -285,52 +339,135 @@ function AbaResumo({ lead }: { lead: LeadPriorizado }) {
         </div>
       )}
 
-      {/* Próxima atividade */}
-      {lead.proximaAtividade && (
-        <div className="flex items-start gap-3 p-3 bg-emerald-50 rounded-2xl border border-emerald-200">
-          <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center flex-shrink-0">
-            <Calendar className="w-4 h-4 text-white" />
+      {/* SPIN completo */}
+      {temSpin && (
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+            <TrendingUp className="w-3.5 h-3.5 text-slate-500" />
+            <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">SPIN — Qualificação</p>
           </div>
-          <div>
-            <p className="text-xs font-bold text-emerald-800">Próxima atividade</p>
-            <p className="text-sm text-emerald-900 font-medium mt-0.5">{lead.proximaAtividade.titulo}</p>
-            {lead.proximaAtividade.agendadoPara && (
-              <p className="text-xs text-emerald-600 mt-0.5">
-                {new Date(lead.proximaAtividade.agendadoPara).toLocaleDateString('pt-BR', {
-                  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-                })}
-              </p>
+          <div className="p-3 space-y-2.5">
+            {lead.situacaoAtual && (
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Situação atual</p>
+                <p className="text-sm text-slate-700">{lead.situacaoAtual}</p>
+              </div>
             )}
+            {lead.motivacaoVenda && (
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Motivação da venda</p>
+                <p className="text-sm text-slate-700">{lead.motivacaoVenda}</p>
+              </div>
+            )}
+            {lead.prazoDesejado && (
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Prazo desejado</p>
+                <p className="text-sm text-slate-700">{lead.prazoDesejado}</p>
+              </div>
+            )}
+            {lead.consequencias && (
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Consequências</p>
+                <p className="text-sm text-slate-700">{lead.consequencias}</p>
+              </div>
+            )}
+            {lead.custosAtuais && (
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Custos atuais</p>
+                <p className="text-sm text-slate-700">{lead.custosAtuais}</p>
+              </div>
+            )}
+            {lead.expectativaServico && (
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Expectativa de serviço</p>
+                <p className="text-sm text-slate-700">{lead.expectativaServico}</p>
+              </div>
+            )}
+            {lead.tentativasAnteriores && (
+              <div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase">Tentativas anteriores</p>
+                <p className="text-sm text-slate-700">{lead.tentativasAnteriores}</p>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {lead.urgenciaEnum && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  lead.urgenciaEnum === 'ALTA' ? 'bg-red-100 text-red-700' :
+                  lead.urgenciaEnum === 'MEDIA' ? 'bg-amber-100 text-amber-700' :
+                  'bg-slate-100 text-slate-600'
+                }`}>
+                  Urgência {lead.urgenciaEnum}
+                </span>
+              )}
+              {lead.pressaoTempo === true && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                  ⏱ Com pressão de tempo
+                </span>
+              )}
+              {lead.comCorretorAtualmente === true && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+                  Já tem corretor
+                </span>
+              )}
+              {lead.interesseAvaliacao === true && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                  ✓ Aceitou avaliação
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Histórico mínimo */}
-      <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100">
-        <span className="flex items-center gap-1.5">
-          <Activity className="w-3.5 h-3.5" />
-          {lead.totalMensagens} mensagens trocadas
+      {/* Negociação comercial */}
+      {(lead.comissaoAcordada || lead.tipoAutorizacao || lead.autorizouAnuncio !== null) && (
+        <SecaoCard titulo="Negociação comercial">
+          <Campo label="Comissão acordada" valor={lead.comissaoAcordada} icone={<BadgeCheck className="w-3 h-3" />} />
+          <Campo label="Tipo autorização" valor={lead.tipoAutorizacao} icone={<FileText className="w-3 h-3" />} />
+          <Campo label="Prazo do contrato" valor={lead.prazoTrabalho ? `${lead.prazoTrabalho} dias` : null} />
+          <Campo label="Autorizou anúncio" valor={lead.autorizouAnuncio} />
+        </SecaoCard>
+      )}
+
+      {/* Dados pessoais */}
+      {(lead.profissao || lead.empresaAtual || lead.rendaEstimada || lead.faixaSalarial || lead.scoreAssertiva) && (
+        <SecaoCard titulo="Perfil do proprietário">
+          <Campo label="Profissão" valor={lead.profissao} icone={<UserCheck className="w-3 h-3" />} />
+          <Campo label="Empresa" valor={lead.empresaAtual} icone={<Building2 className="w-3 h-3" />} />
+          <Campo label="Renda estimada" valor={lead.rendaEstimada} />
+          <Campo label="Faixa salarial" valor={lead.faixaSalarial} />
+          {lead.scoreAssertiva && (
+            <div className="col-span-2 flex items-center gap-2">
+              <div className="flex-1 bg-slate-200 rounded-full h-1.5">
+                <div
+                  className="bg-indigo-500 h-1.5 rounded-full transition-all"
+                  style={{ width: `${Math.min(100, lead.scoreAssertiva)}%` }}
+                />
+              </div>
+              <span className="text-xs font-bold text-slate-600">Score {lead.scoreAssertiva}</span>
+            </div>
+          )}
+        </SecaoCard>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-100">
+        <span className="flex items-center gap-1">
+          <Activity className="w-3 h-3" />
+          {lead.totalMensagens} mensagens
         </span>
-        <span>
-          Lead criado {new Date(lead.criadoEm).toLocaleDateString('pt-BR')}
-        </span>
+        <span>Criado {new Date(lead.criadoEm).toLocaleDateString('pt-BR')}</span>
       </div>
     </div>
   );
 }
 
-// ══════════════════════════════════════
-// ABA IMÓVEL
-// ══════════════════════════════════════
-function AbaImovel({
-  lead,
-  formatarValor,
-}: {
-  lead: LeadPriorizado;
-  formatarValor: (v: number | string | null | undefined) => string;
-  formatarData: (d: string | null | undefined) => string;
-}) {
-  const temDados = lead.enderecoImovel || lead.tipoImovel || lead.valorPretendido || lead.interesseEm;
+// ══════════════════════════════════════════════════
+// ABA IMÓVEL — Completa com todos os campos
+// ══════════════════════════════════════════════════
+function AbaImovel({ lead }: { lead: LeadPriorizado }) {
+  const temDados = lead.enderecoImovel || lead.tipoImovel || lead.valorPretendido ||
+    lead.interesseEm || lead.areaImovel || lead.bairroImovel || lead.nomeEdificio;
 
   if (!temDados) {
     return (
@@ -340,44 +477,211 @@ function AbaImovel({
         </div>
         <p className="text-sm font-semibold text-slate-600">Sem dados do imóvel</p>
         <p className="text-xs text-slate-400 mt-1 text-center">
-          O agente ainda não coletou informações sobre o imóvel nesta conversa.
+          O agente ainda não coletou informações sobre o imóvel.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="p-5 space-y-4">
-      {/* Valor pretendido — destaque principal */}
+    <div className="p-4 space-y-4">
+
+      {/* Valor — destaque */}
       {lead.valorPretendido && (
-        <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-4 text-white shadow-md shadow-emerald-200">
-          <p className="text-xs font-medium text-emerald-200 mb-1">Valor pretendido</p>
-          <p className="text-2xl font-bold">{formatarValor(lead.valorPretendido)}</p>
+        <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-4 text-white">
+          <p className="text-xs font-medium text-emerald-200 mb-0.5">Valor pretendido</p>
+          <p className="text-2xl font-bold">{lead.valorPretendido}</p>
+          {lead.interesseEm && (
+            <span className="mt-2 inline-block text-[11px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full capitalize">
+              {lead.interesseEm}
+            </span>
+          )}
         </div>
       )}
 
-      {/* Grid de dados */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Endereço */}
+      {(lead.enderecoImovel || lead.bairroImovel || lead.nomeEdificio) && (
+        <div className="flex items-start gap-3 bg-slate-50 rounded-xl p-3 border border-slate-200">
+          <MapPin className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+          <div>
+            {lead.enderecoImovel && <p className="text-sm font-semibold text-slate-800">{lead.enderecoImovel}</p>}
+            {lead.bairroImovel && <p className="text-xs text-slate-500 mt-0.5">{lead.bairroImovel}</p>}
+            {lead.nomeEdificio && <p className="text-xs text-indigo-600 font-medium mt-0.5">{lead.nomeEdificio}</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Grid de características */}
+      <div className="grid grid-cols-2 gap-2">
         {[
-          { label: 'Tipo de interesse', valor: lead.interesseEm },
-          { label: 'Tipo de imóvel', valor: lead.tipoImovel ? lead.tipoImovel.charAt(0).toUpperCase() + lead.tipoImovel.slice(1) : null },
-        ].filter((i) => i.valor).map((item) => (
-          <div key={item.label} className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">{item.label}</p>
-            <p className="text-sm font-semibold text-slate-800">{item.valor}</p>
+          { icone: <Home className="w-3.5 h-3.5" />, label: 'Tipo', valor: lead.tipoImovel ? lead.tipoImovel.charAt(0).toUpperCase() + lead.tipoImovel.slice(1) : null },
+          { icone: <Maximize2 className="w-3.5 h-3.5" />, label: 'Área', valor: lead.areaImovel },
+          { icone: <DoorOpen className="w-3.5 h-3.5" />, label: 'Quartos', valor: lead.quartosImovel },
+          { icone: <Car className="w-3.5 h-3.5" />, label: 'Vagas', valor: lead.vagasImovel },
+          { icone: <Layers className="w-3.5 h-3.5" />, label: 'Ocupação', valor: lead.ocupacaoImovel },
+          { icone: <BadgeCheck className="w-3.5 h-3.5" />, label: 'Conservação', valor: lead.estadoConservacao },
+        ].filter((i) => i.valor !== null && i.valor !== undefined).map((item) => (
+          <div key={item.label} className="bg-white rounded-xl p-3 border border-slate-200 flex items-center gap-2">
+            <span className="text-slate-400">{item.icone}</span>
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">{item.label}</p>
+              <p className="text-sm font-semibold text-slate-800">{String(item.valor)}</p>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Endereço */}
-      {lead.enderecoImovel && (
-        <div className="flex items-start gap-3 bg-slate-50 rounded-xl p-3 border border-slate-200">
-          <Home className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Endereço</p>
-            <p className="text-sm text-slate-800">{lead.enderecoImovel}</p>
+      {/* Situação financeira */}
+      {(lead.situacaoFinanceira || lead.temDividas !== null || lead.valorVenal || lead.inscricaoIptu) && (
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
+            <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Situação financeira</p>
+          </div>
+          <div className="p-3 grid grid-cols-2 gap-3">
+            <Campo label="Situação" valor={lead.situacaoFinanceira} />
+            <Campo label="Tem dívidas" valor={lead.temDividas} />
+            <Campo label="Valor venal (IPTU)" valor={lead.valorVenal} />
+            <Campo label="Inscrição IPTU" valor={lead.inscricaoIptu} />
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════
+// ABA TIMELINE — Histórico real de atividades
+// ══════════════════════════════════════════════════
+const TIPO_ATIVIDADE_CFG: Record<string, { emoji: string; cor: string }> = {
+  LIGACAO: { emoji: '📞', cor: 'bg-blue-100 text-blue-700' },
+  EMAIL: { emoji: '✉️', cor: 'bg-violet-100 text-violet-700' },
+  WHATSAPP: { emoji: '💬', cor: 'bg-emerald-100 text-emerald-700' },
+  REUNIAO: { emoji: '🤝', cor: 'bg-amber-100 text-amber-700' },
+  NOTA: { emoji: '📝', cor: 'bg-slate-100 text-slate-700' },
+  TAREFA: { emoji: '✅', cor: 'bg-indigo-100 text-indigo-700' },
+  AVALIACAO: { emoji: '🏠', cor: 'bg-orange-100 text-orange-700' },
+  FOLLOW_UP: { emoji: '🔄', cor: 'bg-teal-100 text-teal-700' },
+};
+
+const STATUS_AGENDAMENTO_CFG: Record<string, { label: string; cor: string }> = {
+  PENDENTE: { label: '⏳ Pendente', cor: 'text-amber-600' },
+  CONFIRMADO: { label: '✅ Confirmado', cor: 'text-emerald-600' },
+  CANCELADO: { label: '❌ Cancelado', cor: 'text-red-500' },
+  REALIZADO: { label: '✓ Realizado', cor: 'text-slate-600' },
+  NAO_COMPARECEU: { label: '👻 No-show', cor: 'text-red-400' },
+};
+
+function CardAtividade({ atividade, destaque }: { atividade: AtividadePriorizado; destaque?: boolean }) {
+  const cfg = TIPO_ATIVIDADE_CFG[atividade.tipo] || { emoji: '📌', cor: 'bg-slate-100 text-slate-700' };
+  const statusCfg = atividade.statusAgendamento
+    ? STATUS_AGENDAMENTO_CFG[atividade.statusAgendamento]
+    : null;
+  const concluida = !!atividade.completadoEm;
+
+  return (
+    <div className={`
+      flex gap-3 p-3 rounded-xl border transition-all
+      ${destaque && !concluida
+        ? 'border-emerald-200 bg-emerald-50'
+        : concluida
+        ? 'border-slate-100 bg-slate-50/50 opacity-70'
+        : 'border-slate-200 bg-white'
+      }
+    `}>
+      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base ${cfg.cor}`}>
+        {cfg.emoji}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-semibold text-slate-800 truncate">{atividade.titulo}</p>
+          {concluida && <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />}
+        </div>
+        {atividade.descricao && (
+          <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{atividade.descricao}</p>
+        )}
+        <div className="flex items-center gap-3 mt-1.5">
+          {atividade.agendadoPara && (
+            <span className="flex items-center gap-1 text-[11px] text-slate-500">
+              <Clock className="w-3 h-3" />
+              {new Date(atividade.agendadoPara).toLocaleDateString('pt-BR', {
+                day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+              })}
+            </span>
+          )}
+          {statusCfg && (
+            <span className={`text-[11px] font-semibold ${statusCfg.cor}`}>
+              {statusCfg.label}
+            </span>
+          )}
+        </div>
+        {atividade.completadoEm && (
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            Concluída: {new Date(atividade.completadoEm).toLocaleDateString('pt-BR')}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AbaTimeline({ lead }: { lead: LeadPriorizado }) {
+  if (lead.atividades.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-6">
+        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+          <Activity className="w-7 h-7 text-slate-400" />
+        </div>
+        <p className="text-sm font-semibold text-slate-600">Sem atividades registradas</p>
+        <p className="text-xs text-slate-400 mt-1">
+          Abra o lead para criar uma atividade ou agendamento.
+        </p>
+      </div>
+    );
+  }
+
+  const pendentes = lead.atividades.filter((a) => !a.completadoEm);
+  const concluidas = lead.atividades.filter((a) => !!a.completadoEm);
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* Pendentes */}
+      {pendentes.length > 0 && (
+        <div>
+          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+            Pendentes ({pendentes.length})
+          </p>
+          <div className="space-y-2">
+            {pendentes.map((a, i) => (
+              <CardAtividade key={a.id} atividade={a} destaque={i === 0} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Concluídas */}
+      {concluidas.length > 0 && (
+        <div>
+          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+            Concluídas ({concluidas.length})
+          </p>
+          <div className="space-y-2">
+            {concluidas.map((a) => (
+              <CardAtividade key={a.id} atividade={a} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {lead.atividades.length === 5 && (
+        <p className="text-center text-xs text-slate-400 pt-1">
+          Mostrando as últimas 5 atividades •{' '}
+          <button
+            className="text-indigo-500 hover:underline font-medium"
+            onClick={() => window.open(`/dashboard/leads/${lead.id}`, '_blank')}
+          >
+            Ver todas
+          </button>
+        </p>
       )}
     </div>
   );

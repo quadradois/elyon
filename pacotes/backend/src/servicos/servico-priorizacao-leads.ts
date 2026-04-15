@@ -4,22 +4,37 @@
  * Calcula a urgência operacional de cada lead e retorna ranqueado.
  * Não altera nenhum dado; é somente leitura.
  *
- * @version 1.0
+ * v2.0 — Query enriquecida com todos os campos do schema.
  */
 
 import { prisma } from '../lib/db';
 
 // ============================================
-// TIPOS
+// TIPOS COMPLETOS (alinhados com GET /leads/:id)
 // ============================================
 
 export type CategoriaUrgencia = 'URGENTE' | 'ATENCAO' | 'IA_ATIVA' | 'SEM_ACAO';
+
+export interface AtividadePriorizado {
+  id: string;
+  tipo: string;
+  titulo: string;
+  descricao: string | null;
+  agendadoPara: Date | null;
+  completadoEm: Date | null;
+  statusAgendamento: string | null;
+  criadoEm: Date;
+}
 
 export interface LeadPriorizado {
   id: string;
   nome: string | null;
   telefone: string | null;
+  telefone2: string | null;
+  telefone3: string | null;
   email: string | null;
+  email2: string | null;
+  cpf: string | null;
   status: string;
   temperatura: string | null;
   origem: string | null;
@@ -28,27 +43,79 @@ export interface LeadPriorizado {
   primeiroContato: Date | null;
   ultimaInteracao: Date | null;
   briefingCloser: string | null;
-  // Campos calculados
+
+  // Campanha origem
+  campanhaOrigem: { id: string; nome: string } | null;
+
+  // ── Imóvel flat ──
+  enderecoImovel: string | null;
+  tipoImovel: string | null;
+  areaImovel: string | null;
+  quartosImovel: number | null;
+  vagasImovel: number | null;
+  valorPretendido: string | null;
+  ocupacaoImovel: string | null;
+  interesseEm: string | null;
+  bairroImovel: string | null;
+  nomeEdificio: string | null;
+  inscricaoIptu: string | null;
+  valorVenal: string | null;
+
+  // ── SPIN Qualificação ──
+  situacaoAtual: string | null;
+  tempoDecisao: string | null;
+  tentativasAnteriores: string | null;
+  comCorretorAtualmente: boolean | null;
+  motivacaoVenda: string | null;
+  doresIdentificadas: string[];
+  prazoDesejado: string | null;
+  urgenciaEnum: string | null;
+  consequencias: string | null;
+  custosAtuais: string | null;
+  pressaoTempo: boolean | null;
+  expectativaServico: string | null;
+  objecoes: string[];
+  interesseAvaliacao: boolean | null;
+  observacoesSpin: string | null;
+
+  // ── Fase 2 — Qualificação adicional ──
+  situacaoFinanceira: string | null;
+  temDividas: boolean | null;
+  estadoConservacao: string | null;
+
+  // ── Fase 3 — Negociação ──
+  comissaoAcordada: string | null;
+  tipoAutorizacao: string | null;
+  prazoTrabalho: number | null;
+  autorizouAnuncio: boolean | null;
+
+  // ── Contato/Pessoa ──
+  idade: number | null;
+  sexo: string | null;
+  rendaEstimada: string | null;
+  faixaSalarial: string | null;
+  scoreAssertiva: number | null;
+  profissao: string | null;
+  empresaAtual: string | null;
+
+  // ── Tracking IA ──
+  ultimaAcaoIA: string | null;
+  ultimaAcaoIAEm: Date | null;
+
+  // ── Calculados ──
   urgencia: number;
   categoriaUrgencia: CategoriaUrgencia;
   motivoUrgencia: string;
   resumoIA: string;
-  ultimaAcaoIA: string | null;
-  ultimaAcaoIAEm: Date | null;
-  // Dados auxiliares para o card
-  proximaAtividade: {
-    tipo: string;
-    titulo: string;
-    agendadoPara: Date | null;
-  } | null;
+
+  // ── Atividades ──
+  proximaAtividade: AtividadePriorizado | null;
+  atividades: AtividadePriorizado[];
+
+  // ── Métricas ──
   totalMensagens: number;
   horasSemResposta: number | null;
-  interesseEm: string | null;
-  tipoImovel: string | null;
-  valorPretendido: number | null;
-  enderecoImovel: string | null;
-  doresIdentificadas: string[];
-  objecoes: string[];
+  faseSPIN: string | null;
 }
 
 export interface EstatisticasPriorizadas {
@@ -90,7 +157,10 @@ function getFasePipeline(status: string): keyof PipelineResumo | null {
 // CÁLCULO DE URGÊNCIA
 // ============================================
 
-function calcularUrgencia(lead: any, agora: number): { pontos: number; categoria: CategoriaUrgencia; motivo: string } {
+function calcularUrgencia(
+  lead: any,
+  agora: number
+): { pontos: number; categoria: CategoriaUrgencia; motivo: string } {
   let pontos = 0;
   const motivos: string[] = [];
 
@@ -107,7 +177,8 @@ function calcularUrgencia(lead: any, agora: number): { pontos: number; categoria
 
   // Agendamento nas próximas 24h (+25)
   if (lead.proximaAtividadeData) {
-    const horasAteAgendamento = (new Date(lead.proximaAtividadeData).getTime() - agora) / (1000 * 60 * 60);
+    const horasAteAgendamento =
+      (new Date(lead.proximaAtividadeData).getTime() - agora) / (1000 * 60 * 60);
     if (horasAteAgendamento > 0 && horasAteAgendamento <= 24) {
       pontos += 25;
       motivos.push(`Agendamento em ${Math.round(horasAteAgendamento)}h`);
@@ -117,7 +188,7 @@ function calcularUrgencia(lead: any, agora: number): { pontos: number; categoria
     }
   }
 
-  // SLA: Sem resposta há X horas (+20/+15)
+  // SLA: Sem resposta há X horas
   const horasSemResposta = lead.horasSemResposta;
   if (horasSemResposta !== null) {
     if (lead.temperatura === 'QUENTE' && horasSemResposta > 2) {
@@ -136,6 +207,20 @@ function calcularUrgencia(lead: any, agora: number): { pontos: number; categoria
     motivos.push('Lead novo — priorizar primeiro contato');
   }
 
+  // Urgência SPIN declarada (+10 para ALTA)
+  if (lead.urgenciaEnum === 'ALTA') {
+    pontos += 10;
+    motivos.push('Urgência declarada: ALTA');
+  } else if (lead.urgenciaEnum === 'MEDIA') {
+    pontos += 5;
+  }
+
+  // Pressão de tempo declarada (+8)
+  if (lead.pressaoTempo === true) {
+    pontos += 8;
+    motivos.push('Lead com pressão de tempo');
+  }
+
   // IA processando agora (-20)
   if (lead.ultimaAcaoIAEm) {
     const minutosDesdeIA = (agora - new Date(lead.ultimaAcaoIAEm).getTime()) / (1000 * 60);
@@ -150,7 +235,6 @@ function calcularUrgencia(lead: any, agora: number): { pontos: number; categoria
     pontos -= 30;
   }
 
-  // Garantir range 0-100
   pontos = Math.max(0, Math.min(100, pontos));
 
   // Categorizar
@@ -182,50 +266,70 @@ function calcularUrgencia(lead: any, agora: number): { pontos: number; categoria
 }
 
 // ============================================
-// GERAÇÃO DE RESUMO IA (template, sem LLM)
+// GERAÇÃO DE RESUMO IA (template rico, sem LLM)
 // ============================================
 
 function gerarResumoIA(lead: any): string {
   const partes: string[] = [];
 
-  // Interesse
+  // Interesse + tipo + endereço
   if (lead.interesseEm) {
     const tipo = lead.tipoImovel ? ` ${lead.tipoImovel}` : '';
-    const endereco = lead.enderecoImovel ? ` em ${lead.enderecoImovel}` : '';
+    const endereco = lead.enderecoImovel
+      ? ` em ${lead.enderecoImovel}`
+      : lead.bairroImovel
+      ? ` no bairro ${lead.bairroImovel}`
+      : '';
     partes.push(`Interesse em ${lead.interesseEm.toLowerCase()}${tipo}${endereco}`);
   }
 
-  // Valor — campo é String no schema (ex: "R$ 650.000", "entre 600-700k")
+  // Valor pretendido (campo String no schema)
   if (lead.valorPretendido) {
-    const valorStr = String(lead.valorPretendido).trim();
-    partes.push(`Valor pretendido: ${valorStr}`);
+    partes.push(`Valor pretendido: ${String(lead.valorPretendido).trim()}`);
   }
 
-  // Dores
+  // Motivação da venda (SPIN - Problema)
+  if (lead.motivacaoVenda) {
+    partes.push(`Motivação: ${lead.motivacaoVenda}`);
+  }
+
+  // Situação atual (SPIN - Situação)
+  if (lead.situacaoAtual && partes.length < 3) {
+    partes.push(`Situação: ${lead.situacaoAtual}`);
+  }
+
+  // Prazo + pressão (SPIN - Implicação)
+  if (lead.prazoDesejado) {
+    partes.push(`Prazo: ${lead.prazoDesejado}`);
+  } else if (lead.pressaoTempo && partes.length < 4) {
+    partes.push('Com pressão de tempo');
+  }
+
+  // Dores identificadas
   const dores = lead.doresIdentificadas || [];
-  if (dores.length > 0) {
+  if (dores.length > 0 && partes.length < 4) {
     partes.push(`Dores: ${dores.slice(0, 2).join(', ')}`);
   }
 
   // Objeções
   const objecoes = lead.objecoes || [];
-  if (objecoes.length > 0) {
+  if (objecoes.length > 0 && partes.length < 5) {
     partes.push(`Objeção: ${objecoes[0]}`);
   }
 
-  // Motivação
-  if (lead.motivacaoVenda && partes.length < 3) {
-    partes.push(`Motivação: ${lead.motivacaoVenda}`);
+  // Expectativa de serviço
+  if (lead.expectativaServico && partes.length < 5) {
+    partes.push(`Expectativa: ${lead.expectativaServico}`);
   }
 
-  // Briefing como fallback
+  // Briefing como fallback final
   if (partes.length === 0 && lead.briefingCloser) {
     const linhas = lead.briefingCloser
       .split('\n')
       .map((l: string) => l.trim())
       .filter((l: string) => l.length > 10 && !/^[#🏠🔥💢🎯📋⚡💰🚨🤝👤]/.test(l));
     if (linhas.length > 0) {
-      return linhas[0].slice(0, 120);
+      return linhas[0].slice(0, 160);
     }
   }
 
@@ -233,41 +337,56 @@ function gerarResumoIA(lead: any): string {
     return 'Lead em qualificação. Aguardando mais informações da conversa.';
   }
 
-  return partes.join('. ').slice(0, 200);
+  return partes.join('. ').slice(0, 250);
 }
 
 // ============================================
 // SERVIÇO PRINCIPAL
 // ============================================
 
-export async function priorizarLeads(tenantId: string, limite: number = 50): Promise<ResultadoPriorizacao> {
+export async function priorizarLeads(
+  tenantId: string,
+  limite: number = 50
+): Promise<ResultadoPriorizacao> {
   const agora = Date.now();
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
   const amanha = new Date(hoje);
   amanha.setDate(amanha.getDate() + 1);
 
-  // Buscar leads ativos do tenant com dados necessários
   const leads = await prisma.lead.findMany({
     where: {
       tenantId,
       status: { notIn: ['ARQUIVADO', 'PERDIDO', 'CAPTADO', 'CONVERTIDO', 'INATIVO'] },
     },
     orderBy: { criadoEm: 'desc' },
-    take: 500, // Buscar mais para priorizar, depois cortar
+    take: 500,
+    // ── Includes enriquecidos ──
     include: {
+      campanhaOrigem: {
+        select: { id: true, nome: true },
+      },
       atividades: {
-        where: {
-          completadoEm: null,
-          statusAgendamento: { not: 'CANCELADO' },
-        },
+        where: { statusAgendamento: { not: 'CANCELADO' } },
         orderBy: { agendadoPara: 'asc' },
-        take: 1,
+        take: 5,
+        select: {
+          id: true,
+          tipo: true,
+          titulo: true,
+          descricao: true,
+          agendadoPara: true,
+          completadoEm: true,
+          statusAgendamento: true,
+          criadoEm: true,
+        },
       },
       conversas: {
         orderBy: { ultimaMensagemEm: 'desc' },
         take: 1,
-        include: {
+        select: {
+          faseSPIN: true,
+          _count: { select: { mensagens: true } },
           mensagens: {
             orderBy: { enviadaEm: 'desc' },
             take: 1,
@@ -278,8 +397,7 @@ export async function priorizarLeads(tenantId: string, limite: number = 50): Pro
     },
   });
 
-  // Calcular estatísticas + pipeline
-  // NOTA: total conta os leads da query (ativos). Para total geral, usar count separado.
+  // ── Estatísticas + Pipeline ──
   const estatisticas: EstatisticasPriorizadas = {
     total: leads.length,
     quentes: 0,
@@ -297,23 +415,37 @@ export async function priorizarLeads(tenantId: string, limite: number = 50): Pro
     onboarding: 0,
   };
 
-  // Processar cada lead
   const leadsPriorizados: LeadPriorizado[] = leads.map((lead: any) => {
-    // Estatísticas
+    // Estatísticas por temperatura
     if (lead.temperatura === 'QUENTE') estatisticas.quentes++;
     else if (lead.temperatura === 'MORNO') estatisticas.mornos++;
     else estatisticas.frios++;
 
+    // Novos hoje
     if (lead.criadoEm >= hoje && lead.criadoEm < amanha) estatisticas.novosHoje++;
 
     // Pipeline
     const fase = getFasePipeline(lead.status);
     if (fase) pipeline[fase]++;
 
-    // Próxima atividade
-    const proxAtividade = lead.atividades[0] || null;
-    const proximaAtividadeData = proxAtividade?.agendadoPara || null;
+    // ── Atividades ──
+    const atividadesFormatadas: AtividadePriorizado[] = (lead.atividades || []).map((a: any) => ({
+      id: a.id,
+      tipo: a.tipo,
+      titulo: a.titulo,
+      descricao: a.descricao,
+      agendadoPara: a.agendadoPara,
+      completadoEm: a.completadoEm,
+      statusAgendamento: a.statusAgendamento,
+      criadoEm: a.criadoEm,
+    }));
 
+    // Próxima atividade = primeira pendente (sem completadoEm)
+    const proximaAtividade =
+      atividadesFormatadas.find((a) => !a.completadoEm && a.agendadoPara) || null;
+    const proximaAtividadeData = proximaAtividade?.agendadoPara || null;
+
+    // Agendamentos hoje
     if (proximaAtividadeData) {
       const dataAtividade = new Date(proximaAtividadeData);
       if (dataAtividade >= hoje && dataAtividade < amanha) {
@@ -321,10 +453,14 @@ export async function priorizarLeads(tenantId: string, limite: number = 50): Pro
       }
     }
 
-    // Horas sem resposta (última mensagem do LEAD, não do assistente)
-    // Valores reais do schema: 'usuario' (lead) | 'cliente' | 'assistente' | 'sistema'
+    // ── Conversa / Mensagens ──
+    const ultimaConversa = lead.conversas[0] || null;
+
+    // Total de mensagens via _count (correto)
+    const totalMensagens = ultimaConversa?._count?.mensagens ?? 0;
+
+    // Horas sem resposta — valores reais: 'usuario' | 'cliente' | 'assistente' | 'sistema'
     let horasSemResposta: number | null = null;
-    const ultimaConversa = lead.conversas[0];
     if (ultimaConversa?.mensagens?.length > 0) {
       const ultimaMsg = ultimaConversa.mensagens[0];
       const remetente = String(ultimaMsg.remetente || '').toLowerCase();
@@ -339,24 +475,27 @@ export async function priorizarLeads(tenantId: string, limite: number = 50): Pro
       if (minutosDesdeIA < 5) estatisticas.iaAtiva++;
     }
 
-    // Total mensagens
-    const totalMensagens = ultimaConversa?._count?.mensagens || ultimaConversa?.mensagens?.length || 0;
-
-    // Calcular urgência
+    // ── Score de urgência ──
     const { pontos, categoria, motivo } = calcularUrgencia(
       {
         ...lead,
         proximaAtividadeData,
         horasSemResposta,
+        urgenciaEnum: lead.urgencia, // enum do schema (BAIXA/MEDIA/ALTA)
       },
       agora
     );
 
     return {
+      // Identificação
       id: lead.id,
       nome: lead.nome,
       telefone: lead.telefone,
+      telefone2: lead.telefone2 ?? null,
+      telefone3: lead.telefone3 ?? null,
       email: lead.email,
+      email2: lead.email2 ?? null,
+      cpf: lead.cpf ?? null,
       status: lead.status,
       temperatura: lead.temperatura,
       origem: lead.origem,
@@ -364,32 +503,82 @@ export async function priorizarLeads(tenantId: string, limite: number = 50): Pro
       atualizadoEm: lead.atualizadoEm,
       primeiroContato: lead.primeiroContato,
       ultimaInteracao: lead.ultimaInteracao,
-      briefingCloser: lead.briefingCloser,
+      briefingCloser: lead.briefingCloser ?? null,
+
+      // Campanha
+      campanhaOrigem: lead.campanhaOrigem
+        ? { id: lead.campanhaOrigem.id, nome: lead.campanhaOrigem.nome }
+        : null,
+
+      // Imóvel flat (todos os campos)
+      enderecoImovel: lead.enderecoImovel ?? null,
+      tipoImovel: lead.tipoImovel ?? null,
+      areaImovel: lead.areaImovel ?? null,
+      quartosImovel: lead.quartosImovel ?? null,
+      vagasImovel: lead.vagasImovel ?? null,
+      valorPretendido: lead.valorPretendido ?? null,
+      ocupacaoImovel: lead.ocupacaoImovel ?? null,
+      interesseEm: lead.interesseEm ?? null,
+      bairroImovel: lead.bairroImovel ?? null,
+      nomeEdificio: lead.nomeEdificio ?? null,
+      inscricaoIptu: lead.inscricaoIptu ?? null,
+      valorVenal: lead.valorVenal ?? null,
+
+      // SPIN completo
+      situacaoAtual: lead.situacaoAtual ?? null,
+      tempoDecisao: lead.tempoDecisao ?? null,
+      tentativasAnteriores: lead.tentativasAnteriores ?? null,
+      comCorretorAtualmente: lead.comCorretorAtualmente ?? null,
+      motivacaoVenda: lead.motivacaoVenda ?? null,
+      doresIdentificadas: lead.doresIdentificadas || [],
+      prazoDesejado: lead.prazoDesejado ?? null,
+      urgenciaEnum: lead.urgencia ?? null,
+      consequencias: lead.consequencias ?? null,
+      custosAtuais: lead.custosAtuais ?? null,
+      pressaoTempo: lead.pressaoTempo ?? null,
+      expectativaServico: lead.expectativaServico ?? null,
+      objecoes: lead.objecoes || [],
+      interesseAvaliacao: lead.interesseAvaliacao ?? null,
+      observacoesSpin: lead.observacoesSpin ?? null,
+
+      // Qualificação adicional (Fase 2)
+      situacaoFinanceira: lead.situacaoFinanceira ?? null,
+      temDividas: lead.temDividas ?? null,
+      estadoConservacao: lead.estadoConservacao ?? null,
+
+      // Negociação (Fase 3)
+      comissaoAcordada: lead.comissaoAcordada ?? null,
+      tipoAutorizacao: lead.tipoAutorizacao ?? null,
+      prazoTrabalho: lead.prazoTrabalho ?? null,
+      autorizouAnuncio: lead.autorizouAnuncio ?? null,
+
+      // Contato/Pessoa
+      idade: lead.idade ?? null,
+      sexo: lead.sexo ?? null,
+      rendaEstimada: lead.rendaEstimada ?? null,
+      faixaSalarial: lead.faixaSalarial ?? null,
+      scoreAssertiva: lead.scoreAssertiva ?? null,
+      profissao: lead.profissao ?? null,
+      empresaAtual: lead.empresaAtual ?? null,
+
+      // Tracking IA
+      ultimaAcaoIA: lead.ultimaAcaoIA ?? null,
+      ultimaAcaoIAEm: lead.ultimaAcaoIAEm ?? null,
+
       // Calculados
       urgencia: pontos,
       categoriaUrgencia: categoria,
       motivoUrgencia: motivo,
       resumoIA: gerarResumoIA(lead),
-      ultimaAcaoIA: lead.ultimaAcaoIA,
-      ultimaAcaoIAEm: lead.ultimaAcaoIAEm,
-      proximaAtividade: proxAtividade
-        ? {
-            tipo: proxAtividade.tipo,
-            titulo: proxAtividade.titulo,
-            agendadoPara: proxAtividade.agendadoPara,
-          }
-        : null,
+
+      // Atividades (até 5)
+      proximaAtividade,
+      atividades: atividadesFormatadas,
+
+      // Métricas
       totalMensagens,
       horasSemResposta,
-      interesseEm: lead.interesseEm,
-      tipoImovel: lead.tipoImovel,
-      // valorPretendido é String no schema (ex: "R$ 650.000") — extrair número
-      valorPretendido: lead.valorPretendido
-        ? parseFloat(String(lead.valorPretendido).replace(/[^0-9,]/g, '').replace(',', '.')) || null
-        : null,
-      enderecoImovel: lead.enderecoImovel,
-      doresIdentificadas: lead.doresIdentificadas || [],
-      objecoes: lead.objecoes || [],
+      faseSPIN: ultimaConversa?.faseSPIN ?? null,
     };
   });
 
