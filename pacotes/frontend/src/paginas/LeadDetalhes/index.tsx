@@ -72,10 +72,7 @@ import {
     CardImovel,
     CardNegociacao,
     CardContrato,
-    CardTrackingIA,
-    CardBriefingIA,
     CardProprietario,
-    FaseChecklist,
 } from "./componentes";
 
 const ChatModal = lazy(() => import("../../componentes/ChatModal").then((m) => ({ default: m.ChatModal })));
@@ -120,7 +117,6 @@ export default function LeadDetalhes() {
     const [modalArquivar, setModalArquivar] = useState(false);
     const [modalAtividade, setModalAtividade] = useState(false);
     const [abaPrincipal, setAbaPrincipal] = useState("atendimento");
-    const [abaAtendimento, setAbaAtendimento] = useState("cockpit");
     const [chatOpen, setChatOpen] = useState(false);
 
     const [cockpitAdmin, setCockpitAdmin] = useState<{
@@ -1003,14 +999,6 @@ export default function LeadDetalhes() {
                 </TabsList>
 
                 <TabsContent value="atendimento" className="mt-6 space-y-6">
-                    <Tabs value={abaAtendimento} onValueChange={setAbaAtendimento} className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 max-w-xl">
-                            <TabsTrigger value="cockpit">Cockpit de Decisão</TabsTrigger>
-                            <TabsTrigger value="contexto">Contexto e IA (Legado)</TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent value="cockpit" className="mt-4 space-y-6">
-
                     {lead.proximaAtividade && !isPerdidoOuArquivado && !isCaptado && (
                         <Card className="border-l-4 border-l-orange-500 bg-orange-50/50">
                             <CardContent className="py-4">
@@ -1560,14 +1548,6 @@ export default function LeadDetalhes() {
                             </Card>
                         </div>
                     </div>
-                        </TabsContent>
-
-                        <TabsContent value="contexto" className="mt-4 space-y-6">
-                            <FaseChecklist lead={lead} />
-                            <CardBriefingIA lead={lead} />
-                            <CardTrackingIA lead={lead} />
-                        </TabsContent>
-                    </Tabs>
                 </TabsContent>
 
                 <TabsContent value="cliente" className="mt-6 space-y-6">

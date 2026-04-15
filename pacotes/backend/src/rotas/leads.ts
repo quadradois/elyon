@@ -12,6 +12,7 @@ import {
   extrairFieldSources,
   obterLastSourceUpdateAt,
 } from '../agentes/governanca-qualificacao';
+import { priorizarLeads } from '../servicos/servico-priorizacao-leads';
 
 const router = Router();
 
@@ -158,6 +159,27 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Erro ao listar leads:', error);
     responderErro(res, 500, 'Erro interno ao listar leads');
+  }
+});
+
+// ============================================
+// GET /api/leads/priorizados - Mission Control (feed priorizado por urgência)
+// IMPORTANTE: Deve vir ANTES de /:id
+// ============================================
+router.get('/priorizados', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
+    const limite = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+    const resultado = await priorizarLeads(tenantId, limite);
+
+    return res.json(resultado);
+  } catch (error) {
+    console.error('Erro ao priorizar leads:', error);
+    responderErro(res, 500, 'Erro interno ao priorizar leads');
   }
 });
 
