@@ -195,9 +195,10 @@ function gerarResumoIA(lead: any): string {
     partes.push(`Interesse em ${lead.interesseEm.toLowerCase()}${tipo}${endereco}`);
   }
 
-  // Valor
+  // Valor — campo é String no schema (ex: "R$ 650.000", "entre 600-700k")
   if (lead.valorPretendido) {
-    partes.push(`Valor pretendido: R$ ${Number(lead.valorPretendido).toLocaleString('pt-BR')}`);
+    const valorStr = String(lead.valorPretendido).trim();
+    partes.push(`Valor pretendido: ${valorStr}`);
   }
 
   // Dores
@@ -278,6 +279,7 @@ export async function priorizarLeads(tenantId: string, limite: number = 50): Pro
   });
 
   // Calcular estatísticas + pipeline
+  // NOTA: total conta os leads da query (ativos). Para total geral, usar count separado.
   const estatisticas: EstatisticasPriorizadas = {
     total: leads.length,
     quentes: 0,
@@ -320,13 +322,13 @@ export async function priorizarLeads(tenantId: string, limite: number = 50): Pro
     }
 
     // Horas sem resposta (última mensagem do LEAD, não do assistente)
+    // Valores reais do schema: 'usuario' (lead) | 'cliente' | 'assistente' | 'sistema'
     let horasSemResposta: number | null = null;
     const ultimaConversa = lead.conversas[0];
     if (ultimaConversa?.mensagens?.length > 0) {
       const ultimaMsg = ultimaConversa.mensagens[0];
-      const remetente = String(ultimaMsg.remetente || '').toUpperCase();
-      // Se a última mensagem é do LEAD (USUARIO), calcular tempo sem resposta nossa
-      if (remetente === 'USUARIO' || remetente === 'LEAD') {
+      const remetente = String(ultimaMsg.remetente || '').toLowerCase();
+      if (remetente === 'usuario' || remetente === 'cliente') {
         horasSemResposta = (agora - new Date(ultimaMsg.enviadaEm).getTime()) / (1000 * 60 * 60);
       }
     }
@@ -381,7 +383,10 @@ export async function priorizarLeads(tenantId: string, limite: number = 50): Pro
       horasSemResposta,
       interesseEm: lead.interesseEm,
       tipoImovel: lead.tipoImovel,
-      valorPretendido: lead.valorPretendido,
+      // valorPretendido é String no schema (ex: "R$ 650.000") — extrair número
+      valorPretendido: lead.valorPretendido
+        ? parseFloat(String(lead.valorPretendido).replace(/[^0-9,]/g, '').replace(',', '.')) || null
+        : null,
       enderecoImovel: lead.enderecoImovel,
       doresIdentificadas: lead.doresIdentificadas || [],
       objecoes: lead.objecoes || [],

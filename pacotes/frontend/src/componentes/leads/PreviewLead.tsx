@@ -58,8 +58,13 @@ function TemperaturaIcon({ temp }: { temp: string | null }) {
   return <Snowflake className="w-4 h-4 text-blue-400" />;
 }
 
-function formatarValor(val: number | null | undefined): string {
-  if (!val || isNaN(val)) return '—';
+function formatarValor(val: number | string | null | undefined): string {
+  if (!val) return '—';
+  if (typeof val === 'string') {
+    // Já formatado (ex: "R$ 650.000" ou "entre 600-700k")
+    return val.trim() || '—';
+  }
+  if (isNaN(val)) return '—';
   return `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`;
 }
 
@@ -209,6 +214,7 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
           <div className="h-full" style={{ minHeight: '300px' }}>
             <ChatPanel
               leadId={lead.id}
+              leadNome={lead.nome || 'Lead'}
               leadTelefone={lead.telefone}
             />
           </div>
@@ -321,7 +327,7 @@ function AbaImovel({
   formatarValor,
 }: {
   lead: LeadPriorizado;
-  formatarValor: (v: number | null | undefined) => string;
+  formatarValor: (v: number | string | null | undefined) => string;
   formatarData: (d: string | null | undefined) => string;
 }) {
   const temDados = lead.enderecoImovel || lead.tipoImovel || lead.valorPretendido || lead.interesseEm;
@@ -343,7 +349,7 @@ function AbaImovel({
   return (
     <div className="p-5 space-y-4">
       {/* Valor pretendido — destaque principal */}
-      {lead.valorPretendido && !isNaN(lead.valorPretendido) && (
+      {lead.valorPretendido && (
         <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-4 text-white shadow-md shadow-emerald-200">
           <p className="text-xs font-medium text-emerald-200 mb-1">Valor pretendido</p>
           <p className="text-2xl font-bold">{formatarValor(lead.valorPretendido)}</p>

@@ -37,7 +37,7 @@ export interface LeadPriorizado {
   horasSemResposta: number | null;
   interesseEm: string | null;
   tipoImovel: string | null;
-  valorPretendido: number | null;
+  valorPretendido: number | string | null;
   enderecoImovel: string | null;
   doresIdentificadas: string[];
   objecoes: string[];
