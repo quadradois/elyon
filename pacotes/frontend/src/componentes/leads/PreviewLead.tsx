@@ -55,13 +55,8 @@ function temLabel(temp: string | null) {
   return 'Frio';
 }
 
-function formatarData(data: string | Date | null | undefined): string {
-  if (!data) return '—';
-  return new Date(data).toLocaleDateString('pt-BR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
+
+
 
 function Campo({ label, valor, icone }: { label: string; valor: string | number | boolean | null | undefined; icone?: React.ReactNode }) {
   const texto =
@@ -584,7 +579,7 @@ function CardAtividade({ atividade, destaque }: { atividade: AtividadePriorizado
       ${destaque && !concluida
         ? 'border-emerald-200 bg-emerald-50'
         : concluida
-        ? 'border-slate-100 bg-slate-50/50 opacity-70'
+        ? 'border-slate-100 bg-slate-50 opacity-70'
         : 'border-slate-200 bg-white'
       }
     `}>

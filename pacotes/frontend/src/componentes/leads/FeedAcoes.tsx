@@ -3,7 +3,7 @@
  * Grupos claros, contagem visível, scroll suave.
  */
 
-import { Loader2, Users, Inbox } from 'lucide-react';
+import { Loader2, Inbox } from 'lucide-react';
 import { CardLeadPriorizado } from './CardLeadPriorizado';
 import { MiniPipeline } from './MiniPipeline';
 import type { LeadPriorizado, PipelineResumo } from '../../ganchos/useLeadsPriorizados';
@@ -32,7 +32,7 @@ const GRUPOS = [
     titulo: 'Ação urgente',
     emoji: '🔴',
     descricao: 'Requerem atenção imediata',
-    corFundo: 'bg-red-50/50',
+    corFundo: 'bg-red-50',
     corBorda: 'border-red-200',
     corTitulo: 'text-red-700',
     corBadge: 'bg-red-100 text-red-700',
@@ -42,7 +42,7 @@ const GRUPOS = [
     titulo: 'Atenção',
     emoji: '🟡',
     descricao: 'Acompanhar em breve',
-    corFundo: 'bg-amber-50/50',
+    corFundo: 'bg-amber-50',
     corBorda: 'border-amber-200',
     corTitulo: 'text-amber-700',
     corBadge: 'bg-amber-100 text-amber-700',
@@ -52,7 +52,7 @@ const GRUPOS = [
     titulo: 'IA trabalhando',
     emoji: '🤖',
     descricao: 'Sendo processados pela IA',
-    corFundo: 'bg-indigo-50/50',
+    corFundo: 'bg-indigo-50',
     corBorda: 'border-indigo-200',
     corTitulo: 'text-indigo-700',
     corBadge: 'bg-indigo-100 text-indigo-700',
@@ -62,7 +62,7 @@ const GRUPOS = [
     titulo: 'Em espera',
     emoji: '⚪',
     descricao: 'Sem ação pendente',
-    corFundo: 'bg-slate-50/30',
+    corFundo: 'bg-slate-50',
     corBorda: 'border-slate-200',
     corTitulo: 'text-slate-600',
     corBadge: 'bg-slate-100 text-slate-600',

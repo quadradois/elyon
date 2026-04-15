@@ -32,28 +32,28 @@ const CATEGORIA_CONFIG: Record<CategoriaUrgencia, {
   pulsar: boolean;
 }> = {
   URGENTE: {
-    gradient: 'from-red-500/10 via-orange-50 to-white border-l-red-500',
+    gradient: 'from-red-50 via-orange-50 to-white border-l-red-500',
     badge: 'bg-red-100 text-red-700 ring-1 ring-red-200',
     badgeText: '🔴 Ação urgente',
     label: 'URGENTE',
     pulsar: false,
   },
   ATENCAO: {
-    gradient: 'from-amber-500/10 via-amber-50/60 to-white border-l-amber-400',
+    gradient: 'from-amber-50 via-yellow-50 to-white border-l-amber-400',
     badge: 'bg-amber-100 text-amber-700 ring-1 ring-amber-200',
     badgeText: '🟡 Atenção',
     label: 'ATENÇÃO',
     pulsar: false,
   },
   IA_ATIVA: {
-    gradient: 'from-indigo-500/10 via-indigo-50/40 to-white border-l-indigo-400',
+    gradient: 'from-indigo-50 via-blue-50 to-white border-l-indigo-400',
     badge: 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200',
     badgeText: '🤖 IA trabalhando',
     label: 'IA ATIVA',
     pulsar: true,
   },
   SEM_ACAO: {
-    gradient: 'from-slate-100/60 via-white to-white border-l-slate-300',
+    gradient: 'from-slate-50 via-white to-white border-l-slate-300',
     badge: 'bg-slate-100 text-slate-500 ring-1 ring-slate-200',
     badgeText: '⚪ Em espera',
     label: 'EM ESPERA',
@@ -156,7 +156,7 @@ export function CardLeadPriorizado({
         </div>
 
         {/* Linha 3: Resumo IA */}
-        <div className="flex items-start gap-2.5 mb-3 bg-white/70 backdrop-blur-sm rounded-xl p-3 border border-white shadow-sm">
+        <div className="flex items-start gap-2.5 mb-3 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <div className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
             <Bot className="w-3.5 h-3.5 text-indigo-600" />
           </div>
