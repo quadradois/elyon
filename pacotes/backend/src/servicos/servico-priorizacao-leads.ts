@@ -11,6 +11,34 @@
 import { prisma } from '../lib/db';
 
 // ============================================
+// HELPERS INTERNOS
+// ============================================
+
+/**
+ * Converte string de valor monetário para número.
+ * Suporta: "R$ 350.000", "600k", "1.5M", "1,5M", "350000"
+ */
+export function parsearValorMonetario(valor: string | null | undefined): number {
+  if (!valor) return NaN;
+  const str = String(valor).toLowerCase().trim();
+
+  // Formato abreviado: "600k", "1.5k"
+  const matchK = str.match(/(\d+[.,]?\d*)\s*k/);
+  if (matchK) return parseFloat(matchK[1].replace(',', '.')) * 1_000;
+
+  // Formato abreviado: "1.5M", "1,5M", "2M"
+  const matchM = str.match(/(\d+[.,]?\d*)\s*m(?!i)/);
+  if (matchM) return parseFloat(matchM[1].replace(',', '.')) * 1_000_000;
+
+  // Formato brasileiro: "R$ 1.200.000" ou "1.200.000" ou "1200000"
+  // Remove símbolos e espaços, trata ponto como separador de milhar e vírgula como decimal
+  const semSimbolo = str.replace(/[r$\s]/g, '');
+  // Se há vírgula como decimal (ex: "350,50"), troca por ponto
+  const normalizado = semSimbolo.replace(/\.(\d{3})/g, '$1').replace(',', '.');
+  return parseFloat(normalizado);
+}
+
+// ============================================
 // TIPOS COMPLETOS (alinhados com GET /leads/:id)
 // ============================================
 
@@ -212,7 +240,7 @@ export function calcularQualificacao(lead: any): number {
 
   // ── Negociação ──
   const tipoAutorizacao = lead.tipoAutorizacao;
-  const autorizouAnuncio = lead.autorizouAnuncio ?? lead.autorizouAnuncio;
+  const autorizouAnuncio = lead.autorizouAnuncio; // fix: era self-referential (??)
   const comissaoAcordada = lead.comissaoAcordada;
 
   if (tipoAutorizacao === 'exclusiva') pontos += 6;
@@ -307,9 +335,7 @@ export function calcularUrgencia(
   // ★ NOVO: Alto valor sem agendamento (+10)
   // Oportunidade de alto valor passando em branco
   if (!lead.proximaAtividadeData && lead.valorPretendido) {
-    const valorNumerico = parseFloat(
-      String(lead.valorPretendido).replace(/[^0-9,]/g, '').replace(',', '.')
-    );
+    const valorNumerico = parsearValorMonetario(lead.valorPretendido);
     if (!isNaN(valorNumerico) && valorNumerico > 500000) {
       pontos += 10;
       motivos.push(`Alto valor (${lead.valorPretendido}) sem agendamento`);
@@ -325,8 +351,10 @@ export function calcularUrgencia(
     }
   }
 
-  // Leads finalizados (-30)
-  if (['PERDIDO', 'ARQUIVADO', 'CAPTADO', 'CONVERTIDO', 'INATIVO'].includes(lead.status)) {
+  // Leads finalizados (-30) — CAPTADO/CONVERTIDO/INATIVO nunca chegam aqui
+  // pois são filtrados pela query Prisma em priorizarLeads()
+  // Mantemos PERDIDO e ARQUIVADO pois calcularUrgencia() é exportada e pode ser chamada externamente
+  if (['PERDIDO', 'ARQUIVADO'].includes(lead.status)) {
     pontos -= 30;
   }
 
