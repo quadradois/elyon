@@ -76,11 +76,16 @@ export function MissionControlLeads() {
         {/* CONTEÚDO PRINCIPAL */}
         {viewMode === 'feed' ? (
           <div className="flex gap-5 items-start">
-            {/* FEED (esquerda) */}
+            {/* FEED (esquerda) — scroll isolado para não ser afetado pelo chat */}
             <div
               className={`transition-all duration-300 ease-out ${
                 leadSelecionado ? 'w-[55%]' : 'w-full max-w-2xl mx-auto'
               }`}
+              style={{
+                height: 'calc(100vh - 200px)',
+                overflowY: 'auto',
+                overscrollBehavior: 'contain',
+              }}
             >
               <FeedAcoes
                 leads={leads}
@@ -94,11 +99,15 @@ export function MissionControlLeads() {
               />
             </div>
 
-            {/* PREVIEW (direita) */}
+            {/* PREVIEW (direita) — sticky + scroll isolado */}
             {leadSelecionado && (
               <div
                 className="w-[45%] flex-shrink-0 sticky top-6"
-                style={{ height: 'calc(100vh - 200px)' }}
+                style={{
+                  height: 'calc(100vh - 200px)',
+                  overflowY: 'auto',
+                  overscrollBehavior: 'contain',
+                }}
               >
                 <PreviewLead
                   lead={leadSelecionado}

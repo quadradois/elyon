@@ -31,6 +31,7 @@ export function ChatPanel({ leadId, leadTelefone, onExpandir }: ChatPanelProps) 
   const [enviando, setEnviando] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     carregarMensagens();
@@ -39,8 +40,10 @@ export function ChatPanel({ leadId, leadTelefone, onExpandir }: ChatPanelProps) 
   }, [leadId]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    // Usa scrollTop no container interno para NÃO vazar para ancestrais.
+    // scrollIntoView() sobe pelo DOM e arrasta o feed de leads junto.
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [mensagens]);
 
@@ -90,8 +93,12 @@ export function ChatPanel({ leadId, leadTelefone, onExpandir }: ChatPanelProps) 
         )}
       </div>
 
-      {/* Área de mensagens */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50 min-h-0">
+      {/* Área de mensagens - overscroll-contain isola o scroll dentro deste container */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50 min-h-0"
+        style={{ overscrollBehavior: 'contain' }}
+      >
         {carregando ? (
           <div className="flex items-center justify-center h-20">
             <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
