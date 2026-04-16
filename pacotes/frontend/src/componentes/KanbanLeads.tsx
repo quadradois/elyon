@@ -5,6 +5,9 @@ import {
     Calendar,
     Clock,
     Ban,
+    Home,
+    User,
+    Megaphone,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
@@ -25,7 +28,7 @@ import { api } from "../servicos/api";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
-// Tipos (Replicados de Leads.tsx ou importados se fosse possível)
+// Tipos enriquecidos — alinhados com LeadPriorizado do hook
 interface Lead {
     id: string;
     nome: string | null;
@@ -33,11 +36,33 @@ interface Lead {
     email: string | null;
     status: string;
     temperatura: string | null;
-    dataCriacao: string;
+    dataCriacao?: string;
+    criadoEm?: string; // campo real do backend
     proximaAtividade?: {
         tipo: string;
-        dataAgendada: string;
+        dataAgendada?: string;
+        agendadoPara?: string;
+        titulo?: string;
     } | null;
+
+    // ── Campanha de origem ──
+    campanhaOrigem?: { id: string; nome: string } | null;
+
+    // ── Dados do imóvel (wizard de captação) ──
+    interesseEm?: string | null;
+    valorPretendido?: string | null;
+    tipoImovel?: string | null;
+    bairroImovel?: string | null;
+    enderecoImovel?: string | null;
+
+    // ── Perfil Assertiva (enriquecimento na mineração) ──
+    scoreAssertiva?: number | null;
+    rendaEstimada?: string | null;
+    faixaSalarial?: string | null;
+    profissao?: string | null;
+
+    // ── Score Composto ──
+    scoreComposto?: number | null;
 }
 
 interface KanbanLeadsProps {
@@ -242,7 +267,8 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                             )}
 
                             {columns[col.id]?.map((lead) => {
-                                const horasCriacao = Math.floor((new Date().getTime() - new Date(lead.dataCriacao).getTime()) / (1000 * 60 * 60));
+                                const dataBase = lead.criadoEm || lead.dataCriacao || new Date().toISOString();
+                                const horasCriacao = Math.floor((new Date().getTime() - new Date(dataBase).getTime()) / (1000 * 60 * 60));
                                 const isAtrasado = horasCriacao > 24 && lead.status === 'NOVO';
 
                                 return (
@@ -325,8 +351,16 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                                             </DropdownMenu>
                                         </div>
 
-                                        {/* Infos */}
-                                        <div className="space-y-1.5 mb-3">
+                                        {/* Campanha de origem */}
+                                        {lead.campanhaOrigem && (
+                                            <div className="flex items-center gap-1.5 text-[11px] text-indigo-600 font-medium bg-indigo-50 px-2 py-1 rounded-md mb-2">
+                                                <Megaphone className="w-3 h-3 flex-shrink-0" />
+                                                <span className="truncate">{lead.campanhaOrigem.nome}</span>
+                                            </div>
+                                        )}
+
+                                        {/* Infos básicas */}
+                                        <div className="space-y-1.5 mb-2">
                                             {lead.telefone && (
                                                 <div className="flex items-center gap-1.5 text-xs text-slate-500">
                                                     <Phone className="w-3 h-3" />
@@ -336,7 +370,11 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                                             {lead.proximaAtividade ? (
                                                 <div className="flex items-center gap-1.5 text-xs text-amber-600 font-medium bg-amber-50 px-2 py-1 rounded">
                                                     <Calendar className="w-3 h-3" />
-                                                    {new Date(lead.proximaAtividade.dataAgendada).toLocaleDateString('pt-BR')}
+                                                    {new Date(
+                                                        lead.proximaAtividade.agendadoPara ||
+                                                        lead.proximaAtividade.dataAgendada ||
+                                                        new Date().toISOString()
+                                                    ).toLocaleDateString('pt-BR')}
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-1.5 text-xs text-slate-400">
@@ -346,12 +384,45 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                                             )}
                                         </div>
 
-                                        {/* Footer */}
+                                        {/* Dados do imóvel */}
+                                        {(lead.tipoImovel || lead.valorPretendido || lead.bairroImovel) && (
+                                            <div className="flex items-start gap-1.5 text-[11px] text-slate-600 bg-slate-50 px-2 py-1.5 rounded-md mb-2">
+                                                <Home className="w-3 h-3 mt-0.5 flex-shrink-0 text-slate-400" />
+                                                <span className="truncate">
+                                                    {[lead.tipoImovel, lead.valorPretendido, lead.bairroImovel]
+                                                        .filter(Boolean)
+                                                        .join(' · ')}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Perfil Assertiva */}
+                                        {(lead.scoreAssertiva || lead.rendaEstimada || lead.faixaSalarial) && (
+                                            <div className="flex items-start gap-1.5 text-[11px] text-slate-600 bg-slate-50 px-2 py-1.5 rounded-md mb-2">
+                                                <User className="w-3 h-3 mt-0.5 flex-shrink-0 text-slate-400" />
+                                                <span className="truncate">
+                                                    {lead.scoreAssertiva && `Score ${lead.scoreAssertiva}`}
+                                                    {lead.scoreAssertiva && (lead.rendaEstimada || lead.faixaSalarial) && ' · '}
+                                                    {lead.rendaEstimada || lead.faixaSalarial || ''}
+                                                    {lead.profissao && ` · ${lead.profissao}`}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Footer: data + score composto */}
                                         <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-50">
-                                            <span>{new Date(lead.dataCriacao).toLocaleDateString('pt-BR')}</span>
-                                            {/* Avatar/Initials placeholder */}
-                                            <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600">
-                                                {(lead.nome || "?")[0]}
+                                            <span>{new Date(lead.criadoEm || lead.dataCriacao || '').toLocaleDateString('pt-BR')}</span>
+                                            <div className="flex items-center gap-2">
+                                                {lead.scoreComposto != null && (
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                                        lead.scoreComposto >= 60 ? 'bg-emerald-100 text-emerald-700' :
+                                                        lead.scoreComposto >= 35 ? 'bg-amber-100 text-amber-700' :
+                                                        'bg-slate-100 text-slate-500'
+                                                    }`}>{lead.scoreComposto} pts</span>
+                                                )}
+                                                <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600">
+                                                    {(lead.nome || "?")[0]}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
