@@ -465,10 +465,18 @@ function AbaResumo({ lead }: { lead: LeadPriorizado }) {
 // ABA IMÓVEL — Completa com todos os campos
 // ══════════════════════════════════════════════════
 function AbaImovel({ lead }: { lead: LeadPriorizado }) {
-  const temDados = lead.enderecoImovel || lead.tipoImovel || lead.valorPretendido ||
+  // Dados do agente (pré-contrato) — coletados na conversa
+  const temDadosAgente = lead.enderecoImovel || lead.tipoImovel || lead.valorPretendido ||
     lead.interesseEm || lead.areaImovel || lead.bairroImovel || lead.nomeEdificio;
 
-  if (!temDados) {
+  // Dados do wizard (pós-contrato) — coletados pelo Admin agente
+  const temDadosWizard = lead.imovelAreaTotal || lead.imovelSuites != null ||
+    lead.imovelBanheiros != null || lead.imovelAndar != null ||
+    lead.imovelDescricao || lead.imovelCaracteristicas?.length > 0 ||
+    lead.imovelFotos?.length > 0 || lead.imovelValorLocacao ||
+    lead.imovelValorCondominio || lead.imovelValorIPTU;
+
+  if (!temDadosAgente && !temDadosWizard) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6">
         <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
@@ -483,65 +491,171 @@ function AbaImovel({ lead }: { lead: LeadPriorizado }) {
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-5">
 
-      {/* Valor — destaque */}
-      {lead.valorPretendido && (
-        <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-4 text-white">
-          <p className="text-xs font-medium text-emerald-200 mb-0.5">Valor pretendido</p>
-          <p className="text-2xl font-bold">{lead.valorPretendido}</p>
-          {lead.interesseEm && (
-            <span className="mt-2 inline-block text-[11px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full capitalize">
-              {lead.interesseEm}
-            </span>
+      {/* ══ BLOCO 1: DADOS DO AGENTE (pré-contrato) ══ */}
+      {temDadosAgente && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="h-px flex-1 bg-slate-100" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dados coletados pelo Agente</span>
+            <div className="h-px flex-1 bg-slate-100" />
+          </div>
+
+          {/* Valor — destaque */}
+          {lead.valorPretendido && (
+            <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-4 text-white">
+              <p className="text-xs font-medium text-emerald-200 mb-0.5">Valor pretendido</p>
+              <p className="text-2xl font-bold">{lead.valorPretendido}</p>
+              {lead.interesseEm && (
+                <span className="mt-2 inline-block text-[11px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full capitalize">
+                  {lead.interesseEm}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Endereço */}
+          {(lead.enderecoImovel || lead.bairroImovel || lead.nomeEdificio) && (
+            <div className="flex items-start gap-3 bg-slate-50 rounded-xl p-3 border border-slate-200">
+              <MapPin className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+              <div>
+                {lead.enderecoImovel && <p className="text-sm font-semibold text-slate-800">{lead.enderecoImovel}</p>}
+                {lead.bairroImovel && <p className="text-xs text-slate-500 mt-0.5">{lead.bairroImovel}</p>}
+                {lead.nomeEdificio && <p className="text-xs text-indigo-600 font-medium mt-0.5">{lead.nomeEdificio}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Grid de características do agente */}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { icone: <Home className="w-3.5 h-3.5" />, label: 'Tipo', valor: lead.tipoImovel ? lead.tipoImovel.charAt(0).toUpperCase() + lead.tipoImovel.slice(1) : null },
+              { icone: <Maximize2 className="w-3.5 h-3.5" />, label: 'Área', valor: lead.areaImovel },
+              { icone: <DoorOpen className="w-3.5 h-3.5" />, label: 'Quartos', valor: lead.quartosImovel },
+              { icone: <Car className="w-3.5 h-3.5" />, label: 'Vagas', valor: lead.vagasImovel },
+              { icone: <Layers className="w-3.5 h-3.5" />, label: 'Ocupação', valor: lead.ocupacaoImovel },
+              { icone: <BadgeCheck className="w-3.5 h-3.5" />, label: 'Conservação', valor: lead.estadoConservacao },
+            ].filter((i) => i.valor !== null && i.valor !== undefined).map((item) => (
+              <div key={item.label} className="bg-white rounded-xl p-3 border border-slate-200 flex items-center gap-2">
+                <span className="text-slate-400">{item.icone}</span>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">{item.label}</p>
+                  <p className="text-sm font-semibold text-slate-800">{String(item.valor)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Situação financeira */}
+          {(lead.situacaoFinanceira || lead.temDividas !== null || lead.valorVenal || lead.inscricaoIptu) && (
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
+                <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Situação financeira</p>
+              </div>
+              <div className="p-3 grid grid-cols-2 gap-3">
+                <Campo label="Situação" valor={lead.situacaoFinanceira} />
+                <Campo label="Tem dívidas" valor={lead.temDividas} />
+                <Campo label="Valor venal (IPTU)" valor={lead.valorVenal} />
+                <Campo label="Inscrição IPTU" valor={lead.inscricaoIptu} />
+              </div>
+            </div>
           )}
         </div>
       )}
 
-      {/* Endereço */}
-      {(lead.enderecoImovel || lead.bairroImovel || lead.nomeEdificio) && (
-        <div className="flex items-start gap-3 bg-slate-50 rounded-xl p-3 border border-slate-200">
-          <MapPin className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-          <div>
-            {lead.enderecoImovel && <p className="text-sm font-semibold text-slate-800">{lead.enderecoImovel}</p>}
-            {lead.bairroImovel && <p className="text-xs text-slate-500 mt-0.5">{lead.bairroImovel}</p>}
-            {lead.nomeEdificio && <p className="text-xs text-indigo-600 font-medium mt-0.5">{lead.nomeEdificio}</p>}
+      {/* ══ BLOCO 2: DADOS DO WIZARD DE CAPTAÇÃO (pós-contrato) ══ */}
+      {temDadosWizard && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="h-px flex-1 bg-indigo-100" />
+            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">📋 Wizard de Captação</span>
+            <div className="h-px flex-1 bg-indigo-100" />
           </div>
-        </div>
-      )}
 
-      {/* Grid de características */}
-      <div className="grid grid-cols-2 gap-2">
-        {[
-          { icone: <Home className="w-3.5 h-3.5" />, label: 'Tipo', valor: lead.tipoImovel ? lead.tipoImovel.charAt(0).toUpperCase() + lead.tipoImovel.slice(1) : null },
-          { icone: <Maximize2 className="w-3.5 h-3.5" />, label: 'Área', valor: lead.areaImovel },
-          { icone: <DoorOpen className="w-3.5 h-3.5" />, label: 'Quartos', valor: lead.quartosImovel },
-          { icone: <Car className="w-3.5 h-3.5" />, label: 'Vagas', valor: lead.vagasImovel },
-          { icone: <Layers className="w-3.5 h-3.5" />, label: 'Ocupação', valor: lead.ocupacaoImovel },
-          { icone: <BadgeCheck className="w-3.5 h-3.5" />, label: 'Conservação', valor: lead.estadoConservacao },
-        ].filter((i) => i.valor !== null && i.valor !== undefined).map((item) => (
-          <div key={item.label} className="bg-white rounded-xl p-3 border border-slate-200 flex items-center gap-2">
-            <span className="text-slate-400">{item.icone}</span>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase">{item.label}</p>
-              <p className="text-sm font-semibold text-slate-800">{String(item.valor)}</p>
+          {/* Grid de dados completos do wizard */}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { icone: <DoorOpen className="w-3.5 h-3.5" />, label: 'Suítes', valor: lead.imovelSuites },
+              { icone: <Layers className="w-3.5 h-3.5" />, label: 'Banheiros', valor: lead.imovelBanheiros },
+              { icone: <Maximize2 className="w-3.5 h-3.5" />, label: 'Área total', valor: lead.imovelAreaTotal ? `${lead.imovelAreaTotal} m²` : null },
+              { icone: <Home className="w-3.5 h-3.5" />, label: 'Andar', valor: lead.imovelAndar },
+            ].filter((i) => i.valor !== null && i.valor !== undefined).map((item) => (
+              <div key={item.label} className="bg-indigo-50 rounded-xl p-3 border border-indigo-100 flex items-center gap-2">
+                <span className="text-indigo-400">{item.icone}</span>
+                <div>
+                  <p className="text-[10px] font-bold text-indigo-400 uppercase">{item.label}</p>
+                  <p className="text-sm font-semibold text-slate-800">{String(item.valor)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Valores financeiros do wizard */}
+          {(lead.imovelValorLocacao || lead.imovelValorCondominio || lead.imovelValorIPTU) && (
+            <div className="rounded-xl border border-indigo-100 overflow-hidden">
+              <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100">
+                <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Valores</p>
+              </div>
+              <div className="p-3 grid grid-cols-2 gap-3">
+                {lead.imovelValorLocacao && <Campo label="Valor de locação" valor={`R$ ${lead.imovelValorLocacao.toLocaleString('pt-BR')}`} />}
+                {lead.imovelValorCondominio && <Campo label="Condomínio/mês" valor={`R$ ${lead.imovelValorCondominio.toLocaleString('pt-BR')}`} />}
+                {lead.imovelValorIPTU && <Campo label="IPTU/ano" valor={`R$ ${lead.imovelValorIPTU.toLocaleString('pt-BR')}`} />}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          )}
 
-      {/* Situação financeira */}
-      {(lead.situacaoFinanceira || lead.temDividas !== null || lead.valorVenal || lead.inscricaoIptu) && (
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
-            <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Situação financeira</p>
-          </div>
-          <div className="p-3 grid grid-cols-2 gap-3">
-            <Campo label="Situação" valor={lead.situacaoFinanceira} />
-            <Campo label="Tem dívidas" valor={lead.temDividas} />
-            <Campo label="Valor venal (IPTU)" valor={lead.valorVenal} />
-            <Campo label="Inscrição IPTU" valor={lead.inscricaoIptu} />
-          </div>
+          {/* Características */}
+          {lead.imovelCaracteristicas?.length > 0 && (
+            <div className="rounded-xl border border-indigo-100 overflow-hidden">
+              <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100">
+                <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Características</p>
+              </div>
+              <div className="p-3 flex flex-wrap gap-2">
+                {lead.imovelCaracteristicas.map((c) => (
+                  <span key={c} className="text-xs bg-white border border-indigo-200 text-indigo-700 px-2.5 py-1 rounded-full font-medium">
+                    {c}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Descrição */}
+          {lead.imovelDescricao && (
+            <div className="rounded-xl border border-indigo-100 overflow-hidden">
+              <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100">
+                <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Descrição</p>
+              </div>
+              <p className="p-3 text-xs text-slate-700 leading-relaxed">{lead.imovelDescricao}</p>
+            </div>
+          )}
+
+          {/* Fotos */}
+          {lead.imovelFotos?.length > 0 && (
+            <div className="rounded-xl border border-indigo-100 overflow-hidden">
+              <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100">
+                <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Fotos ({lead.imovelFotos.length})</p>
+              </div>
+              <div className="p-3 grid grid-cols-3 gap-2">
+                {lead.imovelFotos.map((url, i) => (
+                  <img
+                    key={i}
+                    src={url}
+                    alt={`Foto ${i + 1}`}
+                    className="w-full aspect-square object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity border border-indigo-100"
+                    onClick={() => window.open(url, '_blank')}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {lead.dadosImovelColetadosEm && (
+            <p className="text-[10px] text-slate-400 text-center">
+              Dados coletados em {new Date(lead.dadosImovelColetadosEm).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
         </div>
       )}
     </div>

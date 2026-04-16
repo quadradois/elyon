@@ -84,6 +84,19 @@ export interface LeadPriorizado {
   prazoTrabalho: number | null;
   autorizouAnuncio: boolean | null;
 
+  // ── Dados completos do imóvel — wizard de captação (pós-contrato) ──
+  imovelSuites: number | null;
+  imovelBanheiros: number | null;
+  imovelAreaTotal: number | null;
+  imovelAndar: number | null;
+  imovelCaracteristicas: string[];
+  imovelDescricao: string | null;
+  imovelFotos: string[];
+  imovelValorLocacao: number | null;
+  imovelValorCondominio: number | null;
+  imovelValorIPTU: number | null;
+  dadosImovelColetadosEm: string | null;
+
   // ── Contato/Pessoa ──
   idade: number | null;
   sexo: string | null;

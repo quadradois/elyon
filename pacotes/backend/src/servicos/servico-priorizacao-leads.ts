@@ -639,7 +639,7 @@ export async function priorizarLeads(
         ? { id: lead.campanhaOrigem.id, nome: lead.campanhaOrigem.nome }
         : null,
 
-      // Imóvel flat (todos os campos)
+      // Imóvel flat — coletado pelo agente (pré-contrato)
       enderecoImovel: lead.enderecoImovel ?? null,
       tipoImovel: lead.tipoImovel ?? null,
       areaImovel: lead.areaImovel ?? null,
@@ -652,6 +652,19 @@ export async function priorizarLeads(
       nomeEdificio: lead.nomeEdificio ?? null,
       inscricaoIptu: lead.inscricaoIptu ?? null,
       valorVenal: lead.valorVenal ?? null,
+
+      // ── Dados completos do imóvel (wizard de captação — pós-contrato) ──
+      imovelSuites: lead.imovelSuites ?? null,
+      imovelBanheiros: lead.imovelBanheiros ?? null,
+      imovelAreaTotal: lead.imovelAreaTotal ?? null,
+      imovelAndar: lead.imovelAndar ?? null,
+      imovelCaracteristicas: lead.imovelCaracteristicas ?? [],
+      imovelDescricao: lead.imovelDescricao ?? null,
+      imovelFotos: lead.imovelFotos ?? [],
+      imovelValorLocacao: lead.imovelValorLocacao ?? null,
+      imovelValorCondominio: lead.imovelValorCondominio ?? null,
+      imovelValorIPTU: lead.imovelValorIPTU ?? null,
+      dadosImovelColetadosEm: lead.dadosImovelColetadosEm ?? null,
 
       // SPIN completo
       situacaoAtual: lead.situacaoAtual ?? null,
