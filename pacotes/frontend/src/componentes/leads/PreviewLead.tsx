@@ -564,98 +564,86 @@ function AbaImovel({ lead }: { lead: LeadPriorizado }) {
         </div>
       )}
 
-      {/* ══ BLOCO 2: DADOS DO WIZARD DE CAPTAÇÃO (pós-contrato) ══ */}
-      {temDadosWizard && (
+      {/* ══ BLOCO 2: IMÓVEIS IDENTIFICADOS (tabela Imovel — wizard de captação) ══ */}
+      {lead.imoveisCaptacao?.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <div className="h-px flex-1 bg-indigo-100" />
-            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">📋 Wizard de Captação</span>
+            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">
+              📋 Imóveis Identificados ({lead.imoveisCaptacao.length})
+            </span>
             <div className="h-px flex-1 bg-indigo-100" />
           </div>
 
-          {/* Grid de dados completos do wizard */}
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { icone: <DoorOpen className="w-3.5 h-3.5" />, label: 'Suítes', valor: lead.imovelSuites },
-              { icone: <Layers className="w-3.5 h-3.5" />, label: 'Banheiros', valor: lead.imovelBanheiros },
-              { icone: <Maximize2 className="w-3.5 h-3.5" />, label: 'Área total', valor: lead.imovelAreaTotal ? `${lead.imovelAreaTotal} m²` : null },
-              { icone: <Home className="w-3.5 h-3.5" />, label: 'Andar', valor: lead.imovelAndar },
-            ].filter((i) => i.valor !== null && i.valor !== undefined).map((item) => (
-              <div key={item.label} className="bg-indigo-50 rounded-xl p-3 border border-indigo-100 flex items-center gap-2">
-                <span className="text-indigo-400">{item.icone}</span>
-                <div>
-                  <p className="text-[10px] font-bold text-indigo-400 uppercase">{item.label}</p>
-                  <p className="text-sm font-semibold text-slate-800">{String(item.valor)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Valores financeiros do wizard */}
-          {(lead.imovelValorLocacao || lead.imovelValorCondominio || lead.imovelValorIPTU) && (
-            <div className="rounded-xl border border-indigo-100 overflow-hidden">
-              <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100">
-                <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Valores</p>
-              </div>
-              <div className="p-3 grid grid-cols-2 gap-3">
-                {lead.imovelValorLocacao && <Campo label="Valor de locação" valor={`R$ ${lead.imovelValorLocacao.toLocaleString('pt-BR')}`} />}
-                {lead.imovelValorCondominio && <Campo label="Condomínio/mês" valor={`R$ ${lead.imovelValorCondominio.toLocaleString('pt-BR')}`} />}
-                {lead.imovelValorIPTU && <Campo label="IPTU/ano" valor={`R$ ${lead.imovelValorIPTU.toLocaleString('pt-BR')}`} />}
-              </div>
-            </div>
-          )}
-
-          {/* Características */}
-          {lead.imovelCaracteristicas?.length > 0 && (
-            <div className="rounded-xl border border-indigo-100 overflow-hidden">
-              <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100">
-                <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Características</p>
-              </div>
-              <div className="p-3 flex flex-wrap gap-2">
-                {lead.imovelCaracteristicas.map((c) => (
-                  <span key={c} className="text-xs bg-white border border-indigo-200 text-indigo-700 px-2.5 py-1 rounded-full font-medium">
-                    {c}
+          {lead.imoveisCaptacao.map((im, idx) => (
+            <div key={im.id} className="rounded-xl border border-indigo-100 overflow-hidden">
+              {/* Header do card */}
+              <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
+                <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">
+                  Imóvel {idx + 1}{im.tipoImovel ? ` — ${im.tipoImovel}` : ''}
+                </p>
+                {im.statusCaptacao && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    im.statusCaptacao === 'CAPTADO' ? 'bg-emerald-100 text-emerald-700' :
+                    im.statusCaptacao === 'EM_NEGOCIACAO' ? 'bg-amber-100 text-amber-700' :
+                    'bg-indigo-100 text-indigo-600'
+                  }`}>
+                    {im.statusCaptacao}
                   </span>
-                ))}
+                )}
+              </div>
+
+              <div className="p-3 space-y-3">
+                {/* Endereço */}
+                {(im.logradouro || im.bairro) && (
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      {im.logradouro && (
+                        <p className="text-sm font-semibold text-slate-800 truncate">
+                          {im.logradouro}{im.numero ? `, ${im.numero}` : ''}
+                          {im.complemento ? ` — ${im.complemento}` : ''}
+                        </p>
+                      )}
+                      {im.apartamento && (
+                        <p className="text-xs text-slate-500">
+                          Apto {im.apartamento}{im.bloco ? ` · Bloco ${im.bloco}` : ''}
+                        </p>
+                      )}
+                      {im.bairro && <p className="text-xs text-slate-500">{im.bairro}</p>}
+                      {im.nomeEdificio && <p className="text-xs text-indigo-600 font-medium">{im.nomeEdificio}</p>}
+                    </div>
+                  </div>
+                )}
+
+                {/* Grid de métricas */}
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { icone: <Maximize2 className="w-3 h-3" />, label: 'Área terreno', valor: im.areaTerreno ? `${im.areaTerreno} m²` : null },
+                    { icone: <Maximize2 className="w-3 h-3" />, label: 'Área edificada', valor: im.areaEdificada ? `${im.areaEdificada} m²` : null },
+                    { icone: <Layers className="w-3 h-3" />, label: 'Pavimentos', valor: im.numeroPavimentos },
+                    { icone: <Car className="w-3 h-3" />, label: 'Vagas cobertas', valor: im.vagasCobertas },
+                    { icone: <Car className="w-3 h-3" />, label: 'Vagas desc.', valor: im.vagasDescobertas },
+                  ].filter(i => i.valor !== null && i.valor !== undefined).map(item => (
+                    <div key={item.label} className="bg-slate-50 rounded-lg p-2 flex items-center gap-1.5">
+                      <span className="text-slate-400">{item.icone}</span>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">{item.label}</p>
+                        <p className="text-xs font-semibold text-slate-800">{String(item.valor)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Inscrição IPTU */}
+                {im.inscricaoIptu && (
+                  <p className="text-[10px] text-slate-400">
+                    IPTU: <span className="font-mono text-slate-600">{im.inscricaoIptu}</span>
+                  </p>
+                )}
               </div>
             </div>
-          )}
-
-          {/* Descrição */}
-          {lead.imovelDescricao && (
-            <div className="rounded-xl border border-indigo-100 overflow-hidden">
-              <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100">
-                <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Descrição</p>
-              </div>
-              <p className="p-3 text-xs text-slate-700 leading-relaxed">{lead.imovelDescricao}</p>
-            </div>
-          )}
-
-          {/* Fotos */}
-          {lead.imovelFotos?.length > 0 && (
-            <div className="rounded-xl border border-indigo-100 overflow-hidden">
-              <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100">
-                <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Fotos ({lead.imovelFotos.length})</p>
-              </div>
-              <div className="p-3 grid grid-cols-3 gap-2">
-                {lead.imovelFotos.map((url, i) => (
-                  <img
-                    key={i}
-                    src={url}
-                    alt={`Foto ${i + 1}`}
-                    className="w-full aspect-square object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity border border-indigo-100"
-                    onClick={() => window.open(url, '_blank')}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {lead.dadosImovelColetadosEm && (
-            <p className="text-[10px] text-slate-400 text-center">
-              Dados coletados em {new Date(lead.dadosImovelColetadosEm).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-            </p>
-          )}
+          ))}
         </div>
       )}
     </div>

@@ -489,6 +489,31 @@ export async function priorizarLeads(
       campanhaOrigem: {
         select: { id: true, nome: true },
       },
+      imoveis: {
+        // Imóveis do wizard de captação (tabela separada)
+        select: {
+          id: true,
+          inscricaoIptu: true,
+          logradouro: true,
+          numero: true,
+          complemento: true,
+          bairro: true,
+          nomeEdificio: true,
+          apartamento: true,
+          bloco: true,
+          tipoImovel: true,
+          areaTerreno: true,
+          areaEdificada: true,
+          numeroPavimentos: true,
+          vagasCobertas: true,
+          vagasDescobertas: true,
+          interesse: true,
+          statusCaptacao: true,
+          criadoEm: true,
+        },
+        orderBy: { criadoEm: 'desc' },
+        take: 5,
+      },
       atividades: {
         where: { statusAgendamento: { not: 'CANCELADO' } },
         orderBy: { agendadoPara: 'asc' },
@@ -665,6 +690,28 @@ export async function priorizarLeads(
       imovelValorCondominio: lead.imovelValorCondominio ?? null,
       imovelValorIPTU: lead.imovelValorIPTU ?? null,
       dadosImovelColetadosEm: lead.dadosImovelColetadosEm ?? null,
+
+      // ── Tabela Imovel (wizard de captação — imóveis minerados/identificados) ──
+      imoveisCaptacao: (lead.imoveis || []).map((im: any) => ({
+        id: im.id,
+        inscricaoIptu: im.inscricaoIptu ?? null,
+        logradouro: im.logradouro ?? null,
+        numero: im.numero ?? null,
+        complemento: im.complemento ?? null,
+        bairro: im.bairro ?? null,
+        nomeEdificio: im.nomeEdificio ?? null,
+        apartamento: im.apartamento ?? null,
+        bloco: im.bloco ?? null,
+        tipoImovel: im.tipoImovel ?? null,
+        areaTerreno: im.areaTerreno ?? null,
+        areaEdificada: im.areaEdificada ?? null,
+        numeroPavimentos: im.numeroPavimentos ?? null,
+        vagasCobertas: im.vagasCobertas ?? null,
+        vagasDescobertas: im.vagasDescobertas ?? null,
+        interesse: im.interesse ?? null,
+        statusCaptacao: im.statusCaptacao ?? null,
+        criadoEm: im.criadoEm,
+      })),
 
       // SPIN completo
       situacaoAtual: lead.situacaoAtual ?? null,

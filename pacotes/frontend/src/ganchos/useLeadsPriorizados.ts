@@ -9,6 +9,28 @@ import { api } from '../servicos/api';
 
 export type CategoriaUrgencia = 'URGENTE' | 'ATENCAO' | 'IA_ATIVA' | 'SEM_ACAO';
 
+// Imóvel da tabela Imovel (wizard de captação)
+export interface ImovelCaptacao {
+  id: string;
+  inscricaoIptu: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  nomeEdificio: string | null;
+  apartamento: string | null;
+  bloco: string | null;
+  tipoImovel: string | null;
+  areaTerreno: number | null;
+  areaEdificada: number | null;
+  numeroPavimentos: number | null;
+  vagasCobertas: number | null;
+  vagasDescobertas: number | null;
+  interesse: string | null;
+  statusCaptacao: string | null;
+  criadoEm: string;
+}
+
 export interface AtividadePriorizado {
   id: string;
   tipo: string;
@@ -96,6 +118,9 @@ export interface LeadPriorizado {
   imovelValorCondominio: number | null;
   imovelValorIPTU: number | null;
   dadosImovelColetadosEm: string | null;
+
+  // ── Imóveis minerados (tabela Imovel — wizard de captação) ──
+  imoveisCaptacao: ImovelCaptacao[];
 
   // ── Contato/Pessoa ──
   idade: number | null;
