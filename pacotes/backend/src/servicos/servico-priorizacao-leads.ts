@@ -126,6 +126,8 @@ export interface LeadPriorizado {
   scoreAssertiva: number | null;
   profissao: string | null;
   empresaAtual: string | null;
+  enderecoPrincipal: string | null;   // endereço do proprietário (não do imóvel)
+  dataNascimento: Date | null;
 
   // ── Tracking IA ──
   ultimaAcaoIA: string | null;
@@ -749,6 +751,8 @@ export async function priorizarLeads(
       scoreAssertiva: lead.scoreAssertiva ?? null,
       profissao: lead.profissao ?? null,
       empresaAtual: lead.empresaAtual ?? null,
+      enderecoPrincipal: lead.enderecoPrincipal ?? null,
+      dataNascimento: lead.dataNascimento ?? null,
 
       // Tracking IA
       ultimaAcaoIA: lead.ultimaAcaoIA ?? null,

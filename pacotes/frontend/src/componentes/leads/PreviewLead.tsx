@@ -171,6 +171,47 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
               <span className="truncate">{lead.email}</span>
             </div>
           )}
+
+          {/* ── Dados pessoais capturados pelo agente ── */}
+          {lead.cpf && (
+            <button
+              onClick={() => copiar(lead.cpf!, 'cpf')}
+              className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-800 group w-fit"
+            >
+              <BadgeCheck className="w-3 h-3 text-slate-400" />
+              <span className="font-mono">
+                {lead.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')}
+              </span>
+              {copiado === 'cpf'
+                ? <Check className="w-3 h-3 text-emerald-500" />
+                : <Copy className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100" />
+              }
+            </button>
+          )}
+          {lead.enderecoPrincipal && (
+            <div className="flex items-start gap-2 text-xs text-slate-500">
+              <MapPin className="w-3 h-3 text-slate-400 mt-0.5 flex-shrink-0" />
+              <span className="break-words">{lead.enderecoPrincipal}</span>
+            </div>
+          )}
+          {lead.dataNascimento && (
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Calendar className="w-3 h-3 text-slate-400" />
+              <span>
+                {new Date(lead.dataNascimento).toLocaleDateString('pt-BR')}
+                {lead.idade ? ` · ${lead.idade} anos` : ''}
+              </span>
+            </div>
+          )}
+          {(lead.profissao || lead.empresaAtual) && (
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <TrendingUp className="w-3 h-3 text-slate-400" />
+              <span className="truncate">
+                {[lead.profissao, lead.empresaAtual].filter(Boolean).join(' · ')}
+              </span>
+            </div>
+          )}
+
           {lead.campanhaOrigem && (
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <Users className="w-3 h-3" />
@@ -178,6 +219,7 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
             </div>
           )}
         </div>
+
       </div>
 
       {/* ══ SCORE BAR ══ */}

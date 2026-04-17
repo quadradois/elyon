@@ -130,6 +130,8 @@ export interface LeadPriorizado {
   scoreAssertiva: number | null;
   profissao: string | null;
   empresaAtual: string | null;
+  enderecoPrincipal: string | null;
+  dataNascimento: string | null;
 
   // ── Tracking IA ──
   ultimaAcaoIA: string | null;
