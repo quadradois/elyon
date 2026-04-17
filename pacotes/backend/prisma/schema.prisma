@@ -769,6 +769,7 @@ model Lead {
   atividades         Atividade[]
   conversas          Conversa[]
   contratos          Contrato[]
+  documentos         DocumentoLead[]
   cliente            Cliente?
   criadoEm           DateTime    @default(now())
   atualizadoEm       DateTime    @updatedAt
@@ -1003,6 +1004,34 @@ enum StatusContrato {
   ACEITO // Aceito digitalmente
   CANCELADO // Cancelado
   EXPIRADO // Vigência encerrada
+}
+
+// ====================================
+// ====================================
+// DOCUMENTOS DO LEAD (capturados via WhatsApp)
+// ====================================
+
+model DocumentoLead {
+  id       String @id @default(uuid())
+  leadId   String
+  lead     Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tenantId String
+
+  // Metadados do arquivo
+  nomeOriginal String? // Nome do arquivo original (se houver)
+  mimeType     String  // image/jpeg, application/pdf, audio/ogg, etc
+  tamanhoBytes Int?    // Tamanho em bytes (se disponível)
+  s3Key        String  // Caminho no S3: documentos-lead/{tenantId}/{leadId}/{uuid}.ext
+
+  // Classificação
+  tipo   String @default("documento") // 'imagem' | 'audio' | 'video' | 'documento'
+  origem String @default("whatsapp")  // 'whatsapp' | 'upload_manual'
+
+  criadoEm DateTime @default(now())
+
+  @@index([leadId])
+  @@index([tenantId])
+  @@map("documentos_lead")
 }
 
 // ====================================

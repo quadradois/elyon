@@ -20,6 +20,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
     "@aws-sdk/client-s3": "^3.940.0",
+    "@aws-sdk/s3-request-presigner": "^3.1031.0",
     "@openai/agents": "^0.5.1",
     "@openai/agents-openai": "^0.5.4",
     "@prisma/client": "^5.7.0",

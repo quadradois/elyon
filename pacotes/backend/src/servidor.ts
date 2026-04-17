@@ -23,6 +23,7 @@ import rotaMetricas from './rotas/metricas';
 import rotaAgentes from './rotas/agentes';
 import rotaMetricasAgentes from './rotas/metricas-agentes';
 import rotaDocumentos from './rotas/documentos';
+import rotaDocumentosLead from './rotas/documentos-lead';
 import rotaListas from './rotas/listas';
 import rotaContatos from './rotas/contatos';
 import rotaBlacklist from './rotas/blacklist';
@@ -150,6 +151,7 @@ app.use('/api/metricas', rotaMetricas);   // Dashboard de métricas
 app.use('/api/agentes', rotaAgentes);     // Configuração de agentes IA
 app.use('/api/metricas-agentes', rotaMetricasAgentes); // Métricas dos agentes IA
 app.use('/api/documentos', rotaDocumentos); // Upload de documentos para RAG
+app.use('/api/leads', rotaDocumentosLead);  // Documentos capturados via WhatsApp por lead
 app.use('/api/listas', rotaListas);         // Listas de contatos minerados
 app.use('/api/contatos', rotaContatos);     // Busca global de contatos
 app.use('/api/blacklist', rotaBlacklist);   // Blacklist de telefones

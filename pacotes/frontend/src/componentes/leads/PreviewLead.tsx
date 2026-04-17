@@ -14,10 +14,11 @@ import {
   DoorOpen, Layers, Car, Maximize2,
 } from 'lucide-react';
 import { ChatPanel } from './ChatPanel';
+import { AbaDocumentos } from './AbaDocumentos';
 import type { LeadPriorizado, AtividadePriorizado } from '../../ganchos/useLeadsPriorizados';
 import { toast } from 'sonner';
 
-type AbaPreview = 'resumo' | 'chat' | 'imovel' | 'timeline';
+type AbaPreview = 'resumo' | 'chat' | 'imovel' | 'timeline' | 'docs';
 
 interface PreviewLeadProps {
   lead: LeadPriorizado;
@@ -222,6 +223,7 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
           { id: 'imovel' as const, label: 'Imóvel', icone: Home },
           { id: 'timeline' as const, label: 'Timeline', icone: Activity },
           { id: 'chat' as const, label: 'Chat', icone: MessageSquare },
+          { id: 'docs' as const, label: 'Docs', icone: FileText },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -242,6 +244,9 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
         {aba === 'resumo' && <AbaResumo lead={lead} />}
         {aba === 'imovel' && <AbaImovel lead={lead} />}
         {aba === 'timeline' && <AbaTimeline lead={lead} />}
+        {aba === 'docs' && (
+          <AbaDocumentos leadId={lead.id} leadNome={lead.nome || 'Lead'} />
+        )}
         {aba === 'chat' && (
           <div className="h-full" style={{ minHeight: '300px' }}>
             <ChatPanel
