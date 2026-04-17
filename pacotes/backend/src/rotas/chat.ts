@@ -36,11 +36,13 @@ router.get('/:id/chat', async (req, res) => {
       const urlMidia = metadata?.urlMidia;
       return {
         id: msg.id,
-        papel: msg.remetente,
+        remetente: msg.remetente,
+        papel: msg.remetente, // retrocompatibilidade
         conteudo: urlMidia || msg.conteudo,
         enviadaEm: msg.enviadaEm,
+        lidaEm: msg.lidaEm ?? null,
         tipo: msg.tipo.toLowerCase(),
-        legenda: urlMidia ? msg.conteudo : undefined
+        legenda: urlMidia ? msg.conteudo : undefined,
       };
     });
 
