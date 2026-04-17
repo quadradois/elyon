@@ -1816,4 +1816,112 @@ router.post('/confirmar/:atividadeId/:token', async (req, res) => {
   }
 });
 
+// ============================================================
+// CONTROLE DE MODO — ChatPanel (Mission Control)
+// ============================================================
+
+/**
+ * GET /api/leads/:id/modo
+ * Retorna o modo de atendimento atual do contato vinculado ao lead.
+ */
+router.get('/:id/modo', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+
+    const contato = await prisma.contato.findFirst({
+      where: { leadId: req.params.id },
+      select: { modoAtendimento: true, id: true },
+    });
+
+    res.json({
+      modo: (contato as any)?.modoAtendimento || 'IA',
+      contatoId: contato?.id || null,
+    });
+  } catch {
+    responderErro(res, 500, 'Erro interno');
+  }
+});
+
+/**
+ * POST /api/leads/:id/controle-modo
+ * Body: { modo: 'IA' | 'HUMANO' | 'PAUSADO' }
+ * Alterna o modo de atendimento do contato: IA ativa, humano ou pausado.
+ */
+router.post('/:id/controle-modo', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+
+    const { modo } = req.body;
+    if (!['IA', 'HUMANO', 'PAUSADO'].includes(modo)) {
+      return responderErro(res, 400, 'modo deve ser IA, HUMANO ou PAUSADO');
+    }
+
+    const contato = await prisma.contato.findFirst({
+      where: { leadId: req.params.id },
+      select: { id: true },
+    });
+
+    if (!contato) return responderErro(res, 404, 'Contato não encontrado para este lead');
+
+    await (prisma.contato as any).update({
+      where: { id: contato.id },
+      data: { modoAtendimento: modo },
+    });
+
+    res.json({ sucesso: true, modo });
+  } catch {
+    responderErro(res, 500, 'Erro interno');
+  }
+});
+
+/**
+ * POST /api/leads/:id/followup
+ * Body: { mensagem: string, dataEnvio: string (ISO datetime) }
+ * Agenda uma mensagem customizada para envio automático na data/hora especificada.
+ * O job recontato-automatico.ts dispara a mensagem quando dataRecontato <= agora.
+ */
+router.post('/:id/followup', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+
+    const { mensagem, dataEnvio } = req.body;
+    if (!mensagem || !dataEnvio) {
+      return responderErro(res, 400, 'mensagem e dataEnvio são obrigatórios');
+    }
+
+    const dataRecontato = new Date(dataEnvio);
+    if (isNaN(dataRecontato.getTime())) {
+      return responderErro(res, 400, 'dataEnvio inválida. Use formato ISO (YYYY-MM-DDTHH:mm)');
+    }
+
+    const contato = await prisma.contato.findFirst({
+      where: { leadId: req.params.id },
+      select: { id: true },
+    });
+
+    if (!contato) return responderErro(res, 404, 'Contato não encontrado para este lead');
+
+    // Prefixo [MSG] distingue mensagem customizada de keyword automática no job
+    await (prisma.contato as any).update({
+      where: { id: contato.id },
+      data: {
+        statusProspeccao: 'MORNO_FUTURO',
+        dataRecontato,
+        motivoRecontato: `[MSG] ${mensagem}`,
+      },
+    });
+
+    res.json({
+      sucesso: true,
+      dataRecontato: dataRecontato.toISOString(),
+      mensagem: `Follow-up agendado para ${dataRecontato.toLocaleString('pt-BR')}`,
+    });
+  } catch {
+    responderErro(res, 500, 'Erro interno');
+  }
+});
+
 export default router;

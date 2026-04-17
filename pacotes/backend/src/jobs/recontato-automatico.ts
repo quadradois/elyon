@@ -30,41 +30,42 @@ interface ResultadoRecontato {
 }
 
 /**
- * Gera mensagem de recontato personalizada baseada no motivo original
+ * Gera mensagem de recontato personalizada baseada no motivo original.
+ * Se o motivo começar com [MSG], usa a mensagem exata digitada pelo corretor.
  */
 function gerarMensagemRecontato(contato: any): string {
+  const motivoOriginal = contato.motivoRecontato || '';
+
+  // Mensagem customizada agendada pelo corretor via ChatPanel
+  if (motivoOriginal.startsWith('[MSG] ')) {
+    return motivoOriginal.replace('[MSG] ', '').trim();
+  }
+
   const nome = contato.nome?.split(' ')[0] || 'Olá';
-  const motivo = contato.motivoRecontato?.toLowerCase() || '';
+  const motivo = motivoOriginal.toLowerCase();
   const empreendimento = contato.nomeEdificio || contato.campanha?.nomeEmpreendimento || 'seu imóvel';
   
-  // Mensagens personalizadas por contexto
   if (motivo.includes('inquilino') || motivo.includes('ocupado')) {
     return `Oi ${nome}! 😊 Passando pra saber como está a situação do inquilino. Ainda está morando aí ou já desocupou? Lembra que conversamos sobre a venda do ${empreendimento}?`;
   }
-  
   if (motivo.includes('reforma') || motivo.includes('obra')) {
     return `Oi ${nome}! Tudo bem? Passando pra ver se a reforma já finalizou. Como está ficando o ${empreendimento}? Quando estiver pronto, me avisa que tenho interessados na região! 🏠`;
   }
-  
   if (motivo.includes('viajar') || motivo.includes('viagem')) {
     return `Oi ${nome}! Espero que a viagem tenha sido ótima! 😊 Voltando ao assunto do ${empreendimento}, ainda tem interesse em vender? Tenho novidades do mercado pra te contar!`;
   }
-  
   if (motivo.includes('pensar') || motivo.includes('decidir')) {
     return `Oi ${nome}! Passando pra saber se já pensou melhor sobre a venda do ${empreendimento}. Alguma dúvida que eu possa ajudar a esclarecer? 😊`;
   }
-  
   if (motivo.includes('corretor') || motivo.includes('exclusividade')) {
     return `Oi ${nome}! Como está a venda do ${empreendimento}? Já conseguiu um bom resultado com o corretor atual? Se precisar de uma segunda opinião, estou por aqui! 😊`;
   }
-  
   if (motivo.includes('preço') || motivo.includes('valor')) {
     return `Oi ${nome}! O mercado tem se movimentado bastante! Passando pra saber se ainda tem interesse em saber quanto vale o ${empreendimento} hoje. Posso fazer uma avaliação atualizada pra você! 📊`;
   }
-  
-  // Mensagem genérica de follow-up
   return `Oi ${nome}! 😊 Lembra que conversamos sobre o ${empreendimento}? Passando pra saber se algo mudou e se posso ajudar de alguma forma!`;
 }
+
 
 /**
  * Busca contatos que precisam ser recontatados hoje
