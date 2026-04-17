@@ -34,6 +34,7 @@ import {
   registrarTelemetriaSaida,
   aguardar
 } from '../servicos/webhook-utils';
+import { capturarDocumentoWhatsapp, detectarTipoMidia } from '../servicos/servico-captura-documentos';
 
 const router = Router();
 const MODO_OUTBOUND_ONLY = process.env.MODO_OUTBOUND_ONLY !== 'false';
@@ -999,10 +1000,13 @@ router.post('/', async (req, res) => {
             const messageId = message.key?.id;
 
             // Verifica se é mídia
-            const messageType = message.messageType || (message.message?.imageMessage ? 'imageMessage' : (message.message?.audioMessage ? 'audioMessage' : 'conversation'));
+            const tipoMidiaDetectado = detectarTipoMidia(message);
+            const messageType = tipoMidiaDetectado || message.messageType || 'conversation';
             const isImage = messageType === 'imageMessage';
             const isAudio = messageType === 'audioMessage';
-            const isMedia = isImage || isAudio;
+            const isDocument = messageType === 'documentMessage' || messageType === 'documentWithCaptionMessage';
+            const isVideo = messageType === 'videoMessage';
+            const isMedia = isImage || isAudio || isDocument || isVideo;
 
             if (texto || isMedia) {
               console.log(`[Webhook] 📨 Mensagem de ${telefone}: "${texto || '[Mídia]'}"`);
@@ -1144,6 +1148,20 @@ router.post('/', async (req, res) => {
                           messageId: msg.messageId,
                           telefone: telefone
                         });
+                      }
+
+                      // ── Captura automática de documentos WhatsApp ──
+                      // Fire-and-forget: não bloqueia o fluxo principal
+                      if (isMedia && contatoProspeccao.leadId) {
+                        const tenantIdCaptura = contatoProspeccao.campanha?.tenantId || '';
+                        capturarDocumentoWhatsapp({
+                          message,
+                          messageType,
+                          leadId: contatoProspeccao.leadId,
+                          tenantId: tenantIdCaptura,
+                        }).catch(err =>
+                          console.error('[Webhook] Falha silenciosa na captura de doc:', err)
+                        );
                       }
 
                       deveMarcarLoteComoProcessado = true;
