@@ -115,9 +115,14 @@ const loginLimiter = rateLimit({
   skip: (req) => process.env.NODE_ENV !== 'production'
 });
 
-// ✅ TASK-06: Limite global de 1MB para todas as rotas.
-// O limite de 100MB para webhooks da Evolution é aplicado DENTRO das rotas de webhook,
-// após a validação da instância — impedindo consumo de memória por payloads não autenticados.
+// ✅ TASK-06 (corrigido): Limite de 50MB ANTES do global para /webhooks.
+// A Evolution API envia mídia (imagens, documentos) via base64 no body JSON,
+// o que pode gerar payloads grandes. 50MB cobre arquivos de até ~37MB (overhead base64).
+// O limite global de 1MB protege todas as outras rotas da API.
+app.use('/webhooks', express.json({ limit: '50mb' }));
+app.use('/webhooks', express.urlencoded({ limit: '50mb', extended: true }));
+
+// Limite global de 1MB para todas as demais rotas.
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
