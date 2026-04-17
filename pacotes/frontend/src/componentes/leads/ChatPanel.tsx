@@ -20,7 +20,6 @@ import {
   User,
   Copy,
   Check,
-  ExternalLink,
   ChevronDown,
 } from 'lucide-react';
 import { api } from '../../servicos/api';
@@ -44,6 +43,8 @@ interface ChatPanelProps {
   leadId: string;
   leadNome: string;
   leadTelefone: string | null;
+  leadTemperatura?: string | null;
+  leadStatus?: string | null;
   onExpandir?: () => void;
 }
 
@@ -134,11 +135,30 @@ const REMETENTE_CONFIG: Record<TipoRemetente, {
   },
 };
 
+// Mapa de temperatura para badge visual
+const TEMP_CONFIG: Record<string, { label: string; cor: string }> = {
+  QUENTE: { label: '🔥 Quente', cor: 'bg-red-100 text-red-700 border-red-200' },
+  MORNO:  { label: '⚡ Morno',  cor: 'bg-amber-100 text-amber-700 border-amber-200' },
+  FRIO:   { label: '❄️ Frio',   cor: 'bg-blue-100 text-blue-700 border-blue-200' },
+};
+
+// Mapa de status para label compacto
+const STATUS_LABEL: Record<string, string> = {
+  NOVO: 'Novo',
+  QUALIFICADO: 'Qualificado',
+  CONTATANDO: 'Contatando',
+  TENTATIVA_AGENDAMENTO: 'Ag. visita',
+  VISITA_AGENDADA: 'Visita agendada',
+  DOCUMENTACAO: 'Documentação',
+  EM_NEGOCIACAO: 'Em negociação',
+  ONBOARDING: 'Onboarding',
+};
+
 // Quick replies para o corretor
 const QUICK_REPLIES = [
   { emoji: '📅', label: 'Agendar visita', texto: 'Olá! Gostaria de agendar uma visita ao imóvel. Qual o melhor horário para você?' },
-  { emoji: '📞', label: 'Ligar', texto: '' }, // ação especial: abre WhatsApp
-  { emoji: '📋', label: 'Documentos', texto: 'Para dar continuidade, preciso dos seguintes documentos: RG, CPF e comprovante de residência. Pode me enviar?' },
+  { emoji: '🔄', label: 'Reengajar', texto: 'Oi! Só passando para verificar se você ainda tem interesse em conversar sobre a avaliação do seu imóvel. Estou à disposição 😊' },
+  { emoji: '📋', label: 'Documentos', texto: 'Para dar continuidade, preciso dos seguintes documentos: RG, CPF e comprovante de residência. Pode me enviar? 📎' },
 ];
 
 // ─── Componente Bolha ────────────────────────────
@@ -249,7 +269,7 @@ function BolhaMensagem({ msg }: { msg: Mensagem }) {
 
 // ─── Componente Principal ────────────────────────
 
-export function ChatPanel({ leadId, leadNome, leadTelefone, onExpandir }: ChatPanelProps) {
+export function ChatPanel({ leadId, leadTelefone, leadTemperatura, leadStatus, onExpandir }: ChatPanelProps) {
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [novoTexto, setNovoTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -337,58 +357,60 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, onExpandir }: ChatPa
     m => classificarRemetente(m.remetente) === 'cliente' && !m.lidaEm
   ).length;
 
+  const tempCfg = TEMP_CONFIG[leadTemperatura || ''] || null;
+  const statusLabel = STATUS_LABEL[leadStatus || ''] || leadStatus || null;
+
   return (
-    <div className="flex flex-col h-full bg-[#f0f2f5]">
-      {/* ══ HEADER ══ */}
-      <div className="flex items-center gap-3 px-3 py-2.5 bg-[#202c33] text-white shadow-sm">
-        {/* Avatar */}
-        <div className="w-9 h-9 rounded-full bg-slate-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
-          {(leadNome || '?')[0].toUpperCase()}
-        </div>
+    <div className="flex flex-col h-full bg-slate-50">
+      {/* ══ HEADER — Widgets de gestão ══ */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-white border-b border-slate-200 shadow-sm">
 
-        {/* Nome + status */}
-        <div className="min-w-0 flex-1">
-          <h4 className="text-sm font-semibold truncate">{leadNome || 'Sem nome'}</h4>
-          <div className="flex items-center gap-1.5">
-            {iaAtiva && (
-              <span className="flex items-center gap-1 text-[10px] text-emerald-400">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
-                </span>
-                IA ativa
-              </span>
-            )}
-            <span className="text-[10px] text-slate-400">{mensagens.length} msgs</span>
-            {msgsClienteNaoLidas > 0 && (
-              <span className="bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
-                {msgsClienteNaoLidas}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Ações */}
-        <div className="flex items-center gap-1">
-          {leadTelefone && (
-            <button
-              onClick={() => window.open(`https://wa.me/55${leadTelefone.replace(/\D/g, '')}`, '_blank')}
-              className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors"
-              title="Abrir no WhatsApp"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
-            </button>
+        {/* Badges de gestão */}
+        <div className="flex items-center gap-1.5 flex-1 flex-wrap min-w-0">
+          {/* Temperatura */}
+          {tempCfg && (
+            <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${tempCfg.cor}`}>
+              {tempCfg.label}
+            </span>
           )}
-          {onExpandir && (
-            <button
-              onClick={onExpandir}
-              className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors"
-              title="Expandir"
-            >
-              <Maximize2 className="w-3.5 h-3.5 text-slate-300" />
-            </button>
+
+          {/* Status */}
+          {statusLabel && (
+            <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border bg-slate-100 text-slate-600 border-slate-200">
+              {statusLabel}
+            </span>
+          )}
+
+          {/* IA ativa */}
+          {iaAtiva && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-600 border-indigo-200">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500" />
+              </span>
+              IA ativa
+            </span>
+          )}
+
+          {/* Contagem + não lidas */}
+          <span className="text-[10px] text-slate-400 ml-auto">{mensagens.length} msgs</span>
+          {msgsClienteNaoLidas > 0 && (
+            <span className="bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
+              {msgsClienteNaoLidas}
+            </span>
           )}
         </div>
+
+        {/* Expandir */}
+        {onExpandir && (
+          <button
+            onClick={onExpandir}
+            className="w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors flex-shrink-0"
+            title="Expandir"
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
+          </button>
+        )}
       </div>
 
       {/* ══ ÁREA DE MENSAGENS ══ */}
@@ -455,14 +477,14 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, onExpandir }: ChatPa
       )}
 
       {/* ══ INPUT ══ */}
-      <div className="bg-[#202c33] px-3 py-2">
+      <div className="bg-white border-t border-slate-200 px-3 py-2">
         <div className="flex items-end gap-2">
           {/* Botão quick replies toggle */}
           <button
             onClick={() => setMostrarQuickReplies(!mostrarQuickReplies)}
             className={`
-              w-8 h-9 rounded-full flex items-center justify-center transition-colors flex-shrink-0
-              ${mostrarQuickReplies ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}
+              w-8 h-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0
+              ${mostrarQuickReplies ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}
             `}
             title="Respostas rápidas"
           >
@@ -470,7 +492,7 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, onExpandir }: ChatPa
           </button>
 
           {/* Textarea multiline */}
-          <div className="flex-1 relative">
+          <div className="flex-1">
             <textarea
               ref={textareaRef}
               value={novoTexto}
@@ -479,7 +501,7 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, onExpandir }: ChatPa
               placeholder={leadTelefone ? 'Mensagem...' : 'Sem telefone — envio desabilitado'}
               disabled={enviando || !leadTelefone}
               rows={1}
-              className="w-full resize-none rounded-xl bg-[#2a3942] text-white text-sm px-3 py-2 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full resize-none rounded-xl bg-slate-100 text-slate-800 text-sm px-3 py-2 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ minHeight: '36px', maxHeight: '120px' }}
             />
           </div>
@@ -497,9 +519,7 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, onExpandir }: ChatPa
             )}
           </button>
         </div>
-
-        {/* Hint: Shift+Enter */}
-        <p className="text-[9px] text-slate-600 mt-1 text-center">
+        <p className="text-[9px] text-slate-400 mt-1 text-center">
           Enter envia · Shift+Enter nova linha
         </p>
       </div>

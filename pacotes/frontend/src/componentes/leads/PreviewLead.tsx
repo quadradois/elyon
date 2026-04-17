@@ -248,6 +248,8 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
               leadId={lead.id}
               leadNome={lead.nome || 'Lead'}
               leadTelefone={lead.telefone}
+              leadTemperatura={lead.temperatura}
+              leadStatus={lead.status}
             />
           </div>
         )}
