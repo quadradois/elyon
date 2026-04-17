@@ -15,10 +15,11 @@ import {
 } from 'lucide-react';
 import { ChatPanel } from './ChatPanel';
 import { AbaDocumentos } from './AbaDocumentos';
+import { AbaContato } from './AbaContato';
 import type { LeadPriorizado, AtividadePriorizado } from '../../ganchos/useLeadsPriorizados';
 import { toast } from 'sonner';
 
-type AbaPreview = 'resumo' | 'chat' | 'imovel' | 'timeline' | 'docs';
+type AbaPreview = 'resumo' | 'chat' | 'imovel' | 'timeline' | 'docs' | 'contato';
 
 interface PreviewLeadProps {
   lead: LeadPriorizado;
@@ -149,7 +150,7 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
           </div>
         </div>
 
-        {/* Contatos */}
+        {/* Contatos — apenas o essencial para acesso rápido */}
         <div className="flex flex-col gap-1">
           {lead.telefone && (
             <button
@@ -171,47 +172,22 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
               <span className="truncate">{lead.email}</span>
             </div>
           )}
-
-          {/* ── Dados pessoais capturados pelo agente ── */}
+          {/* CPF como badge compacto quando disponível */}
           {lead.cpf && (
             <button
               onClick={() => copiar(lead.cpf!, 'cpf')}
-              className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-800 group w-fit"
+              className="flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-slate-600 group w-fit"
             >
-              <BadgeCheck className="w-3 h-3 text-slate-400" />
+              <BadgeCheck className="w-3 h-3" />
               <span className="font-mono">
-                {lead.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')}
+                {lead.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.***.**$4')}
               </span>
               {copiado === 'cpf'
                 ? <Check className="w-3 h-3 text-emerald-500" />
-                : <Copy className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100" />
+                : <Copy className="w-3 h-3 opacity-0 group-hover:opacity-60" />
               }
             </button>
           )}
-          {lead.enderecoPrincipal && (
-            <div className="flex items-start gap-2 text-xs text-slate-500">
-              <MapPin className="w-3 h-3 text-slate-400 mt-0.5 flex-shrink-0" />
-              <span className="break-words">{lead.enderecoPrincipal}</span>
-            </div>
-          )}
-          {lead.dataNascimento && (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Calendar className="w-3 h-3 text-slate-400" />
-              <span>
-                {new Date(lead.dataNascimento).toLocaleDateString('pt-BR')}
-                {lead.idade ? ` · ${lead.idade} anos` : ''}
-              </span>
-            </div>
-          )}
-          {(lead.profissao || lead.empresaAtual) && (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <TrendingUp className="w-3 h-3 text-slate-400" />
-              <span className="truncate">
-                {[lead.profissao, lead.empresaAtual].filter(Boolean).join(' · ')}
-              </span>
-            </div>
-          )}
-
           {lead.campanhaOrigem && (
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <Users className="w-3 h-3" />
@@ -219,7 +195,6 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
             </div>
           )}
         </div>
-
       </div>
 
       {/* ══ SCORE BAR ══ */}
@@ -261,11 +236,12 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
       {/* ══ TABS ══ */}
       <div className="flex border-b border-slate-100 flex-shrink-0 overflow-x-auto">
         {[
-          { id: 'resumo' as const, label: 'IA', icone: Bot },
-          { id: 'imovel' as const, label: 'Imóvel', icone: Home },
+          { id: 'resumo' as const,   label: 'IA',      icone: Bot },
+          { id: 'contato' as const,  label: 'Contato',  icone: Phone },
+          { id: 'imovel' as const,   label: 'Imóvel',  icone: Home },
           { id: 'timeline' as const, label: 'Timeline', icone: Activity },
-          { id: 'chat' as const, label: 'Chat', icone: MessageSquare },
-          { id: 'docs' as const, label: 'Docs', icone: FileText },
+          { id: 'chat' as const,     label: 'Chat',     icone: MessageSquare },
+          { id: 'docs' as const,     label: 'Docs',     icone: FileText },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -283,8 +259,9 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
 
       {/* ══ CONTEÚDO ══ */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        {aba === 'resumo' && <AbaResumo lead={lead} />}
-        {aba === 'imovel' && <AbaImovel lead={lead} />}
+        {aba === 'resumo'   && <AbaResumo lead={lead} />}
+        {aba === 'contato'  && <AbaContato lead={lead} />}
+        {aba === 'imovel'   && <AbaImovel lead={lead} />}
         {aba === 'timeline' && <AbaTimeline lead={lead} />}
         {aba === 'docs' && (
           <AbaDocumentos leadId={lead.id} leadNome={lead.nome || 'Lead'} />
