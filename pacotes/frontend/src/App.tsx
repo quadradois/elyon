@@ -176,6 +176,17 @@ function App() {
         />
 
         <Route
+          path="/dashboard/cockpit-ia"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <DashboardAgentes />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
           path="/dashboard/leads"
           element={
             <RotaPrivada>

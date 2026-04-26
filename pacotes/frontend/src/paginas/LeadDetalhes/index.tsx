@@ -27,6 +27,7 @@ import {
     Link2,
     ExternalLink,
     Edit,
+    Shield,
 } from "lucide-react";
 import { Button } from "../../componentes/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../componentes/ui/card";
@@ -210,6 +211,8 @@ export default function LeadDetalhes() {
     } | null>(null);
     const [textoConfirmacao, setTextoConfirmacao] = useState('');
     const [mensagemExclusao, setMensagemExclusao] = useState('');
+    const [processandoRetencao, setProcessandoRetencao] = useState(false);
+    const [preservarRagRetencao, setPreservarRagRetencao] = useState(false);
 
     // Handler para o botão de excluir
     const handleExcluir = async () => {
@@ -237,8 +240,30 @@ export default function LeadDetalhes() {
             setDadosVinculados(null);
             setTextoConfirmacao('');
             setMensagemExclusao('');
+            setPreservarRagRetencao(false);
         }
         setModalArquivar(open);
+    };
+
+    const handleRetencaoSegura = async () => {
+        if (!lead?.id) return;
+        try {
+            setProcessandoRetencao(true);
+            const response = await api.post(`/leads/${lead.id}/retencao-segura`, {
+                confirmacao: "anonimizar",
+                preservarRag: preservarRagRetencao,
+            });
+            const resultado = response.data?.resultado;
+            toast.success(
+                `Retenção segura aplicada. ${resultado?.mensagensAnonimizadas || 0} mensagens anonimizadas.`
+            );
+            await carregarLead();
+            handleFecharModalExcluir(false);
+        } catch (error: any) {
+            toast.error(error?.response?.data?.erro || "Erro ao aplicar retenção segura");
+        } finally {
+            setProcessandoRetencao(false);
+        }
     };
 
     const carregarCockpitAdmin = async (leadId: string) => {
@@ -1991,6 +2016,36 @@ export default function LeadDetalhes() {
                             Excluir Lead Permanentemente
                         </DialogTitle>
                     </DialogHeader>
+
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                        <p className="text-sm font-semibold text-emerald-800 flex items-center gap-2">
+                            <Shield className="w-4 h-4" />
+                            Opção recomendada: Retenção Segura
+                        </p>
+                        <p className="text-xs text-emerald-700 mt-2">
+                            Anonimiza dados sensíveis e preserva aprendizado/métricas do agente.
+                        </p>
+                        <div className="flex items-center gap-2 mt-3">
+                            <input
+                                type="checkbox"
+                                id="preservarRagRetencao"
+                                checked={preservarRagRetencao}
+                                onChange={(e) => setPreservarRagRetencao(e.target.checked)}
+                                className="w-4 h-4 rounded border-slate-300"
+                            />
+                            <label htmlFor="preservarRagRetencao" className="text-xs text-emerald-800">
+                                Preservar chunks de RAG (pode manter traços de contexto antigo)
+                            </label>
+                        </div>
+                        <Button
+                            className="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={handleRetencaoSegura}
+                            disabled={processandoRetencao || salvando}
+                        >
+                            {processandoRetencao && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                            🛡️ Aplicar Retenção Segura
+                        </Button>
+                    </div>
 
                     {/* Se tem dados vinculados, mostra os detalhes */}
                     {dadosVinculados ? (

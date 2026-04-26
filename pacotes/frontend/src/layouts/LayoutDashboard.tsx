@@ -206,6 +206,11 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           path: "/dashboard/relatorios",
         },
         {
+          icon: Bot,
+          label: "Cockpit IA",
+          path: "/dashboard/cockpit-ia",
+        },
+        {
           icon: Coins,
           label: "Créditos",
           path: "/dashboard/creditos",
