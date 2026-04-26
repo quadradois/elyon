@@ -68,6 +68,28 @@ Cada cláusula deve ser explicada assim:
 
 ## Perguntas frequentes (cláusulas) — resposta curta
 
+### Cláusula 6 — Prazo da autorização + revogação com 30 dias
+Texto sensível:
+- prazo da autorização segue o definido no perfil da imobiliária (tenant);
+- pode ser revogada mediante aviso expresso de 30 dias de antecedência.
+
+Risco de interpretação do lead:
+- "Esse prazo foi inventado para me prender."
+- "Não tenho saída se quiser encerrar."
+
+Resposta-base (obrigatória nesse cenário):
+> *"Essa cláusula existe para dar previsibilidade. O prazo segue a política configurada da imobiliária e foi definido com base em operação real, não no chute. E há saída prevista: a autorização pode ser revogada com aviso expresso de 30 dias de antecedência."*
+
+Versão curta para reforço:
+> *"Prazo técnico para executar bem, com regra clara de saída em 30 dias de aviso."*
+
+Checklist de linguagem (Cláusula 6):
+- ✅ "prazo definido na política do tenant"
+- ✅ "base operacional e previsibilidade"
+- ✅ "revogação possível com 30 dias de antecedência"
+- ❌ não prometer resultado garantido por prazo
+- ❌ não tratar o prazo como “prisão contratual”
+
 ### Cláusula 2 — Rede de parceiros sem custo adicional
 Texto sensível:
 - autorização para divulgar em canais e rede de parceiros;
