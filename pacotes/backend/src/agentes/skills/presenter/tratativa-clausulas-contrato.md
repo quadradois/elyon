@@ -36,30 +36,6 @@ Cada cláusula deve ser explicada assim:
 
 ## Blocos prontos por tema
 
-### Prazo
-> *"A cláusula de prazo existe para dar tempo técnico de executar divulgação, qualificar compradores e conduzir proposta sem improviso. Isso evita correria e decisão ruim."*
-
-## Ressignificação do Prazo (usar quando o lead questionar o prazo da autorização)
-
-### Tese comercial
-- O prazo não foi escolhido no chute.
-- O prazo aplicado é o configurado no perfil da imobiliária (tenant).
-- Foi definido após análise interna do ciclo real de venda.
-- Nossa referência operacional é média de fechamento em torno de **6 meses**.
-- No mercado amplo, o lead costuma ver referência de ciclo médio perto de **1 ano e 6 meses**.
-
-### Resposta sugerida
-> *"Ótimo ponto. Esse prazo é o que está configurado na política da imobiliária e foi definido com base na nossa análise interna de operação: nosso ciclo médio de venda gira em torno de 6 meses quando o imóvel entra com estratégia e gestão ativa. No mercado geral, você mesmo encontra referências de ciclos próximos de 1 ano e 6 meses. Ou seja, esse prazo não é para te prender — é para dar janela técnica real de execução e aumentar a chance de vender antes da média do mercado."*
-
-### Revogação com aviso prévio (30 dias)
-> *"A autorização pode ser revogada com aviso expresso de 30 dias de antecedência. Isso dá previsibilidade para os dois lados e evita quebra no meio de negociação em andamento."*
-
-### Guardrails dessa argumentação
-- ✅ Fale em **média histórica/ciclo operacional**, nunca em garantia.
-- ✅ Reforce que resultado depende de preço, produto, demanda e execução.
-- ❌ Não prometer venda em 6 meses como regra fixa.
-- ❌ Não transformar esse argumento em debate estatístico longo.
-
 ### Escopo de atuação
 > *"As cláusulas de atuação deixam claro o que a imobiliária executa no processo e o que depende da sua validação. Você mantém o controle da decisão final."*
 
@@ -77,18 +53,26 @@ Risco de interpretação do lead:
 - "Esse prazo foi inventado para me prender."
 - "Não tenho saída se quiser encerrar."
 
-Resposta-base (obrigatória nesse cenário):
-> *"Essa cláusula existe para dar previsibilidade. O prazo segue a política configurada da imobiliária e foi definido com base em operação real, não no chute. E há saída prevista: a autorização pode ser revogada com aviso expresso de 30 dias de antecedência."*
+#### Ressignificação do Prazo (usar quando o lead questionar o prazo da autorização)
 
-Versão curta para reforço:
-> *"Prazo técnico para executar bem, com regra clara de saída em 30 dias de aviso."*
+##### Tese comercial
+- O prazo não foi escolhido no chute.
+- O prazo aplicado é o configurado no perfil da imobiliária (tenant).
+- Foi definido após análise interna do ciclo real de venda.
+- Nossa referência operacional é média de fechamento em torno de **6 meses**.
+- No mercado amplo, o lead costuma ver referência de ciclo médio perto de **1 ano e 6 meses**.
 
-Checklist de linguagem (Cláusula 6):
-- ✅ "prazo definido na política do tenant"
-- ✅ "base operacional e previsibilidade"
-- ✅ "revogação possível com 30 dias de antecedência"
-- ❌ não prometer resultado garantido por prazo
-- ❌ não tratar o prazo como “prisão contratual”
+##### Resposta sugerida
+> *"Ótimo ponto. Esse prazo é o que está configurado na política da imobiliária e foi definido com base na nossa análise interna de operação: nosso ciclo médio de venda gira em torno de 6 meses quando o imóvel entra com estratégia e gestão ativa. No mercado geral, você mesmo encontra referências de ciclos próximos de 1 ano e 6 meses. Ou seja, esse prazo não é para te prender — é para dar janela técnica real de execução e aumentar a chance de vender antes da média do mercado."*
+
+##### Revogação com aviso prévio (30 dias)
+> *"A autorização pode ser revogada com aviso expresso de 30 dias de antecedência. Isso dá previsibilidade para os dois lados e evita quebra no meio de negociação em andamento."*
+
+##### Guardrails dessa argumentação
+- ✅ Fale em **média histórica/ciclo operacional**, nunca em garantia.
+- ✅ Reforce que resultado depende de preço, produto, demanda e execução.
+- ❌ Não prometer venda em 6 meses como regra fixa.
+- ❌ Não transformar esse argumento em debate estatístico longo.
 
 ### Cláusula 2 — Rede de parceiros sem custo adicional
 Texto sensível:
