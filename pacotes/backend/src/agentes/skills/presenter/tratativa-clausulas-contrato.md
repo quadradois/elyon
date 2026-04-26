@@ -88,6 +88,27 @@ Checklist de linguagem (Cláusula 2):
 - ✅ "repasse ao parceiro é interno da operação"
 - ❌ não sugerir cobrança adicional por número de corretores
 
+### Cláusula 3 — Comissão por intermediação (inclusive após o prazo)
+Texto sensível:
+- comissão é devida se a venda ocorrer no prazo da autorização;
+- também é devida após o prazo quando a venda vier de intermediação/origem da operação do autorizado.
+
+Risco de interpretação do lead:
+- "Vou ficar preso para sempre e pagar comissão em qualquer venda."
+
+Resposta-base (obrigatória nesse cenário):
+> *"Essa cláusula não cria comissão eterna para qualquer venda. Ela protege a intermediação que foi feita por nós. Se a venda acontecer para cliente/corretor que conheceu o imóvel pela nossa atuação, a comissão é devida conforme a cláusula. Agora, se após o fim da autorização você fechar com alguém totalmente fora da nossa intermediação, não há obrigação de pagamento para nossa empresa."*
+
+Versão curta para reforço:
+> *"Comissão é sobre intermediação comprovada — não sobre qualquer venda futura."*
+
+Checklist de linguagem (Cláusula 3):
+- ✅ "comissão por intermediação/origem da operação"
+- ✅ "cliente/corretor apresentado pela nossa atuação"
+- ✅ "fora da nossa intermediação após o prazo = sem obrigação"
+- ❌ não usar tom de ameaça ("vai ter que pagar de qualquer jeito")
+- ❌ não dizer "vale para qualquer comprador depois"
+
 ### Cláusula 1 e 1.1 — Preço anunciado e propostas inferiores
 Texto sensível:
 - "O imóvel será anunciado por [valor definido]"

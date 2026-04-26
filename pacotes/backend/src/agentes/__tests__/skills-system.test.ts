@@ -167,6 +167,11 @@ describe('detectarSkillGatilho — detecção regex', () => {
             .toBe('presenter/tratativa-clausulas-contrato');
     });
 
+    it('detecta dúvida de cláusula 3 (fim do contrato e comissão)', () => {
+        expect(detectarSkillGatilho('depois que acabar o contrato ainda tenho que pagar comissão?', 'sdr'))
+            .toBe('presenter/tratativa-clausulas-contrato');
+    });
+
     it('detecta condições específicas da autorização no presenter', () => {
         expect(detectarSkillGatilho('pode rescindir? tem alguma multa?', 'sdr'))
             .toBe('presenter/tratativa-contrato-condicoes');
