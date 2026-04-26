@@ -157,6 +157,11 @@ describe('detectarSkillGatilho — detecção regex', () => {
             .toBe('presenter/tratativa-clausulas-contrato');
     });
 
+    it('detecta objeção de pressão para baixar valor (cláusula 1.1)', () => {
+        expect(detectarSkillGatilho('vocês vão me forçar a baixar o preço?', 'sdr'))
+            .toBe('presenter/tratativa-clausulas-contrato');
+    });
+
     it('detecta condições específicas da autorização no presenter', () => {
         expect(detectarSkillGatilho('pode rescindir? tem alguma multa?', 'sdr'))
             .toBe('presenter/tratativa-contrato-condicoes');

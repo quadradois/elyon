@@ -91,7 +91,7 @@ const GATILHOS: GatilhoSkill[] = [
     {
         id: 'presenter/tratativa-clausulas-contrato',
         agentes: ['sdr'],
-        regex: /cl[aá]usula|o que significa a cl[aá]usula|explica a cl[aá]usula|me explica o contrato|como funciona a autoriza[cç][aã]o|d[uú]vida sobre (o )?(contrato|autoriza[cç][aã]o)|e se aparecer (um )?comprador direto|e se outro corretor vender|quem paga (os )?an[uú]ncios|posso trabalhar com mais de uma imobili[aá]ria/i,
+        regex: /cl[aá]usula|o que significa a cl[aá]usula|explica a cl[aá]usula|me explica o contrato|como funciona a autoriza[cç][aã]o|d[uú]vida sobre (o )?(contrato|autoriza[cç][aã]o)|e se aparecer (um )?comprador direto|e se outro corretor vender|quem paga (os )?an[uú]ncios|posso trabalhar com mais de uma imobili[aá]ria|proposta inferior|valor inferior|for[çc]ar.*baixar|baixar.*pre[çc]o|voc[eê]s.*baixar.*valor/i,
     },
     {
         id: 'presenter/tratativa-contrato-condicoes',

@@ -64,6 +64,26 @@ Cada cláusula deve ser explicada assim:
 
 ## Perguntas frequentes (cláusulas) — resposta curta
 
+### Cláusula 1 e 1.1 — Preço anunciado e propostas inferiores
+Texto sensível:
+- "O imóvel será anunciado por [valor definido]"
+- "O proprietário aceita receber propostas inferiores, sem obrigação de aceitar"
+
+Risco de interpretação do lead:
+- "Vocês vão me forçar a baixar o preço."
+
+Resposta-base (obrigatória nesse cenário):
+> *"Ótimo ponto. Quem define o valor de anúncio é você. A gente não reduz seu preço por conta própria. O que a cláusula 1.1 faz é permitir que propostas cheguem para sua análise — e a decisão final de aceitar, recusar ou contrapropor é sempre sua."*
+
+Versão curta para reforço:
+> *"Resumindo: nós apresentamos proposta, você decide. Sempre."*
+
+Checklist de linguagem (Cláusula 1/1.1):
+- ✅ "valor de anúncio é definido pelo proprietário"
+- ✅ "proposta inferior pode ser apresentada"
+- ✅ "decisão final é do proprietário"
+- ❌ não usar linguagem de pressão ("tem que baixar", "é melhor aceitar logo")
+
 ### "E se aparecer comprador direto?"
 > *"Se for um comprador que não veio da intermediação, a gente avalia o cenário com transparência. O ponto da cláusula é proteger o trabalho de quem trouxe, qualificou e negociou o interessado."*
 
