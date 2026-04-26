@@ -21,6 +21,8 @@ jobs:
     name: Testes & Type Check
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
@@ -44,14 +46,15 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Testes unitários + coverage
-        run: node node_modules/jest/bin/jest.js --no-cache --config pacotes/backend/jest.config.js --coverage --collectCoverageFrom='src/agentes/**/*.ts' --collectCoverageFrom='!src/agentes/__tests__/**' --ci
+        run: node node_modules/jest/bin/jest.js --config pacotes/backend/jest.config.js --runInBand --coverage --collectCoverageFrom='src/agentes/**/*.ts' --collectCoverageFrom='!src/agentes/__tests__/**' --ci
         env:
           NODE_ENV: test
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Upload coverage artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coverage/
+          path: pacotes/backend/coverage/
           retention-days: 7
