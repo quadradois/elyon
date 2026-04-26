@@ -66,6 +66,11 @@ jest.mock('../../lib/db', () => ({
         logAuditoria: {
             create: jest.fn().mockResolvedValue(null),
         },
+        aprendizadoAgente: {
+            create: jest.fn().mockResolvedValue(null),
+            groupBy: jest.fn().mockResolvedValue([]),
+            findMany: jest.fn().mockResolvedValue([]),
+        },
     },
 }));
 

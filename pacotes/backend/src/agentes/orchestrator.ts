@@ -29,6 +29,7 @@ import { executarAgenteComRetry } from './agent-runner';
 import { processarPosHandoff } from './post-handoff';
 import { logMetricaOrchestrator } from './orchestrator-metrics';
 import { ServicoAuditoria } from '../servicos/servico-auditoria';
+import { calcularGrupoExperimento, registrarOutcomeConversa, registrarTelemetriaTurno } from './telemetria-agente';
 import { resolverAgenteFinal, logAgenteResolvido } from './agent-resolution';
 import { executarGuardrailsEntrada } from './entry-guardrail';
 import { resolverAgentePersistido } from './persisted-agent';
@@ -59,6 +60,9 @@ import {
     persistirAgente,
     MAPA_NOMES_AGENTES,
 } from './agent-chain';
+import { bancoDeAprendizadosService, calcularRecompensaTurno } from '../servicos/banco-aprendizados';
+import { isLearningBankEnabled, isPaolAbEnabled, isPaolShadowEnabled } from './feature-flags';
+import { gerarInstrucaoPaol, paolPolicyService, type PaolDecision, type PaolModoExecucao } from './paol-policy';
 
 // Re-exports para consumidores existentes (webhook.ts, sdr-tools-agents.ts)
 export { buscarConfiguracaoTenant, buscarContextoConversa } from './orchestrator-queries';
@@ -128,12 +132,37 @@ export async function processarMensagemOrquestrada(
     contexto: ContextoConversa,
 ): Promise<ResultadoProcessamento> {
     const inicioTurno = Date.now();
+    let sentimentoDetectado: string | null = null;
+    let paolModoForError: PaolModoExecucao = 'CONTROL';
+    let paolCalcularNoTurnoForError = false;
+    let paolDecisionForError: PaolDecision | null = null;
 
     try {
         const faseFluxoAtual = fasePorStatus(contexto.statusLead);
+        const learningBankEnabled = isLearningBankEnabled();
+        const paolShadowEnabled = isPaolShadowEnabled();
+        const paolAbEnabled = isPaolAbEnabled();
+        const grupoExperimento = calcularGrupoExperimento({
+            tenantId: config.tenantId,
+            telefone: contexto.telefone,
+            contatoId: contexto.contatoId,
+            leadId: contexto.leadId,
+            statusLead: contexto.statusLead,
+            faseFluxo: faseFluxoAtual,
+        });
+        const paolModo: PaolModoExecucao = paolAbEnabled && grupoExperimento === 'VARIANT'
+            ? 'AB_VARIANT'
+            : paolShadowEnabled
+                ? 'SHADOW'
+                : 'CONTROL';
+        const paolAplicarNoTurno = paolModo === 'AB_VARIANT';
+        const paolCalcularNoTurno = paolShadowEnabled || paolAbEnabled;
+        paolModoForError = paolModo;
+        paolCalcularNoTurnoForError = paolCalcularNoTurno;
         let fallbackAplicado = 'NONE';
         let toolCallsTurno = 0;
         let handoffsTurno = 0;
+        let paolDecision: PaolDecision | null = null;
 
         logger.debug(`[ORCHESTRATOR] Processando mensagem para ${contexto.telefone}`);
 
@@ -150,7 +179,7 @@ export async function processarMensagemOrquestrada(
         if (guardrailEntrada.bloqueado && guardrailEntrada.guardrailResult) {
             const guardrailResult = guardrailEntrada.guardrailResult;
             logger.debug(`[ORCHESTRATOR] Guardrail acionado: ${guardrailResult.tipo} telefone=${contexto.telefone} acao=${guardrailResult.acao || 'N/A'}`);
-            logMetricaOrchestrator({
+            const payloadMetrica = logMetricaOrchestrator({
                 tenantId: config.tenantId,
                 telefone: contexto.telefone,
                 contatoId: contexto.contatoId,
@@ -164,6 +193,69 @@ export async function processarMensagemOrquestrada(
                 duracaoMs: Date.now() - inicioTurno,
                 sucesso: true
             });
+            registrarTelemetriaTurno({
+                tenantId: config.tenantId,
+                telefone: contexto.telefone,
+                contatoId: contexto.contatoId,
+                leadId: contexto.leadId,
+                statusLead: contexto.statusLead,
+                faseFluxo: faseFluxoAtual,
+                duracaoMs: payloadMetrica.duracaoMs,
+                sucesso: payloadMetrica.sucesso,
+                fallback: payloadMetrica.fallback,
+                guardrail: guardrailResult.tipo,
+                toolCalls: 0,
+                handoffs: 0,
+                custoEstimadoUSD: payloadMetrica.custoEstimadoUSD,
+                tokenAlertLevel: payloadMetrica.tokenAlertLevel,
+                paolModo,
+                paolAplicado: false,
+            });
+
+            const outcomeGuardrail = guardrailResult.tipo === 'OPTOUT'
+                ? 'OPTOUT'
+                : guardrailResult.tipo === 'COMPRADOR'
+                    ? 'HANDOFF_HUMANO'
+                    : 'ERRO';
+            registrarOutcomeConversa({
+                tenantId: config.tenantId,
+                telefone: contexto.telefone,
+                contatoId: contexto.contatoId,
+                leadId: contexto.leadId,
+                statusLead: contexto.statusLead,
+                faseFluxo: faseFluxoAtual,
+                outcome: outcomeGuardrail,
+                origem: 'GUARDRAIL',
+                motivo: `Guardrail ${guardrailResult.tipo || 'DESCONHECIDO'}`,
+                paolModo,
+                paolAplicado: false,
+            });
+
+            if (learningBankEnabled) {
+                await bancoDeAprendizadosService.registrar({
+                    tenantId: config.tenantId,
+                    contexto: {
+                        faseFluxo: faseFluxoAtual,
+                        statusLead: contexto.statusLead,
+                        agenteInicial: 'GUARDRAIL',
+                        sentimento: 'NEUTRO',
+                    },
+                    acao: `guardrail:${guardrailResult.tipo || 'desconhecido'}`,
+                    resultado: outcomeGuardrail,
+                    recompensa: calcularRecompensaTurno({
+                        sucesso: outcomeGuardrail !== 'ERRO',
+                        outcome: outcomeGuardrail as 'SUCESSO' | 'OPTOUT' | 'HANDOFF_HUMANO' | 'PERDA' | 'ERRO',
+                        fallback: 'GUARDRAIL_BLOCK',
+                        toolCalls: 0,
+                        handoffs: 0,
+                    }),
+                    metadados: {
+                        telefone: contexto.telefone,
+                        contatoId: contexto.contatoId,
+                        leadId: contexto.leadId,
+                    },
+                });
+            }
             return {
                 sucesso: true,
                 resposta: guardrailResult.mensagemFallback,
@@ -256,6 +348,10 @@ export async function processarMensagemOrquestrada(
             contexto: contextoParaInput,
         });
         let inputSDK: AgentInputItem[] = inputBuilderResult.inputSDK;
+        if (inputBuilderResult.temporalFactsStats) {
+            const tf = inputBuilderResult.temporalFactsStats;
+            logger.debug(`[ORCHESTRATOR] ⏳ Fatos temporais: ativos=${tf.ativos} expirados=${tf.expirados} total=${tf.total} taxaExpirados=${tf.taxaExpirados}%`);
+        }
 
         if (contexto.instrucaoTurno && contexto.instrucaoTurno.trim().length > 0) {
             inputSDK = [{ role: 'system' as const, content: contexto.instrucaoTurno }, ...inputSDK];
@@ -292,6 +388,7 @@ export async function processarMensagemOrquestrada(
 
             // Injetar sentimento (síncrono — já resolvido)
             if (sentimento.sentimento !== 'NEUTRO') {
+                sentimentoDetectado = sentimento.sentimento;
                 const instrucaoSentimento = gerarInstrucaoSentimento(sentimento);
                 if (instrucaoSentimento) {
                     inputSDK = [{ role: 'system' as const, content: instrucaoSentimento }, ...inputSDK];
@@ -319,6 +416,77 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
                 inputSDK = [{ role: 'system' as const, content: injecaoSkill }, ...inputSDK];
                 logger.debug(`[ORCHESTRATOR] ⚡ Skill pré-carregada injetada no inputSDK.`);
             }
+        }
+
+        // Learning Bank + PAOL (Plan/Act)
+        const padroesHistoricos = learningBankEnabled
+            ? await bancoDeAprendizadosService.consultarPadroes(
+                config.tenantId,
+                {
+                    faseFluxo: faseFluxoAtual,
+                    statusLead: contexto.statusLead,
+                    agenteInicial: tipoAgente,
+                    sentimento: sentimentoDetectado || 'NEUTRO',
+                },
+                { limit: 3, diasJanela: 120, minimoAmostra: 2 }
+            )
+            : [];
+
+        if (padroesHistoricos.length > 0) {
+            const sugestoes = padroesHistoricos
+                .map((p, idx) => `${idx + 1}. ${p.acao} (reward médio ${p.recompensaMedia.toFixed(2)} | amostra ${p.amostra})`)
+                .join('\n');
+            const instrucaoAprendizado = `[BANCO DE APRENDIZADOS — PRIORIDADE ALTA]
+Para este contexto de conversa, priorize as abordagens com melhor histórico:
+${sugestoes}
+Use isso como desempate estratégico na próxima ação.`;
+            inputSDK = [{ role: 'system' as const, content: instrucaoAprendizado }, ...inputSDK];
+            logger.debug(`[ORCHESTRATOR] 🧠 Learning Bank: ${padroesHistoricos.length} padrões injetados no contexto.`);
+        }
+
+        if (paolCalcularNoTurno) {
+            paolDecision = await paolPolicyService.decidirAcao({
+                contexto: {
+                    tenantId: config.tenantId,
+                    faseFluxo: faseFluxoAtual,
+                    statusLead: contexto.statusLead,
+                    agenteInicial: tipoAgente,
+                    sentimento: sentimentoDetectado || 'NEUTRO',
+                },
+                padroesHistoricos,
+                modo: paolModo,
+                aplicar: paolAplicarNoTurno,
+            });
+
+            if (paolAplicarNoTurno) {
+                inputSDK = [{ role: 'system' as const, content: gerarInstrucaoPaol(paolDecision) }, ...inputSDK];
+                logger.debug(`[ORCHESTRATOR] 🎯 PAOL-ACT aplicado: ${paolDecision.acaoEscolhida} (hash=${paolDecision.contextoHash})`);
+            } else if (paolModo === 'SHADOW') {
+                logger.debug(`[ORCHESTRATOR] 👤 PAOL-SHADOW: ação sugerida=${paolDecision.acaoEscolhida} baseline=${paolDecision.acaoBaseline} divergencia=${paolDecision.divergencia}`);
+            }
+
+            ServicoAuditoria.registrar({
+                tenantId: config.tenantId,
+                acao: 'AGENT_PAOL_DECISION',
+                entidade: 'Conversa',
+                entidadeId: contexto.leadId || contexto.contatoId,
+                ip: '127.0.0.1',
+                detalhes: {
+                    telefone: contexto.telefone || null,
+                    contatoId: contexto.contatoId || null,
+                    leadId: contexto.leadId || null,
+                    faseFluxo: faseFluxoAtual,
+                    paolModo: paolDecision.modo,
+                    paolAplicado: paolDecision.aplicouNaResposta,
+                    acaoEscolhida: paolDecision.acaoEscolhida,
+                    acaoBaseline: paolDecision.acaoBaseline,
+                    divergencia: paolDecision.divergencia,
+                    ganhoPotencial: paolDecision.ganhoPotencial,
+                    custoPotencialExtraUsd: paolDecision.custoPotencialExtraUsd,
+                    candidatos: paolDecision.candidatos,
+                },
+            });
+            paolDecisionForError = paolDecision;
         }
 
         const agenteCache = contexto.contatoId
@@ -464,7 +632,7 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
 
         const guardrailRuntime: string | undefined = undefined;
 
-        logMetricaOrchestrator({
+        const payloadMetrica = logMetricaOrchestrator({
             tenantId: config.tenantId,
             telefone: contexto.telefone,
             contatoId: contexto.contatoId,
@@ -482,6 +650,99 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
             // usage não existe no tipo RunResult do SDK — campo reservado para futuras versões
             tokens: undefined,
         });
+
+        registrarTelemetriaTurno({
+            tenantId: config.tenantId,
+            telefone: contexto.telefone,
+            contatoId: contexto.contatoId,
+            leadId: contexto.leadId,
+            statusLead: contexto.statusLead,
+            faseFluxo: faseFluxoAtual,
+            agenteInicial: tipoAgente,
+            agenteFinal: agenteQueRespondeuFormatado,
+            duracaoMs: payloadMetrica.duracaoMs,
+            sucesso: payloadMetrica.sucesso,
+            fallback: payloadMetrica.fallback,
+            guardrail: payloadMetrica.guardrail || undefined,
+            toolCalls: toolCallsTurno,
+            handoffs: handoffsTurno,
+            repeticaoDetectada: fallbackAplicado === 'ANTI_REPEAT_GUARD',
+            custoEstimadoUSD: payloadMetrica.custoEstimadoUSD,
+            tokenAlertLevel: payloadMetrica.tokenAlertLevel,
+            paolModo,
+            paolAplicado: paolDecision?.aplicouNaResposta || false,
+            paolAcao: paolDecision?.acaoEscolhida,
+            paolDivergencia: paolDecision?.divergencia || false,
+            paolGanhoPotencial: paolDecision?.ganhoPotencial,
+            paolCustoPotencialExtraUSD: paolDecision?.custoPotencialExtraUsd,
+        });
+
+        const outcomePrincipal = (contexto.statusLead === 'PERDIDO' || contexto.statusLead === 'ARQUIVADO')
+            ? 'PERDA'
+            : (contexto.statusLead && STATUS_FASE_HUMANA.has(contexto.statusLead))
+                ? 'HANDOFF_HUMANO'
+                : 'SUCESSO';
+        registrarOutcomeConversa({
+            tenantId: config.tenantId,
+            telefone: contexto.telefone,
+            contatoId: contexto.contatoId,
+            leadId: contexto.leadId,
+            statusLead: contexto.statusLead,
+            faseFluxo: faseFluxoAtual,
+            outcome: outcomePrincipal,
+            origem: 'ORCHESTRATOR',
+            motivo: fallbackAplicado !== 'NONE' ? `Fallback aplicado: ${fallbackAplicado}` : undefined,
+            paolModo,
+            paolAplicado: paolDecision?.aplicouNaResposta || false,
+            paolAcao: paolDecision?.acaoEscolhida,
+        });
+
+        const acaoExecutada = nomesToolsTurno.length > 0
+            ? `tool:${nomesToolsTurno[0]}`
+            : `resposta:${String(agenteQueRespondeuFormatado || tipoAgente).toLowerCase()}`;
+        const recompensaTurno = calcularRecompensaTurno({
+            sucesso: true,
+            outcome: outcomePrincipal,
+            fallback: fallbackAplicado,
+            toolCalls: toolCallsTurno,
+            handoffs: handoffsTurno,
+        });
+
+        if (learningBankEnabled) {
+            await bancoDeAprendizadosService.registrar({
+                tenantId: config.tenantId,
+                contexto: {
+                    faseFluxo: faseFluxoAtual,
+                    statusLead: contexto.statusLead,
+                    agenteInicial: tipoAgente,
+                    sentimento: sentimentoDetectado || 'NEUTRO',
+                },
+                acao: acaoExecutada,
+                resultado: outcomePrincipal,
+                recompensa: recompensaTurno,
+                metadados: {
+                    telefone: contexto.telefone,
+                    contatoId: contexto.contatoId,
+                    leadId: contexto.leadId,
+                    fallback: fallbackAplicado,
+                    toolCalls: toolCallsTurno,
+                    handoffs: handoffsTurno,
+                    agenteFinal: agenteQueRespondeuFormatado,
+                },
+            });
+        }
+
+        if (paolCalcularNoTurno && paolDecision) {
+            await paolPolicyService.aprender({
+                tenantId: config.tenantId,
+                contextoHash: paolDecision.contextoHash,
+                acaoExecutada,
+                recompensa: recompensaTurno,
+                outcome: outcomePrincipal,
+                origem: 'ORCHESTRATOR',
+                fallback: fallbackAplicado,
+            });
+        }
 
         // 🔥 Registrar no Audit Log para governança (ações do Agente)
         if (!cachedHistory || cachedHistory.length === 0) {
@@ -513,7 +774,7 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
         
         const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido no orquestrador';
 
-        logMetricaOrchestrator({
+        const payloadMetrica = logMetricaOrchestrator({
             tenantId: config.tenantId,
             telefone: contexto.telefone,
             contatoId: contexto.contatoId,
@@ -527,6 +788,81 @@ INSTRUÇÃO OBRIGATÓRIA: VOCÊ DEVE CONTORNAR A OBJEÇÃO UTILIZANDO ESTRITAMEN
             sucesso: false,
             erro: errorMessage
         });
+
+        registrarTelemetriaTurno({
+            tenantId: config.tenantId,
+            telefone: contexto.telefone,
+            contatoId: contexto.contatoId,
+            leadId: contexto.leadId,
+            statusLead: contexto.statusLead,
+            faseFluxo: fasePorStatus(contexto.statusLead),
+            duracaoMs: payloadMetrica.duracaoMs,
+            sucesso: false,
+            erro: errorMessage,
+            fallback: 'EXCEPTION',
+            toolCalls: 0,
+            handoffs: 0,
+            custoEstimadoUSD: payloadMetrica.custoEstimadoUSD,
+            tokenAlertLevel: payloadMetrica.tokenAlertLevel,
+            paolModo: paolModoForError,
+            paolAplicado: false,
+        });
+        registrarOutcomeConversa({
+            tenantId: config.tenantId,
+            telefone: contexto.telefone,
+            contatoId: contexto.contatoId,
+            leadId: contexto.leadId,
+            statusLead: contexto.statusLead,
+            faseFluxo: fasePorStatus(contexto.statusLead),
+            outcome: 'ERRO',
+            origem: 'SYSTEM',
+            motivo: errorMessage,
+            paolModo: paolModoForError,
+            paolAplicado: false,
+        });
+        if (isLearningBankEnabled()) {
+            await bancoDeAprendizadosService.registrar({
+                tenantId: config.tenantId,
+                contexto: {
+                    faseFluxo: fasePorStatus(contexto.statusLead),
+                    statusLead: contexto.statusLead,
+                    agenteInicial: 'ERRO',
+                    sentimento: sentimentoDetectado || 'NEUTRO',
+                },
+                acao: 'erro_orchestrator',
+                resultado: 'ERRO',
+                recompensa: calcularRecompensaTurno({
+                    sucesso: false,
+                    outcome: 'ERRO',
+                    fallback: 'EXCEPTION',
+                    toolCalls: 0,
+                    handoffs: 0,
+                }),
+                metadados: {
+                    telefone: contexto.telefone,
+                    contatoId: contexto.contatoId,
+                    leadId: contexto.leadId,
+                    erro: errorMessage,
+                },
+            });
+        }
+        if (paolCalcularNoTurnoForError && paolDecisionForError) {
+            await paolPolicyService.aprender({
+                tenantId: config.tenantId,
+                contextoHash: paolDecisionForError.contextoHash,
+                acaoExecutada: 'erro_orchestrator',
+                recompensa: calcularRecompensaTurno({
+                    sucesso: false,
+                    outcome: 'ERRO',
+                    fallback: 'EXCEPTION',
+                    toolCalls: 0,
+                    handoffs: 0,
+                }),
+                outcome: 'ERRO',
+                origem: 'SYSTEM',
+                fallback: 'EXCEPTION',
+            });
+        }
         return {
             sucesso: false,
             erro: errorMessage

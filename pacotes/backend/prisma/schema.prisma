@@ -107,6 +107,9 @@ model Tenant {
   atualizadoEm   DateTime         @updatedAt
   LogScraperIPTU LogScraperIPTU[]
   LogAuditoria   LogAuditoria[]
+  aprendizadosAgente AprendizadoAgente[]
+  auditoriasReplayAprendizado AuditoriaReplayAprendizado[]
+  politicasPaol PaolPolitica[]
 
   @@index([slug])
   @@index([status])
@@ -1528,6 +1531,105 @@ model MetricaMensagem {
   @@index([acaoSupervisor])
   @@index([processadoEm])
   @@map("metricas_mensagens")
+}
+
+// ====================================
+// APRENDIZADOS DO AGENTE (Reasoning Bank)
+// ====================================
+
+model AprendizadoAgente {
+  id String @id @default(uuid())
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Contexto normalizado da decisão
+  contexto     String
+  contextoHash String // chave curta para consulta rápida por padrão
+
+  // Ação executada e resultado observado
+  acao       String
+  resultado  String
+  recompensa Float
+  metadados  Json?
+
+  criadoEm DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, contextoHash])
+  @@index([tenantId, criadoEm])
+  @@index([tenantId, contextoHash, acao])
+  @@map("aprendizados_agente")
+}
+
+// ====================================
+// AUDITORIA DE EXPERIENCE REPLAY
+// ====================================
+
+model AuditoriaReplayAprendizado {
+  id String @id @default(uuid())
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  executadoEm DateTime @default(now())
+  status      String   @default("SUCESSO") // SUCESSO, SEM_DADOS, PULADO, ERRO
+  erro        String?
+
+  periodoRecenteHoras Int   @default(24)
+  janelaHistoricaDias Int   @default(90)
+  amostraRecente      Int   @default(0)
+  amostraHistorica    Int   @default(0)
+  totalAmostras       Int   @default(0)
+  padroesAvaliados    Int   @default(0)
+  padroesAjustados    Int   @default(0)
+
+  taxaRecente             Float @default(0)
+  taxaHistorica           Float @default(0)
+  ajusteTotalAbs          Float @default(0)
+  ajusteMaxPorPadrao      Float @default(0)
+  limiteDerivaExecucaoAbs Float @default(0)
+
+  resumoOutcomes   Json?
+  ajustesAplicados Json?
+  duracaoMs        Int?
+
+  @@index([tenantId])
+  @@index([tenantId, executadoEm])
+  @@index([status, executadoEm])
+  @@map("auditorias_replay_aprendizado")
+}
+
+// ====================================
+// POLÍTICA PAOL (EMA por contexto/ação)
+// ====================================
+
+model PaolPolitica {
+  id String @id @default(uuid())
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  contextoHash String
+  acao        String
+
+  // EMA de performance
+  emaRecompensa Float @default(0)
+  emaSucesso    Float @default(0)
+  amostra       Int   @default(0)
+
+  ultimaRecompensa Float?
+  ultimoOutcome    String?
+  ultimaOrigem     String? // ORCHESTRATOR, GUARDRAIL, SYSTEM
+  ultimoFallback   String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([tenantId, contextoHash, acao])
+  @@index([tenantId, contextoHash])
+  @@index([tenantId, atualizadoEm])
+  @@map("paol_politicas")
 }
 
 // ====================================

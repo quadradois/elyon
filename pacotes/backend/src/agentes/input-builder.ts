@@ -5,6 +5,8 @@ import type { AgentInputItem } from '@openai/agents';
 import type { Lead } from '@prisma/client';
 import { instrucaoGovernancaCurta } from './roteiro-governanca';
 import { sanitizeHistoryForToolProtocol } from './history-tool-sanitizer';
+import { buildTemporalFactsContext, type TemporalFactsStats } from './temporal-facts';
+import { isTemporalFactsEnabled } from './feature-flags';
 
 export interface MensagemConversa {
   role: 'user' | 'assistant';
@@ -41,6 +43,7 @@ interface ConstruirInputSdkResult {
   inputSDK: AgentInputItem[];
   origem: 'cache' | 'primeiro_turno';
   cachedHistoryLength: number;
+  temporalFactsStats?: TemporalFactsStats;
 }
 
 function construirResumoJanelaMensagensLead(mensagens: MensagemConversa[]): string {
@@ -100,8 +103,9 @@ function construirInputPrimeiroTurno(params: {
   schemaState?: SchemaState;
   config: InputBuilderConfig;
   contexto: InputBuilderContexto;
+  secaoFatosTemporais?: string;
 }): AgentInputItem[] {
-  const { mensagens, estadoConversaAtual, schemaState, config, contexto } = params;
+  const { mensagens, estadoConversaAtual, schemaState, config, contexto, secaoFatosTemporais } = params;
   const resumoJanelaLead = construirResumoJanelaMensagensLead(mensagens);
 
   let secaoMetodoTrabalho: string;
@@ -199,6 +203,7 @@ ESTADO RESUMIDO (NÃO REPETIR PERGUNTAS JÁ RESPONDIDAS):
 - Já respondeu decisão de venda: ${estadoConversaAtual.jaRespondeuDecisao ? 'SIM — NUNCA mais pergunte se já decidiu vender' : 'não'}
 ${guardrailsAtivos}
 ${resumoJanelaLead ? `\n${resumoJanelaLead}\n` : ''}
+${secaoFatosTemporais ? `\n${secaoFatosTemporais}\n` : ''}
 🧭 GOVERNANÇA DE FLUXO: ${instrucaoGovernancaCurta()} Siga esse roteiro para decidir fase e tool. Não force tool call por checklist e não pule etapa.
 
 Responda à última mensagem do proprietário com continuidade conversacional.`;
@@ -229,6 +234,15 @@ Responda à última mensagem do proprietário com continuidade conversacional.`;
 export function construirInputSdk(params: ConstruirInputSdkParams): ConstruirInputSdkResult {
   const { mensagens, cachedHistory, estadoConversaAtual, schemaState, config, contexto } = params;
   const resumoJanelaLead = construirResumoJanelaMensagensLead(mensagens);
+  const temporalFactsEnabled = isTemporalFactsEnabled();
+  const temporalFactsContext = temporalFactsEnabled
+    ? buildTemporalFactsContext({
+        estadoConversaAtual,
+        schemaState,
+        leadRecord: contexto.leadRecord || null,
+      })
+    : null;
+  const secaoFatosTemporais = temporalFactsContext?.secaoPrompt || '';
 
   if (cachedHistory && cachedHistory.length > 0) {
     const cachedHistorySanitizado = sanitizeHistoryForToolProtocol(cachedHistory, 'Input Builder');
@@ -275,6 +289,8 @@ export function construirInputSdk(params: ConstruirInputSdkParams): ConstruirInp
       '',
       resumoJanelaLead || undefined,
       resumoJanelaLead ? '' : undefined,
+      secaoFatosTemporais || undefined,
+      secaoFatosTemporais ? '' : undefined,
       ...guardrails,
       '',
       `GOVERNANÇA: ${instrucaoGovernancaCurta()} Siga esse roteiro para decidir fase e tool. Não force tool call por checklist.`,
@@ -288,12 +304,21 @@ export function construirInputSdk(params: ConstruirInputSdkParams): ConstruirInp
       ],
       origem: 'cache',
       cachedHistoryLength: cachedHistorySanitizado.length,
+      temporalFactsStats: temporalFactsContext?.stats,
     };
   }
 
   return {
-    inputSDK: construirInputPrimeiroTurno({ mensagens, estadoConversaAtual, schemaState, config, contexto }),
+    inputSDK: construirInputPrimeiroTurno({
+      mensagens,
+      estadoConversaAtual,
+      schemaState,
+      config,
+      contexto,
+      secaoFatosTemporais,
+    }),
     origem: 'primeiro_turno',
     cachedHistoryLength: 0,
+    temporalFactsStats: temporalFactsContext?.stats,
   };
 }

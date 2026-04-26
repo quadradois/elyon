@@ -2,6 +2,20 @@ import { construirInputSdk } from '../input-builder';
 import type { EstadoConversa } from '../conversation-state';
 
 describe('construirInputSdk', () => {
+  const TEMPORAL_FACTS_ORIGINAL = process.env.TEMPORAL_FACTS_ENABLED;
+
+  beforeEach(() => {
+    process.env.TEMPORAL_FACTS_ENABLED = 'false';
+  });
+
+  afterAll(() => {
+    if (TEMPORAL_FACTS_ORIGINAL === undefined) {
+      delete process.env.TEMPORAL_FACTS_ENABLED;
+      return;
+    }
+    process.env.TEMPORAL_FACTS_ENABLED = TEMPORAL_FACTS_ORIGINAL;
+  });
+
   const estadoBase: EstadoConversa = {
     intencao: 'vender',
     metragem: 92,
@@ -159,5 +173,65 @@ describe('construirInputSdk', () => {
     expect((result.inputSDK[0] as any).content).toContain('Somos especialistas no bairro X.');
     expect((result.inputSDK[0] as any).content).toContain('CONHECIMENTO DO EMPREENDIMENTO: Residencial Jardim');
     expect((result.inputSDK[0] as any).content).toContain('Torre única com lazer completo.');
+  });
+
+  it('inclui seção de fatos temporais quando feature está ativa', () => {
+    process.env.TEMPORAL_FACTS_ENABLED = 'true';
+    const now = new Date();
+    const leadRec = {
+      urgencia: 'ALTA',
+      atualizadoEm: now,
+      ultimaInteracao: now,
+      criadoEm: now,
+    };
+    const result = construirInputSdk({
+      mensagens: [{ role: 'user', content: 'Quero vender rápido' }],
+      estadoConversaAtual: estadoBase,
+      config: {},
+      contexto: { leadRecord: leadRec as any },
+    });
+
+    expect((result.inputSDK[0] as any).content).toContain('FATOS TEMPORAIS ATIVOS');
+    expect(result.temporalFactsStats).toBeDefined();
+    expect(result.temporalFactsStats?.ativos).toBeGreaterThan(0);
+  });
+
+  it('remove fatos expirados e reporta taxa de expiração', () => {
+    process.env.TEMPORAL_FACTS_ENABLED = 'true';
+    const estadoSemFatos: EstadoConversa = {
+      intencao: null,
+      metragem: null,
+      ocupacao: null,
+      valorPretendido: null,
+      jaRespondeuDecisao: false,
+      estaAnunciando: false,
+      timeline: null,
+      perguntasJaFeitas: {
+        prioridade: false,
+        decisaoVenda: false,
+        valor: false,
+      },
+      statusAnuncio: null,
+      origemAnuncio: null,
+    };
+
+    const leadRec = {
+      objecoes: ['comissão alta'],
+      atualizadoEm: new Date('2026-04-20T10:00:00.000Z'),
+      ultimaInteracao: new Date('2026-04-20T10:00:00.000Z'),
+      criadoEm: new Date('2026-04-20T10:00:00.000Z'),
+    };
+
+    const result = construirInputSdk({
+      mensagens: [{ role: 'user', content: 'oi' }],
+      estadoConversaAtual: estadoSemFatos,
+      config: {},
+      contexto: { leadRecord: leadRec as any },
+    });
+
+    const prompt = (result.inputSDK[0] as any).content as string;
+    expect(prompt).not.toContain('Objeção/dor recente: comissão alta');
+    expect(result.temporalFactsStats?.expirados).toBeGreaterThan(0);
+    expect(result.temporalFactsStats?.taxaExpirados).toBeGreaterThan(0);
   });
 });

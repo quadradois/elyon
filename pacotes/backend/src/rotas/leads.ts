@@ -5,6 +5,7 @@ import { TipoIntegracao } from '@prisma/client';
 import crypto from 'crypto';
 import { getTenantId } from '../utils/tenant';
 import { cascadeDeleteLeads } from '../utils/cascade-delete';
+import { aplicarRetencaoSeguraLead } from '../utils/retencao-segura';
 import { enviarParaCrm, reenviarParaCrm, verificarStatusCrm } from '../servicos/crm-service';
 import { ServicoAuditoria } from '../servicos/servico-auditoria';
 import {
@@ -1266,6 +1267,74 @@ router.patch('/:id', async (req, res) => {
   } catch (error) {
     console.error('Erro ao atualizar lead:', error);
     responderErro(res, 500, 'Erro interno ao atualizar lead');
+  }
+});
+
+// ============================================
+// POST /api/leads/:id/retencao-segura - Anonimização sem perder aprendizado
+// ============================================
+router.post('/:id/retencao-segura', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
+    const { id } = req.params;
+    const { confirmacao, preservarRag } = req.body || {};
+
+    if (confirmacao !== 'anonimizar') {
+      return responderErro(
+        res,
+        400,
+        'Confirmação obrigatória para retenção segura',
+        { mensagem: 'Envie confirmacao: \"anonimizar\" para prosseguir.' }
+      );
+    }
+
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: { id: true, tenantId: true, nome: true },
+    });
+
+    if (!lead) {
+      return responderErro(res, 404, 'Lead não encontrado');
+    }
+
+    if (lead.tenantId !== tenantId) {
+      return responderErro(res, 403, 'Acesso negado');
+    }
+
+    const resultado = await aplicarRetencaoSeguraLead({
+      tenantId,
+      leadId: id,
+      preservarRag: preservarRag === true,
+    });
+
+    ServicoAuditoria.registrar({
+      tenantId,
+      acao: 'LEAD_RETENCAO_SEGURA',
+      entidade: 'Lead',
+      entidadeId: id,
+      ip: req.ip || '127.0.0.1',
+      detalhes: {
+        leadNomeOriginal: lead.nome,
+        tokenAnonimo: resultado.tokenAnonimo,
+        mensagensAnonimizadas: resultado.mensagensAnonimizadas,
+        conversasAnonimizadas: resultado.conversasAnonimizadas,
+        embeddingsRemovidos: resultado.embeddingsRemovidos,
+        preservarRag: resultado.preservarRag,
+      },
+    });
+
+    return res.json({
+      sucesso: true,
+      mensagem: 'Retenção segura aplicada com sucesso (dados sensíveis anonimizados)',
+      resultado,
+    });
+  } catch (error) {
+    console.error('Erro ao aplicar retenção segura no lead:', error);
+    return responderErro(res, 500, 'Erro interno ao aplicar retenção segura');
   }
 });
 

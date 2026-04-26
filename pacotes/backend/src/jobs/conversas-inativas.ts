@@ -1,6 +1,8 @@
 import { ElyonCore } from '../agentes/elyon-core';
+import { isLearningBankEnabled } from '../agentes/feature-flags';
 import { prisma } from '../lib/db';
 import { websocketService } from '../servicos/websocket';
+import { experienceReplayService } from '../servicos/experience-replay';
 
 /**
  * JOB DE CONVERSAS INATIVAS
@@ -45,6 +47,13 @@ class JobConversasInativas {
     erros: number;
     duracao: number;
     conversoesForcadas?: number;
+    replay?: {
+      status: string;
+      tenantsProcessados: number;
+      tenantsComErro: number;
+      ajustesAplicados: number;
+      ajustesTotalAbs: number;
+    };
   }> {
     if (this.estaExecutando) {
       console.log('[JOB] ⚠️ Job já está em execução, pulando...');
@@ -58,6 +67,15 @@ class JobConversasInativas {
     let alertasCriados = 0;
     let erros = 0;
     let conversoesForcadas = 0;
+    let replayResumo:
+      | {
+          status: string;
+          tenantsProcessados: number;
+          tenantsComErro: number;
+          ajustesAplicados: number;
+          ajustesTotalAbs: number;
+        }
+      | undefined;
     
     try {
       console.log(`[JOB] 🔄 Iniciando processamento de conversas inativas (${this.config.horasInatividade}h)`);
@@ -81,6 +99,21 @@ class JobConversasInativas {
       
       // 4. Limpar dados antigos
       await this.limparDadosAntigos();
+
+      // 5. Experience Replay diário (baixo risco, com auditoria e proteção de drift)
+      if (isLearningBankEnabled()) {
+        const replay = await experienceReplayService.executarReplayDiario();
+        replayResumo = {
+          status: replay.status,
+          tenantsProcessados: replay.tenantsProcessados,
+          tenantsComErro: replay.tenantsComErro,
+          ajustesAplicados: replay.ajustesAplicados,
+          ajustesTotalAbs: replay.ajustesTotalAbs,
+        };
+        console.log(
+          `[JOB] 🧠 Replay diário: status=${replay.status}, tenants=${replay.tenantsProcessados}, ajustes=${replay.ajustesAplicados}, derivaAbs=${replay.ajustesTotalAbs}`
+        );
+      }
       
       this.ultimaExecucao = new Date();
       
@@ -94,7 +127,7 @@ class JobConversasInativas {
     const duracao = Date.now() - inicio;
     console.log(`[JOB] ✨ Concluído em ${duracao}ms`);
     
-    return { processadas, alertasCriados, erros, duracao, conversoesForcadas };
+    return { processadas, alertasCriados, erros, duracao, conversoesForcadas, replay: replayResumo };
   }
   
   /**

@@ -64,16 +64,40 @@ interface LogMetricaOrchestratorParams {
   tokens?: TokenUsage;
 }
 
+export interface OrchestratorMetricPayload {
+  ts: string;
+  tenantId: string;
+  telefone: string | null;
+  contatoId: string | null;
+  leadId: string | null;
+  statusLead: string;
+  faseFluxo: string;
+  agenteInicial: TipoAgente | null;
+  agenteFinal: TipoAgente | null;
+  toolCalls: number;
+  handoffs: number;
+  fallback: string;
+  guardrail: string | null;
+  duracaoMs: number;
+  sucesso: boolean;
+  erro: string | null;
+  tokensInput: number | null;
+  tokensOutput: number | null;
+  tokensTotal: number | null;
+  tokenAlertLevel: 'ok' | 'warn' | 'critical';
+  custoEstimadoUSD: number;
+}
+
 export function shortId(valor?: string): string | null {
   if (!valor) return null;
   return valor.length > 8 ? `${valor.substring(0, 8)}...` : valor;
 }
 
-export function logMetricaOrchestrator(params: LogMetricaOrchestratorParams): void {
+export function logMetricaOrchestrator(params: LogMetricaOrchestratorParams): OrchestratorMetricPayload {
   // Avaliar consumo de tokens (alertas)
   const tokenAlert = avaliarConsumoTokens(params.tokens);
 
-  const payload = {
+  const payload: OrchestratorMetricPayload = {
     ts: new Date().toISOString(),
     tenantId: params.tenantId,
     telefone: params.telefone || null,
@@ -107,4 +131,6 @@ export function logMetricaOrchestrator(params: LogMetricaOrchestratorParams): vo
   } else if (tokenAlert.level === 'warn') {
     logger.warn(`[ORCH-TOKENS] ⚠️ WARN — ${tokenAlert.totalTokens} tokens (custo ~$${tokenAlert.custoEstimadoUSD.toFixed(4)}) | tenant=${params.tenantId}`);
   }
+
+  return payload;
 }
