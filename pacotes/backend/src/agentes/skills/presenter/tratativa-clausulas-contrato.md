@@ -39,16 +39,20 @@ Cada cláusula deve ser explicada assim:
 ### Prazo
 > *"A cláusula de prazo existe para dar tempo técnico de executar divulgação, qualificar compradores e conduzir proposta sem improviso. Isso evita correria e decisão ruim."*
 
-## Ressignificação do Prazo (usar quando o lead questionar "180 dias é muito")
+## Ressignificação do Prazo (usar quando o lead questionar o prazo da autorização)
 
 ### Tese comercial
 - O prazo não foi escolhido no chute.
+- O prazo aplicado é o configurado no perfil da imobiliária (tenant).
 - Foi definido após análise interna do ciclo real de venda.
 - Nossa referência operacional é média de fechamento em torno de **6 meses**.
 - No mercado amplo, o lead costuma ver referência de ciclo médio perto de **1 ano e 6 meses**.
 
 ### Resposta sugerida
-> *"Ótimo ponto. Esse prazo foi definido com base na nossa análise interna de operação: nosso ciclo médio de venda gira em torno de 6 meses quando o imóvel entra com estratégia e gestão ativa. No mercado geral, você mesmo encontra referências de ciclos próximos de 1 ano e 6 meses. Ou seja, o prazo de 180 dias não é para te prender — é para dar janela técnica real de execução e aumentar a chance de vender antes da média do mercado."*
+> *"Ótimo ponto. Esse prazo é o que está configurado na política da imobiliária e foi definido com base na nossa análise interna de operação: nosso ciclo médio de venda gira em torno de 6 meses quando o imóvel entra com estratégia e gestão ativa. No mercado geral, você mesmo encontra referências de ciclos próximos de 1 ano e 6 meses. Ou seja, esse prazo não é para te prender — é para dar janela técnica real de execução e aumentar a chance de vender antes da média do mercado."*
+
+### Revogação com aviso prévio (30 dias)
+> *"A autorização pode ser revogada com aviso expresso de 30 dias de antecedência. Isso dá previsibilidade para os dois lados e evita quebra no meio de negociação em andamento."*
 
 ### Guardrails dessa argumentação
 - ✅ Fale em **média histórica/ciclo operacional**, nunca em garantia.
