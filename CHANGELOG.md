@@ -5,6 +5,27 @@ Todas as mudanças notáveis deste projeto serão documentadas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.4.0] - 2026-04-26
+
+### Adicionado
+- **Cockpit de Leads / Mission Control v3** com visão priorizada por IA, preview inline e chat integrado.
+- **Captura automática de documentos via WhatsApp** com armazenamento em S3 e exibição na aba Documentos do lead.
+- **Novos componentes de estado e painel executivo** para sustentação do fluxo operacional no frontend.
+- **Suítes de regressão de coerência dos agents** e materiais de validação em `docs/` (PR1 a PR3).
+
+### Melhorado
+- Coerência operacional do fluxo SDR/Admin com refinamentos de guardrails, skills e sanitização de histórico.
+- Feed e experiência de atendimento com melhoria de usabilidade no ChatPanel e no detalhamento de lead.
+- Consistência da camada de integração/documentação para ambiente produtivo em `elyon.ia.br`.
+
+### Alterado
+- **Migração de branding/domínio** de legados `quadradois.com.br` para `elyon.ia.br` em configs, scripts e documentação.
+- Seed/defaults técnicos atualizados para tenant/contas padrão da ELYON.
+
+### Removido
+- Referências legadas de domínio e branding fora do escopo de integração CRM Quadra Dois.
+- Artefatos de debug e arquivos obsoletos de suporte.
+
 ## [0.3.0] - 2026-04-14
 
 ### Adicionado
@@ -160,6 +181,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 [0.2.0]: https://github.com/elyon-ai/elyon/compare/v0.1.0...v0.2.0
 [0.2.1]: https://github.com/elyon-ai/elyon/compare/v0.2.0...v0.2.1
 [0.2.2]: https://github.com/elyon-ai/elyon/compare/v0.2.1...v0.2.2
+[0.4.0]: https://github.com/elyon-ai/elyon/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/elyon-ai/elyon/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/elyon-ai/elyon/compare/v0.2.2...v0.2.3
 [0.1.0]: https://github.com/elyon-ai/elyon/releases/tag/v0.1.0

@@ -48,7 +48,7 @@ A=NÃO, B=NÃO   → ❌ CEMITÉRIO DE IDEIAS
 - ❌ PROIBIDO over-engineering
 - ❌ PROIBIDO roadmap inchado
 
-Ver [MANDATO_GUARDIAO.md](../docs/MANDATO_GUARDIAO.md) completo.
+Ver [PLAYBOOK_FAXINA_AGENTES.md](./docs/PLAYBOOK_FAXINA_AGENTES.md) completo.
 
 ---
 
@@ -80,7 +80,7 @@ const buscarImoveis = () => {};
 - Hooks: `useCamelCase` (pt-BR)
 - Commits: `feat:`, `fix:`, `refatoração:` (pt-BR)
 
-Ver [DIRETRIZES_TECNICAS.md](../docs/DIRETRIZES_TECNICAS.md) completo.
+Ver [PLAN_REFATORACAO_ORCHESTRATOR_2_AGENTES.md](./docs/PLAN_REFATORACAO_ORCHESTRATOR_2_AGENTES.md) completo.
 
 ---
 
@@ -105,8 +105,9 @@ Ver [DIRETRIZES_TECNICAS.md](../docs/DIRETRIZES_TECNICAS.md) completo.
 
 **IA & Agentes**:
 
-- openai-agents-js (multi-agentes hierárquicos)
-- OpenAI GPT-4 Turbo
+- OpenAI Agents SDK (`@openai/agents` + `@openai/agents-openai`)
+- Arquitetura operacional SDR + Admin (coerência e governança por fases)
+- Suporte multi-provedor LLM por tenant (BYOK)
 
 **Comunicação**:
 
@@ -258,12 +259,12 @@ cp .env.exemplo .env.local
 
 ## 📚 Documentação
 
-- [MANDATO_GUARDIAO.md](../docs/MANDATO_GUARDIAO.md) - Governança de produto
-- [DIRETRIZES_TECNICAS.md](../docs/DIRETRIZES_TECNICAS.md) - Padrões de código
-- [ELYON_ARCHITECTURE.md](../docs/ELYON_ARCHITECTURE.md) - Arquitetura multi-agentes
-- [SAAS_CACHE_STRATEGY.md](../docs/SAAS_CACHE_STRATEGY.md) - Estratégia de cache
+- [PLAN.md](./docs/PLAN.md) - Plano geral de execução
+- [PLAYBOOK_GOVERNANCA_CONFIABILIDADE_QUALIFICACAO.md](./docs/PLAYBOOK_GOVERNANCA_CONFIABILIDADE_QUALIFICACAO.md) - Governança e confiabilidade
+- [RAIO_X_COERENCIA_AGENTES.md](./docs/RAIO_X_COERENCIA_AGENTES.md) - Diagnóstico de coerência dos agents
+- [PLANO_EXECUCAO_COERENCIA_AGENTES.md](./docs/PLANO_EXECUCAO_COERENCIA_AGENTES.md) - Plano PR1-PR3 executado
+- [RAIO_X_AS_IS.md](./docs/RAIO_X_AS_IS.md) - Mapeamento AS-IS técnico
 - [VPS_DEPLOY_GUIDE.md](./DEPLOY.md) - Guia de deploy (Atualizado)
-- [INFRA_README.md](../infra/README.md) - Documentação da Infra Compartilhada (Traefik)
 
 ---
 
@@ -289,9 +290,9 @@ Proprietário - ELYON © 2026
 
 ---
 
-**Versão**: 0.1.0-alpha  
-**Última atualização**: 26/11/2025  
-**Status**: 🚧 Em desenvolvimento ativo
+**Versão**: 0.4.0  
+**Última atualização**: 26/04/2026  
+**Status**: ✅ Produção ativa
 
 ---
 
