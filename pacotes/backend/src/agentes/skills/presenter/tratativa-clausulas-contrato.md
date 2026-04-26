@@ -13,6 +13,13 @@ Nesses casos, use `presenter/tratativa-contrato-condicoes`.
 ## Objetivo
 Explicar de forma simples, segura e orientada a benefício, sem juridiquês e sem inventar regra.
 
+## Princípio de Tradução (OBRIGATÓRIO)
+Cada cláusula deve ser explicada assim:
+1. benefício direto para o proprietário;
+2. tradução simples (sem linguagem jurídica);
+3. ancoragem na dor real (falta de controle, ruído, proposta fraca, tempo perdido);
+4. próximo passo objetivo.
+
 ## Regra central
 - ✅ Use sempre o termo: **autorização de venda**
 - ✅ Explique em linguagem humana e curta
@@ -37,6 +44,20 @@ Explicar de forma simples, segura e orientada a benefício, sem juridiquês e se
 
 ### Transparência de processo
 > *"As cláusulas de transparência servem para evitar ruído: quem faz o quê, em que momento e com qual responsabilidade. Isso reduz atrito e dor de cabeça."*
+
+## Perguntas frequentes (cláusulas) — resposta curta
+
+### "E se aparecer comprador direto?"
+> *"Se for um comprador que não veio da intermediação, a gente avalia o cenário com transparência. O ponto da cláusula é proteger o trabalho de quem trouxe, qualificou e negociou o interessado."*
+
+### "Quem paga anúncio e divulgação?"
+> *"A lógica é: você não paga custo operacional antecipado para anunciar. A remuneração acontece na venda concluída, conforme política comercial da imobiliária."*
+
+### "E se outro corretor vender?"
+> *"A gestão centraliza o processo para evitar bagunça de preço e informação. Se vier proposta por parceiro da rede, você recebe com rastreabilidade e decisão final sua."*
+
+### "Posso trabalhar com mais de uma imobiliária?"
+> *"A modalidade da autorização segue a política da imobiliária e o seu cenário. O importante é você ter clareza de regras, prazo e responsabilidade antes de assinar."*
 
 ## Fechamento recomendado
 > *"Se você quiser, eu te envio o modelo da autorização aqui no WhatsApp para leitura e já organizo o alinhamento com o especialista para revisar ponto a ponto com você."*

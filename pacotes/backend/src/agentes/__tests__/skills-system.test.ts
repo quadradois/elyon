@@ -147,6 +147,16 @@ describe('detectarSkillGatilho — detecção regex', () => {
             .toBe('presenter/tratativa-clausulas-contrato');
     });
 
+    it('detecta dúvida de cláusula sobre comprador direto', () => {
+        expect(detectarSkillGatilho('e se aparecer um comprador direto?', 'sdr'))
+            .toBe('presenter/tratativa-clausulas-contrato');
+    });
+
+    it('detecta dúvida de cláusula sobre mais de uma imobiliária', () => {
+        expect(detectarSkillGatilho('posso trabalhar com mais de uma imobiliária?', 'sdr'))
+            .toBe('presenter/tratativa-clausulas-contrato');
+    });
+
     it('detecta condições específicas da autorização no presenter', () => {
         expect(detectarSkillGatilho('pode rescindir? tem alguma multa?', 'sdr'))
             .toBe('presenter/tratativa-contrato-condicoes');
