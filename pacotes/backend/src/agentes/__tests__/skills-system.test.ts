@@ -137,6 +137,11 @@ describe('detectarSkillGatilho — detecção regex', () => {
             .toBe('presenter/tratativa-comissao');
     });
 
+    it('detecta dúvidas de contrato após template de contato', () => {
+        expect(detectarSkillGatilho('nesse modelo que você mandou, isso é pegadinha?', 'sdr'))
+            .toBe('presenter/tratativa-duvidas-contrato-template-contato');
+    });
+
     it('detecta explicação de cláusulas no presenter', () => {
         expect(detectarSkillGatilho('me explica as cláusulas da autorização', 'sdr'))
             .toBe('presenter/tratativa-clausulas-contrato');

@@ -84,6 +84,11 @@ const GATILHOS: GatilhoSkill[] = [
         regex: /comiss[aã]o (t[aá]|[eé]) (alta|cara|muito|absurda)|desconto na comiss[aã]o|menos de (6|7|8|5)%|cobram demais/i,
     },
     {
+        id: 'presenter/tratativa-duvidas-contrato-template-contato',
+        agentes: ['sdr'],
+        regex: /vi (sua|a) mensagem.*(contrato|autoriza[cç][aã]o)|nesse modelo que voc[eê] mandou|template de contato|isso [eé] pegadinha|documento do contato|isso [eé] obrigat[oó]rio/i,
+    },
+    {
         id: 'presenter/tratativa-clausulas-contrato',
         agentes: ['sdr'],
         regex: /cl[aá]usula|o que significa a cl[aá]usula|explica a cl[aá]usula|me explica o contrato|como funciona a autoriza[cç][aã]o|d[uú]vida sobre (o )?(contrato|autoriza[cç][aã]o)/i,

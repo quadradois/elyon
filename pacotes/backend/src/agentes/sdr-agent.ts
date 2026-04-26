@@ -348,6 +348,7 @@ O conteúdo retornado é o playbook que você DEVE seguir — não improvise.
 | \`presenter/tratativa-exclusividade\` | Lead expressa medo de "ficar refém de uma imobiliária" |
 | \`presenter/tratativa-vender-sozinho\` | Lead questiona "e se eu vender sozinho?" |
 | \`presenter/tratativa-comissao\` | Lead reage mal à % de comissão |
+| \`presenter/tratativa-duvidas-contrato-template-contato\` | Lead reage ao template/mensagem inicial com dúvida contratual curta ("é pegadinha?", "vou ficar preso?") |
 | \`presenter/tratativa-clausulas-contrato\` | Lead pede explicação de cláusulas/termos da autorização |
 | \`presenter/tratativa-contrato-condicoes\` | Lead pede multa, rescisão, prazo especial ou condição fora do padrão |
 | \`presenter/tratativa-sem-aceite-agendamento\` | Lead não aceita agendar agora ("vou pensar", "agora não", "não quero marcar") |

@@ -45,6 +45,7 @@ export const SKILLS_REGISTRY: Record<string, string> = {
     'presenter/tratativa-exclusividade':      'presenter/tratativa-exclusividade.md',
     'presenter/tratativa-vender-sozinho':     'presenter/tratativa-vender-sozinho.md',
     'presenter/tratativa-comissao':           'presenter/tratativa-comissao.md',
+    'presenter/tratativa-duvidas-contrato-template-contato': 'presenter/tratativa-duvidas-contrato-template-contato.md',
     'presenter/tratativa-clausulas-contrato': 'presenter/tratativa-clausulas-contrato.md',
     'presenter/tratativa-contrato-condicoes': 'presenter/tratativa-contrato-condicoes.md',
     'presenter/tratativa-sem-aceite-agendamento': 'presenter/tratativa-sem-aceite-agendamento.md',

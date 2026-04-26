@@ -34,7 +34,7 @@ O conteúdo retornado é o playbook que você DEVE seguir para aquele cenário.`
 - opener/protocolo-desconfianca
 - opener/protocolo-recuo-hostilidade
 - opener/protocolo-indicacao
-- opener/tratativa-exclusividade
+- opener/protocolo-autorizacao-venda
 - opener/tratativa-varios-corretores
 - opener/protocolo-ja-tem-contrato
 - presenter/spin-diagnostico
@@ -42,6 +42,8 @@ O conteúdo retornado é o playbook que você DEVE seguir para aquele cenário.`
 - presenter/tratativa-exclusividade
 - presenter/tratativa-vender-sozinho
 - presenter/tratativa-comissao
+- presenter/tratativa-duvidas-contrato-template-contato
+- presenter/tratativa-clausulas-contrato
 - presenter/tratativa-contrato-condicoes
 - presenter/escalation-trigger-matrix
 - compartilhados/regras-whatsapp
