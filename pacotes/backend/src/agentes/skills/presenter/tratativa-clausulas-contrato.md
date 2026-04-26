@@ -64,6 +64,30 @@ Cada cláusula deve ser explicada assim:
 
 ## Perguntas frequentes (cláusulas) — resposta curta
 
+### Cláusula 2 — Rede de parceiros sem custo adicional
+Texto sensível:
+- autorização para divulgar em canais e rede de parceiros;
+- parceiro pode anunciar por conta própria;
+- sem obrigação do proprietário de pagar outros profissionais;
+- sem aumento da comissão por ter mais corretores envolvidos.
+
+Risco de interpretação do lead:
+- "Vou pagar comissão dobrada/tripla se mais corretores entrarem."
+- "Vou ter custo extra com outros profissionais."
+
+Resposta-base (obrigatória nesse cenário):
+> *"Nessa cláusula, você autoriza ampliar a divulgação com a nossa rede de parceiros para aumentar alcance. Isso não cria comissão extra para você: a comissão continua sendo a da cláusula 3, a mesma combinada. Se um corretor parceiro fechar a venda, o repasse entre imobiliária e parceiro é feito internamente por nós, sem aumentar seu custo."*
+
+Versão curta para reforço:
+> *"Mais corretores trabalhando, mesmo custo para você. A comissão é a combinada na cláusula 3."*
+
+Checklist de linguagem (Cláusula 2):
+- ✅ "mais alcance com parceiros"
+- ✅ "sem custo extra para o proprietário"
+- ✅ "comissão segue a cláusula 3"
+- ✅ "repasse ao parceiro é interno da operação"
+- ❌ não sugerir cobrança adicional por número de corretores
+
 ### Cláusula 1 e 1.1 — Preço anunciado e propostas inferiores
 Texto sensível:
 - "O imóvel será anunciado por [valor definido]"

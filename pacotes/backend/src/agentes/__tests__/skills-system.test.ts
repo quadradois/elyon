@@ -162,6 +162,11 @@ describe('detectarSkillGatilho — detecção regex', () => {
             .toBe('presenter/tratativa-clausulas-contrato');
     });
 
+    it('detecta medo de comissão extra por múltiplos corretores (cláusula 2)', () => {
+        expect(detectarSkillGatilho('se entrar mais corretor eu vou pagar comissão dobrada?', 'sdr'))
+            .toBe('presenter/tratativa-clausulas-contrato');
+    });
+
     it('detecta condições específicas da autorização no presenter', () => {
         expect(detectarSkillGatilho('pode rescindir? tem alguma multa?', 'sdr'))
             .toBe('presenter/tratativa-contrato-condicoes');
