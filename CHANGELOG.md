@@ -5,6 +5,25 @@ Todas as mudanças notáveis deste projeto serão documentadas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.5.0] - 2026-04-26
+
+### Adicionado
+- **Cockpit de IA para operação comercial** com novas rotas de métricas, painéis de acompanhamento e visibilidade por tenant.
+- **Learning Bank do agente** (`aprendizados_agente`) para registrar contexto, ação e recompensa de cada decisão operacional.
+- **PAOL (Policy Adaptation Online Learning)** com política por contexto/ação (`paol_politicas`) e suporte a execução `shadow` e `A/B`.
+- **Experience Replay auditável** (`auditorias_replay_aprendizado`) para recalibrar política com histórico recente + histórico amplo.
+- Novos serviços e utilitários para retenção segura, fatos temporais e telemetria de outcomes do agente.
+- Feature flags de agentes no ambiente (`AGENT_COCKPIT_ENABLED`, `LEARNING_BANK_ENABLED`, `PAOL_*`, `EXPERIENCE_REPLAY_*`, etc.).
+
+### Melhorado
+- Orquestrador com suporte a contexto temporal e tomada de decisão assistida por política adaptativa.
+- Governança de jobs e rotas de leads para integração com fluxo de aprendizado contínuo.
+- Cobertura de testes para política PAOL, fatos temporais, replay, banco de aprendizados e métricas de IA.
+
+### Alterado
+- **Versionamento do produto para `0.5.0`** em monorepo, backend e frontend.
+- README reposicionado para linguagem comercial, destacando proposta de valor e nova capacidade de aprendizado do agente de captação.
+
 ## [0.4.0] - 2026-04-26
 
 ### Adicionado
@@ -185,3 +204,5 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 [0.3.0]: https://github.com/elyon-ai/elyon/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/elyon-ai/elyon/compare/v0.2.2...v0.2.3
 [0.1.0]: https://github.com/elyon-ai/elyon/releases/tag/v0.1.0
+
+[0.5.0]: https://github.com/quadradois/elyon/compare/v0.4.0...v0.5.0
