@@ -3,7 +3,7 @@
  * Grupos claros, contagem visível, scroll suave.
  */
 
-import { Loader2, Inbox } from 'lucide-react';
+import { EstadoCarregandoLeads, EstadoErroLeads, EstadoVazioLeads } from './EstadoListaLeads';
 import { CardLeadPriorizado } from './CardLeadPriorizado';
 import { MiniPipeline } from './MiniPipeline';
 import type { LeadPriorizado, PipelineResumo } from '../../ganchos/useLeadsPriorizados';
@@ -12,9 +12,9 @@ interface FeedAcoesProps {
   leads: LeadPriorizado[];
   pipeline: PipelineResumo;
   carregando: boolean;
+  erro: string;
   leadSelecionadoId: string | null;
   onSelecionarLead: (lead: LeadPriorizado) => void;
-  onAbrirChat: (lead: LeadPriorizado) => void;
   fasePipeline: string | null;
   onFasePipelineChange: (fase: string | null) => void;
 }
@@ -74,35 +74,33 @@ interface GrupoLeadsProps {
   leads: LeadPriorizado[];
   leadSelecionadoId: string | null;
   onSelecionarLead: (lead: LeadPriorizado) => void;
-  onAbrirChat: (lead: LeadPriorizado) => void;
 }
 
-function GrupoLeads({ grupo, leads, leadSelecionadoId, onSelecionarLead, onAbrirChat }: GrupoLeadsProps) {
+function GrupoLeads({ grupo, leads, leadSelecionadoId, onSelecionarLead }: GrupoLeadsProps) {
   if (leads.length === 0) return null;
   return (
-    <div className={`rounded-2xl border overflow-hidden ${grupo.corBorda}`}>
+    <div className={`rounded-xl border overflow-hidden ${grupo.corBorda}`}>
       {/* Header do grupo */}
-      <div className={`flex items-center justify-between px-4 py-3 ${grupo.corFundo} border-b ${grupo.corBorda}`}>
-        <div className="flex items-center gap-2.5">
-          <span className="text-base">{grupo.emoji}</span>
+      <div className={`flex items-center justify-between px-3 py-2 ${grupo.corFundo} border-b ${grupo.corBorda}`}>
+        <div className="flex items-center gap-2">
+          <span className="text-sm">{grupo.emoji}</span>
           <div>
-            <p className={`text-sm font-bold ${grupo.corTitulo}`}>{grupo.titulo}</p>
+            <p className={`text-xs font-bold ${grupo.corTitulo}`}>{grupo.titulo}</p>
             <p className="text-[11px] text-slate-400">{grupo.descricao}</p>
           </div>
         </div>
-        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${grupo.corBadge}`}>
+        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${grupo.corBadge}`}>
           {leads.length} {leads.length === 1 ? 'lead' : 'leads'}
         </span>
       </div>
       {/* Cards do grupo */}
       <div className="divide-y divide-slate-100/70 bg-white">
         {leads.map((lead) => (
-          <div key={lead.id} className="p-3">
+          <div key={lead.id} className="p-2">
             <CardLeadPriorizado
               lead={lead}
               selecionado={lead.id === leadSelecionadoId}
               onSelecionar={onSelecionarLead}
-              onAbrirChat={onAbrirChat}
             />
           </div>
         ))}
@@ -115,9 +113,9 @@ export function FeedAcoes({
   leads,
   pipeline,
   carregando,
+  erro,
   leadSelecionadoId,
   onSelecionarLead,
-  onAbrirChat,
   fasePipeline,
   onFasePipelineChange,
 }: FeedAcoesProps) {
@@ -126,28 +124,19 @@ export function FeedAcoes({
     : leads;
 
   if (carregando) {
-    return (
-      <div className="flex flex-col items-center justify-center h-72 bg-white rounded-2xl border border-slate-200">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-3" />
-        <p className="text-sm text-slate-500 font-medium">Carregando leads...</p>
-      </div>
-    );
+    return <EstadoCarregandoLeads />;
+  }
+
+  if (erro) {
+    return <EstadoErroLeads mensagem={erro} />;
   }
 
   if (leadsFiltrados.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-72 bg-white rounded-2xl border border-dashed border-slate-300">
-        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-          <Inbox className="w-7 h-7 text-slate-400" />
-        </div>
-        <p className="text-sm font-semibold text-slate-700">Nenhum lead encontrado</p>
-        <p className="text-xs text-slate-400 mt-1">Ajuste os filtros ou adicione novos leads</p>
-      </div>
-    );
+    return <EstadoVazioLeads />;
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Pipeline compacto no topo */}
       <MiniPipeline
         pipeline={pipeline}
@@ -163,7 +152,6 @@ export function FeedAcoes({
           leads={leadsFiltrados.filter((l) => l.categoriaUrgencia === grupo.categoria)}
           leadSelecionadoId={leadSelecionadoId}
           onSelecionarLead={onSelecionarLead}
-          onAbrirChat={onAbrirChat}
         />
       ))}
     </div>

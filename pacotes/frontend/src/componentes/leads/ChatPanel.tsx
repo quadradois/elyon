@@ -300,13 +300,20 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, leadTemperatura, lea
       if (link) {
         // Envia o link direto na conversa
         await enviarMensagem(
-          `📄 *Contrato de Captação*\n\nOlá ${leadNome}! Segue o link para você visualizar e assinar nosso contrato digitalmente:\n\n${link}\n\nQualquer dúvida, é só chamar! 😊`
+          `📄 *Autorização Exclusiva de Gestão de Venda*\n\nOlá ${leadNome}! Segue o link para você visualizar e aceitar nossa autorização digitalmente:\n\n${link}\n\nQualquer dúvida, é só chamar!`
         );
-        toast.success('Contrato gerado e enviado na conversa!');
+        toast.success('Autorização gerada e enviada na conversa!');
         setContrato({ linkAceite: link, status: 'PENDENTE' });
       }
-    } catch {
-      toast.error('Erro ao gerar contrato');
+    } catch (error: any) {
+      const faltantesApi = Array.isArray(error?.response?.data?.faltantes)
+        ? error.response.data.faltantes.map((f: any) => f?.label).filter(Boolean)
+        : [];
+      if (faltantesApi.length > 0) {
+        toast.error(`Dados pendentes do lead: ${faltantesApi.join(', ')}`);
+        return;
+      }
+      toast.error('Erro ao gerar autorização');
     } finally {
       setGerandoContrato(false);
     }

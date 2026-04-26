@@ -33,7 +33,7 @@ export const SKILLS_REGISTRY: Record<string, string> = {
     'opener/protocolo-desconfianca':          'opener/protocolo-desconfianca.md',
     'opener/protocolo-recuo-hostilidade':     'opener/protocolo-recuo-hostilidade.md',
     'opener/protocolo-indicacao':             'opener/protocolo-indicacao.md',
-    'opener/tratativa-exclusividade':         'opener/tratativa-exclusividade.md',
+    'opener/protocolo-autorizacao-venda':     'opener/protocolo-autorizacao-venda.md',
     'opener/tratativa-varios-corretores':     'opener/tratativa-varios-corretores.md',
     'opener/protocolo-ja-tem-contrato':       'opener/protocolo-ja-tem-contrato.md',
 
@@ -45,6 +45,8 @@ export const SKILLS_REGISTRY: Record<string, string> = {
     'presenter/tratativa-exclusividade':      'presenter/tratativa-exclusividade.md',
     'presenter/tratativa-vender-sozinho':     'presenter/tratativa-vender-sozinho.md',
     'presenter/tratativa-comissao':           'presenter/tratativa-comissao.md',
+    'presenter/tratativa-clausulas-contrato': 'presenter/tratativa-clausulas-contrato.md',
+    'presenter/tratativa-contrato-condicoes': 'presenter/tratativa-contrato-condicoes.md',
     'presenter/tratativa-sem-aceite-agendamento': 'presenter/tratativa-sem-aceite-agendamento.md',
     'presenter/escalation-trigger-matrix':    'presenter/escalation-trigger-matrix.md',
 };

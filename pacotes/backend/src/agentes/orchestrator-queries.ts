@@ -18,6 +18,32 @@ import {
     resolverPrazoContrato
 } from './commercial-policy';
 
+function normalizarPoliticaContratoNoRag(texto?: string | null): string | undefined {
+    if (!texto) return undefined;
+
+    let normalizado = texto;
+
+    // Remove construções antigas que induzem "dois modelos" / "contrato simples".
+    normalizado = normalizado.replace(
+        /- Oferecemos a opção de contrato exclusivo \(prazo padrão: 180 dias\)\.\s*/gi,
+        ''
+    );
+    normalizado = normalizado.replace(
+        /- A exclusividade é opcional, mas garante maior dedicação e melhores resultados\.\s*/gi,
+        ''
+    );
+    normalizado = normalizado.replace(
+        /- Também trabalhamos com imóveis sem exclusividade\.\s*/gi,
+        ''
+    );
+
+    if (!/REGRA DE COMUNICAÇÃO SOBRE CONTRATO/i.test(normalizado)) {
+        normalizado += `\n- ⚠️ REGRA DE COMUNICAÇÃO SOBRE CONTRATO: NUNCA use o termo "contrato simples" e NUNCA apresente "duas opções de contrato". Use "autorização de venda" e explique que os detalhes de formato/prazo/rescisão são alinhados no atendimento consultivo com o especialista.\n`;
+    }
+
+    return normalizado;
+}
+
 // ====================================
 // BUSCAR CONFIGURAÇÃO DO TENANT
 // ====================================
@@ -42,7 +68,9 @@ export async function buscarConfiguracaoTenant(tenantId: string): Promise<Config
         const perfilVenda = (tenant.perfilVenda as Record<string, unknown>) || {};
 
         // RAG do perfil: prioriza o do agente (mais completo), fallback para o do tenant
-        const ragPerfilTexto = agente?.ragPerfilTexto || tenant.ragPerfilTexto || undefined;
+        const ragPerfilTexto = normalizarPoliticaContratoNoRag(
+            agente?.ragPerfilTexto || tenant.ragPerfilTexto || undefined
+        );
 
         // BYOK: descriptografar API Key do tenant, se configurada (Para retrocompatibilidade no context-builder)
         let llmApiKey: string | undefined;

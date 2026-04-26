@@ -3,11 +3,12 @@
  * Layout em 2 zonas com fundo premium e scroll correto.
  */
 
-import { useState, useCallback, lazy, Suspense } from 'react';
+import { useState, useCallback, lazy, Suspense, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { BarraComando, type ViewMode } from '../componentes/leads/BarraComando';
 import { FeedAcoes } from '../componentes/leads/FeedAcoes';
 import { PreviewLead } from '../componentes/leads/PreviewLead';
+import { PainelExecutivoCockpit } from '../componentes/leads/PainelExecutivoCockpit';
 import { useLeadsPriorizados, type LeadPriorizado } from '../ganchos/useLeadsPriorizados';
 
 const KanbanLeads = lazy(() =>
@@ -15,9 +16,6 @@ const KanbanLeads = lazy(() =>
 );
 const LeadsLegadoLista = lazy(() =>
   import('./Leads').then((m) => ({ default: m.Leads }))
-);
-const ChatModal = lazy(() =>
-  import('../componentes/ChatModal').then((m) => ({ default: m.ChatModal }))
 );
 
 const LoadingFallback = () => (
@@ -32,9 +30,8 @@ export function MissionControlLeads() {
   const [filtroTemperatura, setFiltroTemperatura] = useState('');
   const [leadSelecionado, setLeadSelecionado] = useState<LeadPriorizado | null>(null);
   const [fasePipeline, setFasePipeline] = useState<string | null>(null);
-  const [chatExpandido, setChatExpandido] = useState(false);
 
-  const { leads, estatisticas, pipeline, carregando, recarregar } = useLeadsPriorizados({
+  const { leads, estatisticas, pipeline, carregando, erro, recarregar } = useLeadsPriorizados({
     temperatura: filtroTemperatura || undefined,
     busca: termoBusca || undefined,
   });
@@ -43,18 +40,25 @@ export function MissionControlLeads() {
     setLeadSelecionado((prev) => (prev?.id === lead.id ? null : lead));
   }, []);
 
-  const handleAbrirChat = useCallback((lead: LeadPriorizado) => {
-    setLeadSelecionado(lead);
-    setChatExpandido(true);
-  }, []);
-
   const handleFecharPreview = useCallback(() => {
     setLeadSelecionado(null);
   }, []);
 
+  useEffect(() => {
+    if (!leadSelecionado) return;
+    const atualizado = leads.find((l) => l.id === leadSelecionado.id) || null;
+    if (!atualizado) {
+      setLeadSelecionado(null);
+      return;
+    }
+    if (atualizado !== leadSelecionado) {
+      setLeadSelecionado(atualizado);
+    }
+  }, [leads, leadSelecionado]);
+
   return (
     <div className="min-h-screen bg-slate-50/70">
-      <div className="max-w-[1600px] mx-auto p-6 space-y-6">
+      <div className="max-w-[1640px] mx-auto p-4 lg:p-5 space-y-4">
 
         {/* BARRA DE COMANDO */}
         <BarraComando
@@ -73,16 +77,18 @@ export function MissionControlLeads() {
           onLeadCriado={recarregar}
         />
 
+        <PainelExecutivoCockpit />
+
         {/* CONTEÚDO PRINCIPAL */}
         {viewMode === 'feed' ? (
-          <div className="flex gap-5 items-start">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
             {/* FEED (esquerda) — scroll isolado para não ser afetado pelo chat */}
             <div
               className={`transition-all duration-300 ease-out ${
-                leadSelecionado ? 'w-[55%]' : 'w-full max-w-2xl mx-auto'
+                leadSelecionado ? 'xl:w-[40%]' : 'w-full max-w-3xl mx-auto'
               }`}
               style={{
-                height: 'calc(100vh - 200px)',
+                height: 'calc(100vh - 150px)',
                 overflowY: 'auto',
                 overscrollBehavior: 'contain',
               }}
@@ -91,9 +97,9 @@ export function MissionControlLeads() {
                 leads={leads}
                 pipeline={pipeline}
                 carregando={carregando}
+                erro={erro}
                 leadSelecionadoId={leadSelecionado?.id ?? null}
                 onSelecionarLead={handleSelecionarLead}
-                onAbrirChat={handleAbrirChat}
                 fasePipeline={fasePipeline}
                 onFasePipelineChange={setFasePipeline}
               />
@@ -102,9 +108,9 @@ export function MissionControlLeads() {
             {/* PREVIEW (direita) — sticky + scroll isolado */}
             {leadSelecionado && (
               <div
-                className="w-[45%] flex-shrink-0 sticky top-6"
+                className="w-full xl:w-[60%] xl:flex-shrink-0 xl:sticky xl:top-5"
                 style={{
-                  height: 'calc(100vh - 200px)',
+                  height: 'calc(100vh - 150px)',
                   overflowY: 'auto',
                   overscrollBehavior: 'contain',
                 }}
@@ -112,6 +118,7 @@ export function MissionControlLeads() {
                 <PreviewLead
                   lead={leadSelecionado}
                   onFechar={handleFecharPreview}
+                  onLeadAtualizado={recarregar}
                 />
               </div>
             )}
@@ -126,20 +133,6 @@ export function MissionControlLeads() {
           </Suspense>
         )}
 
-        {/* CHAT EXPANDIDO */}
-        {leadSelecionado && (
-          <Suspense fallback={null}>
-            <ChatModal
-              lead={{
-                id: leadSelecionado.id,
-                nome: leadSelecionado.nome || 'Lead',
-                telefone: leadSelecionado.telefone,
-              }}
-              open={chatExpandido}
-              onOpenChange={setChatExpandido}
-            />
-          </Suspense>
-        )}
       </div>
     </div>
   );

@@ -86,9 +86,11 @@ function labelTipo(tipo: string): string {
 
 function CardDocumento({
   doc,
+  leadId,
   onExcluir,
 }: {
   doc: DocumentoLead;
+  leadId: string;
   onExcluir: (id: string) => void;
 }) {
   const [baixando, setBaixando] = useState(false);
@@ -98,7 +100,7 @@ function CardDocumento({
     if (baixando) return;
     setBaixando(true);
     try {
-      const res = await api.get(`/leads/${doc.id}/documentos/${doc.id}/download`);
+      const res = await api.get(`/leads/${leadId}/documentos/${doc.id}/download`);
       window.open(res.data.url, '_blank');
     } catch {
       toast.error('Erro ao gerar link de download');
@@ -250,7 +252,7 @@ export function AbaDocumentos({ leadId }: AbaDocumentosProps) {
       ) : (
         <div className="space-y-2">
           {documentos.map((doc) => (
-            <CardDocumento key={doc.id} doc={doc} onExcluir={excluir} />
+            <CardDocumento key={doc.id} doc={doc} leadId={leadId} onExcluir={excluir} />
           ))}
         </div>
       )}

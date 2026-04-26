@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Button } from "../componentes/ui/button";
 import { Input } from "../componentes/ui/input";
+import { Textarea } from "../componentes/ui/textarea";
 import { Switch } from "../componentes/ui/switch";
 import { Slider } from "../componentes/ui/slider";
 import { Progress } from "../componentes/ui/progress";
@@ -44,6 +45,8 @@ import { cn } from "../lib/utils";
 // ==============================================
 
 type TipoGarantia = 'FIADOR' | 'SEGURO_FIANCA' | 'TITULO_CAPITALIZACAO' | 'CAUCAO' | 'CARTAO_CREDITO';
+type ModalidadeVenda = 'NAO_EXCLUSIVA' | 'EXCLUSIVA';
+type EstrategiaOferta = 'CONTEXTUAL' | 'DIRETA';
 
 interface PerfilLocacao {
   garantiasAceitas: TipoGarantia[];
@@ -59,12 +62,31 @@ interface PerfilVenda {
   comissaoPadrao: number;
   aceitaExclusividade: boolean;
   tempoExclusividade?: number;
+  modalidadesVenda?: ModalidadeVenda[];
+  modalidadePreferencial?: ModalidadeVenda;
+  estrategiaOferta?: EstrategiaOferta;
+  politicaModalidades?: {
+    NAO_EXCLUSIVA?: {
+      scriptCurto?: string;
+      scriptDetalhado?: string;
+      rescisaoResumo?: string;
+    };
+    EXCLUSIVA?: {
+      prazoDias?: number;
+      scriptCurto?: string;
+      scriptDetalhado?: string;
+      rescisaoResumo?: string;
+    };
+  };
+  termosProibidosAgente?: string[];
   fazAvaliacaoGratuita: boolean;
   fazFotoProfissional: boolean;
   fazTourVirtual: boolean;
   anunciaPortais: string[];
   temParcerias: boolean;
   percentualParceria?: number;
+  respostaEmAudioAtiva?: boolean;
+  vozPadraoTenant?: string;
 }
 
 interface TenantPerfil {
@@ -116,13 +138,32 @@ const LOCACAO_INICIAL: PerfilLocacao = {
 const VENDA_INICIAL: PerfilVenda = {
   comissaoPadrao: 6,
   aceitaExclusividade: true,
-  tempoExclusividade: 90,
+  tempoExclusividade: 180,
+  modalidadesVenda: ['NAO_EXCLUSIVA', 'EXCLUSIVA'],
+  modalidadePreferencial: 'EXCLUSIVA',
+  estrategiaOferta: 'CONTEXTUAL',
+  politicaModalidades: {
+    NAO_EXCLUSIVA: {
+      scriptCurto: '',
+      scriptDetalhado: '',
+      rescisaoResumo: '',
+    },
+    EXCLUSIVA: {
+      prazoDias: 180,
+      scriptCurto: '',
+      scriptDetalhado: '',
+      rescisaoResumo: '',
+    },
+  },
+  termosProibidosAgente: ['contrato simples'],
   fazAvaliacaoGratuita: true,
   fazFotoProfissional: true,
   fazTourVirtual: false,
   anunciaPortais: ['ZAP Imóveis', 'Viva Real'],
   temParcerias: true,
   percentualParceria: 50,
+  respostaEmAudioAtiva: false,
+  vozPadraoTenant: 'alloy',
 };
 
 const PERFIL_INICIAL: TenantPerfil = {
@@ -231,6 +272,45 @@ function aplicarMascaraTelefone(valor: string): string {
   return `(${numerosLimitados.slice(0, 2)}) ${numerosLimitados.slice(2, 7)}-${numerosLimitados.slice(7)}`;
 }
 
+function normalizarPerfilVenda(venda?: Partial<PerfilVenda> | null): PerfilVenda {
+  const base: PerfilVenda = { ...VENDA_INICIAL, ...(venda || {}) };
+  const modalidades: ModalidadeVenda[] = Array.isArray(base.modalidadesVenda) && base.modalidadesVenda.length > 0
+    ? Array.from(new Set<ModalidadeVenda>(base.modalidadesVenda)).filter(
+        (m): m is ModalidadeVenda => m === 'NAO_EXCLUSIVA' || m === 'EXCLUSIVA'
+      )
+    : (base.aceitaExclusividade ? ['NAO_EXCLUSIVA', 'EXCLUSIVA'] : ['NAO_EXCLUSIVA']);
+
+  const modalidadePreferencial = base.modalidadePreferencial && modalidades.includes(base.modalidadePreferencial)
+    ? base.modalidadePreferencial
+    : (modalidades.includes('EXCLUSIVA') ? 'EXCLUSIVA' : 'NAO_EXCLUSIVA');
+
+  return {
+    ...base,
+    modalidadesVenda: modalidades,
+    modalidadePreferencial,
+    estrategiaOferta: base.estrategiaOferta === 'DIRETA' ? 'DIRETA' : 'CONTEXTUAL',
+    tempoExclusividade: base.tempoExclusividade || base.politicaModalidades?.EXCLUSIVA?.prazoDias || 180,
+    aceitaExclusividade: modalidades.includes('EXCLUSIVA'),
+    politicaModalidades: {
+      NAO_EXCLUSIVA: {
+        ...VENDA_INICIAL.politicaModalidades?.NAO_EXCLUSIVA,
+        ...(base.politicaModalidades?.NAO_EXCLUSIVA || {}),
+      },
+      EXCLUSIVA: {
+        ...VENDA_INICIAL.politicaModalidades?.EXCLUSIVA,
+        ...(base.politicaModalidades?.EXCLUSIVA || {}),
+      },
+    },
+    termosProibidosAgente: Array.isArray(base.termosProibidosAgente)
+      ? base.termosProibidosAgente
+      : ['contrato simples'],
+    respostaEmAudioAtiva: !!base.respostaEmAudioAtiva,
+    vozPadraoTenant: typeof base.vozPadraoTenant === 'string' && base.vozPadraoTenant.trim().length > 0
+      ? base.vozPadraoTenant.trim()
+      : 'alloy',
+  };
+}
+
 // ==============================================
 // COMPONENTE PRINCIPAL
 // ==============================================
@@ -296,7 +376,7 @@ export function PerfilImobiliaria() {
         ...PERFIL_INICIAL,
         ...response.data,
         perfilLocacao: { ...LOCACAO_INICIAL, ...response.data?.perfilLocacao },
-        perfilVenda: { ...VENDA_INICIAL, ...response.data?.perfilVenda },
+        perfilVenda: normalizarPerfilVenda(response.data?.perfilVenda),
       });
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
@@ -312,10 +392,19 @@ export function PerfilImobiliaria() {
       setTabAtiva('empresa');
       return;
     }
+
+    if (!perfil.perfilVenda?.modalidadesVenda || perfil.perfilVenda.modalidadesVenda.length === 0) {
+      toast.error('Selecione pelo menos uma modalidade de venda');
+      setTabAtiva('vendas');
+      return;
+    }
     
     try {
       setSalvando(true);
-      await api.put('/tenant/perfil', perfil);
+      await api.put('/tenant/perfil', {
+        ...perfil,
+        perfilVenda: normalizarPerfilVenda(perfil.perfilVenda),
+      });
       
       // Atualizar localStorage
       const tenantAtual = JSON.parse(localStorage.getItem('elyon_tenant') || '{}');
@@ -424,9 +513,55 @@ export function PerfilImobiliaria() {
   const atualizarVenda = (dados: Partial<PerfilVenda>) => {
     setPerfil(prev => ({
       ...prev,
-      perfilVenda: { ...(prev.perfilVenda || VENDA_INICIAL), ...dados }
+      perfilVenda: normalizarPerfilVenda({ ...(prev.perfilVenda || VENDA_INICIAL), ...dados })
     }));
     setAlterado(true);
+  };
+
+  const toggleModalidadeVenda = (modalidade: ModalidadeVenda) => {
+    const atuais = perfil.perfilVenda?.modalidadesVenda || [];
+    let proximas: ModalidadeVenda[];
+    if (atuais.includes(modalidade)) {
+      proximas = atuais.filter(m => m !== modalidade);
+    } else {
+      proximas = [...atuais, modalidade];
+    }
+
+    if (proximas.length === 0) {
+      toast.error('Ao menos uma modalidade deve permanecer ativa');
+      return;
+    }
+
+    const modalidadePreferencial = perfil.perfilVenda?.modalidadePreferencial;
+    const preferencialNormalizada = modalidadePreferencial && proximas.includes(modalidadePreferencial)
+      ? modalidadePreferencial
+      : (proximas.includes('EXCLUSIVA') ? 'EXCLUSIVA' : 'NAO_EXCLUSIVA');
+
+    atualizarVenda({
+      modalidadesVenda: proximas,
+      modalidadePreferencial: preferencialNormalizada,
+      aceitaExclusividade: proximas.includes('EXCLUSIVA'),
+    });
+  };
+
+  const atualizarPoliticaModalidade = (
+    modalidade: ModalidadeVenda,
+    dados: { scriptCurto?: string; scriptDetalhado?: string; rescisaoResumo?: string; prazoDias?: number }
+  ) => {
+    const politicaAtual = perfil.perfilVenda?.politicaModalidades || {};
+    const blocoAtual = modalidade === 'EXCLUSIVA'
+      ? (politicaAtual.EXCLUSIVA || {})
+      : (politicaAtual.NAO_EXCLUSIVA || {});
+
+    atualizarVenda({
+      politicaModalidades: {
+        ...politicaAtual,
+        [modalidade]: {
+          ...blocoAtual,
+          ...dados,
+        },
+      },
+    });
   };
   
   const togglePortal = (portal: string) => {
@@ -839,32 +974,140 @@ export function PerfilImobiliaria() {
               </div>
             </div>
             
-            {/* Exclusividade */}
+            {/* Modalidades de venda */}
             <div className="space-y-3">
-              <SwitchField
-                label="Oferece exclusividade"
-                description="Trabalha com imóveis exclusivos"
-                checked={perfil.perfilVenda?.aceitaExclusividade || false}
-                onChange={(checked) => atualizarVenda({ aceitaExclusividade: checked })}
-              />
-              
-              {perfil.perfilVenda?.aceitaExclusividade && (
+              <label className="text-sm font-medium text-slate-700">Modalidades de autorização de venda</label>
+              <div className="grid grid-cols-2 gap-3">
+                <SwitchField
+                  label="Não exclusiva"
+                  description="Cliente pode manter outros corretores"
+                  checked={perfil.perfilVenda?.modalidadesVenda?.includes('NAO_EXCLUSIVA') || false}
+                  onChange={() => toggleModalidadeVenda('NAO_EXCLUSIVA')}
+                />
+                <SwitchField
+                  label="Exclusiva"
+                  description="Coordenação central com prazo acordado"
+                  checked={perfil.perfilVenda?.modalidadesVenda?.includes('EXCLUSIVA') || false}
+                  onChange={() => toggleModalidadeVenda('EXCLUSIVA')}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Campo label="Modalidade preferencial">
+                  <div className="flex gap-2">
+                    {[
+                      { id: 'NAO_EXCLUSIVA' as ModalidadeVenda, label: 'Não exclusiva' },
+                      { id: 'EXCLUSIVA' as ModalidadeVenda, label: 'Exclusiva' },
+                    ].map((opcao) => (
+                      <button
+                        key={opcao.id}
+                        type="button"
+                        disabled={!perfil.perfilVenda?.modalidadesVenda?.includes(opcao.id)}
+                        onClick={() => atualizarVenda({ modalidadePreferencial: opcao.id })}
+                        className={cn(
+                          "px-3 py-2 rounded-lg border text-sm font-medium transition-all",
+                          perfil.perfilVenda?.modalidadePreferencial === opcao.id
+                            ? "bg-violet-600 text-white border-violet-600"
+                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100",
+                          !perfil.perfilVenda?.modalidadesVenda?.includes(opcao.id) && "opacity-40 cursor-not-allowed"
+                        )}
+                      >
+                        {opcao.label}
+                      </button>
+                    ))}
+                  </div>
+                </Campo>
+
+                <Campo label="Estratégia de oferta do agente">
+                  <div className="flex gap-2">
+                    {[
+                      { id: 'CONTEXTUAL' as EstrategiaOferta, label: 'Contextual' },
+                      { id: 'DIRETA' as EstrategiaOferta, label: 'Direta' },
+                    ].map((opcao) => (
+                      <button
+                        key={opcao.id}
+                        type="button"
+                        onClick={() => atualizarVenda({ estrategiaOferta: opcao.id })}
+                        className={cn(
+                          "px-3 py-2 rounded-lg border text-sm font-medium transition-all",
+                          (perfil.perfilVenda?.estrategiaOferta || 'CONTEXTUAL') === opcao.id
+                            ? "bg-violet-600 text-white border-violet-600"
+                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                        )}
+                      >
+                        {opcao.label}
+                      </button>
+                    ))}
+                  </div>
+                </Campo>
+              </div>
+
+              {perfil.perfilVenda?.modalidadesVenda?.includes('EXCLUSIVA') && (
                 <div className="ml-4 p-3 bg-violet-50 rounded-lg border border-violet-100 animate-in slide-in-from-top-2 duration-200">
-                  <Campo label="Tempo padrão de exclusividade">
+                  <Campo label="Prazo padrão da exclusiva (dias)">
                     <div className="flex items-center gap-2">
                       <Input
                         type="number"
-                        value={perfil.perfilVenda?.tempoExclusividade || 90}
-                        onChange={(e) => atualizarVenda({ tempoExclusividade: parseInt(e.target.value) || 90 })}
+                        value={perfil.perfilVenda?.politicaModalidades?.EXCLUSIVA?.prazoDias || perfil.perfilVenda?.tempoExclusividade || 180}
+                        onChange={(e) => {
+                          const prazo = parseInt(e.target.value) || 180;
+                          atualizarVenda({ tempoExclusividade: prazo });
+                          atualizarPoliticaModalidade('EXCLUSIVA', { prazoDias: prazo });
+                        }}
                         className="w-24"
                         min={30}
-                        max={180}
+                        max={365}
                       />
                       <span className="text-sm text-slate-500">dias</span>
                     </div>
                   </Campo>
                 </div>
               )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Campo label="Resumo de rescisão (não exclusiva)">
+                  <Textarea
+                    value={perfil.perfilVenda?.politicaModalidades?.NAO_EXCLUSIVA?.rescisaoResumo || ''}
+                    onChange={(e) => atualizarPoliticaModalidade('NAO_EXCLUSIVA', { rescisaoResumo: e.target.value })}
+                    placeholder="Ex: condições alinhadas no atendimento consultivo."
+                    rows={3}
+                  />
+                </Campo>
+                <Campo label="Resumo de rescisão (exclusiva)">
+                  <Textarea
+                    value={perfil.perfilVenda?.politicaModalidades?.EXCLUSIVA?.rescisaoResumo || ''}
+                    onChange={(e) => atualizarPoliticaModalidade('EXCLUSIVA', { rescisaoResumo: e.target.value })}
+                    placeholder="Ex: prazo e condições apresentados antes da assinatura."
+                    rows={3}
+                  />
+                </Campo>
+              </div>
+
+              <Campo
+                label="Termos proibidos para o agente"
+                help="Ex.: contrato simples, duas opções de contrato"
+              >
+                <Input
+                  value={(perfil.perfilVenda?.termosProibidosAgente || []).join(', ')}
+                  onChange={(e) => {
+                    const termos = e.target.value
+                      .split(',')
+                      .map((t: string) => t.trim())
+                      .filter(Boolean);
+                    atualizarVenda({ termosProibidosAgente: termos });
+                  }}
+                  placeholder="contrato simples, duas opções de contrato"
+                />
+              </Campo>
+
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <p className="text-sm font-medium text-slate-700 mb-1">Preview da resposta do agente (contrato)</p>
+                <p className="text-sm text-slate-600">
+                  {perfil.perfilVenda?.estrategiaOferta === 'DIRETA'
+                    ? `Trabalhamos com autorização de venda (${(perfil.perfilVenda?.modalidadesVenda || []).map(m => m === 'EXCLUSIVA' ? 'exclusiva' : 'não exclusiva').join(' e ') || 'não exclusiva'}), com condições alinhadas no atendimento consultivo.`
+                    : 'Trabalhamos com autorização de venda e alinhamos a modalidade ideal ao seu contexto no atendimento consultivo, com total transparência.'}
+                </p>
+              </div>
             </div>
             
             {/* Serviços Inclusos */}

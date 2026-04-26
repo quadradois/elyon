@@ -49,7 +49,7 @@ export default function AceitarContrato() {
                     setAceiteConfirmado(true);
                 }
             } catch (error) {
-                setErro("Não foi possível carregar o contrato. Verifique se o link está correto.");
+                setErro("Não foi possível carregar a autorização. Verifique se o link está correto.");
             } finally {
                 setCarregando(false);
             }
@@ -76,7 +76,7 @@ export default function AceitarContrato() {
             const dados = await response.json();
 
             if (!response.ok) {
-                throw new Error(dados.erro || "Erro ao aceitar contrato");
+                throw new Error(dados.erro || "Erro ao aceitar autorização");
             }
 
             setSucesso(true);
@@ -95,7 +95,7 @@ export default function AceitarContrato() {
                 <Card className="w-full max-w-lg">
                     <CardContent className="py-12 text-center">
                         <Loader2 className="w-12 h-12 mx-auto mb-4 text-brand animate-spin" />
-                        <p className="text-slate-600">Carregando contrato...</p>
+                        <p className="text-slate-600">Carregando autorização...</p>
                     </CardContent>
                 </Card>
             </div>
@@ -128,13 +128,13 @@ export default function AceitarContrato() {
                         </div>
 
                         <h1 className="text-2xl font-bold text-emerald-700 mb-2">
-                            Contrato Aceito!
+                            Autorização Aceita!
                         </h1>
 
                         <p className="text-slate-600 mb-6">
                             {sucesso
-                                ? "Obrigado por aceitar o contrato. Entraremos em contato para os próximos passos."
-                                : "Este contrato já foi aceito anteriormente."}
+                                ? "Obrigado por aceitar a autorização. Entraremos em contato para os próximos passos."
+                                : "Esta autorização já foi aceita anteriormente."}
                         </p>
 
                         <div className="bg-emerald-50 rounded-lg p-4 text-left">
@@ -156,7 +156,7 @@ export default function AceitarContrato() {
                                 className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
                             >
                                 <FileText className="w-4 h-4 mr-2" />
-                                Visualizar Contrato
+                                Visualizar Autorização
                             </Button>
                         </div>
 
@@ -177,7 +177,7 @@ export default function AceitarContrato() {
                 <div className="text-center mb-8">
                     <FileText className="w-12 h-12 mx-auto mb-4 text-brand" />
                     <h1 className="text-2xl font-bold text-slate-800">
-                        Contrato de Autorização de Captação
+                        Contrato de Gestão de Venda
                     </h1>
                     <p className="text-slate-600 mt-2">
                         {contrato?.nomeImobiliaria}
@@ -190,7 +190,7 @@ export default function AceitarContrato() {
                         <iframe
                             src={`/api/contratos/${token}/html`}
                             className="w-full h-[600px] border-0"
-                            title="Contrato"
+                            title="Autorização exclusiva de gestão de venda"
                         />
                     </CardContent>
                 </Card>
@@ -212,7 +212,7 @@ export default function AceitarContrato() {
                                     Você concorda com os termos acima?
                                 </h2>
                                 <p className="text-sm text-slate-600">
-                                    Ao clicar em "Aceitar Contrato", você confirma que leu e aceita todas as cláusulas.
+                                    Ao clicar em "Aceitar Autorização", você confirma que leu e aceita todas as cláusulas.
                                 </p>
                             </div>
 
@@ -229,7 +229,7 @@ export default function AceitarContrato() {
                                 ) : (
                                     <>
                                         <Check className="w-5 h-5 mr-2" />
-                                        Aceitar Contrato
+                                        Aceitar Autorização
                                     </>
                                 )}
                             </Button>

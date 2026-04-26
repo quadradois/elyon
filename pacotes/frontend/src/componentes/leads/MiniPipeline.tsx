@@ -58,21 +58,21 @@ export function MiniPipeline({ pipeline, faseSelecionada, onSelecionarFase }: Mi
   const total = Object.values(pipeline).reduce((a, b) => a + b, 0);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
         <div>
-          <h4 className="text-sm font-bold text-slate-800">Pipeline</h4>
+          <h4 className="text-xs font-bold text-slate-800">Pipeline</h4>
           <p className="text-[11px] text-slate-400">Clique para filtrar por fase</p>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="text-xl font-bold text-slate-900">{total}</div>
+          <div className="text-base font-bold text-slate-900">{total}</div>
           <span className="text-xs text-slate-400">leads</span>
         </div>
       </div>
 
       {/* Barra total de progresso */}
       {total > 0 && (
-        <div className="flex h-2 rounded-full overflow-hidden mb-4 gap-0.5">
+        <div className="flex h-1.5 rounded-full overflow-hidden mb-2.5 gap-0.5">
           {FASES.map((fase) => {
             const qtd = pipeline[fase.chave];
             if (qtd === 0) return null;
@@ -88,7 +88,7 @@ export function MiniPipeline({ pipeline, faseSelecionada, onSelecionarFase }: Mi
       )}
 
       {/* Chips clicáveis */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {FASES.map((fase) => {
           const qtd = pipeline[fase.chave];
           const selecionada = faseSelecionada === fase.chave;
@@ -98,7 +98,7 @@ export function MiniPipeline({ pipeline, faseSelecionada, onSelecionarFase }: Mi
               key={fase.chave}
               onClick={() => onSelecionarFase(selecionada ? null : fase.chave)}
               className={`
-                flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all
+                flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all
                 ${selecionada
                   ? fase.corActive
                   : `${fase.corLight} ${fase.corText} ${fase.corBorder} hover:opacity-80`
@@ -107,7 +107,7 @@ export function MiniPipeline({ pipeline, faseSelecionada, onSelecionarFase }: Mi
             >
               <span>{fase.abrev}</span>
               <span className={`
-                px-1.5 py-0.5 rounded-md text-[10px] font-bold
+                px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none
                 ${selecionada ? 'bg-white/25' : 'bg-white/70'}
               `}>
                 {qtd}
@@ -119,7 +119,7 @@ export function MiniPipeline({ pipeline, faseSelecionada, onSelecionarFase }: Mi
         {faseSelecionada && (
           <button
             onClick={() => onSelecionarFase(null)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-slate-300 text-xs text-slate-500 hover:bg-slate-50 transition-all"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-dashed border-slate-300 text-[11px] text-slate-500 hover:bg-slate-50 transition-all"
           >
             ✕ Limpar filtro
           </button>

@@ -3,7 +3,7 @@
 > **ELYON** (עֶלְיוֹן - "O Altíssimo" em hebraico)  
 > Plataforma SaaS de CRM imobiliário com agentes de IA personalizados
 
-**Empresa**: Quadra Dois  
+**Empresa**: ELYON  
 **Produto**: ELYON Platform  
 **Início**: 26/11/2025  
 **Lançamento MVP**: 18/01/2026 (53 dias)  
@@ -18,7 +18,7 @@ Sistema multi-tenant que permite cada imobiliária ter seu próprio agente de IA
 ### Diferencial Competitivo
 
 - 🤖 **ELYON**: Orquestrador mestre que coordena agentes
-- 🎭 **Agentes Personalizados**: Cada imobiliária pode nomear, treinar e customizar seu agente, ou usar um padrão definido pela Quadra Dois
+- 🎭 **Agentes Personalizados**: Cada imobiliária pode nomear, treinar e customizar seu agente, ou usar um padrão oficial da plataforma
 - 💰 **Cache Compartilhado**: Economia de 25% → 85% margem em consultas CPF
 - 🇧🇷 **100% Brasileiro**: Todo sistema em pt-BR
 
@@ -136,12 +136,11 @@ elyon/
 ## 🌐 Domínios
 
 ```
-quadradois.com.br           → Landing page
-admin.quadradois.com.br     → Billing
-elyon.quadradois.com.br     → Dashboard
-api.elyon.quadradois.com.br → Backend API
-evo.quadradois.com.br       → Evolution API (WhatsApp)
-n8n.quadradois.com.br       → N8n (futuro)
+elyon.ia.br       → Landing page
+crm.elyon.ia.br   → Dashboard
+api.elyon.ia.br   → Backend API
+evo.elyon.ia.br   → Evolution API (WhatsApp)
+n8n.elyon.ia.br   → N8n (futuro)
 ```
 
 ---
@@ -214,7 +213,7 @@ n8n.quadradois.com.br       → N8n (futuro)
 
 ```bash
 # Clonar
-git clone https://github.com/quadradois/elyon.git
+git clone https://github.com/elyon-ai/elyon.git
 cd elyon
 
 # Instalar dependências
@@ -278,15 +277,15 @@ cp .env.exemplo .env.local
 
 ## 📄 Licença
 
-Proprietário - Quadra Dois © 2025
+Proprietário - ELYON © 2026
 
 ---
 
 ## 🎯 Contato
 
-**Email**: contato@quadradois.com.br  
-**Website**: https://quadradois.com.br  
-**ELYON**: https://elyon.quadradois.com.br
+**Email**: contato@elyon.ia.br  
+**Website**: https://elyon.ia.br  
+**ELYON**: https://crm.elyon.ia.br
 
 ---
 

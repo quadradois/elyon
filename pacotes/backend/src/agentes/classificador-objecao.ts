@@ -2,6 +2,13 @@ import { BIBLIOTECA_OBJECOES, Objecao } from './catalogo-objecoes';
 import { logger } from '../lib/logger';
 import { MODELO_PADRAO_AUXILIAR } from './byok-resolver';
 
+/**
+ * Integração do catálogo de objeções no ecossistema de skills:
+ * - Este classificador roda no ORQUESTRADOR e seleciona entradas do `catalogo-objecoes.ts`.
+ * - As skills continuam sendo o playbook principal de linguagem via `ler_skill`.
+ * - Catálogo e skills são complementares; em conflito, prevalecem guardrails e nomenclatura oficial.
+ */
+
 export async function tentarDetectarObjecao(
     mensagem: string, 
     apiKey?: string, 

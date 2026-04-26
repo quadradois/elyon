@@ -1,8 +1,8 @@
-# Design System - CRM Quadra Dois
+# Design System - CRM Elyon
 
 ## Visão Holística da Interface
 
-Este documento consolida todos os padrões visuais, tokens de design e componentes do CRM Quadra Dois para garantir consistência no Elyon.
+Este documento consolida todos os padrões visuais, tokens de design e componentes do CRM Elyon para garantir consistência no Elyon.
 
 ---
 
@@ -420,7 +420,7 @@ className="h-12 px-6 text-base gap-2"
 
 ## 📝 Aplicação no Elyon
 
-Para manter consistência visual com o CRM Quadra Dois no Elyon:
+Para manter consistência visual com o CRM Elyon no Elyon:
 
 1. **Usar as mesmas cores** - Especialmente brand-navy e brand-yellow
 2. **Mesmo padrão de cards** - rounded-xl, p-6, border-border/30

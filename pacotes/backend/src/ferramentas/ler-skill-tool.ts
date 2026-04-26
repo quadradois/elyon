@@ -42,6 +42,7 @@ O conteúdo retornado é o playbook que você DEVE seguir para aquele cenário.`
 - presenter/tratativa-exclusividade
 - presenter/tratativa-vender-sozinho
 - presenter/tratativa-comissao
+- presenter/tratativa-contrato-condicoes
 - presenter/escalation-trigger-matrix
 - compartilhados/regras-whatsapp
 - compartilhados/anti-injection

@@ -1779,6 +1779,20 @@ export default function LeadDetalhes() {
                                 <Input value={formEditar.email || ''} onChange={(e) => setFormEditar({ ...formEditar, email: e.target.value })} />
                             </div>
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-sm font-medium">CPF</label>
+                                <Input value={formEditar.cpf || ''} onChange={(e) => setFormEditar({ ...formEditar, cpf: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium">Endereço do Proprietário</label>
+                                <Input value={formEditar.enderecoPrincipal || ''} onChange={(e) => setFormEditar({ ...formEditar, enderecoPrincipal: e.target.value })} />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Complemento do Endereço (Proprietário)</label>
+                            <Input value={formEditar.complementoPrincipal || ''} onChange={(e) => setFormEditar({ ...formEditar, complementoPrincipal: e.target.value })} />
+                        </div>
                         <div>
                             <label className="text-sm font-medium">Temperatura</label>
                             <Select value={formEditar.temperatura} onValueChange={(v) => setFormEditar({ ...formEditar, temperatura: v })}>
@@ -1810,6 +1824,10 @@ export default function LeadDetalhes() {
                                 <label className="text-sm font-medium">Valor Pretendido</label>
                                 <Input type="number" value={formEditar.valorPretendido || ''} onChange={(e) => setFormEditar({ ...formEditar, valorPretendido: Number(e.target.value) })} />
                             </div>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Inscrição IPTU</label>
+                            <Input value={formEditar.inscricaoIptu || ''} onChange={(e) => setFormEditar({ ...formEditar, inscricaoIptu: e.target.value })} />
                         </div>
 
                         {/* Dados de qualificação (novos campos) */}

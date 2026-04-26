@@ -100,10 +100,10 @@ O script de importação realiza automaticamente:
 
 1. **Aponte os registros DNS** do domínio para o IP do novo servidor:
    ```
-   A  elyon.quadradois.com.br      → <IP_NOVO>
-   A  api.elyon.quadradois.com.br  → <IP_NOVO>
-   A  quadradois.com.br            → <IP_NOVO>
-   A  www.quadradois.com.br        → <IP_NOVO>
+   A  crm.elyon.ia.br      → <IP_NOVO>
+   A  api.elyon.ia.br      → <IP_NOVO>
+   A  elyon.ia.br            → <IP_NOVO>
+   A  www.elyon.ia.br        → <IP_NOVO>
    ```
 
 2. O **Traefik** emite os certificados Let's Encrypt automaticamente na primeira requisição.  
@@ -123,7 +123,7 @@ A Evolution API roda como serviço separado. Após a migração:
 
 1. Verifique se a Evolution está configurada:
    ```bash
-   curl https://evo.quadradois.com.br/manager
+   curl https://evo.elyon.ia.br/manager
    ```
 
 2. Se a Evolution também precisar migrar, repita processo similar com o `docker-compose.yml` do diretório `evolution/`.
@@ -148,8 +148,8 @@ docker exec elyon_postgres psql -U elyon_user -d elyon -c "\dt"
 docker exec elyon_redis redis-cli -a "$REDIS_PASSWORD" PING
 
 # Testar endpoints
-curl -sf https://api.elyon.quadradois.com.br/health
-curl -I https://elyon.quadradois.com.br
+curl -sf https://api.elyon.ia.br/health
+curl -I https://crm.elyon.ia.br
 ```
 
 ---

@@ -12,20 +12,39 @@ export class OpenAIService {
     });
   }
 
-  async transcreverAudioBase64(base64: string, apiKey?: string): Promise<string> {
-    const tempFilePath = path.join(os.tmpdir(), `audio_${Date.now()}.ogg`);
+  private determinarExtensaoAudio(mimeType?: string, fileName?: string): string {
+    if (fileName && fileName.includes('.')) {
+      return path.extname(fileName) || '.ogg';
+    }
+
+    const mime = (mimeType || '').toLowerCase();
+    if (mime.includes('mpeg') || mime.includes('mp3')) return '.mp3';
+    if (mime.includes('mp4') || mime.includes('m4a')) return '.mp4';
+    if (mime.includes('webm')) return '.webm';
+    if (mime.includes('wav')) return '.wav';
+    if (mime.includes('ogg') || mime.includes('opus')) return '.ogg';
+    return '.ogg';
+  }
+
+  async transcreverAudioBuffer(
+    buffer: Buffer,
+    options?: {
+      mimeType?: string;
+      fileName?: string;
+      apiKey?: string;
+    }
+  ): Promise<string> {
+    const extensao = this.determinarExtensaoAudio(options?.mimeType, options?.fileName);
+    const tempFilePath = path.join(os.tmpdir(), `audio_${Date.now()}_${Math.random().toString(36).slice(2)}${extensao}`);
 
     try {
-      // 1. Converter Base64 para Arquivo Temporário
-      const buffer = Buffer.from(base64, 'base64');
       fs.writeFileSync(tempFilePath, buffer);
 
-      // 2. Enviar para Whisper API
-      const client = this.getClient(apiKey);
+      const client = this.getClient(options?.apiKey);
       const transcription = await client.audio.transcriptions.create({
         file: fs.createReadStream(tempFilePath),
-        model: 'whisper-1',
-        language: 'pt', // Forçar português ou deixar auto-detect
+        model: process.env.OPENAI_TRANSCRIPTION_MODEL || 'whisper-1',
+        language: 'pt',
       });
 
       return transcription.text;
@@ -33,11 +52,15 @@ export class OpenAIService {
       console.error('[OpenAI] Erro na transcrição:', error);
       throw error;
     } finally {
-      // 3. Limpar Arquivo Temporário
       if (fs.existsSync(tempFilePath)) {
         fs.unlinkSync(tempFilePath);
       }
     }
+  }
+
+  async transcreverAudioBase64(base64: string, apiKey?: string): Promise<string> {
+    const buffer = Buffer.from(base64, 'base64');
+    return this.transcreverAudioBuffer(buffer, { mimeType: 'audio/ogg', apiKey });
   }
 
   async gerarResposta(
@@ -65,6 +88,34 @@ export class OpenAIService {
     } catch (error) {
       console.error('[OpenAI] Erro na geração de resposta:', error);
       return 'Estou com dificuldades técnicas no momento.';
+    }
+  }
+
+  async sintetizarFala(
+    texto: string,
+    options?: {
+      voz?: string;
+      modelo?: string;
+      instrucoes?: string;
+      apiKey?: string;
+      baseURL?: string;
+    }
+  ): Promise<string | null> {
+    try {
+      const client = this.getClient(options?.apiKey, options?.baseURL);
+      const response = await client.audio.speech.create({
+        model: options?.modelo || process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts',
+        voice: options?.voz || process.env.OPENAI_TTS_VOICE || 'alloy',
+        input: texto.slice(0, 4000),
+        format: 'mp3',
+        instructions: options?.instrucoes,
+      } as any);
+
+      const arrayBuffer = await (response as any).arrayBuffer();
+      return Buffer.from(arrayBuffer).toString('base64');
+    } catch (error) {
+      console.error('[OpenAI] Erro na síntese de fala:', error);
+      return null;
     }
   }
 }

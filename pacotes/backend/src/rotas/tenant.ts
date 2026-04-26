@@ -7,6 +7,7 @@ import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { verificarSuperAdmin, verificarAutenticacao } from '../middleware/middleware-auth';
+import { sintetizarFalaTenant } from '../servicos/servico-voz';
 
 const router = Router();
 
@@ -42,6 +43,47 @@ const extrairTenantId = (req: Request): string | null => {
 // ====================================
 import { sintetizarPerfilRAG as sintetizarPerfilCompleto } from '../utilitarios/sintetizarPerfil';
 
+type ModalidadeVenda = 'NAO_EXCLUSIVA' | 'EXCLUSIVA';
+
+function normalizarPerfilVenda(perfilVenda: any): any {
+  const base = perfilVenda || {};
+
+  const modalidades: ModalidadeVenda[] = Array.isArray(base.modalidadesVenda)
+    ? Array.from(new Set(base.modalidadesVenda)).filter((m: unknown): m is ModalidadeVenda => m === 'NAO_EXCLUSIVA' || m === 'EXCLUSIVA')
+    : [];
+
+  const modalidadesResolvidas = modalidades.length > 0
+    ? modalidades
+    : (base.aceitaExclusividade ? ['NAO_EXCLUSIVA', 'EXCLUSIVA'] : ['NAO_EXCLUSIVA']);
+
+  const modalidadePreferencial: ModalidadeVenda =
+    base.modalidadePreferencial && modalidadesResolvidas.includes(base.modalidadePreferencial)
+      ? base.modalidadePreferencial
+      : (modalidadesResolvidas.includes('EXCLUSIVA') ? 'EXCLUSIVA' : 'NAO_EXCLUSIVA');
+
+  return {
+    ...base,
+    modalidadesVenda: modalidadesResolvidas,
+    modalidadePreferencial,
+    estrategiaOferta: base.estrategiaOferta === 'DIRETA' ? 'DIRETA' : 'CONTEXTUAL',
+    politicaModalidades: base.politicaModalidades || {},
+    termosProibidosAgente: Array.isArray(base.termosProibidosAgente) ? base.termosProibidosAgente : [],
+    respostaEmAudioAtiva: !!base.respostaEmAudioAtiva,
+    provedorVozTenant: base.provedorVozTenant === 'elevenlabs' ? 'elevenlabs' : 'openai',
+    vozPadraoTenant: typeof base.vozPadraoTenant === 'string' && base.vozPadraoTenant.trim().length > 0
+      ? base.vozPadraoTenant.trim()
+      : 'onyx',
+    elevenLabsVoiceId: typeof base.elevenLabsVoiceId === 'string' ? base.elevenLabsVoiceId.trim() : '',
+    elevenLabsModelId: typeof base.elevenLabsModelId === 'string' && base.elevenLabsModelId.trim().length > 0
+      ? base.elevenLabsModelId.trim()
+      : 'eleven_multilingual_v2',
+    perfilVozTenant: base.perfilVozTenant || 'vendas_alta_energia',
+    // Compatibilidade legado
+    aceitaExclusividade: modalidadesResolvidas.includes('EXCLUSIVA'),
+    tempoExclusividade: base.tempoExclusividade || base.politicaModalidades?.EXCLUSIVA?.prazoDias || 180,
+  };
+}
+
 function sintetizarPerfilRAG(tenant: any): string {
   // Adaptar formato flat do tenant para o formato PerfilImobiliaria
   const perfilEstruturado = {
@@ -72,17 +114,21 @@ function sintetizarPerfilRAG(tenant: any): string {
       fazVistoriaSaida: true,
       tempoMedioContrato: 30,
     },
-    venda: tenant.perfilVenda || {
-      comissaoPadrao: 6,
+    venda: normalizarPerfilVenda(tenant.perfilVenda || {
       aceitaExclusividade: true,
       tempoExclusividade: 180,
+      modalidadesVenda: ['NAO_EXCLUSIVA', 'EXCLUSIVA'],
+      modalidadePreferencial: 'EXCLUSIVA',
+      estrategiaOferta: 'CONTEXTUAL',
+      politicaModalidades: {},
+      termosProibidosAgente: ['contrato simples'],
       fazAvaliacaoGratuita: true,
       fazFotoProfissional: true,
       fazTourVirtual: false,
       anunciaPortais: [],
       temParcerias: true,
       percentualParceria: 50,
-    },
+    }),
   };
 
   return sintetizarPerfilCompleto(perfilEstruturado);
@@ -213,7 +259,10 @@ router.get('/perfil', async (req: Request, res: Response) => {
       return responderErro(res, 404, 'Tenant não encontrado');
     }
 
-    res.json(tenant);
+    res.json({
+      ...tenant,
+      perfilVenda: normalizarPerfilVenda(tenant.perfilVenda || {})
+    });
   } catch (error) {
     console.error('[Tenant] Erro ao buscar perfil:', error);
     responderErro(res, 500, 'Erro ao buscar perfil');
@@ -233,6 +282,8 @@ router.put('/perfil', async (req: Request, res: Response) => {
     }
 
     console.log('[Tenant] Atualizando perfil:', tenantId);
+
+    const perfilVendaNormalizado = normalizarPerfilVenda(dados.perfilVenda);
 
     // Atualizar tenant com todos os campos
     const tenantAtualizado = await prisma.tenant.update({
@@ -254,7 +305,7 @@ router.put('/perfil', async (req: Request, res: Response) => {
         atendeFinalDeSemana: dados.atendeFinalDeSemana,
         tempoMercado: dados.tempoMercado,
         perfilLocacao: dados.perfilLocacao,
-        perfilVenda: dados.perfilVenda,
+        perfilVenda: perfilVendaNormalizado,
       }
     });
 
@@ -334,6 +385,56 @@ router.post('/perfil/logo', upload.single('logo'), async (req: Request, res: Res
     console.error('[Tenant] ❌ Erro no upload de logo:', error.message);
     console.error('[Tenant] Detalhes:', error);
     responderErro(res, 500, 'Erro interno do servidor');
+  }
+});
+
+// ====================================
+// POST /api/tenant/perfil/voz/preview - Gera áudio de prévia da voz
+// ====================================
+router.post('/perfil/voz/preview', async (req: Request, res: Response) => {
+  try {
+    const tenantId = extrairTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 400, 'Tenant ID obrigatório');
+    }
+
+    const voz = typeof req.body?.voz === 'string' && req.body.voz.trim().length > 0
+      ? req.body.voz.trim()
+      : 'onyx';
+    const provedor = req.body?.provedor === 'elevenlabs' ? 'elevenlabs' : 'openai';
+    const elevenLabsVoiceId = typeof req.body?.elevenLabsVoiceId === 'string'
+      ? req.body.elevenLabsVoiceId.trim()
+      : '';
+    const elevenLabsModelId = typeof req.body?.elevenLabsModelId === 'string'
+      ? req.body.elevenLabsModelId.trim()
+      : undefined;
+    const textoEntrada = typeof req.body?.texto === 'string' ? req.body.texto.trim() : '';
+    const textoPreview = textoEntrada.length > 0
+      ? textoEntrada.slice(0, 280)
+      : 'Perfeito, eu vou te mostrar como a gente pode vender seu imóvel com mais estratégia, alcance e segurança.';
+
+    const audioBase64 = await sintetizarFalaTenant(textoPreview, {
+      provedor,
+      vozOpenAI: voz,
+      elevenLabsVoiceId,
+      elevenLabsModelId,
+      perfil: 'vendas_alta_energia',
+    });
+    if (!audioBase64) {
+      return responderErro(res, 502, 'Não foi possível gerar a prévia de áudio');
+    }
+
+    res.json({
+      sucesso: true,
+      provedor,
+      voz,
+      texto: textoPreview,
+      mimeType: 'audio/mpeg',
+      audioBase64,
+    });
+  } catch (error) {
+    console.error('[Tenant] Erro ao gerar prévia de voz:', error);
+    responderErro(res, 500, 'Erro ao gerar prévia de voz');
   }
 });
 

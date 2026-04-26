@@ -83,6 +83,26 @@ describe('construirInputSdk', () => {
     expect(result.inputSDK[2]).toEqual({ role: 'user', content: 'Pode seguir com a avaliação.' });
   });
 
+  it('saneia histórico de cache removendo item role=tool órfão', () => {
+    const mensagens = [{ role: 'user' as const, content: 'Seguimos?' }];
+    const cachedHistory = [
+      { role: 'system', content: 'history-item' },
+      { role: 'tool', content: 'output órfão sem tool_call_id' },
+    ] as any;
+
+    const result = construirInputSdk({
+      mensagens,
+      cachedHistory,
+      estadoConversaAtual: estadoBase,
+      config: {},
+      contexto: {},
+    });
+
+    expect(result.origem).toBe('cache');
+    expect(result.cachedHistoryLength).toBe(1);
+    expect(result.inputSDK[0]).toEqual({ role: 'system', content: 'history-item' });
+  });
+
   it('inclui resumo de schemaState quando informado', () => {
     const result = construirInputSdk({
       mensagens: [{ role: 'user', content: 'Olá' }],

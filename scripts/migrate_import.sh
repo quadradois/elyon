@@ -196,7 +196,7 @@ ${DC_CMD} -f docker-compose.prod.yml ps
 echo ""
 
 # Checar saúde do backend
-BACKEND_URL="${BACKEND_URL:-https://api.elyon.quadradois.com.br}"
+BACKEND_URL="${BACKEND_URL:-https://api.elyon.ia.br}"
 log "Testando backend em ${BACKEND_URL}/health ..."
 sleep 5
 if curl -sf --max-time 10 "${BACKEND_URL}/health" &>/dev/null 2>&1; then
@@ -211,8 +211,8 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║       MIGRAÇÃO CONCLUÍDA! 🎉             ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
 echo ""
-echo "  Frontend:  ${FRONTEND_URL:-https://elyon.quadradois.com.br}"
-echo "  API:       ${BACKEND_URL:-https://api.elyon.quadradois.com.br}"
+echo "  Frontend:  ${FRONTEND_URL:-https://crm.elyon.ia.br}"
+echo "  API:       ${BACKEND_URL:-https://api.elyon.ia.br}"
 echo ""
 echo -e "${YELLOW}Próximos passos:${NC}"
 echo "  1. Aponte o DNS para o IP deste servidor"

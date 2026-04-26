@@ -41,7 +41,7 @@ export const BIBLIOTECA_OBJECOES: Objecao[] = [
     id: 6,
     fase: 'SDR',
     gatilhos: ["já trabalho com outra", "tenho outra imobiliária", "já tem gente anunciando"],
-    contorno: "Que bom que já deu o primeiro passo! Só uma curiosidade: eles estão trazendo compradores com crédito aprovado, ou tem aparecido mais gente sem condição real de compra? Pergunto porque a gente tem um processo de pré-qualificação dos compradores que faz bastante diferença."
+    contorno: "Que ótimo que você já está em movimento com a venda! E como tá indo? Tá tendo retorno e visitas? Se estiver indo bem, eu respeito totalmente seu momento e encerro por aqui com cordialidade. Se não estiver fluindo como esperado, me conta o que tem faltado pra eu entender melhor."
   },
   {
     id: 7,

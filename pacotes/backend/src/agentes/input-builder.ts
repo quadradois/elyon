@@ -4,6 +4,7 @@ import { construirSecaoPoliticaComercial } from './commercial-policy';
 import type { AgentInputItem } from '@openai/agents';
 import type { Lead } from '@prisma/client';
 import { instrucaoGovernancaCurta } from './roteiro-governanca';
+import { sanitizeHistoryForToolProtocol } from './history-tool-sanitizer';
 
 export interface MensagemConversa {
   role: 'user' | 'assistant';
@@ -42,6 +43,29 @@ interface ConstruirInputSdkResult {
   cachedHistoryLength: number;
 }
 
+function construirResumoJanelaMensagensLead(mensagens: MensagemConversa[]): string {
+  if (!Array.isArray(mensagens) || mensagens.length === 0) return '';
+  let ultimoAssistant = -1;
+  for (let i = mensagens.length - 1; i >= 0; i--) {
+    if (mensagens[i].role === 'assistant') {
+      ultimoAssistant = i;
+      break;
+    }
+  }
+  const blocoLead = mensagens
+    .slice(ultimoAssistant + 1)
+    .filter((m) => m.role === 'user')
+    .map((m) => (m.content || '').trim())
+    .filter(Boolean);
+
+  if (blocoLead.length <= 1) return '';
+  return [
+    'JANELA RECENTE DO LEAD (mensagens em sequência):',
+    ...blocoLead.map((m, i) => `${i + 1}. ${m}`),
+    'Regra obrigatória: responda TODOS os pontos/perguntas dessa janela antes de fazer nova pergunta.'
+  ].join('\n');
+}
+
 function pareceValorMonetario(texto?: string | null): boolean {
   const t = (texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   if (!t) return false;
@@ -78,6 +102,7 @@ function construirInputPrimeiroTurno(params: {
   contexto: InputBuilderContexto;
 }): AgentInputItem[] {
   const { mensagens, estadoConversaAtual, schemaState, config, contexto } = params;
+  const resumoJanelaLead = construirResumoJanelaMensagensLead(mensagens);
 
   let secaoMetodoTrabalho: string;
   if (config.ragPerfilTexto) {
@@ -173,6 +198,7 @@ ESTADO RESUMIDO (NÃO REPETIR PERGUNTAS JÁ RESPONDIDAS):
 - Timeline informada: ${estadoConversaAtual.timeline || 'não mencionada'}
 - Já respondeu decisão de venda: ${estadoConversaAtual.jaRespondeuDecisao ? 'SIM — NUNCA mais pergunte se já decidiu vender' : 'não'}
 ${guardrailsAtivos}
+${resumoJanelaLead ? `\n${resumoJanelaLead}\n` : ''}
 🧭 GOVERNANÇA DE FLUXO: ${instrucaoGovernancaCurta()} Siga esse roteiro para decidir fase e tool. Não force tool call por checklist e não pule etapa.
 
 Responda à última mensagem do proprietário com continuidade conversacional.`;
@@ -202,8 +228,10 @@ Responda à última mensagem do proprietário com continuidade conversacional.`;
 
 export function construirInputSdk(params: ConstruirInputSdkParams): ConstruirInputSdkResult {
   const { mensagens, cachedHistory, estadoConversaAtual, schemaState, config, contexto } = params;
+  const resumoJanelaLead = construirResumoJanelaMensagensLead(mensagens);
 
   if (cachedHistory && cachedHistory.length > 0) {
+    const cachedHistorySanitizado = sanitizeHistoryForToolProtocol(cachedHistory, 'Input Builder');
     const ultimaMsgUser = mensagens.filter((m) => m.role === 'user').pop();
 
     // Construir guardrails ricos com dados do leadRecord (mesmo nível do primeiro turno)
@@ -245,6 +273,8 @@ export function construirInputSdk(params: ConstruirInputSdkParams): ConstruirInp
     const conteudoCompleto = [
       ...estadoResumo,
       '',
+      resumoJanelaLead || undefined,
+      resumoJanelaLead ? '' : undefined,
       ...guardrails,
       '',
       `GOVERNANÇA: ${instrucaoGovernancaCurta()} Siga esse roteiro para decidir fase e tool. Não force tool call por checklist.`,
@@ -252,12 +282,12 @@ export function construirInputSdk(params: ConstruirInputSdkParams): ConstruirInp
 
     return {
       inputSDK: [
-        ...cachedHistory,
+        ...cachedHistorySanitizado,
         { role: 'system' as const, content: conteudoCompleto },
         { role: 'user' as const, content: ultimaMsgUser?.content || '' }
       ],
       origem: 'cache',
-      cachedHistoryLength: cachedHistory.length,
+      cachedHistoryLength: cachedHistorySanitizado.length,
     };
   }
 

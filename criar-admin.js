@@ -6,13 +6,13 @@ async function criarAdmin() {
 
     try {
         // Criar tenant se não existir
-        let tenant = await prisma.tenant.findFirst({ where: { slug: 'quadradois' } });
+        let tenant = await prisma.tenant.findFirst({ where: { slug: 'elyon' } });
 
         if (!tenant) {
             tenant = await prisma.tenant.create({
                 data: {
-                    nome: 'QuadraDois',
-                    slug: 'quadradois',
+                    nome: 'Elyon',
+                    slug: 'elyon',
                     status: 'ATIVO',
                 }
             });
@@ -23,7 +23,7 @@ async function criarAdmin() {
 
         // Criar usuário admin
         const existeAdmin = await prisma.usuario.findFirst({
-            where: { tenantId: tenant.id, email: 'quadradoisgo@gmail.com' }
+            where: { tenantId: tenant.id, email: 'admin@elyon.ia.br' }
         });
 
         if (!existeAdmin) {
@@ -31,8 +31,8 @@ async function criarAdmin() {
             const admin = await prisma.usuario.create({
                 data: {
                     tenantId: tenant.id,
-                    email: 'quadradoisgo@gmail.com',
-                    nome: 'QuadraDois Admin',
+                    email: 'admin@elyon.ia.br',
+                    nome: 'Elyon Admin',
                     senha: senhaHash,
                     papel: 'SUPER_ADMIN',
                     estaAtivo: true

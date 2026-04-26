@@ -145,6 +145,20 @@ function limparBlocoInternoStructuredOutput(texto: string): string {
   return resposta;
 }
 
+function normalizarTermosComerciaisSensveis(texto: string): string {
+  return texto
+    .replace(
+      /temos\s+duas\s+op[cç][oõ]es\s*:\s*(?:contrato\s+simples|autoriza[cç][aã]o\s+de\s+venda)\s*\(?.*?\)?\s*ou\s*exclusivo\s*(por\s*\d+\s*dias)?/gi,
+      'Trabalhamos com autorização de venda, com condições alinhadas em atendimento consultivo'
+    )
+    .replace(/\bcontrato\s+simples\b/gi, 'autorização de venda')
+    .replace(
+      /quer que eu te envie os termos por e-?mail para ver antes ou prefere que o corretor explique tudo na nossa pr[oó]xima reuni[aã]o\?/gi,
+      'Quer que eu te envie o documento de autorização aqui no WhatsApp para você analisar com calma, ou prefere que o corretor explique tudo na nossa próxima reunião?'
+    )
+    .replace(/por e-?mail/gi, 'aqui no WhatsApp');
+}
+
 export function sanitizarRespostaParaCliente(texto: string): string {
   let resposta = (texto || '').trim();
   if (!resposta) return '';
@@ -159,7 +173,7 @@ export function sanitizarRespostaParaCliente(texto: string): string {
   resposta = limparBlocoInternoStructuredOutput(resposta);
   resposta = removerBlocoMetadadosInternos(resposta);
   resposta = removerAspasEnvolventes(resposta);
+  resposta = normalizarTermosComerciaisSensveis(resposta);
 
   return resposta.trim();
 }
-

@@ -4,7 +4,7 @@
 
 ### Pontos Fortes ✅
 1. **Layout estruturado** - Grid 3 colunas bem organizado
-2. **Design System consistente** - Segue padrão do CRM Quadra Dois
+2. **Design System consistente** - Segue padrão do CRM Elyon
 3. **Cards com hover effects** - Transições suaves
 4. **Responsividade** - Grid adaptativo
 5. **Hierarquia visual** - Header destacado com gradient

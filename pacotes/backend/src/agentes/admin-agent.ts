@@ -96,7 +96,9 @@ function gerarPromptAdmin(config: {
 }): string {
     const tipoContrato = config.tipoAutorizacao === 'exclusiva' ? 'AUTORIZAÇÃO EXCLUSIVA' : 'AUTORIZAÇÃO DE VENDA';
     const prazo = config.prazoTrabalho || resolverPrazoContrato(config.prazoContrato);
-    const comissao = config.comissaoAcordada || resolverComissaoPadrao(config.comissaoPadrao);
+    const comissao = config.comissaoAcordada
+        || resolverComissaoPadrao(config.comissaoPadrao)
+        || 'conforme política comercial da imobiliária';
 
     return `# Você é ${config.nomeAgente} - Especialista em Onboarding da ${config.nomeImobiliaria}
 

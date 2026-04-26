@@ -277,11 +277,14 @@ IMPORTANTE: Passe TODOS os dados coletados na conversa! Tipo de imóvel, quartos
         input.prazoDesejado = sanitizeStr(input.prazoDesejado);
 
         const result = await useCase.execute(input);
+        const conversaoIdempotente = result?.reasonCode === 'ALREADY_LEAD';
         await registrarExecucaoTool({
             leadId: result?.leadId,
             toolName: 'converter_para_lead',
-            sucesso: !!result?.success,
-            detalhes: result?.message || result?.error
+            sucesso: !!result?.success || conversaoIdempotente,
+            detalhes: conversaoIdempotente
+                ? 'Lead já convertido anteriormente (idempotente)'
+                : (result?.message || result?.error)
         });
         return JSON.stringify(result);
     })

@@ -38,9 +38,26 @@ interface PerfilLocacao {
 }
 
 interface PerfilVenda {
-  comissaoPadrao: number;
+  comissaoPadrao?: number;
   aceitaExclusividade: boolean;
   tempoExclusividade?: number;
+  modalidadesVenda?: Array<'NAO_EXCLUSIVA' | 'EXCLUSIVA'>;
+  modalidadePreferencial?: 'NAO_EXCLUSIVA' | 'EXCLUSIVA';
+  estrategiaOferta?: 'CONTEXTUAL' | 'DIRETA';
+  politicaModalidades?: {
+    NAO_EXCLUSIVA?: {
+      scriptCurto?: string;
+      scriptDetalhado?: string;
+      rescisaoResumo?: string;
+    };
+    EXCLUSIVA?: {
+      prazoDias?: number;
+      scriptCurto?: string;
+      scriptDetalhado?: string;
+      rescisaoResumo?: string;
+    };
+  };
+  termosProibidosAgente?: string[];
   fazAvaliacaoGratuita: boolean;
   fazFotoProfissional: boolean;
   fazTourVirtual: boolean;
@@ -48,6 +65,22 @@ interface PerfilVenda {
   temParcerias: boolean;
   percentualParceria?: number;
   observacoesVenda?: string;
+  respostaEmAudioAtiva?: boolean;
+  provedorVozTenant?: 'openai' | 'elevenlabs';
+  vozPadraoTenant?: string;
+  elevenLabsVoiceId?: string;
+  elevenLabsModelId?: string;
+  perfilVozTenant?: string;
+}
+
+function resolverModalidadesVenda(venda: PerfilVenda): Array<'NAO_EXCLUSIVA' | 'EXCLUSIVA'> {
+  if (Array.isArray(venda.modalidadesVenda) && venda.modalidadesVenda.length > 0) {
+    const unicas = Array.from(new Set(venda.modalidadesVenda));
+    return unicas.filter((m): m is 'NAO_EXCLUSIVA' | 'EXCLUSIVA' => m === 'NAO_EXCLUSIVA' || m === 'EXCLUSIVA');
+  }
+
+  // Compatibilidade com modelo legado.
+  return venda.aceitaExclusividade ? ['NAO_EXCLUSIVA', 'EXCLUSIVA'] : ['NAO_EXCLUSIVA'];
 }
 
 interface PerfilImobiliaria {
@@ -186,24 +219,41 @@ export function sintetizarPerfilRAG(perfil: PerfilImobiliaria): string {
     secoes.push(`Quando o proprietário deseja VENDER o imóvel:`);
     
     // Comissão
-    secoes.push(`- Comissão padrão: ${venda.comissaoPadrao}% sobre o valor de venda.`);
+    if (typeof venda.comissaoPadrao === 'number' && Number.isFinite(venda.comissaoPadrao) && venda.comissaoPadrao > 0) {
+      secoes.push(`- Comissão padrão: ${venda.comissaoPadrao}% sobre o valor de venda.`);
+    } else {
+      secoes.push(`- Comissão: seguir a política comercial configurada pela imobiliária (sem inventar percentual fixo).`);
+    }
     
-    // Exclusividade — Reframing: gestão de venda + compartilhamento ativo
-    if (venda.aceitaExclusividade) {
-      secoes.push(`- ⚠️ REGRA FUNDAMENTAL SOBRE EXCLUSIVIDADE: Quando o proprietário citar "exclusividade", NUNCA explique de cara. AJA EM 2 PASSOS.`);
-      secoes.push(`  Passo 1: Pergunte "O que você entende por exclusividade hoje?" e aguarde ele responder.`);
-      secoes.push(`  Passo 2: Após a resposta, foque direto na dor dele (o medo de ficar preso). Diga: "Ao invés de UMA empresa trabalhando, a gente compartilha sua venda com TODOS os corretores da cidade. O contrato de Gestão existe apenas porque arcamos com os custos iniciais e só recebemos no sucesso. Ele garante nosso investimento, não prende você a um corretor só."`);
-      
+    const modalidadesVenda = resolverModalidadesVenda(venda);
+    const modalidadePreferencial = venda.modalidadePreferencial
+      && modalidadesVenda.includes(venda.modalidadePreferencial)
+      ? venda.modalidadePreferencial
+      : (modalidadesVenda.includes('EXCLUSIVA') ? 'EXCLUSIVA' : 'NAO_EXCLUSIVA');
+    const estrategiaOferta = venda.estrategiaOferta || 'CONTEXTUAL';
+
+    secoes.push(`- Modalidades de autorização de venda habilitadas: ${modalidadesVenda.map(m => m === 'EXCLUSIVA' ? 'EXCLUSIVA' : 'NÃO EXCLUSIVA').join(' e ')}.`);
+    secoes.push(`- Modalidade preferencial da imobiliária: ${modalidadePreferencial === 'EXCLUSIVA' ? 'EXCLUSIVA' : 'NÃO EXCLUSIVA'}.`);
+    secoes.push(`- Estratégia de oferta comercial no atendimento: ${estrategiaOferta}.`);
+    secoes.push(`- ⚠️ REGRA INQUEBRÁVEL DE LINGUAGEM: NUNCA usar o termo "contrato simples". Sempre usar "autorização de venda".`);
+
+    if (Array.isArray(venda.termosProibidosAgente) && venda.termosProibidosAgente.length > 0) {
+      secoes.push(`- ⚠️ Termos proibidos para o agente nesta imobiliária: ${venda.termosProibidosAgente.join(', ')}.`);
+    }
+
+    if (modalidadesVenda.includes('EXCLUSIVA')) {
+      secoes.push(`- ⚠️ REGRA FUNDAMENTAL SOBRE EXCLUSIVIDADE: quando o proprietário perguntar "é exclusivo?", responda DIRETAMENTE primeiro conforme as modalidades habilitadas (exclusiva, não exclusiva ou ambas).`);
+      secoes.push(`- Depois da resposta direta, faça ressignificação curta: foco em estratégia, coordenação, previsibilidade e qualidade de propostas (não em "rótulo" de modalidade).`);
       secoes.push(`- ⚠️ OBJEÇÃO "VÁRIOS CORRETORES / POUCAS VISITAS": Se o cliente disser que prefere deixar com várias imobiliárias, ou reclamar que já tem vários mas quase não tem visita, use o 'Dilema do Carona' para explicar a causa. Diga que se ele deixa solto, nenhum corretor investe dinheiro em tráfego ou fotos profissionais por medo de outro corretor vender rápido e pegar carona no investimento. O imóvel fica sem marketing. Com a nossa gestão, nós bancamos 100% do marketing pesado, protegemos nossa operação através da gestão, e ainda assim acionamos toda a rede para vender.`);
 
       secoes.push(`- ⚠️ REGRA INQUEBRÁVEL (E SE EU VENDER SOZINHO?): Se ele perguntar se pode vender sozinho sem pagar caso encontre o comprador, NUNCA autorize trabalho gratuito. Diga: "Se você contrata a gente pra fazer tudo e assumir o risco do investimento, o lógico é que se achar um cliente, você repassa pra nós resolvermos a burocracia e garantirmos o pagamento de ponta a ponta. Como na analogia de uma reforma com os empreiteiros: ele cobrará pela reforma mesmo se você for lá na obra lavar as ferramentas dele, certo? Nós somos a sua gestora imobiliária, a comissão continua sendo paga integralmente na venda final sob nossa responsabilidade de execução de papelada."`);
-    } else {
-      secoes.push(`- Não trabalhamos com contratos de exclusividade.`);
-      secoes.push(`- O proprietário fica livre para anunciar em outros lugares.`);
     }
 
-    secoes.push(`- Prazo do Contrato Padrão: 180 dias.`);
-    secoes.push(`  (Se questionado por que 180 dias: Responda de forma simples que este tempo foi definido após estudos comprovarem que a média de tempo de venda de um apartamento na Quadra Dois gira em 180 dias. Reforce que essa média está muito abaixo da média nacional de vendas no mercado imobiliário, indicando alta velocidade na gestão. Não trata-se de prender, e sim de tempo técnico).`);
+    const prazoExclusiva = venda.politicaModalidades?.EXCLUSIVA?.prazoDias || venda.tempoExclusividade || 180;
+    if (modalidadesVenda.includes('EXCLUSIVA')) {
+      secoes.push(`- Prazo padrão da autorização EXCLUSIVA: ${prazoExclusiva} dias.`);
+      secoes.push(`  (Se questionado por que ${prazoExclusiva} dias: explicar de forma simples que é o tempo técnico para executar a estratégia completa com qualidade e previsibilidade).`);
+    }
     
     
     // Serviços inclusos
@@ -228,6 +278,17 @@ export function sintetizarPerfilRAG(perfil: PerfilImobiliaria): string {
     
     if (venda.observacoesVenda) {
       secoes.push(`- Observações: ${venda.observacoesVenda}`);
+    }
+
+    if (venda.respostaEmAudioAtiva) {
+      secoes.push(`- Resposta em áudio: ATIVA.`);
+      secoes.push(`- Perfil vocal: vendedor imobiliário de alta energia, consultivo, confiante e natural.`);
+      if (venda.provedorVozTenant) {
+        secoes.push(`- Provedor de voz configurado: ${venda.provedorVozTenant}.`);
+      }
+      if (venda.vozPadraoTenant) {
+        secoes.push(`- Voz padrão configurada para respostas em áudio: ${venda.vozPadraoTenant}.`);
+      }
     }
   } else {
     secoes.push(`\n## VENDA`);
@@ -286,7 +347,11 @@ export function resumirPerfil(perfil: PerfilImobiliaria): string {
     partes.push(`Locação: ${locacao.taxaAdministracao}% adm`);
   }
   if (dadosGerais.trabalhaComVenda) {
-    partes.push(`Venda: ${venda.comissaoPadrao}% comissão`);
+    if (typeof venda.comissaoPadrao === 'number' && Number.isFinite(venda.comissaoPadrao) && venda.comissaoPadrao > 0) {
+      partes.push(`Venda: ${venda.comissaoPadrao}% comissão`);
+    } else {
+      partes.push('Venda: comissão conforme política da imobiliária');
+    }
   }
   
   return partes.join(' | ');

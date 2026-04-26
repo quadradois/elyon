@@ -18,7 +18,7 @@ ou apresentação. Esta é a versão completa com argumentação de inversão de
 >
 > *Ao invés de UMA empresa trabalhando, a gente compartilha sua venda com TODOS os corretores da cidade que tiverem interesse. Quanto mais gente trabalhando, mais rápido vende.*
 >
-> *O contrato de Gestão de Venda existe por um motivo simples: nós arcamos com todos os custos — material profissional, divulgação, visitas — e só recebemos se a venda for concluída. Ele garante nosso investimento, não prende você a um corretor só."*
+> *A autorização de venda existe para dar segurança e compromisso real com você. Ela é a garantia de que os serviços prometidos serão executados com padrão profissional — material completo, divulgação estruturada, gestão das visitas e negociação organizada até a venda acontecer. Não é para te prender; é para te dar previsibilidade, controle e resultado."*
 
 ---
 
@@ -33,6 +33,16 @@ Aprofunde com o argumento da organização vs. desorganização:
 > *Agora imagine: ao invés de 10 corretores soltos, você tivesse dezenas de corretores e imobiliárias trabalhando de forma organizada, com as informações certas, o preço correto e o material profissional — todos coordenados pela nossa equipe.*
 >
 > *A diferença não é exclusividade. A diferença é desorganização versus estratégia."*
+
+## Dilema do Carona (aplicação obrigatória quando houver objeção de investimento)
+
+Use esse argumento para mostrar por que falta de compromisso sai mais caro:
+
+> *"Aqui entra o Dilema do Carona: quando não existe compromisso claro, o corretor evita investir pesado em anúncio, tráfego, material e divulgação, porque sempre fica a dúvida: 'e se eu investir e outro vender?'.*
+>
+> *Na prática, o imóvel fica meio sem dono: todo mundo diz que está tentando vender, mas ninguém coloca energia, dinheiro e prioridade de verdade. E quem sente isso é o proprietário, vendo o tempo passar, a venda esfriar e aparecer só proposta fraca.*
+>
+> *Com compromisso ativo, muda o jogo. O corretor sabe que pode investir, trabalhar com estratégia e prestar conta do que está fazendo. Você deixa de depender de sorte e passa a ter alguém realmente responsável por fazer a venda acontecer."*
 
 ## Tratativa sobre Prazo de Contrato
 

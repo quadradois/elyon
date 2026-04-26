@@ -71,6 +71,11 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@elyon_redis:6379
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET}
       OPENAI_API_KEY: ${OPENAI_API_KEY:?Defina OPENAI_API_KEY}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_MODEL_ID: ${ELEVENLABS_MODEL_ID:-eleven_multilingual_v2}
+      AUTORIZACAO_VENDA_DOC_URL: ${AUTORIZACAO_VENDA_DOC_URL:-}
+      AUTORIZACAO_VENDA_DOC_NOME: ${AUTORIZACAO_VENDA_DOC_NOME:-modelo_autorizacao_venda.pdf}
+      AUTORIZACAO_VENDA_DOC_CAPTION: ${AUTORIZACAO_VENDA_DOC_CAPTION:-Segue o modelo de autorizacao de venda para voce analisar com calma.}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       EVOLUTION_API_URL: ${EVOLUTION_API_URL}
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
@@ -173,7 +178,7 @@ services:
   #     - crm_quadradois_net
   #   labels:
   #     - "traefik.enable=true"
-  #     - "traefik.http.routers.admin.rule=Host(`admin.quadradois.com.br`)"
+  #     - "traefik.http.routers.admin.rule=Host(`admin.elyon.ia.br`)"
   #     - "traefik.http.routers.admin.entrypoints=websecure"
   #     - "traefik.http.routers.admin.tls.certresolver=letsencrypt"
   #     - "traefik.http.services.admin.loadbalancer.server.port=80"
@@ -209,7 +214,7 @@ services:
       - elyon_network
     labels:
       - "traefik.enable=true"
-      # Traefik dashboard interno em traefik.quadradois.com.br (opcional)
+      # Traefik dashboard interno em traefik.elyon.ia.br (opcional)
       - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.elyon.ia.br`)"
       - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
       - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"

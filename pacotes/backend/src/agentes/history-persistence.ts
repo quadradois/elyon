@@ -1,5 +1,6 @@
 import { getCacheStats, setHistory } from './conversation-cache';
 import { removeHandoffNarration, sliceHistoryPreservingSystem } from './handoff-filters';
+import { sanitizeHistoryForToolProtocol } from './history-tool-sanitizer';
 import { logger } from '../lib/logger';
 import { MAPA_NOMES_AGENTES } from './agent-chain';
 import type { ElyonRunResult } from './types';
@@ -33,7 +34,8 @@ export async function persistirHistoricoSdk(
       const lastAgentNormalizado = normalizarNomeAgente(lastAgentName);
       const historySemNarracao = removeHandoffNarration(history);
       const historyFinal = sliceHistoryPreservingSystem(historySemNarracao, 40, 'Persistência Orchestrator');
-      await setHistory(contatoId, historyFinal, lastAgentNormalizado);
+      const historySanitizado = sanitizeHistoryForToolProtocol(historyFinal, 'Persistência Orchestrator');
+      await setHistory(contatoId, historySanitizado, lastAgentNormalizado);
 
       const newItems: RunItem[] = result.newItems;
       if (newItems && Array.isArray(newItems)) {

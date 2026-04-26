@@ -59,9 +59,9 @@ do_up() {
     echo -e "${GREEN}✅ Serviços iniciados!${NC}"
     echo ""
     echo "URLs disponíveis:"
-    echo "  Frontend: https://elyon.quadradois.com.br"
-    echo "  API:      https://api.elyon.quadradois.com.br"
-    echo "  Admin:    https://admin.quadradois.com.br"
+    echo "  Frontend: https://crm.elyon.ia.br"
+    echo "  API:      https://api.elyon.ia.br"
+    echo "  Site:     https://elyon.ia.br"
     echo ""
 }
 

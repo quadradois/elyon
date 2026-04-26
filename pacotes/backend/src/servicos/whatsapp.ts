@@ -60,7 +60,7 @@ export class WhatsAppService {
       console.log('Instância criada com sucesso:', response.data);
 
       // Auto-configurar webhook após criação
-      const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.quadradois.com.br';
+      const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.ia.br';
       const webhookUrl = `${backendUrl}/api/webhooks/whatsapp?instance=${this.instanceName}`;
 
       try {
@@ -161,6 +161,90 @@ export class WhatsAppService {
         }
       }
       console.error('Erro ao enviar mensagem WhatsApp:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  async enviarMensagemAudio(numero: string, audioBase64: string, ptt: boolean = true): Promise<any> {
+    let numeroFormatado = numero.replace(/\D/g, '');
+    if (numeroFormatado.length === 10 || numeroFormatado.length === 11) {
+      numeroFormatado = `55${numeroFormatado}`;
+    }
+
+    const candidatos = [
+      {
+        url: `${this.apiUrl}/message/sendWhatsAppAudio/${this.instanceName}`,
+        body: {
+          number: numeroFormatado,
+          audio: audioBase64,
+          ptt,
+          delay: 1200,
+        },
+      },
+      {
+        url: `${this.apiUrl}/message/sendMedia/${this.instanceName}`,
+        body: {
+          number: numeroFormatado,
+          mediatype: 'audio',
+          mimetype: 'audio/mpeg',
+          media: audioBase64,
+          fileName: `audio_${Date.now()}.mp3`,
+          ptt,
+          delay: 1200,
+        },
+      },
+    ];
+
+    let ultimoErro: any;
+    for (const tentativa of candidatos) {
+      try {
+        const response = await axios.post(tentativa.url, tentativa.body, { headers: this.getHeaders() });
+        return response.data;
+      } catch (error: any) {
+        ultimoErro = error;
+      }
+    }
+
+    console.error('[WhatsApp] Erro ao enviar áudio:', ultimoErro?.response?.data || ultimoErro?.message || ultimoErro);
+    throw ultimoErro;
+  }
+
+  async enviarMensagemDocumento(
+    numero: string,
+    media: string,
+    options?: {
+      fileName?: string;
+      mimeType?: string;
+      caption?: string;
+    }
+  ): Promise<any> {
+    let numeroFormatado = numero.replace(/\D/g, '');
+    if (numeroFormatado.length === 10 || numeroFormatado.length === 11) {
+      numeroFormatado = `55${numeroFormatado}`;
+    }
+
+    const payload: any = {
+      number: numeroFormatado,
+      mediatype: 'document',
+      mimetype: options?.mimeType || 'application/pdf',
+      media,
+      fileName: options?.fileName || `autorizacao_venda_${Date.now()}.pdf`,
+      delay: 1200,
+    };
+
+    if (options?.caption) {
+      payload.caption = options.caption;
+    }
+
+    try {
+      const response = await axios.post(
+        `${this.apiUrl}/message/sendMedia/${this.instanceName}`,
+        payload,
+        { headers: this.getHeaders() }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error('[WhatsApp] Erro ao enviar documento:', error?.response?.data || error?.message || error);
       throw error;
     }
   }

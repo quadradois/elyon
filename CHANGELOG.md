@@ -157,9 +157,9 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 - Prisma ORM com PostgreSQL
 - Autenticação multi-tenant
 
-[0.2.0]: https://github.com/quadradois/elyon/compare/v0.1.0...v0.2.0
-[0.2.1]: https://github.com/quadradois/elyon/compare/v0.2.0...v0.2.1
-[0.2.2]: https://github.com/quadradois/elyon/compare/v0.2.1...v0.2.2
-[0.3.0]: https://github.com/quadradois/elyon/compare/v0.2.3...v0.3.0
-[0.2.3]: https://github.com/quadradois/elyon/compare/v0.2.2...v0.2.3
-[0.1.0]: https://github.com/quadradois/elyon/releases/tag/v0.1.0
+[0.2.0]: https://github.com/elyon-ai/elyon/compare/v0.1.0...v0.2.0
+[0.2.1]: https://github.com/elyon-ai/elyon/compare/v0.2.0...v0.2.1
+[0.2.2]: https://github.com/elyon-ai/elyon/compare/v0.2.1...v0.2.2
+[0.3.0]: https://github.com/elyon-ai/elyon/compare/v0.2.3...v0.3.0
+[0.2.3]: https://github.com/elyon-ai/elyon/compare/v0.2.2...v0.2.3
+[0.1.0]: https://github.com/elyon-ai/elyon/releases/tag/v0.1.0

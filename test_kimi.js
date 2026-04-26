@@ -4,7 +4,7 @@ const { descriptografar } = require('./src/lib/crypto');
 const crypto = require('crypto');
 
 async function main() {
-  const t = await prisma.tenant.findUnique({ where: { slug: 'quadradois' } });
+  const t = await prisma.tenant.findUnique({ where: { slug: 'elyon' } });
   
   if (!t.llmApiKeyCriptografada) {
     console.log("Sem key");
@@ -124,7 +124,7 @@ async function main() {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + key,
-      'HTTP-Referer': 'https://elyon.quadradois.com.br',
+      'HTTP-Referer': 'https://crm.elyon.ia.br',
       'X-Title': 'Elyon'
     },
     body: JSON.stringify(payload)

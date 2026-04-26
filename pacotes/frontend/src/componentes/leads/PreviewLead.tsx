@@ -4,57 +4,102 @@
  * Exibe TODOS os dados disponíveis no lead.
  */
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   X, Phone, Mail, ExternalLink, Home, Bot, Calendar,
   MessageSquare, Activity, Copy, Check, Flame, Zap,
   Snowflake, AlertCircle, Clock, UserCheck, Building2,
   TrendingUp, FileText, BadgeCheck, Users, MapPin,
-  DoorOpen, Layers, Car, Maximize2,
+  DoorOpen, Layers, Car, Maximize2, Loader2, RefreshCw, ShieldAlert,
+  ShieldCheck, Send, Repeat, Plus,
 } from 'lucide-react';
 import { ChatPanel } from './ChatPanel';
 import { AbaDocumentos } from './AbaDocumentos';
 import { AbaContato } from './AbaContato';
 import type { LeadPriorizado, AtividadePriorizado } from '../../ganchos/useLeadsPriorizados';
 import { toast } from 'sonner';
+import { api } from '../../servicos/api';
+import { getStatusLeadUI, getTemperaturaLeadUI } from './lead-ui';
 
 type AbaPreview = 'resumo' | 'chat' | 'imovel' | 'timeline' | 'docs' | 'contato';
 
 interface PreviewLeadProps {
   lead: LeadPriorizado;
   onFechar: () => void;
+  onLeadAtualizado?: () => Promise<void> | void;
 }
+
+type CockpitAdminResponse = {
+  agenteAdmin: {
+    id: string;
+    nome: string;
+    tipoAgente: string;
+    status: string;
+    estaAtivo: boolean;
+    sessaoWhatsapp?: {
+      id: string;
+      nome: string;
+      numeroWhatsapp: string | null;
+      status: string;
+    } | null;
+  } | null;
+  integracaoCRM: {
+    id: string;
+    ativo: boolean;
+    apiUrl: string;
+    temApiKey: boolean;
+    tenantIdDestino: number | null;
+    ultimoTesteEm: string | null;
+    ultimoTesteOk: boolean | null;
+    ultimoErro: string | null;
+    totalEnvios: number;
+    totalSucessos: number;
+    totalFalhas: number;
+    ultimoEnvioEm: string | null;
+  } | null;
+  crmLead: {
+    statusLead: string;
+    proprietarioId: number | null;
+    propertyId: number | null;
+    propertyCode: string | null;
+    syncStatus: string | null;
+    syncError: string | null;
+    enviadoEm: string | null;
+  };
+};
+
+type CockpitEvento = {
+  id: string;
+  acao: string;
+  detalhes?: Record<string, any>;
+  criadoEm: string;
+  usuario?: { id: string; nome?: string | null; email?: string | null } | null;
+};
+
+type GovernancaLead = {
+  prontidaoQualificacao: 'COMPLETA' | 'PARCIAL' | string;
+  camposCriticos: {
+    total: number;
+    preenchidos: number;
+    faltantes: string[];
+  };
+  sourceOfTruth: {
+    lastSourceUpdateAt: string | null;
+    totalCamposRastreados: number;
+    fields: Array<{
+      field: string;
+      source: string;
+      updatedAt?: string | null;
+    }>;
+  };
+};
 
 // ─── helpers ────────────────────────────────────────────────────────────────
-function getStatusConfig(status: string) {
-  const mapa: Record<string, { label: string; cor: string }> = {
-    NOVO: { label: 'Novo', cor: 'bg-indigo-100 text-indigo-700' },
-    QUALIFICADO: { label: 'Qualificado', cor: 'bg-indigo-100 text-indigo-700' },
-    TENTATIVA_AGENDAMENTO: { label: 'Tentando Agendar', cor: 'bg-amber-100 text-amber-700' },
-    VISITA_AGENDADA: { label: 'Visita Agendada', cor: 'bg-amber-100 text-amber-700' },
-    CONTATANDO: { label: 'Contatando', cor: 'bg-amber-100 text-amber-700' },
-    AVALIACAO_EM_ANDAMENTO: { label: 'Avaliação', cor: 'bg-violet-100 text-violet-700' },
-    DOCUMENTACAO: { label: 'Documentação', cor: 'bg-violet-100 text-violet-700' },
-    EM_NEGOCIACAO: { label: 'Negociação', cor: 'bg-violet-100 text-violet-700' },
-    ONBOARDING: { label: 'Onboarding', cor: 'bg-emerald-100 text-emerald-700' },
-    CAPTADO: { label: 'Captado ✓', cor: 'bg-emerald-100 text-emerald-700' },
-    PERDIDO: { label: 'Perdido', cor: 'bg-red-100 text-red-700' },
-    ARQUIVADO: { label: 'Arquivado', cor: 'bg-slate-100 text-slate-600' },
-  };
-  return mapa[status] || { label: status, cor: 'bg-slate-100 text-slate-600' };
-}
-
 function TemperaturaIcon({ temp }: { temp: string | null }) {
   if (temp === 'QUENTE') return <Flame className="w-3.5 h-3.5 text-red-500" />;
   if (temp === 'MORNO') return <Zap className="w-3.5 h-3.5 text-amber-500" />;
   return <Snowflake className="w-3.5 h-3.5 text-blue-400" />;
-}
-
-function temLabel(temp: string | null) {
-  if (temp === 'QUENTE') return 'Quente';
-  if (temp === 'MORNO') return 'Morno';
-  return 'Frio';
 }
 
 
@@ -95,11 +140,167 @@ function SecaoCard({ titulo, children }: { titulo: string; children: React.React
 }
 
 // ─── Componente principal ────────────────────────────────────────────────────
-export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
+export function PreviewLead({ lead, onFechar, onLeadAtualizado }: PreviewLeadProps) {
   const navigate = useNavigate();
   const [aba, setAba] = useState<AbaPreview>('resumo');
   const [copiado, setCopiado] = useState<string | null>(null);
-  const statusCfg = getStatusConfig(lead.status);
+  const [cockpitAdmin, setCockpitAdmin] = useState<CockpitAdminResponse | null>(null);
+  const [eventosCockpit, setEventosCockpit] = useState<CockpitEvento[]>([]);
+  const [governanca, setGovernanca] = useState<GovernancaLead | null>(null);
+  const [carregandoOperacao, setCarregandoOperacao] = useState(false);
+  const [processandoCrm, setProcessandoCrm] = useState<null | 'enviar' | 'reenviar' | 'status'>(null);
+
+  const [atividades, setAtividades] = useState<AtividadePriorizado[]>(lead.atividades || []);
+  const [criandoAtividade, setCriandoAtividade] = useState(false);
+  const [atividadeNova, setAtividadeNova] = useState({
+    tipo: 'TAREFA',
+    titulo: '',
+    descricao: '',
+    agendadoPara: '',
+  });
+  const [atividadeAcaoId, setAtividadeAcaoId] = useState<string | null>(null);
+  const statusCfg = getStatusLeadUI(lead.status);
+  const tempUi = getTemperaturaLeadUI(lead.temperatura);
+
+  useEffect(() => {
+    setAtividades(lead.atividades || []);
+  }, [lead.id, lead.atividades]);
+
+  const carregarOperacao = async () => {
+    try {
+      setCarregandoOperacao(true);
+      const [adminRes, eventosRes, leadRes] = await Promise.all([
+        api.get(`/leads/${lead.id}/cockpit-admin`),
+        api.get(`/leads/${lead.id}/cockpit-eventos?limite=20`),
+        api.get(`/leads/${lead.id}`),
+      ]);
+      setCockpitAdmin(adminRes.data || null);
+      setEventosCockpit(eventosRes.data?.eventos || []);
+      setGovernanca(leadRes.data?.governanca || null);
+    } catch (error) {
+      console.error('Erro ao carregar operação do lead:', error);
+      toast.error('Erro ao carregar dados operacionais do lead');
+    } finally {
+      setCarregandoOperacao(false);
+    }
+  };
+
+  useEffect(() => {
+    carregarOperacao();
+  }, [lead.id]);
+
+  const registrarEventoCockpit = async (acao: string, detalhes?: Record<string, any>) => {
+    try {
+      await api.post(`/leads/${lead.id}/cockpit-evento`, { acao, detalhes });
+    } catch (error) {
+      console.error('Erro ao registrar evento do cockpit:', error);
+    }
+  };
+
+  const executarAcaoCrm = async (acao: 'enviar' | 'reenviar' | 'status') => {
+    try {
+      setProcessandoCrm(acao);
+      await registrarEventoCockpit('CRM_ACAO', { tipo: acao, etapa: 'inicio' });
+
+      if (acao === 'status') {
+        const resp = await api.get(`/leads/${lead.id}/crm/status`);
+        if (resp.data?.sucesso) {
+          toast.success('Status CRM atualizado');
+          await registrarEventoCockpit('CRM_RESULTADO', { tipo: acao, sucesso: true });
+        } else {
+          toast.warning(resp.data?.resultado?.error || 'Sem confirmação de status no CRM');
+          await registrarEventoCockpit('CRM_RESULTADO', { tipo: acao, sucesso: false, resposta: resp.data?.resultado?.error });
+        }
+      } else {
+        const endpoint = acao === 'enviar' ? 'enviar' : 'reenviar';
+        const resp = await api.post(`/leads/${lead.id}/crm/${endpoint}`);
+        if (resp.data?.sucesso) {
+          toast.success(resp.data?.mensagem || 'Operação CRM concluída');
+          await registrarEventoCockpit('CRM_RESULTADO', { tipo: acao, sucesso: true });
+        } else {
+          toast.error(resp.data?.erro || 'Falha ao operar CRM');
+          await registrarEventoCockpit('CRM_RESULTADO', { tipo: acao, sucesso: false, resposta: resp.data?.erro });
+        }
+      }
+
+      await carregarOperacao();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.erro || 'Erro ao executar ação CRM');
+      await registrarEventoCockpit('CRM_RESULTADO', { tipo: acao, sucesso: false, resposta: error?.response?.data?.erro || 'erro' });
+    } finally {
+      setProcessandoCrm(null);
+    }
+  };
+
+  const atualizarAtividadesLocal = async () => {
+    try {
+      const res = await api.get(`/leads/${lead.id}`);
+      setAtividades(res.data?.atividades || []);
+      if (onLeadAtualizado) await onLeadAtualizado();
+    } catch (error) {
+      console.error('Erro ao atualizar atividades:', error);
+    }
+  };
+
+  const acionarAtividade = async (atividadeId: string, acao: 'completar' | 'cancelar' | 'reagendar') => {
+    try {
+      setAtividadeAcaoId(atividadeId);
+      const payload: Record<string, any> = { acao };
+
+      if (acao === 'cancelar') {
+        const obs = window.prompt('Motivo do cancelamento (opcional):', '') || '';
+        payload.observacao = obs;
+      }
+
+      if (acao === 'reagendar') {
+        const novaData = window.prompt('Nova data/hora (YYYY-MM-DDTHH:mm):', '');
+        if (!novaData) return;
+        payload.novaData = novaData;
+      }
+
+      await api.patch(`/leads/${lead.id}/atividades/${atividadeId}`, payload);
+      await registrarEventoCockpit('DECISAO_RESULTADO', { tipo: `atividade_${acao}`, sucesso: true, atividadeId });
+      toast.success('Atividade atualizada');
+      await atualizarAtividadesLocal();
+    } catch (error) {
+      console.error('Erro ao atualizar atividade:', error);
+      await registrarEventoCockpit('DECISAO_RESULTADO', { tipo: `atividade_${acao}`, sucesso: false, atividadeId });
+      toast.error('Erro ao atualizar atividade');
+    } finally {
+      setAtividadeAcaoId(null);
+    }
+  };
+
+  const criarAtividade = async () => {
+    if (!atividadeNova.titulo.trim()) {
+      toast.error('Título da atividade é obrigatório');
+      return;
+    }
+    try {
+      setCriandoAtividade(true);
+      await api.post(`/leads/${lead.id}/atividades`, {
+        tipo: atividadeNova.tipo,
+        titulo: atividadeNova.titulo.trim(),
+        descricao: atividadeNova.descricao.trim() || undefined,
+        agendadoPara: atividadeNova.agendadoPara || undefined,
+      });
+      await registrarEventoCockpit('DECISAO_RESULTADO', { tipo: 'atividade_criada', sucesso: true });
+      toast.success('Atividade criada');
+      setAtividadeNova({ tipo: 'TAREFA', titulo: '', descricao: '', agendadoPara: '' });
+      await atualizarAtividadesLocal();
+    } catch (error) {
+      console.error('Erro ao criar atividade:', error);
+      await registrarEventoCockpit('DECISAO_RESULTADO', { tipo: 'atividade_criada', sucesso: false });
+      toast.error('Erro ao criar atividade');
+    } finally {
+      setCriandoAtividade(false);
+    }
+  };
+
+  const pendentesCriticos = useMemo(
+    () => governanca?.camposCriticos?.faltantes || [],
+    [governanca]
+  );
 
   const copiar = (texto: string, chave: string) => {
     navigator.clipboard.writeText(texto);
@@ -109,22 +310,22 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+    <div className="flex flex-col h-full bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
 
       {/* ══ HEADER ══ */}
-      <div className="px-4 pt-4 pb-3 border-b border-slate-100 flex-shrink-0">
-        <div className="flex items-start justify-between mb-2">
+      <div className="px-3 pt-3 pb-2 border-b border-slate-100 flex-shrink-0">
+        <div className="flex items-start justify-between mb-1.5">
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-bold text-slate-900 leading-tight truncate">
+            <h2 className="text-[15px] font-bold text-slate-900 leading-tight truncate">
               {lead.nome || 'Sem nome'}
             </h2>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <span className={`inline-flex text-[11px] font-bold px-2 py-0.5 rounded-full ${statusCfg.cor}`}>
+              <span className={`inline-flex text-[11px] font-bold px-2 py-0.5 rounded-full ${statusCfg.className}`}>
                 {statusCfg.label}
               </span>
               <span className="flex items-center gap-1 text-xs font-medium text-slate-500">
                 <TemperaturaIcon temp={lead.temperatura} />
-                {temLabel(lead.temperatura)}
+                {tempUi.label}
               </span>
               {lead.faseSPIN && (
                 <span className="text-[10px] font-medium text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full">
@@ -136,99 +337,84 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
           <div className="flex items-center gap-1 ml-2 flex-shrink-0">
             <button
               onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-200 transition-all"
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-all"
             >
               <ExternalLink className="w-3 h-3" />
               Abrir
             </button>
             <button
               onClick={onFechar}
-              className="w-7 h-7 flex items-center justify-center rounded-xl hover:bg-slate-100 transition-colors"
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors"
             >
               <X className="w-4 h-4 text-slate-500" />
             </button>
           </div>
         </div>
 
-        {/* Contatos — apenas o essencial para acesso rápido */}
-        <div className="flex flex-col gap-1">
-          {lead.telefone && (
-            <button
-              onClick={() => copiar(lead.telefone!, 'tel')}
-              className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 group w-fit"
-            >
-              <Phone className="w-3.5 h-3.5 text-slate-400" />
-              <span className="font-medium">{lead.telefone}</span>
-              {copiado === 'tel'
-                ? <Check className="w-3 h-3 text-emerald-500" />
-                : <Copy className="w-3 h-3 text-slate-300 group-hover:text-slate-400" />
-              }
-              {lead.telefone2 && <span className="text-slate-400 text-xs">+{lead.telefone2}</span>}
-            </button>
-          )}
-          {lead.email && (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Mail className="w-3 h-3 text-slate-400" />
-              <span className="truncate">{lead.email}</span>
-            </div>
-          )}
-          {/* CPF como badge compacto quando disponível */}
-          {lead.cpf && (
-            <button
-              onClick={() => copiar(lead.cpf!, 'cpf')}
-              className="flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-slate-600 group w-fit"
-            >
-              <BadgeCheck className="w-3 h-3" />
-              <span className="font-mono">
-                {lead.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.***.**$4')}
-              </span>
-              {copiado === 'cpf'
-                ? <Check className="w-3 h-3 text-emerald-500" />
-                : <Copy className="w-3 h-3 opacity-0 group-hover:opacity-60" />
-              }
-            </button>
-          )}
-          {lead.campanhaOrigem && (
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Users className="w-3 h-3" />
-              <span className="truncate">{lead.campanhaOrigem.nome}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ══ SCORE BAR ══ */}
-      <div className="px-4 py-2.5 flex-shrink-0 border-b border-slate-100">
+        {/* Contexto do lead + score em faixa única */}
         <div className={`
-          flex items-center gap-3 px-3 py-2.5 rounded-xl border
+          mt-2 flex items-center justify-between gap-3 px-2.5 py-2 rounded-lg border
           ${lead.scoreComposto >= 60 ? 'bg-emerald-50 border-emerald-200' : lead.scoreComposto >= 35 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}
         `}>
-          <div className={`
-            w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 font-bold
-            ${lead.scoreComposto >= 60 ? 'bg-emerald-500 text-white' : lead.scoreComposto >= 35 ? 'bg-amber-500 text-white' : 'bg-slate-400 text-white'}
-          `}>
-            <span className="text-sm leading-none">{lead.scoreComposto}</span>
-            <span className="text-[9px] leading-none opacity-80">pts</span>
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className={`text-xs font-bold ${lead.scoreComposto >= 60 ? 'text-emerald-700' : lead.scoreComposto >= 35 ? 'text-amber-700' : 'text-slate-600'}`}>
-              {lead.scoreComposto >= 60 ? '🏆 Alto potencial' : lead.scoreComposto >= 35 ? '⚠️ Potencial em evolução' : '📋 Em qualificação'}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">
-              🎯 Qualif: <strong>{lead.scoreQualificacao}</strong>
-              &nbsp;·&nbsp;
-              ⚡ Urgência: <strong>{lead.urgencia}</strong>
-            </p>
-          </div>
-          <div className="text-right flex-shrink-0">
-            <p className="text-[10px] text-slate-400">{lead.totalMensagens} msgs</p>
-            {lead.horasSemResposta && lead.horasSemResposta > 1 && (
-              <p className={`text-[10px] font-bold ${lead.horasSemResposta > 4 ? 'text-red-600' : 'text-amber-600'}`}>
-                {lead.horasSemResposta < 24
-                  ? `${Math.round(lead.horasSemResposta)}h sem resp.`
-                  : `${Math.round(lead.horasSemResposta / 24)}d sem resp.`}
-              </p>
+          <div className="min-w-0 flex flex-wrap items-center gap-x-3 gap-y-1">
+            {lead.telefone && (
+              <button
+                onClick={() => copiar(lead.telefone!, 'tel')}
+                className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 group w-fit"
+              >
+                <Phone className="w-3.5 h-3.5 text-slate-400" />
+                <span className="font-medium">{lead.telefone}</span>
+                {copiado === 'tel'
+                  ? <Check className="w-3 h-3 text-emerald-500" />
+                  : <Copy className="w-3 h-3 text-slate-300 group-hover:text-slate-400" />
+                }
+              </button>
             )}
+            {lead.campanhaOrigem && (
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <Users className="w-3 h-3" />
+                <span className="truncate">{lead.campanhaOrigem.nome}</span>
+              </span>
+            )}
+            {lead.email && (
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                <Mail className="w-3 h-3 text-slate-400" />
+                <span className="truncate">{lead.email}</span>
+              </span>
+            )}
+            {lead.cpf && (
+              <button
+                onClick={() => copiar(lead.cpf!, 'cpf')}
+                className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-600 group w-fit"
+              >
+                <BadgeCheck className="w-3 h-3" />
+                <span className="font-mono">
+                  {lead.cpf.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.***.**$4')}
+                </span>
+                {copiado === 'cpf'
+                  ? <Check className="w-3 h-3 text-emerald-500" />
+                  : <Copy className="w-3 h-3 opacity-0 group-hover:opacity-60" />
+                }
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className={`
+              w-8 h-8 rounded-lg flex flex-col items-center justify-center font-bold
+              ${lead.scoreComposto >= 60 ? 'bg-emerald-500 text-white' : lead.scoreComposto >= 35 ? 'bg-amber-500 text-white' : 'bg-slate-400 text-white'}
+            `}>
+              <span className="text-xs leading-none">{lead.scoreComposto}</span>
+              <span className="text-[8px] leading-none opacity-80">pts</span>
+            </div>
+            <div className="text-right">
+              <p className={`text-[11px] font-bold ${lead.scoreComposto >= 60 ? 'text-emerald-700' : lead.scoreComposto >= 35 ? 'text-amber-700' : 'text-slate-600'}`}>
+                {lead.scoreComposto >= 60 ? 'Alto potencial' : lead.scoreComposto >= 35 ? 'Em evolução' : 'Em qualificação'}
+              </p>
+              <p className="text-[10px] text-slate-400">
+                Qualif: <strong>{lead.scoreQualificacao}</strong> · Urg: <strong>{lead.urgencia}</strong> · {lead.totalMensagens} msgs
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -247,7 +433,7 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
             key={tab.id}
             onClick={() => setAba(tab.id)}
             className={`
-              flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold border-b-2 whitespace-nowrap transition-all flex-shrink-0
+              flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold border-b-2 whitespace-nowrap transition-all flex-shrink-0
               ${aba === tab.id ? 'border-indigo-500 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'}
             `}
           >
@@ -259,10 +445,34 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
 
       {/* ══ CONTEÚDO ══ */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        {aba === 'resumo'   && <AbaResumo lead={lead} />}
+        {aba === 'resumo'   && (
+          <AbaResumo
+            lead={lead}
+            cockpitAdmin={cockpitAdmin}
+            governanca={governanca}
+            eventosCockpit={eventosCockpit}
+            carregandoOperacao={carregandoOperacao}
+            processandoCrm={processandoCrm}
+            pendentesCriticos={pendentesCriticos}
+            onAtualizarOperacao={carregarOperacao}
+            onAcaoCrm={executarAcaoCrm}
+          />
+        )}
         {aba === 'contato'  && <AbaContato lead={lead} />}
         {aba === 'imovel'   && <AbaImovel lead={lead} />}
-        {aba === 'timeline' && <AbaTimeline lead={lead} />}
+        {aba === 'timeline' && (
+          <AbaTimeline
+            leadId={lead.id}
+            leadNome={lead.nome || 'Lead'}
+            atividades={atividades}
+            criandoAtividade={criandoAtividade}
+            atividadeNova={atividadeNova}
+            atividadeAcaoId={atividadeAcaoId}
+            onAtividadeNovaChange={setAtividadeNova}
+            onCriarAtividade={criarAtividade}
+            onAcionarAtividade={acionarAtividade}
+          />
+        )}
         {aba === 'docs' && (
           <AbaDocumentos leadId={lead.id} leadNome={lead.nome || 'Lead'} />
         )}
@@ -285,12 +495,164 @@ export function PreviewLead({ lead, onFechar }: PreviewLeadProps) {
 // ══════════════════════════════════════════════════
 // ABA RESUMO IA — SPIN completo + dores + ações
 // ══════════════════════════════════════════════════
-function AbaResumo({ lead }: { lead: LeadPriorizado }) {
+function AbaResumo({
+  lead,
+  cockpitAdmin,
+  governanca,
+  eventosCockpit,
+  carregandoOperacao,
+  processandoCrm,
+  pendentesCriticos,
+  onAtualizarOperacao,
+  onAcaoCrm,
+}: {
+  lead: LeadPriorizado;
+  cockpitAdmin: CockpitAdminResponse | null;
+  governanca: GovernancaLead | null;
+  eventosCockpit: CockpitEvento[];
+  carregandoOperacao: boolean;
+  processandoCrm: null | 'enviar' | 'reenviar' | 'status';
+  pendentesCriticos: string[];
+  onAtualizarOperacao: () => Promise<void>;
+  onAcaoCrm: (acao: 'enviar' | 'reenviar' | 'status') => Promise<void>;
+}) {
   const temSpin = lead.situacaoAtual || lead.motivacaoVenda || lead.prazoDesejado ||
     lead.consequencias || lead.custosAtuais || lead.expectativaServico;
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-3 space-y-3">
+      {/* Cockpit operacional */}
+      <div className="rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Cockpit Operacional</p>
+          <button
+            onClick={onAtualizarOperacao}
+            className="w-6 h-6 rounded-md hover:bg-slate-200/70 flex items-center justify-center transition-colors"
+            title="Atualizar operação"
+            disabled={carregandoOperacao}
+          >
+            {carregandoOperacao ? <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" /> : <RefreshCw className="w-3.5 h-3.5 text-slate-500" />}
+          </button>
+        </div>
+        <div className="p-3 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-slate-200 bg-white p-2">
+              <p className="text-[10px] text-slate-400 font-bold uppercase">Agente</p>
+              <p className="text-xs font-semibold text-slate-700 mt-0.5">{cockpitAdmin?.agenteAdmin?.nome || 'Não configurado'}</p>
+              <p className={`text-[11px] mt-0.5 ${cockpitAdmin?.agenteAdmin?.estaAtivo ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {cockpitAdmin?.agenteAdmin?.estaAtivo ? 'Ativo' : 'Inativo'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-2">
+              <p className="text-[10px] text-slate-400 font-bold uppercase">WhatsApp Sessão</p>
+              <p className="text-xs font-semibold text-slate-700 mt-0.5">{cockpitAdmin?.agenteAdmin?.sessaoWhatsapp?.nome || 'Sem sessão'}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">{cockpitAdmin?.agenteAdmin?.sessaoWhatsapp?.status || '---'}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-2">
+              <p className="text-[10px] text-slate-400 font-bold uppercase">Integração CRM</p>
+              <p className={`text-xs font-semibold mt-0.5 ${cockpitAdmin?.integracaoCRM?.ativo ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {cockpitAdmin?.integracaoCRM?.ativo ? 'Ativa' : 'Inativa'}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                {cockpitAdmin?.integracaoCRM?.ultimoEnvioEm
+                  ? `Último envio: ${new Date(cockpitAdmin.integracaoCRM.ultimoEnvioEm).toLocaleDateString('pt-BR')}`
+                  : 'Sem envios'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-2">
+              <p className="text-[10px] text-slate-400 font-bold uppercase">Lead no CRM</p>
+              <p className="text-xs font-semibold text-slate-700 mt-0.5">{cockpitAdmin?.crmLead?.syncStatus || 'Sem status'}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                {cockpitAdmin?.crmLead?.propertyCode ? `Código: ${cockpitAdmin.crmLead.propertyCode}` : 'Sem código'}
+              </p>
+            </div>
+          </div>
+
+          {cockpitAdmin?.crmLead?.syncError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2">
+              <p className="text-[11px] font-semibold text-red-700">Erro CRM: {cockpitAdmin.crmLead.syncError}</p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => onAcaoCrm('enviar')}
+              disabled={processandoCrm !== null}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50"
+            >
+              {processandoCrm === 'enviar' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              Enviar CRM
+            </button>
+            <button
+              onClick={() => onAcaoCrm('reenviar')}
+              disabled={processandoCrm !== null}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {processandoCrm === 'reenviar' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Repeat className="w-3.5 h-3.5" />}
+              Reenviar CRM
+            </button>
+            <button
+              onClick={() => onAcaoCrm('status')}
+              disabled={processandoCrm !== null}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50"
+            >
+              {processandoCrm === 'status' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              Atualizar Status CRM
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Governança */}
+      <div className={`
+        rounded-xl border overflow-hidden
+        ${governanca?.prontidaoQualificacao === 'COMPLETA'
+          ? 'border-emerald-200'
+          : 'border-amber-200'}
+      `}>
+        <div className={`
+          px-3 py-2 border-b flex items-center justify-between
+          ${governanca?.prontidaoQualificacao === 'COMPLETA'
+            ? 'bg-emerald-50 border-emerald-200'
+            : 'bg-amber-50 border-amber-200'}
+        `}>
+          <p className={`text-[11px] font-bold uppercase tracking-wider ${governanca?.prontidaoQualificacao === 'COMPLETA' ? 'text-emerald-700' : 'text-amber-700'}`}>
+            Governança da Qualificação
+          </p>
+          <span className={`text-[11px] font-semibold ${governanca?.prontidaoQualificacao === 'COMPLETA' ? 'text-emerald-700' : 'text-amber-700'}`}>
+            {governanca?.prontidaoQualificacao || 'PARCIAL'}
+          </span>
+        </div>
+        <div className="p-3 space-y-2">
+          <div className="flex items-center gap-2 text-xs">
+            {governanca?.prontidaoQualificacao === 'COMPLETA'
+              ? <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              : <ShieldAlert className="w-4 h-4 text-amber-600" />
+            }
+            <span className="text-slate-600">
+              Criticidade: {governanca?.camposCriticos?.preenchidos ?? 0}/{governanca?.camposCriticos?.total ?? 0} campos críticos preenchidos
+            </span>
+          </div>
+          {pendentesCriticos.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {pendentesCriticos.map((campo) => (
+                <span key={campo} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  Falta: {campo}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="text-[11px] text-slate-500">
+            Última atualização de fonte:
+            {' '}
+            <span className="font-medium text-slate-700">
+              {governanca?.sourceOfTruth?.lastSourceUpdateAt
+                ? new Date(governanca.sourceOfTruth.lastSourceUpdateAt).toLocaleString('pt-BR')
+                : 'Sem atualização registrada'}
+            </span>
+          </p>
+        </div>
+      </div>
 
       {/* Resumo IA */}
       <div className="rounded-xl bg-gradient-to-br from-indigo-50 to-slate-50 border border-indigo-100 p-3">
@@ -483,6 +845,27 @@ function AbaResumo({ lead }: { lead: LeadPriorizado }) {
         </span>
         <span>Criado {new Date(lead.criadoEm).toLocaleDateString('pt-BR')}</span>
       </div>
+
+      {/* Telemetria recente */}
+      <div className="rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
+          <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Telemetria Operacional</p>
+        </div>
+        <div className="p-3 space-y-2">
+          {eventosCockpit.length === 0 ? (
+            <p className="text-xs text-slate-400">Sem eventos recentes</p>
+          ) : (
+            eventosCockpit.slice(0, 6).map((ev) => (
+              <div key={ev.id} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+                <p className="text-[11px] font-semibold text-slate-700">{ev.acao.replace('COCKPIT_', '')}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  {new Date(ev.criadoEm).toLocaleString('pt-BR')} · {ev.usuario?.nome || 'Sistema'}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -517,7 +900,7 @@ function AbaImovel({ lead }: { lead: LeadPriorizado }) {
   }
 
   return (
-    <div className="p-4 space-y-5">
+    <div className="p-3 space-y-4">
 
       {/* ══ BLOCO 1: DADOS DO AGENTE (pré-contrato) ══ */}
       {temDadosAgente && (
@@ -698,7 +1081,21 @@ const STATUS_AGENDAMENTO_CFG: Record<string, { label: string; cor: string }> = {
   NAO_COMPARECEU: { label: '👻 No-show', cor: 'text-red-400' },
 };
 
-function CardAtividade({ atividade, destaque }: { atividade: AtividadePriorizado; destaque?: boolean }) {
+function CardAtividade({
+  atividade,
+  destaque,
+  loading,
+  onCompletar,
+  onCancelar,
+  onReagendar,
+}: {
+  atividade: AtividadePriorizado;
+  destaque?: boolean;
+  loading?: boolean;
+  onCompletar?: () => void;
+  onCancelar?: () => void;
+  onReagendar?: () => void;
+}) {
   const cfg = TIPO_ATIVIDADE_CFG[atividade.tipo] || { emoji: '📌', cor: 'bg-slate-100 text-slate-700' };
   const statusCfg = atividade.statusAgendamento
     ? STATUS_AGENDAMENTO_CFG[atividade.statusAgendamento]
@@ -746,31 +1143,171 @@ function CardAtividade({ atividade, destaque }: { atividade: AtividadePriorizado
             Concluída: {new Date(atividade.completadoEm).toLocaleDateString('pt-BR')}
           </p>
         )}
+        {!concluida && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            <button
+              disabled={loading}
+              onClick={onCompletar}
+              className="px-2 py-1 rounded-md text-[10px] font-semibold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50"
+            >
+              Concluir
+            </button>
+            <button
+              disabled={loading}
+              onClick={onReagendar}
+              className="px-2 py-1 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50"
+            >
+              Reagendar
+            </button>
+            <button
+              disabled={loading}
+              onClick={onCancelar}
+              className="px-2 py-1 rounded-md text-[10px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function AbaTimeline({ lead }: { lead: LeadPriorizado }) {
-  if (lead.atividades.length === 0) {
+function AbaTimeline({
+  leadId,
+  leadNome,
+  atividades,
+  criandoAtividade,
+  atividadeNova,
+  atividadeAcaoId,
+  onAtividadeNovaChange,
+  onCriarAtividade,
+  onAcionarAtividade,
+}: {
+  leadId: string;
+  leadNome: string;
+  atividades: AtividadePriorizado[];
+  criandoAtividade: boolean;
+  atividadeNova: {
+    tipo: string;
+    titulo: string;
+    descricao: string;
+    agendadoPara: string;
+  };
+  atividadeAcaoId: string | null;
+  onAtividadeNovaChange: (v: { tipo: string; titulo: string; descricao: string; agendadoPara: string; }) => void;
+  onCriarAtividade: () => Promise<void>;
+  onAcionarAtividade: (atividadeId: string, acao: 'completar' | 'cancelar' | 'reagendar') => Promise<void>;
+}) {
+  const pendentes = atividades.filter((a) => !a.completadoEm);
+  const concluidas = atividades.filter((a) => !!a.completadoEm);
+
+  if (atividades.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-6">
-        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
-          <Activity className="w-7 h-7 text-slate-400" />
+      <div className="p-3 space-y-3">
+        <div className="rounded-xl border border-slate-200 p-3 bg-white space-y-2">
+          <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Nova atividade — {leadNome}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={atividadeNova.tipo}
+              onChange={(e) => onAtividadeNovaChange({ ...atividadeNova, tipo: e.target.value })}
+              className="h-9 rounded-lg border border-slate-200 px-2 text-xs"
+              title="Tipo de atividade"
+            >
+              <option value="TAREFA">Tarefa</option>
+              <option value="AVALIACAO">Avaliação</option>
+              <option value="REUNIAO">Reunião</option>
+              <option value="LIGACAO">Ligação</option>
+              <option value="FOLLOW_UP">Follow-up</option>
+            </select>
+            <input
+              value={atividadeNova.agendadoPara}
+              onChange={(e) => onAtividadeNovaChange({ ...atividadeNova, agendadoPara: e.target.value })}
+              type="datetime-local"
+              className="h-9 rounded-lg border border-slate-200 px-2 text-xs"
+            />
+          </div>
+          <input
+            value={atividadeNova.titulo}
+            onChange={(e) => onAtividadeNovaChange({ ...atividadeNova, titulo: e.target.value })}
+            placeholder="Título da atividade"
+            className="w-full h-9 rounded-lg border border-slate-200 px-2 text-xs"
+          />
+          <textarea
+            value={atividadeNova.descricao}
+            onChange={(e) => onAtividadeNovaChange({ ...atividadeNova, descricao: e.target.value })}
+            placeholder="Descrição (opcional)"
+            className="w-full min-h-[70px] rounded-lg border border-slate-200 px-2 py-2 text-xs"
+          />
+          <button
+            onClick={onCriarAtividade}
+            disabled={criandoAtividade}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50"
+          >
+            {criandoAtividade ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+            Criar atividade
+          </button>
         </div>
-        <p className="text-sm font-semibold text-slate-600">Sem atividades registradas</p>
-        <p className="text-xs text-slate-400 mt-1">
-          Abra o lead para criar uma atividade ou agendamento.
-        </p>
+
+        <div className="flex flex-col items-center justify-center py-10 px-6">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+            <Activity className="w-7 h-7 text-slate-400" />
+          </div>
+          <p className="text-sm font-semibold text-slate-600">Sem atividades registradas</p>
+          <p className="text-xs text-slate-400 mt-1">
+            Crie a primeira atividade direto por aqui.
+          </p>
+        </div>
       </div>
     );
   }
 
-  const pendentes = lead.atividades.filter((a) => !a.completadoEm);
-  const concluidas = lead.atividades.filter((a) => !!a.completadoEm);
-
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-3 space-y-3">
+      <div className="rounded-xl border border-slate-200 p-3 bg-white space-y-2">
+        <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Nova atividade — {leadNome}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={atividadeNova.tipo}
+            onChange={(e) => onAtividadeNovaChange({ ...atividadeNova, tipo: e.target.value })}
+            className="h-9 rounded-lg border border-slate-200 px-2 text-xs"
+            title="Tipo de atividade"
+          >
+            <option value="TAREFA">Tarefa</option>
+            <option value="AVALIACAO">Avaliação</option>
+            <option value="REUNIAO">Reunião</option>
+            <option value="LIGACAO">Ligação</option>
+            <option value="FOLLOW_UP">Follow-up</option>
+          </select>
+          <input
+            value={atividadeNova.agendadoPara}
+            onChange={(e) => onAtividadeNovaChange({ ...atividadeNova, agendadoPara: e.target.value })}
+            type="datetime-local"
+            className="h-9 rounded-lg border border-slate-200 px-2 text-xs"
+          />
+        </div>
+        <input
+          value={atividadeNova.titulo}
+          onChange={(e) => onAtividadeNovaChange({ ...atividadeNova, titulo: e.target.value })}
+          placeholder="Título da atividade"
+          className="w-full h-9 rounded-lg border border-slate-200 px-2 text-xs"
+        />
+        <textarea
+          value={atividadeNova.descricao}
+          onChange={(e) => onAtividadeNovaChange({ ...atividadeNova, descricao: e.target.value })}
+          placeholder="Descrição (opcional)"
+          className="w-full min-h-[70px] rounded-lg border border-slate-200 px-2 py-2 text-xs"
+        />
+        <button
+          onClick={onCriarAtividade}
+          disabled={criandoAtividade}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50"
+        >
+          {criandoAtividade ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          Criar atividade
+        </button>
+      </div>
+
       {/* Pendentes */}
       {pendentes.length > 0 && (
         <div>
@@ -779,7 +1316,15 @@ function AbaTimeline({ lead }: { lead: LeadPriorizado }) {
           </p>
           <div className="space-y-2">
             {pendentes.map((a, i) => (
-              <CardAtividade key={a.id} atividade={a} destaque={i === 0} />
+              <CardAtividade
+                key={a.id}
+                atividade={a}
+                destaque={i === 0}
+                loading={atividadeAcaoId === a.id}
+                onCompletar={() => onAcionarAtividade(a.id, 'completar')}
+                onCancelar={() => onAcionarAtividade(a.id, 'cancelar')}
+                onReagendar={() => onAcionarAtividade(a.id, 'reagendar')}
+              />
             ))}
           </div>
         </div>
@@ -799,12 +1344,12 @@ function AbaTimeline({ lead }: { lead: LeadPriorizado }) {
         </div>
       )}
 
-      {lead.atividades.length === 5 && (
+      {atividades.length === 5 && (
         <p className="text-center text-xs text-slate-400 pt-1">
           Mostrando as últimas 5 atividades •{' '}
           <button
             className="text-indigo-500 hover:underline font-medium"
-            onClick={() => window.open(`/dashboard/leads/${lead.id}`, '_blank')}
+            onClick={() => window.open(`/dashboard/leads/${leadId}`, '_blank')}
           >
             Ver todas
           </button>

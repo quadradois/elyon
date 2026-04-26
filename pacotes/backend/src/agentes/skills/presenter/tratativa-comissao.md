@@ -3,8 +3,8 @@
 ## Quando usar esta Skill
 Use quando o lead perguntar ou objetar sobre:
 - "Quanto vocês cobram?" / "Qual a comissão?"
-- "6% é muito" / "Acho a taxa alta"
-- "Vi uma imobiliária cobrando 4%"
+- "[COMISSAO_DO_TENANT] é muito" / "Acho a taxa alta"
+- "Vi uma imobiliária cobrando menos"
 - "O serviço não vale isso tudo"
 
 ---
@@ -14,7 +14,7 @@ Use quando o lead perguntar ou objetar sobre:
 Se a pergunta vier cedo, antes do pitch completo:
 
 → Responda a comissão em **meia linha** e **volte ao diagnóstico**:
-> *"A comissão é a média de mercado — e você só paga quando a venda fechar. Me conta uma coisa: [próxima pergunta de dor]"*
+> *"A comissão segue a política da imobiliária ([COMISSAO_DO_TENANT], quando configurada) e você só paga quando a venda fechar. Me conta uma coisa: [próxima pergunta de dor]"*
 
 ---
 
@@ -27,18 +27,18 @@ Se a pergunta vier cedo, antes do pitch completo:
 > *"Avaliação com dados de mercado, produção de material profissional, coordenação de todos os corretores da cidade, filtro de visitantes, acompanhamento de visitas, negociação de propostas, assessoria até a assinatura — tudo isso está incluso. E você não paga nada disso antes de vender."*
 
 **Passo 3 — Reposicione o custo:**
-> *"Em um imóvel de R$ 500 mil, 6% representa R$ 30 mil. Um erro de negociação ou um comprador mal qualificado podem custar muito mais do que isso."*
+> *"Em um imóvel de R$ 500 mil, [COMISSAO_DO_TENANT] representa um valor relevante. Um erro de negociação ou um comprador mal qualificado podem custar muito mais do que isso."*
 
 **Fechamento:**
 > *"Você não está pagando comissão — está investindo em resultado. E só paga se vender."*
 
 ---
 
-## Objeção "Vi uma imobiliária cobrando 4%"
+## Objeção "Vi outra imobiliária cobrando menos"
 
-> *"Sempre faça a conta do barato que custa meses. Imobiliária com taxa baixa só joga no portal e reza pra vender.*
+> *"Sempre faça a conta do barato que custa meses. Taxa menor sem operação completa costuma virar imóvel parado e proposta fraca.*
 >
-> *A gente compartilha ganhos com os parceiros ativamente — daí a sustentação da comissão de 6%. Custo baixo é economia na etapa da vitrine, que depois custa caríssimo em rebaixamento no preço final de negociação."*
+> *A gente compartilha ganhos com os parceiros ativamente — por isso a comissão segue a política da imobiliária ([COMISSAO_DO_TENANT]). Custo baixo na vitrine pode sair caro no preço final de negociação."*
 
 ---
 

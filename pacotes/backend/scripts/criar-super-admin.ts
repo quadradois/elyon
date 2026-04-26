@@ -48,7 +48,7 @@ async function main() {
       data: {
         tenantId: tenants[0].id,
         nome: 'Super Admin',
-        email: 'admin@quadradois.com.br',
+        email: 'admin@elyon.ia.br',
         senha: senhaHash,
         papel: 'SUPER_ADMIN',
         estaAtivo: true
@@ -56,7 +56,7 @@ async function main() {
     });
     
     console.log('✅ Usuário SUPER_ADMIN criado!\n');
-    console.log(`  📧 Email: admin@quadradois.com.br`);
+    console.log(`  📧 Email: admin@elyon.ia.br`);
     console.log(`  🔑 Senha: admin123`);
     console.log(`  ⚠️ TROQUE A SENHA APÓS O PRIMEIRO LOGIN!\n`);
   }

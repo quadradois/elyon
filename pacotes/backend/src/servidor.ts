@@ -65,8 +65,6 @@ const allowedOrigins = [
   'http://localhost:3001',  // Admin Dashboard (serve)
   'http://127.0.0.1:3001',  // Admin alternativo
   // Produção: HTTPS apenas para evitar MitM
-  'https://elyon.quadradois.com.br',    // Produção Elyon HTTPS (legado)
-  'https://admin.quadradois.com.br',    // Produção Admin HTTPS (legado)
   'https://crm.elyon.ia.br',           // CRM Elyon HTTPS
   'https://elyon.ia.br',               // Landing Page HTTPS
   'https://www.elyon.ia.br',           // Landing Page www HTTPS

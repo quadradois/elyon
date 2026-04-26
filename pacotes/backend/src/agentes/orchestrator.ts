@@ -105,6 +105,7 @@ export interface ContextoConversa {
     tipoAutorizacao?: string;
     comissaoAcordada?: string;
     prazoTrabalho?: number;
+    instrucaoTurno?: string;
     // optional record fetched from leads table; may be included by orchestrator
     leadRecord?: Lead;
 }
@@ -255,6 +256,11 @@ export async function processarMensagemOrquestrada(
             contexto: contextoParaInput,
         });
         let inputSDK: AgentInputItem[] = inputBuilderResult.inputSDK;
+
+        if (contexto.instrucaoTurno && contexto.instrucaoTurno.trim().length > 0) {
+            inputSDK = [{ role: 'system' as const, content: contexto.instrucaoTurno }, ...inputSDK];
+            logger.debug('[ORCHESTRATOR] 🧩 Instrução de turno (mensagens sequenciais) injetada.');
+        }
 
         if (inputBuilderResult.origem === 'cache') {
             logger.debug(`[ORCHESTRATOR] 📜 Usando cache SDK: ${inputBuilderResult.cachedHistoryLength} itens + nova mensagem`);

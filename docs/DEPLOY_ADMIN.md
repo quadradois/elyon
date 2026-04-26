@@ -1,6 +1,6 @@
 # 🚀 Guia de Deploy - Admin Billing Dashboard
 
-> **URL Final:** https://admin.quadradois.com.br
+> **URL Final:** https://admin.elyon.ia.br
 
 ---
 
@@ -8,7 +8,7 @@
 
 - [ ] Acesso SSH ao servidor
 - [ ] Docker e Docker Compose instalados
-- [ ] DNS de `admin.quadradois.com.br` apontando para o IP do servidor
+- [ ] DNS de `admin.elyon.ia.br` apontando para o IP do servidor
 - [ ] Repositório clonado em `/opt/elyon`
 
 ---
@@ -78,12 +78,12 @@ Deve mostrar nginx iniciando sem erros.
 docker compose -f docker-compose.prod.yml logs traefik | grep admin
 ```
 
-Deve mostrar que o certificado foi gerado para `admin.quadradois.com.br`.
+Deve mostrar que o certificado foi gerado para `admin.elyon.ia.br`.
 
 ### 7. Testar acesso
 
 ```bash
-curl -I https://admin.quadradois.com.br
+curl -I https://admin.elyon.ia.br
 ```
 
 Deve retornar `HTTP/2 200`.
@@ -124,7 +124,7 @@ docker compose -f docker-compose.prod.yml logs traefik | grep -i acme
 Verifique se o DNS está configurado:
 
 ```bash
-nslookup admin.quadradois.com.br
+nslookup admin.elyon.ia.br
 ```
 
 Deve retornar o IP do servidor.
@@ -147,10 +147,10 @@ site-quadradois/admin/
 
 | Serviço           | URL                                 | Container         |
 | ----------------- | ----------------------------------- | ----------------- |
-| Dashboard Elyon   | https://elyon.quadradois.com.br     | `elyon_frontend`  |
-| API Backend       | https://api.elyon.quadradois.com.br | `elyon_backend`   |
-| **Admin Billing** | **https://admin.quadradois.com.br** | **`elyon_admin`** |
-| Traefik Dashboard | https://traefik.quadradois.com.br   | `elyon_traefik`   |
+| Dashboard Elyon   | https://crm.elyon.ia.br     | `elyon_frontend`  |
+| API Backend       | https://api.elyon.ia.br     | `elyon_backend`   |
+| **Admin Billing** | **https://admin.elyon.ia.br** | **`elyon_admin`** |
+| Traefik Dashboard | https://traefik.elyon.ia.br   | `elyon_traefik`   |
 
 ---
 
@@ -160,7 +160,7 @@ site-quadradois/admin/
 - [ ] `docker compose build` sem erros
 - [ ] `docker compose up -d` sem erros
 - [ ] Container `elyon_admin` rodando
-- [ ] https://admin.quadradois.com.br acessível
+- [ ] https://admin.elyon.ia.br acessível
 - [ ] Certificado SSL válido (cadeado verde)
 
 ---

@@ -1,4 +1,4 @@
-# Biblioteca de Objeções — Quadra Dois
+# Biblioteca de Objeções — ELYON
 > Formato padronizado para integração nos agentes Opener, Presenter e Closer  
 > Total: 35 objeções mapeadas
 
@@ -243,7 +243,7 @@ Taxa padrão de 6%, só paga quando a gente vender — zero custo antes disso. P
 > *"Comunicação fragmentada — tenho muitos corretores e ninguém me dá retorno."*
 
 **Contorno:**
-Isso é exatamente o que a gente resolve. Com a Quadra Dois você tem um único ponto de contato — nossa equipe. A gente coordena todos os parceiros e você recebe atualização direto pelo celular. Faz diferença?
+Isso é exatamente o que a gente resolve. Com a ELYON você tem um único ponto de contato — nossa equipe. A gente coordena todos os parceiros e você recebe atualização direto pelo celular. Faz diferença?
 
 **Fase:** Presenter — Diagnóstico SPIN (Trilha A)
 
@@ -425,4 +425,4 @@ Algumas objeções podem aparecer em mais de uma fase. Nesses casos, o contorno 
 
 ---
 
-*Biblioteca de Objeções v1.0 | Quadra Dois | 2026*
+*Biblioteca de Objeções v1.0 | ELYON | 2026*

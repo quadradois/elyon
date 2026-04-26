@@ -107,9 +107,26 @@ const PerfilLocacaoSchema = z.object({
 });
 
 const PerfilVendaSchema = z.object({
-  comissaoPadrao: z.number().min(1).max(10).default(6),
+  comissaoPadrao: z.number().min(1).max(10).optional(),
   aceitaExclusividade: z.boolean().default(true),
   tempoExclusividade: z.number().min(30).max(180).optional(),
+  modalidadesVenda: z.array(z.enum(['NAO_EXCLUSIVA', 'EXCLUSIVA'])).optional().default(['NAO_EXCLUSIVA', 'EXCLUSIVA']),
+  modalidadePreferencial: z.enum(['NAO_EXCLUSIVA', 'EXCLUSIVA']).optional().default('EXCLUSIVA'),
+  estrategiaOferta: z.enum(['CONTEXTUAL', 'DIRETA']).optional().default('CONTEXTUAL'),
+  politicaModalidades: z.object({
+    NAO_EXCLUSIVA: z.object({
+      scriptCurto: z.string().optional(),
+      scriptDetalhado: z.string().optional(),
+      rescisaoResumo: z.string().optional(),
+    }).optional(),
+    EXCLUSIVA: z.object({
+      prazoDias: z.number().min(30).max(365).optional(),
+      scriptCurto: z.string().optional(),
+      scriptDetalhado: z.string().optional(),
+      rescisaoResumo: z.string().optional(),
+    }).optional(),
+  }).optional(),
+  termosProibidosAgente: z.array(z.string()).optional().default(['contrato simples']),
   fazAvaliacaoGratuita: z.boolean().default(true),
   fazFotoProfissional: z.boolean().default(true),
   fazTourVirtual: z.boolean().default(false),
@@ -117,6 +134,12 @@ const PerfilVendaSchema = z.object({
   temParcerias: z.boolean().default(true),
   percentualParceria: z.number().min(20).max(80).optional(),
   observacoesVenda: z.string().optional(),
+  respostaEmAudioAtiva: z.boolean().optional().default(false),
+  provedorVozTenant: z.enum(['openai', 'elevenlabs']).optional().default('openai'),
+  vozPadraoTenant: z.string().optional().default('onyx'),
+  elevenLabsVoiceId: z.string().optional().default(''),
+  elevenLabsModelId: z.string().optional().default('eleven_multilingual_v2'),
+  perfilVozTenant: z.string().optional().default('vendas_alta_energia'),
 });
 
 const DadosGeraisImobiliariaSchema = z.object({

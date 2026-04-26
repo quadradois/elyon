@@ -8,7 +8,7 @@ async function main() {
   const prisma = new PrismaClient();
   const { descriptografar } = require('./src/lib/crypto');
   
-  const t = await prisma.tenant.findUnique({ where: { slug: 'quadradois' } });
+  const t = await prisma.tenant.findUnique({ where: { slug: 'elyon' } });
   
   if (!t.llmApiKeyCriptografada) {
     console.log("Sem key");

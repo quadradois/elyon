@@ -182,10 +182,9 @@ ls -lh /root/elyon/backups
 
 | Serviço | URL |
 |---------|-----|
-| **Frontend** | https://elyon.quadradois.com.br |
-| **Backend API** | https://api.elyon.quadradois.com.br |
-| **Admin** | https://admin.quadradois.com.br |
-| **CRM** | https://crm.quadradois.com.br |
+| **Frontend (CRM)** | https://crm.elyon.ia.br |
+| **Backend API** | https://api.elyon.ia.br |
+| **Site Institucional** | https://elyon.ia.br |
 
 ---
 

@@ -57,6 +57,31 @@ describe('executarAgenteComRetry', () => {
     expect(result.inputSDKFinal).toEqual([{ role: 'system', content: 'novo-input' }]);
   });
 
+  it('faz retry quando erro é role tool sem tool_calls precedente', async () => {
+    const runMock = jest
+      .fn()
+      .mockRejectedValueOnce(new Error("400 Invalid parameter: messages with role 'tool' must be a response to a preceeding message with 'tool_calls'."))
+      .mockResolvedValueOnce({ finalOutput: 'ok-retry-tool-role' });
+    const limparMock = jest.fn().mockResolvedValue(undefined);
+
+    const result = await executarAgenteComRetry({
+      agente: agenteFake,
+      inputSDK: [{ role: 'user', content: 'Olá' }],
+      elyonContext: contextFake,
+      cachedHistory: [{ role: 'system', content: 'hist' }],
+      contatoId: 'contato-1',
+      mensagensLength: 2,
+      construirInputSemCache: () => [{ role: 'system', content: 'novo-input' }],
+      limparHistoricoContato: limparMock,
+      executarRun: runMock as any,
+    });
+
+    expect(runMock).toHaveBeenCalledTimes(2);
+    expect(limparMock).toHaveBeenCalledWith('contato-1');
+    expect(result.result.finalOutput).toBe('ok-retry-tool-role');
+    expect(result.inputSDKFinal).toEqual([{ role: 'system', content: 'novo-input' }]);
+  });
+
   it('propaga erro original quando não é tool_call_id', async () => {
     const runMock = jest.fn().mockRejectedValue(new Error('outro erro'));
 

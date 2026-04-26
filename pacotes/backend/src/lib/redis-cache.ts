@@ -8,6 +8,12 @@
 
 import { getRedisClient } from './redis';
 
+function lerEnvSegundos(nome: string, padrao: number, min: number = 1, max: number = 3600): number {
+  const bruto = Number(process.env[nome] || padrao);
+  if (!Number.isFinite(bruto)) return padrao;
+  return Math.max(min, Math.min(max, Math.round(bruto)));
+}
+
 // ─────────────────────────────────────────────────
 // DEDUPE DE MENSAGENS (substitui mensagensJaVistas Map)
 // ─────────────────────────────────────────────────
@@ -37,7 +43,7 @@ export async function jaVimosMensagem(chave: string): Promise<boolean> {
 // COOLDOWN DE RESPOSTA (substitui ultimaRespostaPorContato Map)
 // ─────────────────────────────────────────────────
 
-const COOLDOWN_RESPOSTA_S = 10; // 10 segundos
+const COOLDOWN_RESPOSTA_S = lerEnvSegundos('WEBHOOK_COOLDOWN_RESPOSTA_S', 10, 1, 300); // 10s default
 
 export async function registrarRespostaEnviada(contatoId: string): Promise<void> {
   try {
@@ -60,7 +66,7 @@ export async function estaNoCooldown(contatoId: string): Promise<boolean> {
 // MUTEX DE PROCESSAMENTO (substitui processandoContato Map)
 // ─────────────────────────────────────────────────
 
-const TTL_MUTEX_S = 30; // 30 segundos máximo de lock
+const TTL_MUTEX_S = lerEnvSegundos('WEBHOOK_MUTEX_TTL_S', 30, 5, 300); // 30s default
 
 export async function adquirirMutexContato(contatoId: string): Promise<boolean> {
   try {
@@ -121,5 +127,24 @@ export async function obterHashResposta(contatoId: string): Promise<string | nul
     return await redis.get(`hash:resposta:${contatoId}`);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Dedupe atômico por janela: registra combinação (scope + hash) usando SET NX.
+ * Retorna true se foi registrado agora (pode enviar), false se já existia (duplicado).
+ */
+export async function registrarHashRespostaUnicaJanela(
+  scope: string,
+  hash: string,
+  ttlSegundos: number = TTL_DEDUPE_RESPOSTA_S
+): Promise<boolean> {
+  try {
+    const redis = await getRedisClient();
+    const ttl = Math.max(5, Math.min(120, Math.round(ttlSegundos)));
+    const result = await redis.set(`hash:resposta:janela:${scope}:${hash}`, '1', { NX: true, EX: ttl });
+    return result === 'OK';
+  } catch {
+    return true;
   }
 }

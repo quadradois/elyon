@@ -242,6 +242,30 @@ export function normalizarTexto(texto?: string): string {
         .trim();
 }
 
+function normalizarComparacaoLinha(texto?: string): string {
+    return normalizarTexto(texto || '')
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function limparEcoAssistenteNoTextoUsuario(textoUsuario: string, assistentesNormalizados: string[]): string {
+    const linhas = String(textoUsuario || '')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+    if (linhas.length === 0 || assistentesNormalizados.length === 0) return textoUsuario;
+
+    const filtradas = linhas.filter((linha) => {
+        const n = normalizarComparacaoLinha(linha);
+        if (!n || n.length < 12) return true;
+        return !assistentesNormalizados.some((a) => a.includes(n) || n.includes(a));
+    });
+
+    return filtradas.join('\n').trim();
+}
+
 // ====================================
 // EXTRAÇÃO DE ESTADO
 // ====================================
@@ -249,9 +273,15 @@ export function normalizarTexto(texto?: string): string {
 export function extrairEstadoConversa(
     mensagens: Array<{ role: 'user' | 'assistant'; content: string }>
 ): EstadoConversa {
+    const assistentesNormalizados = mensagens
+        .filter((m) => m.role === 'assistant')
+        .map((m) => normalizarComparacaoLinha(m.content || ''))
+        .filter((t) => t.length >= 12);
+
     const textoUsuarios = mensagens
         .filter((m) => m.role === 'user')
-        .map((m) => m.content || '')
+        .map((m) => limparEcoAssistenteNoTextoUsuario(m.content || '', assistentesNormalizados))
+        .filter(Boolean)
         .join(' \n ')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')

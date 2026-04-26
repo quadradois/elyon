@@ -111,12 +111,15 @@ export async function executarAgenteComRetry(
       };
     }
 
-    // ── Tratamento 1: tool_call_id not found (histórico SDK com IDs obsoletos) ──
+    // ── Tratamento 1: erros de protocolo de tools no histórico (cache obsoleto) ──
     const erroToolCallId = /tool_call_id.*is not found|is not found.*tool_call_id/i.test(mensagemErro)
       || ((errObj?.status as number) === 400 && /tool_call_id/i.test(mensagemErro));
+    const erroToolRoleOrfao = /messages with role ['"]tool['"] must be a response to a preceeding message with ['"]tool_calls['"]/i.test(mensagemErro)
+      || /messages with role ['"]tool['"] must be a response to a preceding message with ['"]tool_calls['"]/i.test(mensagemErro);
 
-    if (erroToolCallId && contatoId) {
-      logger.warn(`[ORCHESTRATOR] ⚠️ tool_call_id obsoleto detectado para ${contatoId.substring(0, 8)}. Purgando histórico SDK e fazendo retry...`);
+    if ((erroToolCallId || erroToolRoleOrfao) && contatoId) {
+      const motivo = erroToolCallId ? 'tool_call_id obsoleto' : 'role tool órfão';
+      logger.warn(`[ORCHESTRATOR] ⚠️ ${motivo} detectado para ${contatoId.substring(0, 8)}. Purgando histórico SDK e fazendo retry...`);
       await limparHistoricoContato(contatoId);
 
       inputSDKFinal = construirInputSemCache();

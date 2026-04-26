@@ -255,7 +255,7 @@ export function Configuracao() {
             </div>
           </div>
           <button
-            onClick={() => window.open("https://docs.quadradois.com.br", "_blank")}
+            onClick={() => window.open("https://elyon.ia.br", "_blank")}
             className="px-4 py-2 bg-brand text-white rounded-lg text-sm font-medium hover:bg-brand-dark transition-colors"
           >
             Ver Documentação

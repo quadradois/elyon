@@ -621,6 +621,8 @@ router.get('/:id', async (req, res) => {
       telefone: l.telefone,
       email: l.email,
       cpf: l.cpf,
+      enderecoPrincipal: l.enderecoPrincipal,
+      complementoPrincipal: l.complementoPrincipal,
       status: l.status,
       temperatura: l.temperatura,
       origem: l.origem,
@@ -1208,10 +1210,10 @@ router.patch('/:id', async (req, res) => {
 
     const camposPermitidos = [
       // Básicos
-      'nome', 'telefone', 'email', 'status', 'temperatura',
+      'nome', 'telefone', 'email', 'cpf', 'enderecoPrincipal', 'complementoPrincipal', 'status', 'temperatura',
       // Imóvel
       'enderecoImovel', 'tipoImovel', 'areaImovel', 'quartosImovel',
-      'vagasImovel', 'valorPretendido', 'ocupacaoImovel', 'interesseEm',
+      'vagasImovel', 'valorPretendido', 'ocupacaoImovel', 'interesseEm', 'inscricaoIptu',
       // SPIN
       'situacaoAtual', 'tempoDecisao', 'tentativasAnteriores', 'comCorretorAtualmente',
       'motivacaoVenda', 'doresIdentificadas',

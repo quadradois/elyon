@@ -8,6 +8,8 @@ export interface Lead {
     telefone: string | null;
     email: string | null;
     cpf: string | null;
+    enderecoPrincipal?: string | null;
+    complementoPrincipal?: string | null;
     status: string;
     temperatura: string;
     origem: string | null;
@@ -194,10 +196,14 @@ export interface FormEditar {
     nome?: string;
     telefone?: string;
     email?: string;
+    cpf?: string;
+    enderecoPrincipal?: string;
+    complementoPrincipal?: string;
     temperatura?: string;
     enderecoImovel?: string;
     tipoImovel?: string;
     valorPretendido?: number;
+    inscricaoIptu?: string;
     // Novos campos
     situacaoFinanceira?: string;
     temDividas?: boolean;

@@ -27,6 +27,21 @@ interface DadosAceite {
     userAgent: string;
 }
 
+interface CampoObrigatorioContrato {
+    campo: string;
+    label: string;
+}
+
+export class DadosContratoIncompletosError extends Error {
+    faltantes: CampoObrigatorioContrato[];
+
+    constructor(faltantes: CampoObrigatorioContrato[]) {
+        super('Dados obrigatórios da autorização estão incompletos');
+        this.name = 'DadosContratoIncompletosError';
+        this.faltantes = faltantes;
+    }
+}
+
 // Workaround para tipos do Prisma
 const db: any = prisma;
 
@@ -55,6 +70,24 @@ function formatarCPF(cpf: string | null): string {
 }
 
 /**
+ * Formata CPF ou CNPJ para exibição
+ */
+function formatarCpfCnpj(valor: string | null | undefined): string {
+    if (!valor) return 'Não informado';
+    const numeros = valor.replace(/\D/g, '');
+
+    if (numeros.length === 11) {
+        return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    }
+
+    if (numeros.length === 14) {
+        return numeros.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    }
+
+    return valor;
+}
+
+/**
  * Formata telefone para exibição
  */
 function formatarTelefone(telefone: string | null): string {
@@ -64,6 +97,122 @@ function formatarTelefone(telefone: string | null): string {
         return numeros.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
     }
     return telefone;
+}
+
+function formatarComissao(valor: unknown): string {
+    if (valor === null || valor === undefined || valor === '') return '6%';
+
+    if (typeof valor === 'number') {
+        return `${valor}%`;
+    }
+
+    const texto = String(valor).trim();
+    if (!texto) return '6%';
+    return texto.includes('%') ? texto : `${texto}%`;
+}
+
+function formatarValorImovel(valor: unknown): string {
+    if (valor === null || valor === undefined || valor === '') return 'A definir';
+
+    if (typeof valor === 'number') {
+        return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    const texto = String(valor).trim();
+    if (!texto) return 'A definir';
+    if (/R\$/i.test(texto)) return texto;
+
+    const normalizado = texto
+        .replace(/\./g, '')
+        .replace(',', '.')
+        .replace(/[^\d.]/g, '');
+    const numero = Number(normalizado);
+
+    if (Number.isFinite(numero) && numero > 0) {
+        return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    return texto;
+}
+
+function resolverPrazoAutorizacao(lead: any, perfilVenda: any): number {
+    const prazoLead = Number(lead?.prazoTrabalho);
+    if (Number.isFinite(prazoLead) && prazoLead > 0) return prazoLead;
+
+    const prazoModalidade = Number(perfilVenda?.politicaModalidades?.EXCLUSIVA?.prazoDias);
+    if (Number.isFinite(prazoModalidade) && prazoModalidade > 0) return prazoModalidade;
+
+    const tempoExclusividade = Number(perfilVenda?.tempoExclusividade);
+    if (Number.isFinite(tempoExclusividade) && tempoExclusividade > 0) return tempoExclusividade;
+
+    const prazoContrato = Number(perfilVenda?.prazoContrato);
+    if (Number.isFinite(prazoContrato) && prazoContrato > 0) return prazoContrato;
+
+    return 180;
+}
+
+function resolverCreciAutorizado(tenant: any, perfilVenda: any): string {
+    return perfilVenda?.creci
+        || perfilVenda?.creciResponsavel
+        || perfilVenda?.registroCreci
+        || tenant?.creci
+        || tenant?.creciResponsavel
+        || 'Não informado';
+}
+
+function montarEnderecoTenant(tenant: any): string {
+    const partes = [tenant?.endereco, tenant?.cidade, tenant?.estado].filter(Boolean);
+    return partes.length ? partes.join(' - ') : 'Não informado';
+}
+
+function montarComplementoImovel(lead: any): string {
+    const partes = [
+        lead?.complementoImovel,
+        lead?.nomeEdificio,
+        lead?.bairroImovel
+    ].filter(Boolean);
+
+    return partes.length ? partes.join(' - ') : 'Não informado';
+}
+
+function extrairPrazoSnapshot(dadosSnapshot: unknown): number | null {
+    if (!dadosSnapshot) return null;
+
+    try {
+        const snapshot = typeof dadosSnapshot === 'string'
+            ? JSON.parse(dadosSnapshot)
+            : dadosSnapshot as any;
+        const prazo = Number(snapshot?.prazoAutorizacao || snapshot?.prazoTrabalho);
+        return Number.isFinite(prazo) && prazo > 0 ? prazo : null;
+    } catch {
+        return null;
+    }
+}
+
+function validarCamposObrigatoriosContrato(lead: any): CampoObrigatorioContrato[] {
+    const faltantes: CampoObrigatorioContrato[] = [];
+    const texto = (valor: unknown) => String(valor ?? '').trim();
+
+    if (!texto(lead?.nome)) faltantes.push({ campo: 'nome', label: 'Nome do proprietário' });
+    if (!texto(lead?.cpf)) faltantes.push({ campo: 'cpf', label: 'CPF do proprietário' });
+    if (!texto(lead?.email)) faltantes.push({ campo: 'email', label: 'E-mail do proprietário' });
+    if (!texto(lead?.enderecoPrincipal)) faltantes.push({ campo: 'enderecoPrincipal', label: 'Endereço do proprietário' });
+
+    if (!texto(lead?.enderecoImovel)) faltantes.push({ campo: 'enderecoImovel', label: 'Endereço do imóvel' });
+    if (!texto(lead?.inscricaoIptu)) faltantes.push({ campo: 'inscricaoIptu', label: 'Inscrição IPTU' });
+
+    const valorPretendido = lead?.valorPretendido;
+    if (valorPretendido === null || valorPretendido === undefined || texto(valorPretendido) === '') {
+        faltantes.push({ campo: 'valorPretendido', label: 'Valor pretendido' });
+    }
+
+    if (!texto(lead?.comissaoAcordada)) faltantes.push({ campo: 'comissaoAcordada', label: 'Comissão acordada' });
+    const prazo = Number(lead?.prazoTrabalho);
+    if (!Number.isFinite(prazo) || prazo <= 0) {
+        faltantes.push({ campo: 'prazoTrabalho', label: 'Prazo de trabalho (dias)' });
+    }
+
+    return faltantes;
 }
 
 /**
@@ -92,7 +241,7 @@ function processarTemplate(template: string, variaveis: Record<string, any>): st
 }
 
 /**
- * Gera contrato de captação para um lead
+ * Gera autorização exclusiva de gestão de venda para um lead
  */
 export async function gerarContratoCaptacao(dados: DadosContrato): Promise<ContratoGerado> {
     // 1. Buscar dados do lead
@@ -117,7 +266,7 @@ export async function gerarContratoCaptacao(dados: DadosContrato): Promise<Contr
 
     if (contratoExistente) {
         // Idempotência: Se já existe, retorna o link do existente
-        const baseUrl = process.env.FRONTEND_URL || 'https://elyon.quadradois.com.br';
+        const baseUrl = process.env.FRONTEND_URL || 'https://crm.elyon.ia.br';
         const linkAceite = `${baseUrl}/aceitar-contrato/${contratoExistente.tokenAceite}`;
 
         return {
@@ -126,6 +275,11 @@ export async function gerarContratoCaptacao(dados: DadosContrato): Promise<Contr
             hash: contratoExistente.hashDocumento,
             linkAceite: linkAceite
         };
+    }
+
+    const camposObrigatoriosFaltando = validarCamposObrigatoriosContrato(lead);
+    if (camposObrigatoriosFaltando.length > 0) {
+        throw new DadosContratoIncompletosError(camposObrigatoriosFaltando);
     }
 
     // 3. Gerar token e hash
@@ -141,25 +295,38 @@ export async function gerarContratoCaptacao(dados: DadosContrato): Promise<Contr
     const hashContrato = gerarHashContrato(dadosParaHash);
 
     // 4. Montar URL de aceite
-    const baseUrl = process.env.FRONTEND_URL || 'https://elyon.quadradois.com.br';
+    const baseUrl = process.env.FRONTEND_URL || 'https://crm.elyon.ia.br';
     const linkAceite = `${baseUrl}/aceitar-contrato/${tokenAceite}`;
 
     // Extrair perfil de venda do tenant para defaults
     const perfilVenda = lead.tenant?.perfilVenda as any || {};
-    const comissaoPadrao = perfilVenda.comissaoPadrao || '6%';
-    const prazoPadrao = perfilVenda.prazoContrato ? Number(perfilVenda.prazoContrato) : 90;
+    const comissao = formatarComissao(lead.comissaoAcordada || perfilVenda.comissaoPadrao || 6);
+    const prazoAutorizacao = resolverPrazoAutorizacao(lead, perfilVenda);
 
     // 5. Preparar variáveis do template
     const variaveis = {
-        // Imobiliária (Tenant)
+        // Dados auxiliares da imobiliária
         nomeImobiliaria: lead.tenant?.nome || 'Imobiliária',
-        cnpjImobiliaria: lead.tenant?.cnpj || '',
-        enderecoImobiliaria: lead.tenant?.endereco ? `${lead.tenant.endereco} - ${lead.tenant.cidade || ''}` : '',
+        cnpjImobiliaria: formatarCpfCnpj(lead.tenant?.cnpj),
+        enderecoImobiliaria: montarEnderecoTenant(lead.tenant),
         telefoneImobiliaria: lead.tenant?.telefone || lead.tenant?.whatsapp || '',
         siteImobiliaria: lead.tenant?.site || '',
         logoImobiliaria: lead.tenant?.logoUrl || '',
 
-        // Proprietário
+        // Autorizante
+        nomeAutorizante: lead.nome || 'Nome não informado',
+        cpfCnpjAutorizante: formatarCpfCnpj(lead.cpf),
+        enderecoAutorizante: lead.enderecoPrincipal || 'Não informado',
+        complementoAutorizante: lead.complementoPrincipal || 'Não informado',
+        emailAutorizante: lead.email || 'Não informado',
+
+        // Autorizado
+        nomeAutorizado: lead.tenant?.nome || 'Imobiliária',
+        cpfCnpjAutorizado: formatarCpfCnpj(lead.tenant?.cnpj),
+        creciAutorizado: resolverCreciAutorizado(lead.tenant, perfilVenda),
+        emailAutorizado: lead.tenant?.email || 'Não informado',
+
+        // Campos legados mantidos para compatibilidade com telas antigas
         nomeProprietario: lead.nome || 'Nome não informado',
         cpf: formatarCPF(lead.cpf),
         telefone: formatarTelefone(lead.telefone),
@@ -167,24 +334,22 @@ export async function gerarContratoCaptacao(dados: DadosContrato): Promise<Contr
 
         // Imóvel
         enderecoImovel: lead.enderecoImovel || 'Endereço não informado',
+        complementoImovel: montarComplementoImovel(lead),
+        iptu: lead.inscricaoIptu || 'Não informado',
         tipoImovel: lead.tipoImovel || 'Não especificado',
         areaImovel: lead.areaImovel || '---',
 
         // Condições comerciais
-        comissao: lead.comissaoAcordada || comissaoPadrao,
-        prazoTrabalho: lead.prazoTrabalho || prazoPadrao,
-        tipoAutorizacao: lead.tipoAutorizacao || 'simples',
-        tipoAutorizacaoTexto: lead.tipoAutorizacao === 'exclusiva'
-            ? 'EXCLUSIVA'
-            : 'SIMPLES (outras imobiliárias também podem comercializar)',
-
-        // Cláusula de exclusividade
-        clausulaExclusividade: lead.tipoAutorizacao === 'exclusiva'
-            ? 'Trata-se de AUTORIZAÇÃO EXCLUSIVA, ficando o PROPRIETÁRIO impedido de comercializar o imóvel diretamente ou por intermédio de terceiros durante a vigência deste contrato, sob pena de pagamento da comissão integral acordada.'
-            : 'Trata-se de AUTORIZAÇÃO SIMPLES, podendo o PROPRIETÁRIO comercializar o imóvel por conta própria ou por intermédio de outras imobiliárias, sendo a comissão devida apenas em caso de negócio realizado por esta IMOBILIÁRIA.',
+        valorImovel: formatarValorImovel(lead.valorPretendido),
+        comissao,
+        prazoAutorizacao,
+        prazoTrabalho: prazoAutorizacao,
+        tipoAutorizacao: 'exclusiva',
+        tipoAutorizacaoTexto: 'EXCLUSIVA',
 
         // Status e datas
         aceito: false,
+        aguardandoAceite: true,
         statusAceite: '',
         dataContrato: dataGeracao.toLocaleDateString('pt-BR', {
             day: '2-digit',
@@ -225,8 +390,8 @@ export async function gerarContratoCaptacao(dados: DadosContrato): Promise<Contr
         data: {
             leadId: lead.id,
             tipo: 'NOTA',
-            titulo: '📄 Contrato de captação gerado',
-            descricao: `Contrato gerado e aguardando aceite digital.\nLink: ${linkAceite}`,
+            titulo: 'Autorização exclusiva gerada',
+            descricao: `Autorização exclusiva de gestão de venda gerada e aguardando aceite digital.\nLink: ${linkAceite}`,
             criadoPor: 'sistema',
             completadoEm: new Date()
         }
@@ -238,7 +403,7 @@ export async function gerarContratoCaptacao(dados: DadosContrato): Promise<Contr
         data: {
             status: 'ONBOARDING',
             contratoUrl: linkAceite,
-            ultimaAcaoIA: 'Contrato de captação gerado',
+            ultimaAcaoIA: 'Autorização exclusiva de gestão de venda gerada',
             ultimaAcaoIAEm: new Date()
         }
     });
@@ -264,19 +429,19 @@ export async function registrarAceiteContrato(dados: DadosAceite): Promise<{ suc
     });
 
     if (!contrato) {
-        return { success: false, message: 'Contrato não encontrado' };
+        return { success: false, message: 'Autorização não encontrada' };
     }
 
     if (contrato.status === 'ACEITO') {
-        return { success: false, message: 'Este contrato já foi aceito anteriormente' };
+        return { success: false, message: 'Esta autorização já foi aceita anteriormente' };
     }
 
     if (contrato.status === 'CANCELADO') {
-        return { success: false, message: 'Este contrato foi cancelado' };
+        return { success: false, message: 'Esta autorização foi cancelada' };
     }
 
     // 2. Calcular vigência
-    const prazoTrabalho = contrato.lead?.prazoTrabalho || 90;
+    const prazoTrabalho = contrato.lead?.prazoTrabalho || extrairPrazoSnapshot(contrato.dadosSnapshot) || 180;
     const vigenciaInicio = new Date();
     const vigenciaFim = new Date();
     vigenciaFim.setDate(vigenciaFim.getDate() + prazoTrabalho);
@@ -302,7 +467,7 @@ export async function registrarAceiteContrato(dados: DadosAceite): Promise<{ suc
             dataAssinatura: new Date(),
             vigenciaInicio: vigenciaInicio,
             vigenciaFim: vigenciaFim,
-            ultimaAcaoIA: 'Contrato aceito digitalmente',
+            ultimaAcaoIA: 'Autorização aceita digitalmente',
             ultimaAcaoIAEm: new Date()
         }
     });
@@ -312,8 +477,8 @@ export async function registrarAceiteContrato(dados: DadosAceite): Promise<{ suc
         data: {
             leadId: contrato.leadId,
             tipo: 'NOTA',
-            titulo: '🎉 Contrato aceito digitalmente!',
-            descricao: `O proprietário aceitou o contrato de captação.\n\nIP: ${dados.ip}\nVigência: ${vigenciaInicio.toLocaleDateString('pt-BR')} a ${vigenciaFim.toLocaleDateString('pt-BR')}`,
+            titulo: 'Autorização aceita digitalmente',
+            descricao: `O proprietário aceitou a autorização exclusiva de gestão de venda.\n\nIP: ${dados.ip}\nVigência: ${vigenciaInicio.toLocaleDateString('pt-BR')} a ${vigenciaFim.toLocaleDateString('pt-BR')}`,
             criadoPor: 'sistema',
             completadoEm: new Date(),
             statusAgendamento: null // Remove o status PENDENTE padrão
@@ -333,7 +498,7 @@ export async function registrarAceiteContrato(dados: DadosAceite): Promise<{ suc
         },
         data: {
             completadoEm: new Date(),
-            descricao: 'Concluído automaticamente após aceite digital do contrato.'
+            descricao: 'Concluído automaticamente após aceite digital da autorização.'
         }
     });
 
@@ -341,7 +506,7 @@ export async function registrarAceiteContrato(dados: DadosAceite): Promise<{ suc
 
     return {
         success: true,
-        message: 'Contrato aceito com sucesso! Bem-vindo à nossa carteira de imóveis.'
+        message: 'Autorização aceita com sucesso! Bem-vindo à nossa carteira de imóveis.'
     };
 }
 

@@ -6,13 +6,13 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Iniciando semeadura...');
 
-  // 1. Criar Tenant Quadra Dois (Admin)
-  const tenantQuadraDois = await prisma.tenant.upsert({
-    where: { slug: 'quadradois' },
+  // 1. Criar Tenant Elyon (Admin)
+  const tenantElyon = await prisma.tenant.upsert({
+    where: { slug: 'elyon' },
     update: {},
     create: {
-      nome: 'Quadra Dois Imóveis',
-      slug: 'quadradois',
+      nome: 'ELYON Imóveis',
+      slug: 'elyon',
       status: 'ATIVO',
       plano: 'ENTERPRISE',
       precoConsultaCpf: 2.00,
@@ -20,25 +20,25 @@ async function main() {
     }
   });
 
-  console.log(`✅ Tenant criado: ${tenantQuadraDois.nome}`);
+  console.log(`✅ Tenant criado: ${tenantElyon.nome}`);
 
   // 2. Criar Usuário Admin
   const senhaHash = await bcrypt.hash('admin123', 10); // Senha temporária dev
 
   const admin = await prisma.usuario.upsert({
     where: {
-      tenantId_email: {
-        tenantId: tenantQuadraDois.id,
-        email: 'admin@quadradois.com.br'
+        tenantId_email: {
+        tenantId: tenantElyon.id,
+        email: 'admin@elyon.ia.br'
       }
     },
     update: {
       senha: senhaHash // Atualiza senha se já existir
     },
     create: {
-      tenantId: tenantQuadraDois.id,
-      nome: 'Admin Quadra Dois',
-      email: 'admin@quadradois.com.br',
+      tenantId: tenantElyon.id,
+      nome: 'Admin Elyon',
+      email: 'admin@elyon.ia.br',
       senha: senhaHash,
       papel: 'SUPER_ADMIN',
       estaAtivo: true

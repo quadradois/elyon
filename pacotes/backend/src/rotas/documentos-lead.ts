@@ -12,6 +12,7 @@ import { prisma } from '../lib/db';
 import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { s3Client } from '../lib/s3';
+import { getTenantId } from '../utils/tenant';
 
 const router = Router();
 
@@ -25,12 +26,37 @@ function classificarTipoMime(mimeType: string): string {
   return 'documento';
 }
 
+async function validarAcessoLead(leadId: string, tenantId: string) {
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { id: true, tenantId: true }
+  });
+
+  if (!lead) return { ok: false as const, status: 404 as const, erro: 'Lead não encontrado' };
+  if (lead.tenantId !== tenantId) {
+    console.warn(`[SECURITY][DOCS] Acesso cruzado bloqueado: lead=${leadId} tenantReq=${tenantId} tenantLead=${lead.tenantId}`);
+    return { ok: false as const, status: 403 as const, erro: 'Acesso negado' };
+  }
+
+  return { ok: true as const, lead };
+}
+
 // ─────────────────────────────────────────────────
 // GET /api/leads/:id/documentos
 // ─────────────────────────────────────────────────
 router.get('/:id/documentos', async (req: Request, res: Response) => {
   try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
     const { id: leadId } = req.params;
+
+    const acesso = await validarAcessoLead(leadId, tenantId);
+    if (!acesso.ok) {
+      return responderErro(res, acesso.status, acesso.erro);
+    }
 
     const documentos = await (prisma as any).documentoLead.findMany({
       where: { leadId },
@@ -50,7 +76,17 @@ router.get('/:id/documentos', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────
 router.get('/:id/documentos/:docId/download', async (req: Request, res: Response) => {
   try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
     const { id: leadId, docId } = req.params;
+
+    const acesso = await validarAcessoLead(leadId, tenantId);
+    if (!acesso.ok) {
+      return responderErro(res, acesso.status, acesso.erro);
+    }
 
     const doc = await (prisma as any).documentoLead.findFirst({
       where: { id: docId, leadId },
@@ -76,7 +112,17 @@ router.get('/:id/documentos/:docId/download', async (req: Request, res: Response
 // ─────────────────────────────────────────────────
 router.delete('/:id/documentos/:docId', async (req: Request, res: Response) => {
   try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
     const { id: leadId, docId } = req.params;
+
+    const acesso = await validarAcessoLead(leadId, tenantId);
+    if (!acesso.ok) {
+      return responderErro(res, acesso.status, acesso.erro);
+    }
 
     const doc = await (prisma as any).documentoLead.findFirst({
       where: { id: docId, leadId },

@@ -86,10 +86,10 @@ describe('buscarConfiguracaoTenant', () => {
         expect(result).not.toBeNull();
         expect(result!.nomeAgente).toBe('Sofia'); // default
         expect(result!.genero).toBe('feminino'); // default
-        expect(result!.comissaoPadrao).toBe('5%'); // default
+        expect(result!.comissaoPadrao).toBeUndefined(); // sem fallback global
         expect(result!.prazoContrato).toBe(180); // default
         expect(result!.diferenciais).toEqual([
-            'Avaliação com IA',
+            'Avaliação com dados de mercado',
             'Material Profissional',
             'Rede de Parceiros'
         ]);

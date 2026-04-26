@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "../servicos/api";
 import { Button } from "../componentes/ui/button";
 import { Input } from "../componentes/ui/input";
@@ -38,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../componentes/ui/select";
+import { Switch } from "../componentes/ui/switch";
 import { ModalUpgradeAgente } from "../componentes/ModalUpgradeAgente";
 
 // Interface para documentos salvos no backend
@@ -99,6 +100,25 @@ interface ConfiguracaoAgenteData {
   sessaoWhatsapp?: { nome: string };
 }
 
+const VOZES_TTS_OPCOES = [
+  { id: "onyx", nome: "Onyx", descricao: "grave, firme e consultiva" },
+  { id: "echo", nome: "Echo", descricao: "masculina, clara e comercial" },
+  { id: "ash", nome: "Ash", descricao: "moderna, segura e direta" },
+  { id: "nova", nome: "Nova", descricao: "feminina, jovem e cativante" },
+  { id: "coral", nome: "Coral", descricao: "feminina, quente e elegante" },
+  { id: "shimmer", nome: "Shimmer", descricao: "leve, simpática e acolhedora" },
+  { id: "sage", nome: "Sage", descricao: "calma, natural e madura" },
+  { id: "alloy", nome: "Alloy", descricao: "neutra e equilibrada" },
+  { id: "ballad", nome: "Ballad", descricao: "expressiva e suave" },
+  { id: "fable", nome: "Fable", descricao: "narrativa e envolvente" },
+];
+
+const MODELOS_ELEVENLABS = [
+  { id: "eleven_multilingual_v2", nome: "Multilingual v2", descricao: "mais estável para PT-BR" },
+  { id: "eleven_flash_v2_5", nome: "Flash v2.5", descricao: "mais rápido e econômico" },
+  { id: "eleven_turbo_v2_5", nome: "Turbo v2.5", descricao: "baixa latência com boa qualidade" },
+];
+
 export function ConfiguracaoAgente() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -111,6 +131,21 @@ export function ConfiguracaoAgente() {
   const [termosAceitos, setTermosAceitos] = useState(false);
   const [modalUpgradeOpen, setModalUpgradeOpen] = useState(false);
   const [limiteAtual, setLimiteAtual] = useState(1);
+  const [tenantPerfil, setTenantPerfil] = useState<any>(null);
+  const [configVozTenant, setConfigVozTenant] = useState({
+    respostaEmAudioAtiva: false,
+    provedorVozTenant: "openai" as "openai" | "elevenlabs",
+    vozPadraoTenant: "onyx",
+    elevenLabsVoiceId: "",
+    elevenLabsModelId: "eleven_multilingual_v2",
+    perfilVozTenant: "vendas_alta_energia",
+  });
+  const [textoPreviewVoz, setTextoPreviewVoz] = useState(
+    "Perfeito, eu vou te mostrar como vender seu imóvel com mais estratégia, alcance e segurança."
+  );
+  const [gerandoPreviewVoz, setGerandoPreviewVoz] = useState(false);
+  const [vozPreviewAtiva, setVozPreviewAtiva] = useState<string | null>(null);
+  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
 
   // Estado para documentos (edição)
   const [documentosSalvos, setDocumentosSalvos] = useState<DocumentoSalvo[]>(
@@ -139,6 +174,7 @@ export function ConfiguracaoAgente() {
   });
   useEffect(() => {
     carregarSessoes();
+    carregarConfiguracaoVozTenant();
     if (id && id !== "novo") {
       carregarAgente(id);
     } else if (id === "novo") {
@@ -190,6 +226,128 @@ export function ConfiguracaoAgente() {
       setLoading(false);
     }
   };
+
+  const carregarConfiguracaoVozTenant = async () => {
+    try {
+      const response = await api.get("/tenant/perfil");
+      const perfilTenant = response.data || {};
+      const perfilVenda = perfilTenant?.perfilVenda || {};
+      const voz =
+        typeof perfilVenda.vozPadraoTenant === "string" &&
+        perfilVenda.vozPadraoTenant.trim().length > 0
+          ? perfilVenda.vozPadraoTenant.trim()
+          : "onyx";
+
+      setTenantPerfil(perfilTenant);
+      setConfigVozTenant({
+        respostaEmAudioAtiva: !!perfilVenda.respostaEmAudioAtiva,
+        provedorVozTenant:
+          perfilVenda.provedorVozTenant === "elevenlabs"
+            ? "elevenlabs"
+            : "openai",
+        vozPadraoTenant: voz,
+        elevenLabsVoiceId:
+          typeof perfilVenda.elevenLabsVoiceId === "string"
+            ? perfilVenda.elevenLabsVoiceId
+            : "",
+        elevenLabsModelId:
+          typeof perfilVenda.elevenLabsModelId === "string" &&
+          perfilVenda.elevenLabsModelId.trim().length > 0
+            ? perfilVenda.elevenLabsModelId.trim()
+            : "eleven_multilingual_v2",
+        perfilVozTenant: perfilVenda.perfilVozTenant || "vendas_alta_energia",
+      });
+    } catch (error) {
+      console.error("Erro ao carregar configuração de voz do tenant:", error);
+    }
+  };
+
+  const salvarConfiguracaoVozTenant = async () => {
+    let basePerfil = tenantPerfil;
+    if (!basePerfil) {
+      const response = await api.get("/tenant/perfil");
+      basePerfil = response.data || {};
+      setTenantPerfil(basePerfil);
+    }
+    const perfilVendaAtual = basePerfil?.perfilVenda || {};
+    await api.put("/tenant/perfil", {
+      ...basePerfil,
+      perfilVenda: {
+        ...perfilVendaAtual,
+        respostaEmAudioAtiva: configVozTenant.respostaEmAudioAtiva,
+        provedorVozTenant: configVozTenant.provedorVozTenant,
+        vozPadraoTenant: configVozTenant.vozPadraoTenant,
+        elevenLabsVoiceId: configVozTenant.elevenLabsVoiceId,
+        elevenLabsModelId: configVozTenant.elevenLabsModelId,
+        perfilVozTenant: configVozTenant.perfilVozTenant,
+      },
+    });
+    setTenantPerfil((prev: any) => ({
+      ...(prev || {}),
+      perfilVenda: {
+        ...(prev?.perfilVenda || {}),
+        respostaEmAudioAtiva: configVozTenant.respostaEmAudioAtiva,
+        provedorVozTenant: configVozTenant.provedorVozTenant,
+        vozPadraoTenant: configVozTenant.vozPadraoTenant,
+        elevenLabsVoiceId: configVozTenant.elevenLabsVoiceId,
+        elevenLabsModelId: configVozTenant.elevenLabsModelId,
+        perfilVozTenant: configVozTenant.perfilVozTenant,
+      },
+    }));
+  };
+
+  const pararPreviewVoz = () => {
+    if (audioPreviewRef.current) {
+      audioPreviewRef.current.pause();
+      audioPreviewRef.current.currentTime = 0;
+    }
+    setVozPreviewAtiva(null);
+  };
+
+  const tocarPreviewVoz = async (voz: string) => {
+    if (vozPreviewAtiva === voz && !gerandoPreviewVoz) {
+      pararPreviewVoz();
+      return;
+    }
+
+    try {
+      setGerandoPreviewVoz(true);
+      pararPreviewVoz();
+      setVozPreviewAtiva(voz);
+
+      const response = await api.post("/tenant/perfil/voz/preview", {
+        voz,
+        texto: textoPreviewVoz,
+        provedor: configVozTenant.provedorVozTenant,
+        elevenLabsVoiceId: configVozTenant.elevenLabsVoiceId,
+        elevenLabsModelId: configVozTenant.elevenLabsModelId,
+      });
+
+      const audioBase64 = response.data?.audioBase64;
+      if (!audioBase64) {
+        throw new Error("Áudio de prévia não retornado");
+      }
+
+      const audio = new Audio(`data:audio/mpeg;base64,${audioBase64}`);
+      audioPreviewRef.current = audio;
+      audio.onended = () => setVozPreviewAtiva(null);
+      await audio.play();
+    } catch (error) {
+      console.error("Erro ao reproduzir prévia de voz:", error);
+      toast.error("Não foi possível reproduzir a prévia de voz");
+      setVozPreviewAtiva(null);
+    } finally {
+      setGerandoPreviewVoz(false);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+      }
+    };
+  }, []);
 
   const carregarAgente = async (idAgente: string) => {
     try {
@@ -267,12 +425,14 @@ export function ConfiguracaoAgente() {
 
       if (agenteExiste && agenteId) {
         response = await api.put(`/agentes/${agenteId}`, payload);
+        await salvarConfiguracaoVozTenant();
         toast.success("Agente atualizado!", {
           description: "As alterações já estão ativas.",
           icon: <CheckCircle className="w-5 h-5 text-emerald-500" />,
         });
       } else {
         response = await api.post("/agentes", payload);
+        await salvarConfiguracaoVozTenant();
         setAgenteExiste(true);
         setAgenteId(response.data.agente.id);
         navigate(`/dashboard/agente/${response.data.agente.id}`, {
@@ -728,6 +888,225 @@ export function ConfiguracaoAgente() {
             >
               Gerenciar Todas as Sessões
             </Button>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+            <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-violet-600" />
+              Voz do Agente (Tenant)
+            </h3>
+            <p className="text-xs text-slate-500">
+              Essa configuração vale para as respostas do agente no WhatsApp em
+              todo o tenant.
+            </p>
+
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3 bg-slate-50">
+              <div>
+                <p className="text-sm font-medium text-slate-800">
+                  Responder em áudio
+                </p>
+                <p className="text-xs text-slate-500">
+                  Se ativo, o agente tenta enviar áudio com fallback para texto.
+                </p>
+              </div>
+              <Switch
+                checked={configVozTenant.respostaEmAudioAtiva}
+                onCheckedChange={(checked) =>
+                  setConfigVozTenant((prev) => ({
+                    ...prev,
+                    respostaEmAudioAtiva: checked,
+                  }))
+                }
+              />
+            </div>
+
+            {configVozTenant.respostaEmAudioAtiva && (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-sm font-semibold text-amber-900">
+                    Perfil vocal aplicado: venda de alta energia
+                  </p>
+                  <p className="text-xs text-amber-800 mt-1">
+                    Voz motivada, confiante, com impacto comercial e ritmo de
+                    vendedor imobiliário de alta performance.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-700">
+                    Provedor de voz
+                  </p>
+                  <Select
+                    value={configVozTenant.provedorVozTenant}
+                    onValueChange={(value: "openai" | "elevenlabs") =>
+                      setConfigVozTenant((prev) => ({
+                        ...prev,
+                        provedorVozTenant: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o provedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="openai">OpenAI TTS</SelectItem>
+                      <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {configVozTenant.provedorVozTenant === "elevenlabs" && (
+                    <p className="text-xs text-slate-500">
+                      Requer `ELEVENLABS_API_KEY` configurada no backend e um
+                      Voice ID da sua biblioteca ElevenLabs.
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-700">
+                    Texto da prévia
+                  </p>
+                  <Input
+                    value={textoPreviewVoz}
+                    onChange={(e) => setTextoPreviewVoz(e.target.value)}
+                    placeholder="Digite um texto curto para testar a voz"
+                    maxLength={280}
+                  />
+                </div>
+
+                {configVozTenant.provedorVozTenant === "openai" ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-slate-700">
+                      Voz padrão do tenant
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {VOZES_TTS_OPCOES.map((voz) => (
+                        <div
+                          key={voz.id}
+                          className={`flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full text-sm font-medium transition-all border ${
+                            configVozTenant.vozPadraoTenant === voz.id
+                              ? "bg-violet-600 text-white border-violet-600"
+                              : "bg-white text-slate-700 border-slate-200"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConfigVozTenant((prev) => ({
+                                ...prev,
+                                vozPadraoTenant: voz.id,
+                              }))
+                            }
+                            className="hover:opacity-90 text-left"
+                          >
+                            <span>{voz.nome}</span>
+                            <span className="block text-[10px] opacity-75">
+                              {voz.descricao}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => tocarPreviewVoz(voz.id)}
+                            disabled={gerandoPreviewVoz}
+                            className={`inline-flex items-center justify-center h-6 w-6 rounded-full ${
+                              configVozTenant.vozPadraoTenant === voz.id
+                                ? "bg-white/20 hover:bg-white/30"
+                                : "bg-slate-100 hover:bg-slate-200"
+                            }`}
+                            title={`Ouvir prévia da voz ${voz.nome}`}
+                          >
+                            {gerandoPreviewVoz && vozPreviewAtiva === voz.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : vozPreviewAtiva === voz.id ? (
+                              <Pause className="w-3.5 h-3.5" />
+                            ) : (
+                              <Play className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-slate-700">
+                        ElevenLabs Voice ID
+                      </p>
+                      <Input
+                        value={configVozTenant.elevenLabsVoiceId}
+                        onChange={(e) =>
+                          setConfigVozTenant((prev) => ({
+                            ...prev,
+                            elevenLabsVoiceId: e.target.value.trim(),
+                          }))
+                        }
+                        placeholder="Ex: 21m00Tcm4TlvDq8ikWAM"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-slate-700">
+                        Modelo ElevenLabs
+                      </p>
+                      <Select
+                        value={configVozTenant.elevenLabsModelId}
+                        onValueChange={(value) =>
+                          setConfigVozTenant((prev) => ({
+                            ...prev,
+                            elevenLabsModelId: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Modelo ElevenLabs" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MODELOS_ELEVENLABS.map((modelo) => (
+                            <SelectItem key={modelo.id} value={modelo.id}>
+                              {modelo.nome} - {modelo.descricao}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        tocarPreviewVoz(configVozTenant.vozPadraoTenant)
+                      }
+                      disabled={
+                        gerandoPreviewVoz ||
+                        !configVozTenant.elevenLabsVoiceId.trim()
+                      }
+                    >
+                      {gerandoPreviewVoz ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Play className="w-4 h-4 mr-2" />
+                      )}
+                      Ouvir prévia ElevenLabs
+                    </Button>
+                  </div>
+                )}
+
+                {vozPreviewAtiva && !gerandoPreviewVoz && (
+                  <div className="pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={pararPreviewVoz}
+                    >
+                      <Pause className="w-4 h-4 mr-2" />
+                      Parar prévia
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="md:col-span-2 space-y-6">

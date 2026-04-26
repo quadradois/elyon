@@ -109,7 +109,7 @@ export function Login() {
         </form>
 
         <div className="text-center text-xs text-slate-400">
-          Quadra Dois © 2025 • ELYON Platform
+          ELYON © 2026 • Plataforma oficial
         </div>
       </div>
     </div>

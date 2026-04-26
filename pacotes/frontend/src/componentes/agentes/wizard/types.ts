@@ -35,6 +35,23 @@ export interface PerfilVenda {
   comissaoPadrao: number; // Percentual (ex: 6 = 6%)
   aceitaExclusividade: boolean;
   tempoExclusividade?: number; // Dias de exclusividade
+  modalidadesVenda?: Array<'NAO_EXCLUSIVA' | 'EXCLUSIVA'>;
+  modalidadePreferencial?: 'NAO_EXCLUSIVA' | 'EXCLUSIVA';
+  estrategiaOferta?: 'CONTEXTUAL' | 'DIRETA';
+  politicaModalidades?: {
+    NAO_EXCLUSIVA?: {
+      scriptCurto?: string;
+      scriptDetalhado?: string;
+      rescisaoResumo?: string;
+    };
+    EXCLUSIVA?: {
+      prazoDias?: number;
+      scriptCurto?: string;
+      scriptDetalhado?: string;
+      rescisaoResumo?: string;
+    };
+  };
+  termosProibidosAgente?: string[];
   fazAvaliacaoGratuita: boolean;
   fazFotoProfissional: boolean;
   fazTourVirtual: boolean;
@@ -42,6 +59,12 @@ export interface PerfilVenda {
   temParcerias: boolean;
   percentualParceria?: number; // % para parceria com outras imobiliárias
   observacoesVenda?: string;
+  respostaEmAudioAtiva?: boolean;
+  provedorVozTenant?: 'openai' | 'elevenlabs';
+  vozPadraoTenant?: string;
+  elevenLabsVoiceId?: string;
+  elevenLabsModelId?: string;
+  perfilVozTenant?: string;
 }
 
 // Dados gerais da imobiliária
@@ -231,7 +254,15 @@ export const PERFIL_PADRAO: PerfilImobiliaria = {
   venda: {
     comissaoPadrao: 6,
     aceitaExclusividade: true,
-    tempoExclusividade: 90,
+    tempoExclusividade: 180,
+    modalidadesVenda: ['NAO_EXCLUSIVA', 'EXCLUSIVA'],
+    modalidadePreferencial: 'EXCLUSIVA',
+    estrategiaOferta: 'CONTEXTUAL',
+    politicaModalidades: {
+      NAO_EXCLUSIVA: { scriptCurto: '', scriptDetalhado: '', rescisaoResumo: '' },
+      EXCLUSIVA: { prazoDias: 180, scriptCurto: '', scriptDetalhado: '', rescisaoResumo: '' },
+    },
+    termosProibidosAgente: ['contrato simples'],
     fazAvaliacaoGratuita: true,
     fazFotoProfissional: true,
     fazTourVirtual: false,

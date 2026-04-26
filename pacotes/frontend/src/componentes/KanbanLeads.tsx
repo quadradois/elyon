@@ -8,6 +8,9 @@ import {
     Home,
     User,
     Megaphone,
+    Flame,
+    Zap,
+    Snowflake,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
@@ -27,6 +30,7 @@ import {
 import { api } from "../servicos/api";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { getStatusLeadUI, getTemperaturaLeadUI } from "./leads/lead-ui";
 
 // Tipos enriquecidos — alinhados com LeadPriorizado do hook
 interface Lead {
@@ -262,7 +266,7 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                         <div className="flex-1 overflow-y-auto p-2 space-y-3 min-h-[150px]">
                             {columns[col.id]?.length === 0 && (
                                 <div className="h-full flex flex-col items-center justify-center text-slate-400 text-sm border-2 border-dashed border-slate-100 rounded-lg m-2 p-4">
-                                    Nenhum lead
+                                    Nenhuma oportunidade
                                 </div>
                             )}
 
@@ -283,6 +287,17 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                  `}
                                         onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
                                     >
+                                        {(() => {
+                                            const statusUi = getStatusLeadUI(lead.status);
+                                            const tempUi = getTemperaturaLeadUI(lead.temperatura);
+                                            const tempIcon =
+                                                tempUi.icon === "quente"
+                                                    ? <Flame className="w-3 h-3 text-red-500" />
+                                                    : tempUi.icon === "morno"
+                                                        ? <Zap className="w-3 h-3 text-amber-500" />
+                                                        : <Snowflake className="w-3 h-3 text-blue-400" />;
+                                            return (
+                                                <>
                                         {/* Botão de Conclusão (Fase 3 apenas) */}
                                         {col.id === 'FASE3' && (
                                             <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -313,13 +328,15 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                                         {/* Header do Card */}
                                         <div className="flex justify-between items-start mb-2">
                                             <div>
-                                                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md mb-1 inline-block
-                       ${lead.temperatura === 'QUENTE' ? 'bg-red-50 text-red-600' :
-                                                        lead.temperatura === 'MORNO' ? 'bg-amber-50 text-amber-600' :
-                                                            'bg-indigo-50 text-brand'}
-                     `}>
-                                                    {lead.temperatura === 'QUENTE' ? '🔥 Quente' : lead.temperatura === 'MORNO' ? '⚡ Morno' : '❄️ Frio'}
+                                                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md mb-1 inline-flex items-center gap-1 ${tempUi.pillClass}`}>
+                                                    {tempIcon}
+                                                    {tempUi.label}
                                                 </span>
+                                                <div>
+                                                    <span className={`inline-flex text-[10px] font-bold px-1.5 py-0.5 rounded-md ${statusUi.className}`}>
+                                                        {statusUi.label}
+                                                    </span>
+                                                </div>
                                                 <h4 className="font-semibold text-slate-900 line-clamp-1">{lead.nome || "Sem Nome"}</h4>
                                             </div>
 
@@ -425,6 +442,9 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                                                 </div>
                                             </div>
                                         </div>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 );
                             })}

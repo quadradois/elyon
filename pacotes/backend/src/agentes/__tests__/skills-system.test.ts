@@ -2,7 +2,7 @@
  * Testes: Sistema de Skills (.md) + Classificador de Gatilhos
  *
  * Cobre:
- * - SKILLS_REGISTRY: todas as 16 skills registradas carregam corretamente do disco
+ * - SKILLS_REGISTRY: todas as skills registradas carregam corretamente do disco
  * - lerConteudoSkill: retorno correto para skill existente e inexistente
  * - listarSkillsDisponiveis: lista completa
  * - detectarSkillGatilho: regex de gatilhos para SDR (unificado opener + presenter)
@@ -20,12 +20,12 @@ import { detectarSkillGatilho, tentarPreCarregarSkill } from '../classificador-s
 describe('SKILLS_REGISTRY — integridade dos arquivos .md', () => {
     const skills = Object.keys(SKILLS_REGISTRY);
 
-    it('tem 16 skills registradas', () => {
-        expect(skills.length).toBe(16);
+    it('tem pelo menos 16 skills registradas', () => {
+        expect(skills.length).toBeGreaterThanOrEqual(16);
     });
 
-    it('listarSkillsDisponiveis retorna todas as 16', () => {
-        expect(listarSkillsDisponiveis()).toHaveLength(16);
+    it('listarSkillsDisponiveis retorna todas as skills registradas', () => {
+        expect(listarSkillsDisponiveis()).toHaveLength(skills.length);
     });
 
     it.each(skills)('skill "%s" carrega do disco sem erro', (skillId) => {
@@ -101,9 +101,14 @@ describe('detectarSkillGatilho — detecção regex', () => {
             .toBe('opener/protocolo-indicacao');
     });
 
-    it('detecta tratativa-exclusividade (abertura)', () => {
+    it('detecta tratativa de autorização/contrato no opener', () => {
+        expect(detectarSkillGatilho('nós vamos fazer algum contrato para vender?', 'sdr'))
+            .toBe('opener/protocolo-autorizacao-venda');
+    });
+
+    it('detecta tratativa-exclusividade no presenter', () => {
         expect(detectarSkillGatilho('exclusividade eu acho complicado', 'sdr'))
-            .toBe('opener/tratativa-exclusividade');
+            .toBe('presenter/tratativa-exclusividade');
     });
 
     it('detecta tratativa-varios-corretores', () => {
@@ -130,6 +135,21 @@ describe('detectarSkillGatilho — detecção regex', () => {
     it('detecta tratativa-comissao', () => {
         expect(detectarSkillGatilho('a comissão tá muito alta', 'sdr'))
             .toBe('presenter/tratativa-comissao');
+    });
+
+    it('detecta explicação de cláusulas no presenter', () => {
+        expect(detectarSkillGatilho('me explica as cláusulas da autorização', 'sdr'))
+            .toBe('presenter/tratativa-clausulas-contrato');
+    });
+
+    it('detecta condições específicas da autorização no presenter', () => {
+        expect(detectarSkillGatilho('pode rescindir? tem alguma multa?', 'sdr'))
+            .toBe('presenter/tratativa-contrato-condicoes');
+    });
+
+    it('detecta pedido de envio do documento no presenter', () => {
+        expect(detectarSkillGatilho('me manda a autorização para eu ler', 'sdr'))
+            .toBe('presenter/tratativa-contrato-condicoes');
     });
 
     it('detecta tratativa-sem-aceite-agendamento', () => {

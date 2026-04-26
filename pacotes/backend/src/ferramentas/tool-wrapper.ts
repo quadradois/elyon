@@ -283,6 +283,25 @@ const enricherQualificacao: ToolResultEnricher = {
 };
 
 /**
+ * converter_para_lead é idempotente:
+ * se o contato já virou lead, tratamos como sucesso lógico para evitar loops/retries.
+ */
+const enricherConversaoLead: ToolResultEnricher = {
+    toolName: 'converter_para_lead',
+    enrich: (result, _args) => {
+        if (result?.success === false && result?.reasonCode === 'ALREADY_LEAD') {
+            return {
+                ...result,
+                success: true,
+                message: result?.message || 'Lead já estava convertido anteriormente.',
+                instrucaoParaAgente: 'Lead já convertido. Continue a conversa sem tentar converter novamente.',
+            };
+        }
+        return result;
+    }
+};
+
+/**
  * Quando mover_para_fase é bloqueado por gate SPIN, instrui o LLM sobre o que falta.
  */
 const enricherMoverFase: ToolResultEnricher = {
@@ -333,6 +352,7 @@ const PRE_VALIDATORS: ToolPreValidator[] = [
 const RESULT_ENRICHERS: ToolResultEnricher[] = [
     enricherAgendamento,
     enricherQualificacao,
+    enricherConversaoLead,
     enricherFollowup,
     enricherMoverFase,
 ];

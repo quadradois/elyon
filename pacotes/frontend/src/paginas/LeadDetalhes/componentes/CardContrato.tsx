@@ -1,7 +1,7 @@
 /**
- * Card de Contrato (Fase 4 do Playbook)
- * Exibe: URL do contrato, datas de assinatura e vigência
- * Permite: Gerar novo contrato quando não houver um pendente
+ * Card de autorização de venda (Fase 4 do Playbook)
+ * Exibe: URL da autorização, datas de assinatura e vigência
+ * Permite: Gerar nova autorização quando não houver uma pendente
  */
 
 import { useState } from "react";
@@ -25,11 +25,36 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
 
     const temContrato = lead.contratoUrl || lead.dataAssinatura;
     const temVigencia = lead.vigenciaInicio || lead.vigenciaFim;
+    const camposObrigatoriosContrato = [
+        { campo: 'nome', label: 'Nome do proprietário', ok: !!lead.nome?.trim() },
+        { campo: 'cpf', label: 'CPF do proprietário', ok: !!lead.cpf?.trim() },
+        { campo: 'email', label: 'E-mail do proprietário', ok: !!lead.email?.trim() },
+        { campo: 'enderecoPrincipal', label: 'Endereço do proprietário', ok: !!lead.enderecoPrincipal?.trim() },
+        { campo: 'enderecoImovel', label: 'Endereço do imóvel', ok: !!lead.imovel?.endereco?.trim() },
+        { campo: 'inscricaoIptu', label: 'Inscrição IPTU', ok: !!lead.inscricaoIptu?.trim() },
+        {
+            campo: 'valorPretendido',
+            label: 'Valor pretendido',
+            ok: lead.imovel?.valorPretendido !== null && lead.imovel?.valorPretendido !== undefined
+        },
+        { campo: 'comissaoAcordada', label: 'Comissão acordada', ok: !!lead.comissaoAcordada?.trim() },
+        {
+            campo: 'prazoTrabalho',
+            label: 'Prazo de trabalho (dias)',
+            ok: typeof lead.prazoTrabalho === 'number' && lead.prazoTrabalho > 0
+        }
+    ];
+    const faltantesContrato = camposObrigatoriosContrato.filter(item => !item.ok).map(item => item.label);
+    const podeGerarContrato = faltantesContrato.length === 0;
 
-    // Gerar novo contrato
+    // Gerar nova autorização
     const handleGerarContrato = async () => {
         setGerando(true);
         try {
+            if (!podeGerarContrato) {
+                toast.error('Preencha os dados obrigatórios do contrato antes de gerar a autorização.');
+                return;
+            }
             const response = await api.post('/contratos/gerar', {
                 leadId: lead.id,
                 tipoContrato: 'CAPTACAO'
@@ -37,19 +62,26 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
 
             if (response.data.sucesso) {
                 setLinkContrato(response.data.contrato.linkAceite);
-                toast.success('Contrato gerado com sucesso!');
+                toast.success('Autorização gerada com sucesso!');
                 onUpdate?.();
             } else {
                 throw new Error(response.data.erro);
             }
         } catch (error: any) {
-            toast.error(error.response?.data?.erro || 'Erro ao gerar contrato');
+            const faltantesApi = Array.isArray(error?.response?.data?.faltantes)
+                ? error.response.data.faltantes.map((f: any) => f?.label).filter(Boolean)
+                : [];
+            if (faltantesApi.length > 0) {
+                toast.error(`Dados pendentes: ${faltantesApi.join(', ')}`);
+                return;
+            }
+            toast.error(error.response?.data?.erro || 'Erro ao gerar autorização');
         } finally {
             setGerando(false);
         }
     };
 
-    // Copiar link do contrato
+    // Copiar link da autorização
     const handleCopiarLink = () => {
         const link = linkContrato || lead.contratoUrl;
         if (link) {
@@ -63,7 +95,7 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
         const link = linkContrato || lead.contratoUrl;
         if (link && lead.telefone) {
             const mensagem = encodeURIComponent(
-                `Olá ${lead.nome}! 📄\n\nSegue o link para visualizar e aceitar nosso contrato de captação:\n\n${link}\n\nQualquer dúvida estou à disposição!`
+                `Olá ${lead.nome}!\n\nSegue o link para visualizar e aceitar nossa autorização exclusiva de gestão de venda:\n\n${link}\n\nQualquer dúvida estou à disposição!`
             );
             const telefone = lead.telefone.replace(/\D/g, '');
             window.open(`https://wa.me/55${telefone}?text=${mensagem}`, '_blank');
@@ -76,7 +108,7 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
         return null;
     }
 
-    // Estado: Nenhum contrato ainda - Botão para gerar
+    // Estado: Nenhuma autorização ainda - Botão para gerar
     if (!temContrato && !temVigencia && !linkContrato) {
         return (
             <Card className="border-dashed border-amber-200 bg-gradient-to-br from-amber-50/50 to-white overflow-hidden">
@@ -88,13 +120,23 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
                             <FileText className="w-7 h-7 text-amber-500" />
                         </div>
                     </div>
-                    <h4 className="text-base font-semibold text-amber-800 mb-1">Contrato Pendente</h4>
+                    <h4 className="text-base font-semibold text-amber-800 mb-1">Autorização Pendente</h4>
                     <p className="text-sm text-amber-600 mb-5 max-w-xs mx-auto">
-                        Gere o contrato de captação para enviar ao proprietário
+                        Gere a autorização exclusiva de gestão de venda para enviar ao proprietário
                     </p>
+                    {!podeGerarContrato && (
+                        <div className="text-left bg-amber-100 border border-amber-200 rounded-lg p-3 mb-4">
+                            <p className="text-xs font-semibold text-amber-800 mb-1">
+                                Campos obrigatórios pendentes:
+                            </p>
+                            <p className="text-xs text-amber-700">
+                                {faltantesContrato.join(', ')}
+                            </p>
+                        </div>
+                    )}
                     <Button
                         onClick={handleGerarContrato}
-                        disabled={gerando}
+                        disabled={gerando || !podeGerarContrato}
                         className="btn-premium border-0 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
                     >
                         {gerando ? (
@@ -105,7 +147,7 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
                         ) : (
                             <>
                                 <Plus className="w-4 h-4 mr-2" />
-                                Gerar Contrato
+                                Gerar Autorização
                             </>
                         )}
                     </Button>
@@ -114,20 +156,20 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
         );
     }
 
-    // Estado: Contrato gerado mas não assinado
+    // Estado: Autorização gerada mas não assinada
     if (linkContrato && !lead.dataAssinatura) {
         return (
             <Card className="border-indigo-200 bg-indigo-50/30">
                 <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">
                         <FileText className="w-5 h-5 text-brand" />
-                        Contrato Gerado
-                        <Badge className="bg-indigo-100 text-indigo-700 ml-auto">⏳ Aguardando Aceite</Badge>
+                        Autorização Gerada
+                        <Badge className="bg-indigo-100 text-indigo-700 ml-auto">Aguardando Aceite</Badge>
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm text-slate-600 mb-4">
-                        Contrato pronto! Envie o link abaixo para o proprietário assinar digitalmente.
+                        Autorização pronta! Envie o link abaixo para o proprietário aceitar digitalmente.
                     </p>
 
                     <div className="bg-white rounded-lg border border-indigo-200 p-3 mb-4">
@@ -144,7 +186,7 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
                             onClick={handleCopiarLink}
                             className="flex-1"
                         >
-                            📋 Copiar Link
+                            Copiar Link
                         </Button>
                         <Button
                             size="sm"
@@ -160,17 +202,17 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
         );
     }
 
-    // Estado: Contrato URL existe (pode ser link de aceite pendente ou assinado)
+    // Estado: Autorização URL existe (pode ser link de aceite pendente ou assinado)
     return (
         <Card className={`${lead.dataAssinatura ? 'border-emerald-200 bg-emerald-50/30' : 'border-indigo-200 bg-indigo-50/30'}`}>
             <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
                     <FileText className={`w-5 h-5 ${lead.dataAssinatura ? 'text-emerald-600' : 'text-brand'}`} />
-                    Contrato de Captação
+                    Autorização Exclusiva
                     {lead.dataAssinatura ? (
-                        <Badge className="bg-emerald-100 text-emerald-700 ml-auto">✅ Assinado</Badge>
+                        <Badge className="bg-emerald-100 text-emerald-700 ml-auto">Assinado</Badge>
                     ) : (
-                        <Badge className="bg-indigo-100 text-indigo-700 ml-auto">⏳ Aguardando</Badge>
+                        <Badge className="bg-indigo-100 text-indigo-700 ml-auto">Aguardando</Badge>
                     )}
                 </CardTitle>
             </CardHeader>
@@ -212,7 +254,7 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
                                 onClick={() => window.open(lead.contratoUrl!, '_blank')}
                             >
                                 <ExternalLink className="w-4 h-4 mr-2" />
-                                Visualizar Contrato
+                                Visualizar Autorização
                             </Button>
                             {!lead.dataAssinatura && (
                                 <Button
@@ -221,7 +263,7 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
                                     onClick={() => {
                                         if (lead.telefone) {
                                             const mensagem = encodeURIComponent(
-                                                `Olá ${lead.nome}! 📄\n\nSegue o link para visualizar e aceitar nosso contrato:\n\n${lead.contratoUrl}\n\nQualquer dúvida estou à disposição!`
+                                                `Olá ${lead.nome}!\n\nSegue o link para visualizar e aceitar nossa autorização exclusiva de gestão de venda:\n\n${lead.contratoUrl}\n\nQualquer dúvida estou à disposição!`
                                             );
                                             const telefone = lead.telefone.replace(/\D/g, '');
                                             window.open(`https://wa.me/55${telefone}?text=${mensagem}`, '_blank');

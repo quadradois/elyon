@@ -402,7 +402,7 @@ router.post('/:id/conectar', async (req, res) => {
     if (status?.instance?.state === 'open') {
       // Configurar webhook automaticamente quando conectado
       try {
-        const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.quadradois.com.br';
+        const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.ia.br';
         const webhookUrl = `${backendUrl}/api/webhooks/whatsapp?instance=${sessao.instanceName}`;
         const apiUrl = process.env.EVOLUTION_API_URL || 'http://evolution:8080';
         
@@ -688,7 +688,7 @@ router.post('/:id/configurar', async (req, res) => {
 
     // Se foi passado webhookBase64, atualiza o webhook
     if (typeof webhookBase64 === 'boolean') {
-      const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.quadradois.com.br';
+      const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.ia.br';
       const webhookUrl = `${backendUrl}/api/webhooks/whatsapp?instance=${sessao.instanceName}`;
 
       const apiUrl = process.env.EVOLUTION_API_URL || '';

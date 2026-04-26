@@ -52,9 +52,9 @@ const GATILHOS: GatilhoSkill[] = [
         regex: /tem um amigo|conhe[cç]o algu[eé]m|meu vizinho|meu cunhado|minha irm[aã]|meu irm[aã]o|pode ser indica[cç][aã]o/i,
     },
     {
-        id: 'opener/tratativa-exclusividade',
+        id: 'opener/protocolo-autorizacao-venda',
         agentes: ['sdr'],
-        regex: /exclusividade|contrato exclusivo|n[aã]o quero exclusividade|fico preso|ficar preso/i,
+        regex: /vamos fazer (algum )?contrato|tem (algum )?contrato|como funciona (o )?(contrato|autoriza[cç][aã]o)|precisa assinar|que documento precisa|autoriza[cç][aã]o de venda/i,
     },
     {
         id: 'opener/tratativa-varios-corretores',
@@ -71,7 +71,7 @@ const GATILHOS: GatilhoSkill[] = [
     {
         id: 'presenter/tratativa-exclusividade',
         agentes: ['sdr'],
-        regex: /exclusividade|contrato exclusivo|n[aã]o quero exclusividade|fico preso|ficar preso/i,
+        regex: /exclusividade|contrato exclusivo|n[aã]o quero exclusividade|fico preso|ficar preso|[eé]\s*exclusivo\??|tem exclusividade\??/i,
     },
     {
         id: 'presenter/tratativa-vender-sozinho',
@@ -82,6 +82,16 @@ const GATILHOS: GatilhoSkill[] = [
         id: 'presenter/tratativa-comissao',
         agentes: ['sdr'],
         regex: /comiss[aã]o (t[aá]|[eé]) (alta|cara|muito|absurda)|desconto na comiss[aã]o|menos de (6|7|8|5)%|cobram demais/i,
+    },
+    {
+        id: 'presenter/tratativa-clausulas-contrato',
+        agentes: ['sdr'],
+        regex: /cl[aá]usula|o que significa a cl[aá]usula|explica a cl[aá]usula|me explica o contrato|como funciona a autoriza[cç][aã]o|d[uú]vida sobre (o )?(contrato|autoriza[cç][aã]o)/i,
+    },
+    {
+        id: 'presenter/tratativa-contrato-condicoes',
+        agentes: ['sdr'],
+        regex: /me manda (o |a )?(contrato|documento|autoriza[cç][aã]o)|enviar (o |a )?(contrato|documento|autoriza[cç][aã]o)|pode rescindir|rescis[aã]o|custo para rescindir|multa|negociar prazo|prazo (especial|diferente)|condi[cç][oõ]es (especiais|fora do padr[aã]o)|isen[cç][aã]o|desconto no contrato|penalidade/i,
     },
     {
         id: 'presenter/tratativa-sem-aceite-agendamento',

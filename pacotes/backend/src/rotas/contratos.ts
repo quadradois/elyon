@@ -8,6 +8,7 @@ import { Router, Request, Response } from 'express';
 import { getTenantId } from '../utils/tenant';
 import {
     gerarContratoCaptacao,
+    DadosContratoIncompletosError,
     registrarAceiteContrato,
     buscarContratoPorToken
 } from '../contratos/contrato-service';
@@ -43,10 +44,18 @@ router.post('/gerar', async (req: Request, res: Response) => {
                 hash: resultado.hash,
                 linkAceite: resultado.linkAceite
             },
-            mensagem: 'Contrato gerado com sucesso!'
+            mensagem: 'Autorização gerada com sucesso!'
         });
 
     } catch (error: any) {
+        if (error instanceof DadosContratoIncompletosError) {
+            return responderErro(
+                res,
+                400,
+                'Preencha os dados obrigatórios do contrato no lead antes de gerar a autorização.',
+                { faltantes: error.faltantes }
+            );
+        }
         console.error('[CONTRATOS] Erro ao gerar:', error);
         responderErro(res, 500, 'Erro interno do servidor');
     }

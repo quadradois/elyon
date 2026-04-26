@@ -18,6 +18,7 @@ import { s3Client } from '../lib/s3';
 import { prisma } from '../lib/db';
 
 const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || 'rag-eloyn';
+const CAPTURA_DOCS_INCLUIR_AUDIO = process.env.CAPTURA_DOCS_INCLUIR_AUDIO === 'true';
 
 // ─── Tipos de mídia suportados ────────────────────
 
@@ -171,10 +172,10 @@ export async function capturarDocumentoWhatsapp(evento: EventoMidia): Promise<vo
  */
 export const TIPOS_MIDIA_CAPTURÁVEIS = new Set([
   'imageMessage',
-  'audioMessage',
   'videoMessage',
   'documentMessage',
   'documentWithCaptionMessage',
+  ...(CAPTURA_DOCS_INCLUIR_AUDIO ? ['audioMessage'] : []),
 ]);
 
 /**
