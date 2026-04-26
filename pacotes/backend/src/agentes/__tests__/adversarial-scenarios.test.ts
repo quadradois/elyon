@@ -99,7 +99,7 @@ describe('ADV-02 — SPIN Diagnóstico', () => {
     it('SDR referencia skill de SPIN diagnóstico', () => {
         const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('presenter/spin-diagnostico');
+        expect(prompt).toContain('diagnostico/spin-diagnostico');
     });
 
     it('SDR instrui a usar qualificar_lead após cobrir blocos SPIN', () => {
@@ -123,9 +123,9 @@ describe('ADV-03 — Objeção: Comparação com Concorrentes', () => {
     it('SDR referencia skills de tratativas para objeções', () => {
         const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('presenter/tratativa-exclusividade');
-        expect(prompt).toContain('presenter/tratativa-vender-sozinho');
-        expect(prompt).toContain('presenter/tratativa-comissao');
+        expect(prompt).toContain('diagnostico/tratativa-exclusividade');
+        expect(prompt).toContain('diagnostico/tratativa-vender-sozinho');
+        expect(prompt).toContain('diagnostico/tratativa-comissao');
     });
 
     it('SDR declara proibições do WhatsApp contra narrações técnicas', () => {
@@ -181,7 +181,7 @@ describe('ADV-05 — Comissão disponível no SDR', () => {
     it('SDR instrui a consultar skill de comissão para casos difíceis', () => {
         const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('presenter/tratativa-comissao');
+        expect(prompt).toContain('diagnostico/tratativa-comissao');
     });
 });
 
@@ -247,7 +247,7 @@ describe('Behavioral Contracts — Invariantes SDR', () => {
     it('SDR instrui a consultar skill escalation-trigger-matrix', () => {
         const agent = criarSdrAgent(baseConfig);
         const prompt = agent.instructions({});
-        expect(prompt).toContain('presenter/escalation-trigger-matrix');
+        expect(prompt).toContain('agendamento/escalation-trigger-matrix');
     });
 
     it('SDR contém regras de progressão de fase', () => {

@@ -11,7 +11,7 @@ Use quando o lead já recebeu, viu ou pediu a prévia da nossa autorização de 
 Em 90% dos casos, esta skill entra depois que o proprietário leu o modelo ou a prévia do documento.
 
 Não use esta skill para negociação de exceções (multa específica, prazo especial, desconto, isenção).
-Nesses casos, use `presenter/tratativa-contrato-condicoes`.
+Nesses casos, use `contrato/tratativa-condicoes`.
 
 ## Objetivo
 Tirar dúvidas do proprietário sobre o nosso documento de autorização de venda, de forma objetiva, segura e conectada ao ponto que ele perguntou.

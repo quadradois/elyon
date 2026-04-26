@@ -5,7 +5,7 @@
  * - SKILLS_REGISTRY: todas as skills registradas carregam corretamente do disco
  * - lerConteudoSkill: retorno correto para skill existente e inexistente
  * - listarSkillsDisponiveis: lista completa
- * - detectarSkillGatilho: regex de gatilhos para SDR (unificado opener + presenter)
+ * - detectarSkillGatilho: regex de gatilhos para SDR (namespaces canônicos)
  * - tentarPreCarregarSkill: integração gatilho → carregamento → system message
  * - ler_skill tool: validação do schema e execução
  */
@@ -41,26 +41,46 @@ describe('SKILLS_REGISTRY — integridade dos arquivos .md', () => {
         expect(conteudo).toContain('inexistente/nao-existe');
     });
 
-    // Validar que cada pasta corresponde ao prefixo do ID
-    it('skills de opener/ estão no diretório opener/', () => {
-        const openerSkills = skills.filter(s => s.startsWith('opener/'));
-        expect(openerSkills.length).toBeGreaterThanOrEqual(6);
-        for (const s of openerSkills) {
-            expect(SKILLS_REGISTRY[s]).toMatch(/^opener\//);
-        }
+    // Validar namespaces canônicos e aliases legados
+    it('skills canônicas de prospeccao/ existem', () => {
+        const prospeccaoSkills = skills.filter(s => s.startsWith('prospeccao/'));
+        expect(prospeccaoSkills.length).toBeGreaterThanOrEqual(6);
     });
 
-    it('skills de presenter/ estão no diretório presenter/', () => {
-        const presenterSkills = skills.filter(s => s.startsWith('presenter/'));
-        expect(presenterSkills.length).toBeGreaterThanOrEqual(6);
-        for (const s of presenterSkills) {
-            expect(SKILLS_REGISTRY[s]).toMatch(/^presenter\//);
-        }
+    it('skills canônicas de diagnostico/ existem', () => {
+        const diagnosticoSkills = skills.filter(s => s.startsWith('diagnostico/'));
+        expect(diagnosticoSkills.length).toBeGreaterThanOrEqual(5);
     });
 
-    it('skills compartilhados/ estão no diretório compartilhados/', () => {
+    it('skills canônicas de contrato/ existem', () => {
+        const contratoSkills = skills.filter(s => s.startsWith('contrato/'));
+        expect(contratoSkills.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('skills canônicas de agendamento/ existem', () => {
+        const agendamentoSkills = skills.filter(s => s.startsWith('agendamento/'));
+        expect(agendamentoSkills.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('skills compartilhados/ existem', () => {
         const compartilhados = skills.filter(s => s.startsWith('compartilhados/'));
         expect(compartilhados.length).toBe(3);
+    });
+
+    it('aliases legados opener/ e presenter/ continuam registrados', () => {
+        const openerSkills = skills.filter(s => s.startsWith('opener/'));
+        const presenterSkills = skills.filter(s => s.startsWith('presenter/'));
+        expect(openerSkills.length).toBeGreaterThanOrEqual(6);
+        expect(presenterSkills.length).toBeGreaterThanOrEqual(10);
+    });
+
+    it('aliases legados carregam o mesmo conteúdo das skills canônicas', () => {
+        expect(lerConteudoSkill('opener/protocolo-desconfianca'))
+            .toBe(lerConteudoSkill('prospeccao/protocolo-desconfianca'));
+        expect(lerConteudoSkill('presenter/tratativa-clausulas-contrato'))
+            .toBe(lerConteudoSkill('contrato/tratativa-clausulas'));
+        expect(lerConteudoSkill('presenter/tratativa-sem-aceite-agendamento'))
+            .toBe(lerConteudoSkill('agendamento/tratativa-sem-aceite'));
     });
 });
 
@@ -85,35 +105,35 @@ describe('detectarSkillGatilho — detecção regex', () => {
             .toBe('compartilhados/reset-emocional');
     });
 
-    // ── SDR — Skills de Abertura/Prospecção ──
+    // ── SDR — Skills de Prospeccao ──
     it('detecta protocolo-desconfianca', () => {
         expect(detectarSkillGatilho('como você conseguiu meu número?', 'sdr'))
-            .toBe('opener/protocolo-desconfianca');
+            .toBe('prospeccao/protocolo-desconfianca');
     });
 
     it('detecta protocolo-recuo-hostilidade', () => {
         expect(detectarSkillGatilho('não pedi sua ajuda', 'sdr'))
-            .toBe('opener/protocolo-recuo-hostilidade');
+            .toBe('prospeccao/protocolo-recuo-hostilidade');
     });
 
     it('detecta protocolo-indicacao', () => {
         expect(detectarSkillGatilho('tem um amigo que quer vender o apartamento', 'sdr'))
-            .toBe('opener/protocolo-indicacao');
+            .toBe('prospeccao/protocolo-indicacao');
     });
 
-    it('detecta tratativa de autorização/contrato no opener', () => {
+    it('detecta tratativa de autorização/contrato na prospeccao', () => {
         expect(detectarSkillGatilho('nós vamos fazer algum contrato para vender?', 'sdr'))
-            .toBe('opener/protocolo-autorizacao-venda');
+            .toBe('prospeccao/protocolo-autorizacao-venda');
     });
 
-    it('detecta tratativa-exclusividade no presenter', () => {
+    it('detecta tratativa-exclusividade no diagnostico', () => {
         expect(detectarSkillGatilho('exclusividade eu acho complicado', 'sdr'))
-            .toBe('presenter/tratativa-exclusividade');
+            .toBe('diagnostico/tratativa-exclusividade');
     });
 
     it('detecta tratativa-varios-corretores', () => {
         expect(detectarSkillGatilho('já tenho vários corretores trabalhando', 'sdr'))
-            .toBe('opener/tratativa-varios-corretores');
+            .toBe('prospeccao/tratativa-varios-corretores');
     });
 
     it('nao aciona tratativa-varios-corretores apenas por "poucas visitas"', () => {
@@ -123,88 +143,88 @@ describe('detectarSkillGatilho — detecção regex', () => {
 
     it('detecta protocolo-ja-tem-contrato', () => {
         expect(detectarSkillGatilho('já assinei contrato com uma imobiliária', 'sdr'))
-            .toBe('opener/protocolo-ja-tem-contrato');
+            .toBe('prospeccao/protocolo-ja-tem-contrato');
     });
 
-    // ── SDR — Skills de Diagnóstico/Pitch ──
+    // ── SDR — Skills de Diagnostico/Pitch ──
     it('detecta tratativa-vender-sozinho', () => {
         expect(detectarSkillGatilho('se eu achar o comprador, posso vender por fora?', 'sdr'))
-            .toBe('presenter/tratativa-vender-sozinho');
+            .toBe('diagnostico/tratativa-vender-sozinho');
     });
 
     it('detecta tratativa-comissao', () => {
         expect(detectarSkillGatilho('a comissão tá muito alta', 'sdr'))
-            .toBe('presenter/tratativa-comissao');
+            .toBe('diagnostico/tratativa-comissao');
     });
 
     it('detecta dúvidas de contrato após template de contato', () => {
         expect(detectarSkillGatilho('nesse modelo que você mandou, isso é pegadinha?', 'sdr'))
-            .toBe('presenter/tratativa-duvidas-contrato-template-contato');
+            .toBe('contrato/tratativa-duvidas-template-contato');
     });
 
-    it('detecta explicação de cláusulas no presenter', () => {
+    it('detecta explicação de cláusulas no contrato', () => {
         expect(detectarSkillGatilho('me explica as cláusulas da autorização', 'sdr'))
-            .toBe('presenter/tratativa-clausulas-contrato');
+            .toBe('contrato/tratativa-clausulas');
     });
 
     it('detecta dúvida de cláusula sobre comprador direto', () => {
         expect(detectarSkillGatilho('e se aparecer um comprador direto?', 'sdr'))
-            .toBe('presenter/tratativa-clausulas-contrato');
+            .toBe('contrato/tratativa-clausulas');
     });
 
     it('detecta dúvida de cláusula sobre mais de uma imobiliária', () => {
         expect(detectarSkillGatilho('posso trabalhar com mais de uma imobiliária?', 'sdr'))
-            .toBe('presenter/tratativa-clausulas-contrato');
+            .toBe('contrato/tratativa-clausulas');
     });
 
     it('detecta objeção de pressão para baixar valor (cláusula 1.1)', () => {
         expect(detectarSkillGatilho('vocês vão me forçar a baixar o preço?', 'sdr'))
-            .toBe('presenter/tratativa-clausulas-contrato');
+            .toBe('contrato/tratativa-clausulas');
     });
 
     it('detecta medo de comissão extra por múltiplos corretores (cláusula 2)', () => {
         expect(detectarSkillGatilho('se entrar mais corretor eu vou pagar comissão dobrada?', 'sdr'))
-            .toBe('presenter/tratativa-clausulas-contrato');
+            .toBe('contrato/tratativa-clausulas');
     });
 
     it('detecta dúvida de cláusula 3 (fim do contrato e comissão)', () => {
         expect(detectarSkillGatilho('depois que acabar o contrato ainda tenho que pagar comissão?', 'sdr'))
-            .toBe('presenter/tratativa-clausulas-contrato');
+            .toBe('contrato/tratativa-clausulas');
     });
 
     it('detecta dúvida de cláusula 4 (gestão exclusiva do processo)', () => {
         expect(detectarSkillGatilho('por que tenho que direcionar todos os interessados para vocês?', 'sdr'))
-            .toBe('presenter/tratativa-clausulas-contrato');
+            .toBe('contrato/tratativa-clausulas');
     });
 
     it('detecta dúvida de cláusula 5 (interessado apresentado/comunicado)', () => {
         expect(detectarSkillGatilho('depois do contrato vocês podem cobrar comissão de cliente não comunicado?', 'sdr'))
-            .toBe('presenter/tratativa-clausulas-contrato');
+            .toBe('contrato/tratativa-clausulas');
     });
 
-    it('detecta condições específicas da autorização no presenter', () => {
+    it('detecta condições específicas da autorização no contrato', () => {
         expect(detectarSkillGatilho('pode rescindir? tem alguma multa?', 'sdr'))
-            .toBe('presenter/tratativa-contrato-condicoes');
+            .toBe('contrato/tratativa-condicoes');
     });
 
-    it('detecta pedido de envio do documento no presenter', () => {
+    it('detecta pedido de envio do documento no contrato', () => {
         expect(detectarSkillGatilho('me manda a autorização para eu ler', 'sdr'))
-            .toBe('presenter/tratativa-contrato-condicoes');
+            .toBe('contrato/tratativa-condicoes');
     });
 
     it('detecta tratativa-sem-aceite-agendamento', () => {
         expect(detectarSkillGatilho('agora não quero marcar', 'sdr'))
-            .toBe('presenter/tratativa-sem-aceite-agendamento');
+            .toBe('agendamento/tratativa-sem-aceite');
     });
 
     it('detecta tratativa-sem-aceite-agendamento para "vou pensar"', () => {
         expect(detectarSkillGatilho('vou pensar e depois te aviso', 'sdr'))
-            .toBe('presenter/tratativa-sem-aceite-agendamento');
+            .toBe('agendamento/tratativa-sem-aceite');
     });
 
     it('detecta tratativa-sem-aceite-agendamento para "depois eu vejo"', () => {
         expect(detectarSkillGatilho('depois eu vejo esse agendamento', 'sdr'))
-            .toBe('presenter/tratativa-sem-aceite-agendamento');
+            .toBe('agendamento/tratativa-sem-aceite');
     });
 
     it('mantém recuo-hostilidade para rejeição explícita de contato', () => {
@@ -214,7 +234,7 @@ describe('detectarSkillGatilho — detecção regex', () => {
 
     it('detecta escalation-trigger-matrix', () => {
         expect(detectarSkillGatilho('sim pode avançar', 'sdr'))
-            .toBe('presenter/escalation-trigger-matrix');
+            .toBe('agendamento/escalation-trigger-matrix');
     });
 
     // ── Filtro por agente — Admin NÃO tem skills de SDR ──

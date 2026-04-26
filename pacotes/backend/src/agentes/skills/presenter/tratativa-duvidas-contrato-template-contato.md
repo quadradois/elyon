@@ -34,9 +34,9 @@ Remover fricção de confiança no primeiro momento sem cair em juridiquês e se
 
 ## Limites (não ultrapassar)
 - Se pedir multa, rescisão específica, desconto, isenção ou condição fora do padrão:
-  - acione `presenter/tratativa-contrato-condicoes`.
+  - acione `contrato/tratativa-condicoes`.
 - Se for explicação ampla de cláusulas:
-  - acione `presenter/tratativa-clausulas-contrato`.
+  - acione `contrato/tratativa-clausulas`.
 
 ## O que NÃO fazer
 - ❌ Não usar "contrato simples".

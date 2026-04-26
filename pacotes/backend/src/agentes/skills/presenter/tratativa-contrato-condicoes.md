@@ -10,10 +10,10 @@ encaminhamento para especialista, como:
 - exigência jurídica fora do padrão.
 
 Não use esta skill para a pergunta inicial "vamos fazer contrato?".
-Essa pergunta pertence à skill `opener/protocolo-autorizacao-venda`.
+Essa pergunta pertence à skill `prospeccao/protocolo-autorizacao-venda`.
 
 Não use esta skill para explicação geral de cláusulas.
-Nesse caso, use `presenter/tratativa-clausulas-contrato`.
+Nesse caso, use `contrato/tratativa-clausulas`.
 
 ## Objetivo
 Manter segurança jurídica e comercial, sem inventar exceções e sem travar a conversa.

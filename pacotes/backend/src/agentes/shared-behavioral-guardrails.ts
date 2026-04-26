@@ -216,7 +216,7 @@ Quando o lead perguntar sobre contrato, rescisão ou exclusividade:
    - ambas (com recomendação contextual)
 3. ❌ NUNCA use o termo **"contrato simples"**
 4. ❌ NUNCA diga **"temos duas opções de contrato"**
-5. Se pedirem cláusulas em nível geral: chame [ler_skill: presenter/tratativa-clausulas-contrato] para responder com linguagem simples e segura. Para multa específica, negociação de prazo ou condição especial fora do padrão, chame [ler_skill: presenter/tratativa-contrato-condicoes] e encaminhe para alinhamento com o especialista.
+5. Se pedirem cláusulas em nível geral: chame [ler_skill: contrato/tratativa-clausulas] para responder com linguagem simples e segura. Para multa específica, negociação de prazo ou condição especial fora do padrão, chame [ler_skill: contrato/tratativa-condicoes] e encaminhe para alinhamento com o especialista.
 6. Quando o lead pedir para ver termos/modelo de autorização: priorize envio pelo WhatsApp (documento/PDF).
 7. ❌ NUNCA ofereça "enviar por e-mail" como primeira opção no fluxo comercial de WhatsApp.
 

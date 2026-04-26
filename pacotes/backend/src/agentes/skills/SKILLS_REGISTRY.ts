@@ -5,9 +5,15 @@
  * Cada skill é um arquivo .md com playbook instrucional carregado sob demanda.
  * 
  * Para adicionar uma nova skill:
- * 1. Crie o arquivo .md na pasta correspondente (opener/, presenter/, compartilhados/)
- *    Nota: após unificação SDR, opener/ e presenter/ são subpastas organizacionais.
- *    O SDR Agent tem acesso a TODAS as skills.
+ * 1. Use os namespaces canônicos por função/fase:
+ *    - prospeccao/
+ *    - diagnostico/
+ *    - contrato/
+ *    - agendamento/
+ *    - compartilhados/
+ * 2. Nota de compatibilidade:
+ *    - IDs legados opener/ e presenter/ seguem ativos como aliases.
+ *    - O SDR Agent tem acesso a TODAS as skills.
  * 2. Adicione a entrada no SKILLS_REGISTRY abaixo
  * 
  * @version 1.0
@@ -28,7 +34,39 @@ export const SKILLS_REGISTRY: Record<string, string> = {
     'compartilhados/reset-emocional':         'compartilhados/reset-emocional.md',
 
     // ===========================
-    // Opener — Primeiro contato
+    // Canônicas — Prospeccao
+    // ===========================
+    'prospeccao/protocolo-desconfianca':      'opener/protocolo-desconfianca.md',
+    'prospeccao/protocolo-recuo-hostilidade': 'opener/protocolo-recuo-hostilidade.md',
+    'prospeccao/protocolo-indicacao':         'opener/protocolo-indicacao.md',
+    'prospeccao/protocolo-autorizacao-venda': 'opener/protocolo-autorizacao-venda.md',
+    'prospeccao/tratativa-varios-corretores': 'opener/tratativa-varios-corretores.md',
+    'prospeccao/protocolo-ja-tem-contrato':   'opener/protocolo-ja-tem-contrato.md',
+
+    // ===========================
+    // Canônicas — Diagnostico
+    // ===========================
+    'diagnostico/spin-diagnostico':           'presenter/spin-diagnostico.md',
+    'diagnostico/pitch-rede-parceiros':       'presenter/pitch-rede-parceiros.md',
+    'diagnostico/tratativa-exclusividade':    'presenter/tratativa-exclusividade.md',
+    'diagnostico/tratativa-vender-sozinho':   'presenter/tratativa-vender-sozinho.md',
+    'diagnostico/tratativa-comissao':         'presenter/tratativa-comissao.md',
+
+    // ===========================
+    // Canônicas — Contrato
+    // ===========================
+    'contrato/tratativa-duvidas-template-contato': 'presenter/tratativa-duvidas-contrato-template-contato.md',
+    'contrato/tratativa-clausulas':           'presenter/tratativa-clausulas-contrato.md',
+    'contrato/tratativa-condicoes':           'presenter/tratativa-contrato-condicoes.md',
+
+    // ===========================
+    // Canônicas — Agendamento
+    // ===========================
+    'agendamento/tratativa-sem-aceite':       'presenter/tratativa-sem-aceite-agendamento.md',
+    'agendamento/escalation-trigger-matrix':  'presenter/escalation-trigger-matrix.md',
+
+    // ===========================
+    // Aliases legados (compatibilidade)
     // ===========================
     'opener/protocolo-desconfianca':          'opener/protocolo-desconfianca.md',
     'opener/protocolo-recuo-hostilidade':     'opener/protocolo-recuo-hostilidade.md',
@@ -36,10 +74,6 @@ export const SKILLS_REGISTRY: Record<string, string> = {
     'opener/protocolo-autorizacao-venda':     'opener/protocolo-autorizacao-venda.md',
     'opener/tratativa-varios-corretores':     'opener/tratativa-varios-corretores.md',
     'opener/protocolo-ja-tem-contrato':       'opener/protocolo-ja-tem-contrato.md',
-
-    // ===========================
-    // Presenter — Diagnóstico e pitch
-    // ===========================
     'presenter/spin-diagnostico':             'presenter/spin-diagnostico.md',
     'presenter/pitch-rede-parceiros':         'presenter/pitch-rede-parceiros.md',
     'presenter/tratativa-exclusividade':      'presenter/tratativa-exclusividade.md',

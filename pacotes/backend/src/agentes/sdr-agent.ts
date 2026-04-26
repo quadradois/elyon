@@ -286,7 +286,7 @@ ${perguntasRoteiroMarkdown}
 ### Complementos Operacionais (OBRIGATÓRIOS)
 - Ordem de prioridade: PVAM (descoberta) primeiro; SPIN só inicia após descoberta mínima completa.
 - Em DIAGNOSTICO_SPIN, as perguntas devem ser abertas e curtas (máx 1 linha), sem listar hipóteses.
-- Em PITCH, chame \`ler_skill\` com ID \`presenter/pitch-rede-parceiros\` antes de iniciar.
+- Em PITCH, chame \`ler_skill\` com ID \`diagnostico/pitch-rede-parceiros\` antes de iniciar.
 - Em AGENDAMENTO, só chame \`agendar_reuniao_closer\` com dia+hora explícitos do lead.
 - "sim/pode ser/fechou" não são datas: após aceite, pergunte dia e horário.
 - Antes de pedir dia/horário, faça pre-CTA de interesse no agendamento (ex.: "faz sentido avançar para uma consultoria gratuita com o especialista?").
@@ -315,7 +315,7 @@ Chame \`ler_skill\` com o ID correto ANTES de responder e adapte ao contexto/fas
 
 // =============================================================================
 // CAMADA 5 — SKILLS DISPONÍVEIS
-// Union das tabelas de ambos os agentes (opener/* + presenter/* + compartilhados/*)
+// Skills organizadas por fase/função (prospeccao/* + diagnostico/* + contrato/* + agendamento/* + compartilhados/*)
 // =============================================================================
 
 function gerarLayer5Skills(): string {
@@ -327,31 +327,41 @@ function gerarLayer5Skills(): string {
 Antes de agir em qualquer situação específica, use \`ler_skill\` com o ID correspondente.
 O conteúdo retornado é o playbook que você DEVE seguir — não improvise.
 
-## Skills de Abertura/Prospecção (fases MEIO_CAMPO e DESCOBERTA)
+## Skills de Prospeccao (fases MEIO_CAMPO e DESCOBERTA)
 
 | ID da Skill | Quando usar |
 |-------------|-------------|
-| \`opener/protocolo-desconfianca\` | Lead pergunta "quem é você?", "como conseguiu meu número?", "de onde é?" |
-| \`opener/protocolo-recuo-hostilidade\` | Lead está irritado, hostil, defensivo ou rejeita o contato |
-| \`opener/protocolo-indicacao\` | Lead menciona outra pessoa que pode ter imóvel |
-| \`opener/protocolo-autorizacao-venda\` | Lead pergunta sobre contrato/autorização na fase de abertura |
-| \`opener/tratativa-varios-corretores\` | Lead diz que já tem vários corretores / poucas visitas |
-| \`opener/protocolo-ja-tem-contrato\` | Lead diz que já assinou contrato com outra imobiliária |
+| \`prospeccao/protocolo-desconfianca\` | Lead pergunta "quem é você?", "como conseguiu meu número?", "de onde é?" |
+| \`prospeccao/protocolo-recuo-hostilidade\` | Lead está irritado, hostil, defensivo ou rejeita o contato |
+| \`prospeccao/protocolo-indicacao\` | Lead menciona outra pessoa que pode ter imóvel |
+| \`prospeccao/protocolo-autorizacao-venda\` | Lead pergunta sobre contrato/autorização na fase de abertura |
+| \`prospeccao/tratativa-varios-corretores\` | Lead diz que já tem vários corretores / poucas visitas |
+| \`prospeccao/protocolo-ja-tem-contrato\` | Lead diz que já assinou contrato com outra imobiliária |
 
-## Skills de Diagnóstico/Pitch (fases DIAGNOSTICO_SPIN, PITCH, AGENDAMENTO)
+## Skills de Diagnostico/Pitch (fases DIAGNOSTICO_SPIN e PITCH)
 
 | ID da Skill | Quando usar |
 |-------------|-------------|
-| \`presenter/spin-diagnostico\` | Quando precisar formular perguntas certas de P, I ou N |
-| \`presenter/pitch-rede-parceiros\` | Após validar necessidade, para montar os Blocos A, B e C |
-| \`presenter/escalation-trigger-matrix\` | Lead aceita o pitch e demonstra interesse em avançar para agendamento |
-| \`presenter/tratativa-exclusividade\` | Lead expressa medo de "ficar refém de uma imobiliária" |
-| \`presenter/tratativa-vender-sozinho\` | Lead questiona "e se eu vender sozinho?" |
-| \`presenter/tratativa-comissao\` | Lead reage mal à % de comissão |
-| \`presenter/tratativa-duvidas-contrato-template-contato\` | Lead reage ao template/mensagem inicial com dúvida contratual curta ("é pegadinha?", "vou ficar preso?") |
-| \`presenter/tratativa-clausulas-contrato\` | Lead pede explicação de cláusulas/termos da autorização |
-| \`presenter/tratativa-contrato-condicoes\` | Lead pede multa, rescisão, prazo especial ou condição fora do padrão |
-| \`presenter/tratativa-sem-aceite-agendamento\` | Lead não aceita agendar agora ("vou pensar", "agora não", "não quero marcar") |
+| \`diagnostico/spin-diagnostico\` | Quando precisar formular perguntas certas de P, I ou N |
+| \`diagnostico/pitch-rede-parceiros\` | Após validar necessidade, para montar os Blocos A, B e C |
+| \`diagnostico/tratativa-exclusividade\` | Lead expressa medo de "ficar refém de uma imobiliária" |
+| \`diagnostico/tratativa-vender-sozinho\` | Lead questiona "e se eu vender sozinho?" |
+| \`diagnostico/tratativa-comissao\` | Lead reage mal à % de comissão |
+
+## Skills de Contrato (fases PITCH e AGENDAMENTO)
+
+| ID da Skill | Quando usar |
+|-------------|-------------|
+| \`contrato/tratativa-duvidas-template-contato\` | Lead reage ao template/mensagem inicial com dúvida contratual curta ("é pegadinha?", "vou ficar preso?") |
+| \`contrato/tratativa-clausulas\` | Lead pede explicação de cláusulas/termos da autorização |
+| \`contrato/tratativa-condicoes\` | Lead pede multa, rescisão, prazo especial ou condição fora do padrão |
+
+## Skills de Agendamento (fase AGENDAMENTO)
+
+| ID da Skill | Quando usar |
+|-------------|-------------|
+| \`agendamento/tratativa-sem-aceite\` | Lead não aceita agendar agora ("vou pensar", "agora não", "não quero marcar") |
+| \`agendamento/escalation-trigger-matrix\` | Lead aceita o pitch e demonstra interesse em avançar para agendamento |
 
 ## Skills Compartilhadas (qualquer fase)
 
