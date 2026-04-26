@@ -1,48 +1,66 @@
 # Skill: Tratativa de Cláusulas da Autorização (Presenter)
 
 ## Quando usar esta Skill
-Use quando o lead pedir explicação sobre cláusulas da autorização de venda:
+Use quando o lead já recebeu, viu ou pediu a prévia da nossa autorização de venda e trouxe dúvida sobre o documento:
 - "Me explica as cláusulas"
 - "O que significa essa parte do contrato?"
 - "Quais são os termos da autorização?"
 - "Quero entender antes de assinar"
 - "Tenho dúvida sobre preço, parceiros, comissão, prazo ou comprador direto"
 
+Em 90% dos casos, esta skill entra depois que o proprietário leu o modelo ou a prévia do documento.
+
 Não use esta skill para negociação de exceções (multa específica, prazo especial, desconto, isenção).
 Nesses casos, use `presenter/tratativa-contrato-condicoes`.
 
 ## Objetivo
-Explicar a autorização de venda de forma simples, segura e orientada a benefício, sem juridiquês e sem inventar regra comercial.
+Tirar dúvidas do proprietário sobre o nosso documento de autorização de venda, de forma objetiva, segura e conectada ao ponto que ele perguntou.
+
+Não ensine "o que é um contrato" em abstrato. Responda sobre a cláusula, regra ou trecho que existe no nosso documento.
 
 ## Regras centrais
 - Use sempre o termo **autorização de venda**.
+- Se o lead chamar de "contrato", acolha a palavra dele e traduza: "no nosso documento, isso é a autorização de venda".
 - Explique primeiro o benefício para o proprietário, depois a regra.
 - Responda em linguagem humana e curta.
 - Não invente prazo, comissão, multa ou condição comercial.
+- Comissão, prazo e qualquer valor comercial devem vir do perfil da imobiliária (tenant). Se não estiverem no contexto, diga que o especialista confirma o valor exato no alinhamento.
 - Nunca use **"contrato simples"**.
 - Nunca apresente **"duas opções de contrato"**.
+- Nunca comece com aula genérica sobre contrato; comece pelo ponto que gerou dúvida.
 
-## Estrutura recomendada de resposta
-1. Valide a dúvida em 1 linha.
-2. Explique a cláusula pelo benefício prático.
-3. Traduza a regra sem juridiquês.
-4. Feche com próximo passo objetivo.
+## Processo de resposta
+1. Identifique qual cláusula ou tema do nosso documento o lead está questionando.
+2. Responda a pergunta direta primeiro.
+3. Mostre por que aquela regra protege o proprietário ou organiza a venda.
+4. Traduza a regra do nosso documento sem juridiquês.
+5. Feche com próximo passo objetivo.
 
-## Resposta-base geral
-> *"Perfeito, faz total sentido querer entender antes de assinar. Em resumo, as cláusulas da autorização de venda servem para deixar claro o que cada lado faz, como funciona o prazo e como fica a intermediação com transparência. Assim você não assume nada no escuro e todo o processo fica previsível."*
+## Se o lead pedir uma explicação geral do documento
+Use apenas um resumo curto e depois convide para tratar ponto a ponto:
+
+> *"Claro. A autorização de venda organiza três coisas principais: valor e propostas, forma de divulgação com nossa rede, e regras de comissão/prazo. O ideal é eu te responder ponto a ponto para não virar juridiquês. Qual cláusula ficou menos clara para você?"*
+
+## Mapa rápido de dúvidas
+- Valor, proposta menor, medo de baixar preço: cláusula 1 e 1.1.
+- Divulgação, parceiros, anúncios e custo extra: cláusula 2.
+- Comissão, venda após prazo e origem do comprador: cláusula 3.
+- Gestão exclusiva, contato com interessados e centralização: cláusula 4.
+- Comprador apresentado, venda direta e comissão integral: cláusula 5 e 5.1.
+- Prazo, saída e aviso de 30 dias: cláusula 6.
 
 ## Cláusulas em ordem
 
 ### Cláusula 1 e 1.1 - Preço anunciado e propostas inferiores
-Texto sensível:
+Trecho do nosso documento que gera dúvida:
 - o imóvel será anunciado pelo valor definido;
 - o proprietário pode receber propostas inferiores, sem obrigação de aceitar.
 
-Risco de interpretação do lead:
+Dúvida comum do proprietário:
 - "Vocês vão me forçar a baixar o preço."
 
 Resposta-base:
-> *"Ótimo ponto. Quem define o valor de anúncio é você. A gente não reduz seu preço por conta própria. O que a cláusula 1.1 faz é permitir que propostas cheguem para sua análise - e a decisão final de aceitar, recusar ou contrapropor é sempre sua."*
+> *"Neste trecho, o ponto principal é: quem define o valor de anúncio é você. A cláusula 1.1 não autoriza a gente a baixar o preço por conta própria. Ela só permite que uma proposta menor seja apresentada para sua análise - e a decisão final de aceitar, recusar ou contrapropor continua sendo sempre sua."*
 
 Versão curta:
 > *"Resumindo: nós apresentamos proposta, você decide. Sempre."*
@@ -54,18 +72,18 @@ Checklist:
 - não usar linguagem de pressão, como "tem que baixar" ou "é melhor aceitar logo".
 
 ### Cláusula 2 - Rede de parceiros sem custo adicional
-Texto sensível:
+Trecho do nosso documento que gera dúvida:
 - autorização para divulgar em canais e rede de parceiros;
 - parceiros podem anunciar por conta própria;
 - o proprietário não paga outros profissionais;
 - a comissão não aumenta por haver mais corretores envolvidos.
 
-Risco de interpretação do lead:
+Dúvida comum do proprietário:
 - "Vou pagar comissão dobrada/tripla se mais corretores entrarem."
 - "Vou ter custo extra com outros profissionais."
 
 Resposta-base:
-> *"Nessa cláusula, você autoriza ampliar a divulgação com a nossa rede de parceiros para aumentar alcance. Isso não cria comissão extra para você: a comissão continua sendo a da cláusula 3, a mesma combinada. Se um corretor parceiro fechar a venda, o repasse entre imobiliária e parceiro é feito internamente por nós, sem aumentar seu custo."*
+> *"Nessa cláusula, você está autorizando que a divulgação seja ampliada pela nossa rede de parceiros. Isso serve para dar mais alcance ao imóvel, mas não aumenta sua despesa. A comissão continua sendo a combinada na cláusula 3. Se um corretor parceiro participar da venda, o acerto com ele é interno da nossa operação, sem comissão extra para você."*
 
 Versão curta:
 > *"Mais corretores trabalhando, mesmo custo para você. A comissão é a combinada na cláusula 3."*
@@ -78,15 +96,15 @@ Checklist:
 - não sugerir cobrança adicional por número de corretores.
 
 ### Cláusula 3 - Comissão por intermediação
-Texto sensível:
+Trecho do nosso documento que gera dúvida:
 - comissão é devida se a venda ocorrer no prazo da autorização;
 - comissão também é devida após o prazo quando a venda vier da intermediação/origem da operação.
 
-Risco de interpretação do lead:
+Dúvida comum do proprietário:
 - "Vou ficar preso para sempre e pagar comissão em qualquer venda."
 
 Resposta-base:
-> *"Essa cláusula não cria comissão eterna para qualquer venda. Ela protege a intermediação que foi feita por nós. Se a venda acontecer para cliente ou corretor que conheceu o imóvel pela nossa atuação, a comissão é devida conforme a cláusula. Agora, se após o fim da autorização você fechar com alguém totalmente fora da nossa intermediação, não há obrigação de pagamento para nossa empresa."*
+> *"Essa cláusula não cria comissão eterna para qualquer venda. Ela trata da origem da negociação. Se a venda acontecer com cliente ou corretor que teve acesso ao imóvel pela nossa intermediação, a comissão é devida conforme o valor configurado para a imobiliária. Mas, se depois do fim da autorização você fechar com alguém que não foi apresentado por nós e não veio da nossa atuação, não há obrigação de pagamento para nossa empresa."*
 
 Versão curta:
 > *"Comissão é sobre intermediação comprovada - não sobre qualquer venda futura."*
@@ -99,19 +117,19 @@ Checklist:
 - não dizer que vale para qualquer comprador depois.
 
 ### Cláusula 4 - Gestão exclusiva do processo de venda
-Texto sensível:
+Trecho do nosso documento que gera dúvida:
 - durante a vigência, a gestão e condução da venda ficam com o autorizado;
 - corretores/clientes interessados devem ser direcionados ao autorizado.
 
-Risco de interpretação do lead:
+Dúvida comum do proprietário:
 - "Vou perder autonomia."
 - "Vão me impedir de falar com interessados."
 
 Resposta-base:
-> *"Aqui a lógica é simplificar sua vida: se você contratou nossa empresa para conduzir a venda, nós assumimos a gestão de ponta a ponta para você não se desgastar com operação, triagem e negociação desalinhada. Você não perde decisão - você ganha um responsável único cuidando de tudo, com você validando o que realmente importa."*
+> *"Neste item, a gestão fica centralizada conosco para tirar o peso operacional de você. A ideia é que nossa empresa cuide de divulgação, triagem, organização de interessados e condução da negociação, enquanto você mantém a decisão final sobre propostas e condições. Você não perde autonomia: você delega o processo para não precisar fazer o trabalho que contratou a imobiliária para executar."*
 
 Reforço de valor:
-> *"No fim, a pergunta é: por que você vai perder tempo, correr risco de negociação errada e absorver desgaste operacional, se pode ter uma equipe dedicada fazendo isso por você com método?"*
+> *"Na prática, isso reduz desgaste, perda de tempo e risco de negociação desalinhada. Em vez de você administrar contatos soltos, a venda passa por uma gestão única e rastreável."*
 
 Versão curta:
 > *"Você delega o operacional, mantém a decisão final e reduz desgaste, risco e tempo perdido."*
@@ -124,12 +142,12 @@ Checklist:
 - não soar como imposição ou perda de decisão.
 
 ### Cláusula 5 e 5.1 - Proteção de interessados apresentados
-Texto sensível:
+Trecho do nosso documento que gera dúvida:
 - o proprietário não deve negociar direto, nem por outro corretor, com interessado apresentado pelo autorizado;
 - após o término, isso só vale para interessados comunicados e identificados;
 - descumprimento gera comissão integral da cláusula 3.
 
-Risco de interpretação do lead:
+Dúvida comum do proprietário:
 - "Vocês vão reivindicar qualquer comprador depois."
 - "Eu vou ficar preso sem saber quem foi apresentado."
 
@@ -137,7 +155,7 @@ Resposta-base:
 > *"Essa cláusula existe para dar segurança e evitar conflito. Só é considerado 'interessado apresentado por nós' quem foi devidamente comunicado e identificado para você. Sem esse registro e comunicação, não existe base para reivindicação. Ou seja: transparência total para os dois lados."*
 
 Complemento obrigatório:
-> *"Na prática, nosso direito de comissão depende de gestão ativa e rastreável: manter você atualizado com feedback, identificação dos interessados e histórico claro. Isso evita abandono, evita ruído e evita o famoso 'deixar no vácuo'."*
+> *"Na prática, nosso direito de comissão depende de gestão ativa e rastreável: manter você atualizado com feedback, identificação dos interessados e histórico claro. Isso evita abandono, ruído de informação e falta de retorno durante a venda."*
 
 Versão curta:
 > *"Sem comunicação + identificação do interessado, não há como tratar como cliente apresentado por nós."*
@@ -151,11 +169,11 @@ Checklist:
 - não usar tom de ameaça sobre a cláusula 5.1.
 
 ### Cláusula 6 - Prazo da autorização e revogação com 30 dias
-Texto sensível:
+Trecho do nosso documento que gera dúvida:
 - prazo da autorização segue o definido no perfil da imobiliária;
 - a autorização pode ser revogada mediante aviso expresso de 30 dias.
 
-Risco de interpretação do lead:
+Dúvida comum do proprietário:
 - "Esse prazo foi inventado para me prender."
 - "Não tenho saída se quiser encerrar."
 
@@ -167,7 +185,7 @@ Tese comercial:
 - no mercado amplo, o lead costuma ver referência de ciclo médio perto de **1 ano e 6 meses**.
 
 Resposta-base:
-> *"Ótimo ponto. Esse prazo é o que está configurado na política da imobiliária e foi definido com base na nossa análise interna de operação: nosso ciclo médio de venda gira em torno de 6 meses quando o imóvel entra com estratégia e gestão ativa. No mercado geral, você mesmo encontra referências de ciclos próximos de 1 ano e 6 meses. Ou seja, esse prazo não é para te prender - é para dar janela técnica real de execução e aumentar a chance de vender antes da média do mercado."*
+> *"No nosso documento, esse prazo segue a política configurada para a imobiliária. Ele não foi escolhido no chute: foi definido com base na nossa análise interna do ciclo real de venda. Nossa referência operacional gira em torno de 6 meses quando o imóvel entra com estratégia e gestão ativa. No mercado amplo, é comum encontrar referências próximas de 1 ano e 6 meses. Então esse prazo não existe para te prender - ele dá uma janela técnica real para executar a venda com método e aumentar a chance de vender antes da média ampla do mercado."*
 
 Revogação com aviso prévio:
 > *"A autorização pode ser revogada com aviso expresso de 30 dias de antecedência. Isso dá previsibilidade para os dois lados e evita quebra no meio de negociação em andamento."*
@@ -183,22 +201,28 @@ Checklist:
 ## Perguntas rápidas sem citar cláusula
 
 ### "E se aparecer comprador direto?"
-> *"Se for um comprador que não veio da intermediação, a gente avalia o cenário com transparência. O ponto da cláusula é proteger o trabalho de quem trouxe, qualificou e negociou o interessado."*
+> *"Pelo nosso documento, se for alguém que não foi apresentado por nós e não veio da nossa intermediação, isso não entra como interessado apresentado. A cláusula protege apenas o cliente que foi trazido, comunicado e identificado pela nossa operação."*
 
 ### "Quem paga anúncio e divulgação?"
-> *"A lógica é: você não paga custo operacional antecipado para anunciar. A remuneração acontece na venda concluída, conforme política comercial da imobiliária."*
+> *"A cláusula 2 deixa claro que a divulgação e a atuação dos parceiros não criam custo extra para você. A comissão continua sendo a da cláusula 3, paga na venda concluída conforme a política comercial da imobiliária."*
 
 ### "E se outro corretor vender?"
-> *"A gestão centraliza o processo para evitar bagunça de preço e informação. Se vier proposta por parceiro da rede, você recebe com rastreabilidade e decisão final sua."*
+> *"Se for um parceiro dentro da nossa operação, a venda continua centralizada conosco. Você recebe a proposta com rastreabilidade e mantém a decisão final. O repasse ao corretor parceiro é resolvido internamente, sem aumentar sua comissão."*
 
 ### "Posso trabalhar com mais de uma imobiliária?"
-> *"A modalidade da autorização segue a política da imobiliária e o seu cenário. O importante é você ter clareza de regras, prazo e responsabilidade antes de assinar."*
+> *"Na nossa autorização, durante a vigência, a gestão da venda fica centralizada conosco e os interessados devem ser direcionados para nossa equipe. Se você quiser discutir uma condição diferente disso, essa já é uma exceção comercial e precisa ser validada com o especialista."*
 
 ## Fechamento recomendado
-> *"Se você quiser, eu te envio o modelo da autorização aqui no WhatsApp para leitura e já organizo o alinhamento com o especialista para revisar ponto a ponto com você."*
+Se o lead já recebeu ou leu a prévia:
+> *"Se esse ponto ficou claro, eu sigo contigo no próximo trecho que gerou dúvida ou já organizo o alinhamento com o especialista para revisar os detalhes finais."*
+
+Se o lead ainda não recebeu o documento:
+> *"Posso te enviar o modelo da autorização aqui no WhatsApp para você ler com calma e já chegar na conversa com as dúvidas certas."*
 
 ## O que NÃO fazer
 - Inventar multa, rescisão ou penalidade específica sem base no contexto.
 - Prometer condição especial sem validação humana.
 - Desviar para debate de exclusividade se o lead perguntou cláusula geral.
 - Listar todas as cláusulas de uma vez se o lead perguntou uma cláusula específica.
+- Responder como se o proprietário ainda não tivesse visto o documento quando ele já está comentando a prévia.
+- Dar aula genérica sobre contratos em vez de explicar a cláusula do nosso documento.
