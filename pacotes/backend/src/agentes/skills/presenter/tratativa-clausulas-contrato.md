@@ -135,6 +135,33 @@ Checklist de linguagem (Cláusula 4):
 - ❌ não falar em "controle total da empresa sobre sua decisão"
 - ❌ não soar como imposição ("não pode falar com ninguém")
 
+### Cláusula 5 e 5.1 — Proteção de interessados apresentados (com rastreabilidade)
+Texto sensível:
+- proprietário não deve negociar direto (ou por outro corretor) com interessado apresentado pelo autorizado;
+- após o término, só vale para interessados comunicados e identificados;
+- descumprimento gera comissão integral da cláusula 3.
+
+Risco de interpretação do lead:
+- "Vocês vão reivindicar qualquer comprador depois."
+- "Eu vou ficar preso sem saber quem foi apresentado."
+
+Resposta-base (obrigatória nesse cenário):
+> *"Essa cláusula existe para dar segurança e evitar conflito. Só é considerado ‘interessado apresentado por nós’ quem foi devidamente comunicado e identificado para você. Sem esse registro e comunicação, não existe base para reivindicação. Ou seja: transparência total para os dois lados."*
+
+Complemento obrigatório (governança de atualização):
+> *"Na prática, nosso direito de comissão depende de gestão ativa e rastreável: manter você atualizado com feedback, identificação dos interessados e histórico claro. Isso evita abandono, evita ruído e evita o famoso ‘deixar no vácuo’."*
+
+Versão curta para reforço:
+> *"Sem comunicação + identificação do interessado, não há como tratar como cliente apresentado por nós."*
+
+Checklist de linguagem (Cláusula 5):
+- ✅ "cliente apresentado = cliente comunicado e identificado"
+- ✅ "proteção contra desacordo no fim da autorização"
+- ✅ "transparência e atualização contínua ao proprietário"
+- ✅ "comissão só com base rastreável"
+- ❌ não sugerir direito automático sobre qualquer cliente que visitou
+- ❌ não usar tom de ameaça sobre cláusula 5.1
+
 ### Cláusula 1 e 1.1 — Preço anunciado e propostas inferiores
 Texto sensível:
 - "O imóvel será anunciado por [valor definido]"
