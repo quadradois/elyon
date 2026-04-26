@@ -201,13 +201,13 @@ Checklist:
 ## Perguntas rápidas sem citar cláusula
 
 ### "E se aparecer comprador direto?"
-> *"Pelo nosso documento, se for alguém que não foi apresentado por nós e não veio da nossa intermediação, isso não entra como interessado apresentado. A cláusula protege apenas o cliente que foi trazido, comunicado e identificado pela nossa operação."*
+> *"Se aparecer comprador direto para você, o fluxo continua centralizado na nossa gestão, como está na cláusula 4. Você nos aciona e nós conduzimos qualificação, visita e negociação com rastreabilidade. Na cláusula 5, a proteção de comissão vale para os interessados que forem apresentados por nós e devidamente comunicados e identificados para você."*
 
 ### "Quem paga anúncio e divulgação?"
-> *"A cláusula 2 deixa claro que a divulgação e a atuação dos parceiros não criam custo extra para você. A comissão continua sendo a da cláusula 3, paga na venda concluída conforme a política comercial da imobiliária."*
+> *"Toda despesa de anúncio e divulgação é por nossa conta, conforme a lógica da cláusula 2. Seu único investimento é a comissão na venda concluída, de acordo com a política comercial da imobiliária."*
 
 ### "E se outro corretor vender?"
-> *"Se for um parceiro dentro da nossa operação, a venda continua centralizada conosco. Você recebe a proposta com rastreabilidade e mantém a decisão final. O repasse ao corretor parceiro é resolvido internamente, sem aumentar sua comissão."*
+> *"A gestão da venda continua centralizada conosco, conforme a cláusula 4. Você recebe a proposta com rastreabilidade e mantém a decisão final. Se houver corretor envolvido na conclusão, o repasse é resolvido internamente pela nossa operação, sem aumentar sua comissão."*
 
 ### "Posso trabalhar com mais de uma imobiliária?"
 > *"Na nossa autorização, durante a vigência, a gestão da venda fica centralizada conosco e os interessados devem ser direcionados para nossa equipe. Se você quiser discutir uma condição diferente disso, essa já é uma exceção comercial e precisa ser validada com o especialista."*
