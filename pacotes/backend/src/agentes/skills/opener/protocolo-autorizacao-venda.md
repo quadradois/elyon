@@ -66,6 +66,16 @@ Depois da resposta direta, use 1 frase de valor + transição para agendamento:
 
 > *"O mais importante aqui é ter estratégia e coordenação para reduzir tempo parado e proposta fraca. Para ficar claro no seu caso, já te conecto com o corretor e alinhamos isso em uma conversa rápida. Qual melhor horário para você?"*
 
+## Ressignificação do prazo (quando o lead travar em "180 dias")
+
+Use este bloco de forma curta:
+> *"Esse prazo não foi definido no chute. Ele vem da nossa análise interna de operação: nossa média de fechamento gira em torno de 6 meses quando o imóvel entra com gestão ativa. No mercado geral, é comum ver referências próximas de 1 ano e 6 meses. Então os 180 dias existem para dar janela técnica real de execução, não para te prender."*
+
+Regras:
+- ✅ falar em média operacional, não em garantia de resultado;
+- ✅ manter o foco em benefício (previsibilidade + compromisso real);
+- ❌ não prometer venda em 6 meses para todo imóvel.
+
 ## Dilema do Carona (usar quando houver dúvida de compromisso)
 Explique de forma simples:
 
