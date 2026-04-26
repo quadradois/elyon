@@ -172,6 +172,11 @@ describe('detectarSkillGatilho — detecção regex', () => {
             .toBe('presenter/tratativa-clausulas-contrato');
     });
 
+    it('detecta dúvida de cláusula 4 (gestão exclusiva do processo)', () => {
+        expect(detectarSkillGatilho('por que tenho que direcionar todos os interessados para vocês?', 'sdr'))
+            .toBe('presenter/tratativa-clausulas-contrato');
+    });
+
     it('detecta condições específicas da autorização no presenter', () => {
         expect(detectarSkillGatilho('pode rescindir? tem alguma multa?', 'sdr'))
             .toBe('presenter/tratativa-contrato-condicoes');

@@ -109,6 +109,32 @@ Checklist de linguagem (Cláusula 3):
 - ❌ não usar tom de ameaça ("vai ter que pagar de qualquer jeito")
 - ❌ não dizer "vale para qualquer comprador depois"
 
+### Cláusula 4 — Gestão exclusiva do processo de venda
+Texto sensível:
+- durante a vigência, a gestão e condução da venda ficam com o autorizado;
+- corretores/clientes interessados devem ser direcionados ao autorizado.
+
+Risco de interpretação do lead:
+- "Vou perder autonomia."
+- "Vão me impedir de falar com interessados."
+
+Resposta-base (obrigatória nesse cenário):
+> *"Aqui a lógica é simplificar sua vida: se você contratou nossa empresa para conduzir a venda, nós assumimos a gestão de ponta a ponta para você não se desgastar com operação, triagem e negociação desalinhada. Você não perde decisão — você ganha um responsável único cuidando de tudo, com você validando o que realmente importa."*
+
+Reforço de valor (ressignificação):
+> *"No fim, a pergunta é: por que você vai perder tempo, correr risco de negociação errada e absorver desgaste operacional, se pode ter uma equipe dedicada fazendo isso por você com método?"*
+
+Versão curta para reforço:
+> *"Você delega o operacional, mantém a decisão final e reduz desgaste, risco e tempo perdido."*
+
+Checklist de linguagem (Cláusula 4):
+- ✅ "empresa 100% comprometida com a venda"
+- ✅ "delegação do operacional"
+- ✅ "proprietário mantém decisão final"
+- ✅ "redução de desgaste, tempo e risco"
+- ❌ não falar em "controle total da empresa sobre sua decisão"
+- ❌ não soar como imposição ("não pode falar com ninguém")
+
 ### Cláusula 1 e 1.1 — Preço anunciado e propostas inferiores
 Texto sensível:
 - "O imóvel será anunciado por [valor definido]"

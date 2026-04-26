@@ -91,7 +91,7 @@ const GATILHOS: GatilhoSkill[] = [
     {
         id: 'presenter/tratativa-clausulas-contrato',
         agentes: ['sdr'],
-        regex: /cl[aá]usula|o que significa a cl[aá]usula|explica a cl[aá]usula|me explica o contrato|como funciona a autoriza[cç][aã]o|d[uú]vida sobre (o )?(contrato|autoriza[cç][aã]o)|e se aparecer (um )?comprador direto|e se outro corretor vender|quem paga (os )?an[uú]ncios|posso trabalhar com mais de uma imobili[aá]ria|proposta inferior|valor inferior|for[çc]ar.*baixar|baixar.*pre[çc]o|voc[eê]s.*baixar.*valor|comiss[aã]o (dobrada|tripla|extra)|pagar.*mais.*corretor|fim do contrato.*comiss[aã]o|depois que acabar.*comiss[aã]o|ap[oó]s o prazo.*comiss[aã]o|cliente apresentado.*comiss[aã]o/i,
+        regex: /cl[aá]usula|o que significa a cl[aá]usula|explica a cl[aá]usula|me explica o contrato|como funciona a autoriza[cç][aã]o|d[uú]vida sobre (o )?(contrato|autoriza[cç][aã]o)|e se aparecer (um )?comprador direto|e se outro corretor vender|quem paga (os )?an[uú]ncios|posso trabalhar com mais de uma imobili[aá]ria|proposta inferior|valor inferior|for[çc]ar.*baixar|baixar.*pre[çc]o|voc[eê]s.*baixar.*valor|comiss[aã]o (dobrada|tripla|extra)|pagar.*mais.*corretor|fim do contrato.*comiss[aã]o|depois que acabar.*comiss[aã]o|ap[oó]s o prazo.*comiss[aã]o|cliente apresentado.*comiss[aã]o|respons[aá]vel exclusivo|gest[aã]o exclusiva|direcionad[oa]s? ao autorizado|tenho que mandar (todos )?(clientes|corretores|interessados)|direcionar (todos )?os interessados para voc[eê]s/i,
     },
     {
         id: 'presenter/tratativa-contrato-condicoes',
