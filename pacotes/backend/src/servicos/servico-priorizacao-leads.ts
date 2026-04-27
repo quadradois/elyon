@@ -174,6 +174,28 @@ export interface ResultadoPriorizacao {
   pipeline: PipelineResumo;
 }
 
+function textoValido(valor: unknown): string | null {
+  if (valor === null || valor === undefined) return null;
+  const texto = String(valor).trim();
+  if (!texto) return null;
+  if (texto.toLowerCase() === '[object object]') return null;
+  return texto;
+}
+
+function pareceLogradouro(valor: string | null): boolean {
+  if (!valor) return false;
+  const t = valor.toUpperCase().trim();
+  return /^(RUA|R\.|AV|AV\.|AVENIDA|ALAMEDA|TRAVESSA|RODOVIA|ESTRADA|QD|QUADRA)\b/.test(t);
+}
+
+function montarEndereco(logradouro: string | null, numero: string | null, complemento: string | null): string | null {
+  const l = textoValido(logradouro);
+  if (!l) return null;
+  const n = textoValido(numero);
+  const c = textoValido(complemento);
+  return [l, n, c].filter(Boolean).join(', ');
+}
+
 // ============================================
 // MAPEAMENTO STATUS → FASE
 // ============================================
@@ -546,6 +568,53 @@ export async function priorizarLeads(
     },
   });
 
+  const iptus = Array.from(
+    new Set(
+      leads
+        .map((l: any) => textoValido(l.inscricaoIptu))
+        .filter(Boolean)
+        .map((iptu) => iptu!.replace(/\D/g, ''))
+        .filter(Boolean)
+    )
+  );
+
+  const imoveisPorIptu = new Map<string, {
+    inscricaoIptu: string;
+    logradouro: string | null;
+    numero: string | null;
+    complemento: string | null;
+    bairro: string | null;
+    nomeEdificio: string | null;
+  }>();
+
+  if (iptus.length > 0) {
+    const imoveis = await prisma.imovel.findMany({
+      where: { inscricaoIptu: { in: iptus } },
+      select: {
+        inscricaoIptu: true,
+        logradouro: true,
+        numero: true,
+        complemento: true,
+        bairro: true,
+        nomeEdificio: true,
+      },
+      orderBy: { atualizadoEm: 'desc' },
+    });
+
+    for (const imovel of imoveis) {
+      const iptu = textoValido(imovel.inscricaoIptu)?.replace(/\D/g, '');
+      if (!iptu || imoveisPorIptu.has(iptu)) continue;
+      imoveisPorIptu.set(iptu, {
+        inscricaoIptu: imovel.inscricaoIptu,
+        logradouro: textoValido(imovel.logradouro),
+        numero: textoValido(imovel.numero),
+        complemento: textoValido(imovel.complemento),
+        bairro: textoValido(imovel.bairro),
+        nomeEdificio: textoValido(imovel.nomeEdificio),
+      });
+    }
+  }
+
   // ── Estatísticas + Pipeline ──
   const estatisticas: EstatisticasPriorizadas = {
     total: leads.length,
@@ -565,6 +634,24 @@ export async function priorizarLeads(
   };
 
   const leadsPriorizados: LeadPriorizado[] = leads.map((lead: any) => {
+    const iptuLead = textoValido(lead.inscricaoIptu)?.replace(/\D/g, '') || '';
+    const imovelRef = iptuLead ? imoveisPorIptu.get(iptuLead) : undefined;
+
+    const enderecoLead = textoValido(lead.enderecoImovel);
+    const bairroLead = textoValido(lead.bairroImovel);
+    const nomeEdificioLead = textoValido(lead.nomeEdificio);
+
+    const enderecoRef = montarEndereco(imovelRef?.logradouro || null, imovelRef?.numero || null, imovelRef?.complemento || null);
+    const bairroRef = textoValido(imovelRef?.bairro);
+    const nomeEdificioRef = textoValido(imovelRef?.nomeEdificio);
+
+    const enderecoImovel = enderecoLead || enderecoRef || null;
+    const bairroImovel =
+      !bairroLead || bairroLead === enderecoImovel || pareceLogradouro(bairroLead)
+        ? (bairroRef || bairroLead || null)
+        : bairroLead;
+    const nomeEdificio = nomeEdificioLead || nomeEdificioRef || null;
+
     // Estatísticas por temperatura
     if (lead.temperatura === 'QUENTE') estatisticas.quentes++;
     else if (lead.temperatura === 'MORNO') estatisticas.mornos++;
@@ -666,7 +753,7 @@ export async function priorizarLeads(
         : null,
 
       // Imóvel flat — coletado pelo agente (pré-contrato)
-      enderecoImovel: lead.enderecoImovel ?? null,
+      enderecoImovel,
       tipoImovel: lead.tipoImovel ?? null,
       areaImovel: lead.areaImovel ?? null,
       quartosImovel: lead.quartosImovel ?? null,
@@ -674,8 +761,8 @@ export async function priorizarLeads(
       valorPretendido: lead.valorPretendido ?? null,
       ocupacaoImovel: lead.ocupacaoImovel ?? null,
       interesseEm: lead.interesseEm ?? null,
-      bairroImovel: lead.bairroImovel ?? null,
-      nomeEdificio: lead.nomeEdificio ?? null,
+      bairroImovel,
+      nomeEdificio,
       inscricaoIptu: lead.inscricaoIptu ?? null,
       valorVenal: lead.valorVenal ?? null,
 

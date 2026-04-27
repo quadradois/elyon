@@ -77,14 +77,40 @@ function paraStringOuNull(valor: unknown): string | null {
   return null;
 }
 
-function normalizarLeadParaFrontend(lead: any, contato: any) {
+function pareceLogradouro(valor: string | null): boolean {
+  if (!valor) return false;
+  const t = valor.toUpperCase().trim();
+  return /^(RUA|R\.|AV|AV\.|AVENIDA|ALAMEDA|TRAVESSA|RODOVIA|ESTRADA|QD|QUADRA)\b/.test(t);
+}
+
+function montarEndereco(logradouro: string | null, numero: string | null, complemento: string | null): string | null {
+  const l = paraStringOuNull(logradouro);
+  if (!l) return null;
+  const n = paraStringOuNull(numero);
+  const c = paraStringOuNull(complemento);
+  return [l, n, c].filter(Boolean).join(', ');
+}
+
+function normalizarLeadParaFrontend(lead: any, contato: any, imovelRef?: any | null) {
   if (!lead) return null;
 
-  const enderecoImovel = paraStringOuNull(lead.enderecoImovel) ?? paraStringOuNull(contato?.enderecoImovel);
+  const enderecoLead = paraStringOuNull(lead.enderecoImovel);
+  const enderecoContato = paraStringOuNull(contato?.enderecoImovel);
+  const enderecoRef = montarEndereco(imovelRef?.logradouro || null, imovelRef?.numero || null, imovelRef?.complemento || null);
+  const enderecoImovel = enderecoLead ?? enderecoContato ?? enderecoRef;
+
   const tipoImovel = paraStringOuNull(lead.tipoImovel) ?? paraStringOuNull(contato?.tipoImovel);
   const inscricaoIptu = paraStringOuNull(lead.inscricaoIptu) ?? paraStringOuNull(contato?.inscricaoIptu);
-  const bairroImovel = paraStringOuNull(lead.bairroImovel) ?? paraStringOuNull(contato?.bairroImovel);
-  const nomeEdificio = paraStringOuNull(lead.nomeEdificio) ?? paraStringOuNull(contato?.nomeEdificio);
+  const bairroBruto = paraStringOuNull(lead.bairroImovel) ?? paraStringOuNull(contato?.bairroImovel);
+  const bairroRef = paraStringOuNull(imovelRef?.bairro);
+  const bairroImovel =
+    !bairroBruto || bairroBruto === enderecoImovel || pareceLogradouro(bairroBruto)
+      ? (bairroRef ?? bairroBruto)
+      : bairroBruto;
+  const nomeEdificio =
+    paraStringOuNull(lead.nomeEdificio) ??
+    paraStringOuNull(contato?.nomeEdificio) ??
+    paraStringOuNull(imovelRef?.nomeEdificio);
   const areaImovel = paraStringOuNull(lead.areaImovel) ?? paraStringOuNull(contato?.areaConstruida);
 
   return {
@@ -317,7 +343,23 @@ router.get('/:id', async (req, res) => {
         : Promise.resolve([])
     ]);
 
-    const leadNormalizado = normalizarLeadParaFrontend(lead, contato);
+    const iptuConsulta = paraStringOuNull(lead?.inscricaoIptu) ?? paraStringOuNull(contato?.inscricaoIptu);
+    const iptuNumerico = iptuConsulta ? iptuConsulta.replace(/\D/g, '') : null;
+    const imovelRef = iptuNumerico
+      ? await prisma.imovel.findFirst({
+          where: { inscricaoIptu: iptuNumerico },
+          select: {
+            inscricaoIptu: true,
+            logradouro: true,
+            numero: true,
+            complemento: true,
+            bairro: true,
+            nomeEdificio: true
+          }
+        })
+      : null;
+
+    const leadNormalizado = normalizarLeadParaFrontend(lead, contato, imovelRef);
 
     const estagio = calcularEstagio({
       statusProspeccao: contato?.statusProspeccao,
