@@ -8,7 +8,6 @@ import { Loader2 } from 'lucide-react';
 import { BarraComando, type ViewMode } from '../componentes/leads/BarraComando';
 import { FeedAcoes } from '../componentes/leads/FeedAcoes';
 import { PreviewLead } from '../componentes/leads/PreviewLead';
-import { PainelExecutivoCockpit } from '../componentes/leads/PainelExecutivoCockpit';
 import { useLeadsPriorizados, type LeadPriorizado } from '../ganchos/useLeadsPriorizados';
 
 const KanbanLeads = lazy(() =>
@@ -76,8 +75,6 @@ export function MissionControlLeads() {
           onRecarregar={recarregar}
           onLeadCriado={recarregar}
         />
-
-        <PainelExecutivoCockpit />
 
         {/* CONTEÚDO PRINCIPAL */}
         {viewMode === 'feed' ? (
