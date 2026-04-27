@@ -198,6 +198,8 @@ export function calcularQualificacao(lead: any): number {
   // ── Status por fase (pesos crescentes no pipeline) ──
   const statusPesos: Record<string, number> = {
     NOVO: 5,
+    // Compatibilidade com status legado ainda usado em testes/fluxos antigos.
+    QUALIFICADO: 8,
     TENTATIVA_AGENDAMENTO: 12,
     VISITA_AGENDADA: 14,
     AVALIACAO_EM_ANDAMENTO: 16,
