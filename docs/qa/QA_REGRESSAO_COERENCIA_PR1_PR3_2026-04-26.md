@@ -1,7 +1,7 @@
 # QA de Regressão — Coerência PR1+PR2+PR3 (26/04/2026)
 
 ## Escopo validado
-Plano: `docs/PLANO_EXECUCAO_COERENCIA_AGENTES.md`  
+Plano: `docs/planos/PLANO_EXECUCAO_COERENCIA_AGENTES.md`  
 Cenários mínimos:
 1. Comissão + aceite de pitch + pedido de agenda.
 2. Pergunta sobre exclusividade e autorização.

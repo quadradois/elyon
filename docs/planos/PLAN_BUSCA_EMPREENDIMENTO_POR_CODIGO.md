@@ -12,7 +12,7 @@ Adicionar busca por código no sistema de mineração de leads do Elyon, sem alt
 7. No modo “Por código”, enviar `codigo` na chamada de busca e reutilizar o mesmo componente de resultado para evitar impacto nas etapas seguintes.
 8. Implementar UX de não encontrado com pergunta explícita de fallback para nome (CTA para tentar por nome + opção de permanecer no modo código).
 9. Validar compatibilidade do pipeline 2–5 (seleção, processamento, salvar, concluir), incluindo integração com [pacotes/frontend/src/componentes/ModalProcessamento.tsx](pacotes/frontend/src/componentes/ModalProcessamento.tsx).
-10. Registrar regras e comportamento no plano técnico em [docs/PLAN.md](docs/PLAN.md) ou documento dedicado de produto.
+10. Registrar regras e comportamento no plano técnico em [docs/planos/PLAN.md](./PLAN.md) ou documento dedicado de produto.
 
 **Verification**
 - Testar busca por nome sem regressão em [pacotes/frontend/src/paginas/Captacao.tsx](pacotes/frontend/src/paginas/Captacao.tsx).

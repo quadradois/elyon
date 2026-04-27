@@ -1,6 +1,6 @@
 # Plano de Execução Técnico — Coerência de Agentes SDR
 
-Base: `docs/RAIO_X_COERENCIA_AGENTES.md`  
+Base: `docs/raio-x/RAIO_X_COERENCIA_AGENTES.md`  
 Objetivo: corrigir conflitos de instrução e reduzir regressão de comportamento no agente SDR.
 
 ## Estratégia de Entrega

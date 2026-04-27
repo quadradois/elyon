@@ -76,8 +76,8 @@ npm run dev
 
 ## Documentação
 
-- [Plano de Coerência dos Agents](./docs/PLANO_EXECUCAO_COERENCIA_AGENTES.md)
-- [Raio-X de Coerência](./docs/RAIO_X_COERENCIA_AGENTES.md)
+- [Plano de Coerência dos Agents](./docs/planos/PLANO_EXECUCAO_COERENCIA_AGENTES.md)
+- [Raio-X de Coerência](./docs/raio-x/RAIO_X_COERENCIA_AGENTES.md)
 - [Deploy](./DEPLOY.md)
 
 ## Release atual
@@ -85,4 +85,3 @@ npm run dev
 - **Versão**: `0.5.0`
 - **Status**: Produção ativa
 - **Última atualização**: 26/04/2026
-

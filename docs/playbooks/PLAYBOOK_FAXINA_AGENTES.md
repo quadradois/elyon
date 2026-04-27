@@ -2,7 +2,7 @@
 
 > **Criado:** 03/03/2026  
 > **Concluído:** 03/03/2026  
-> **Baseado em:** [RAIO_X_MODULO_AGENTES.md](./RAIO_X_MODULO_AGENTES.md)  
+> **Baseado em:** [RAIO_X_MODULO_AGENTES.md](../raio-x/RAIO_X_MODULO_AGENTES.md)  
 > **Resultado:** Eliminadas ~5.287 linhas de código morto (53% do módulo)  
 > **Estado:** 23 arquivos → 15 arquivos | 9.346 linhas → 4.378 linhas
 
