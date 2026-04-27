@@ -203,7 +203,7 @@ export function CarteiraClientes() {
                         <p className="text-gray-500 mb-4 text-center max-w-sm">
                             Os leads que você marcar como "Captado" no funil de vendas aparecerão aqui automaticamente.
                         </p>
-                        <Button variant="outline" onClick={() => navigate('/dashboard/leads')}>
+                        <Button variant="outline" onClick={() => navigate('/dashboard/proprietarios')}>
                             Ir para Funil de Captação
                         </Button>
                     </CardContent>
@@ -224,7 +224,7 @@ export function CarteiraClientes() {
                                     <TableRow
                                         key={cliente.id}
                                         className="cursor-pointer hover:bg-gray-50"
-                                        onClick={() => navigate(`/dashboard/leads/${cliente.origemLeadId || cliente.id}`)}
+                                        onClick={() => navigate(`/dashboard/proprietarios/${cliente.origemLeadId || cliente.id}`)}
                                     >
                                         <TableCell>
                                             <div className="font-medium text-slate-900">{cliente.nome || "Sem Nome"}</div>
@@ -276,7 +276,7 @@ export function CarteiraClientes() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => navigate(`/dashboard/leads/${cliente.origemLeadId || cliente.id}`)}>
+                                                    <DropdownMenuItem onClick={() => navigate(`/dashboard/proprietarios/${cliente.origemLeadId || cliente.id}`)}>
                                                         <Eye className="h-4 w-4 mr-2" />
                                                         Ver ficha completa
                                                     </DropdownMenuItem>

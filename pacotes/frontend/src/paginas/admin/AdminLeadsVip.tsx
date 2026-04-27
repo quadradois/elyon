@@ -87,7 +87,7 @@ export function AdminLeadsVip() {
     const taxa = total > 0 ? Math.round((atendidos / total) * 100) : 0;
 
     const getStatusClass = (lead: LeadVip) => {
-        if (lead.status === 'CONVERTIDO') return 'bg-emerald-500/10 text-emerald-400';
+        if (lead.status === 'CAPTADO') return 'bg-emerald-500/10 text-emerald-400';
         if (lead.atendido) return 'bg-brand/10 text-indigo-400';
         return 'bg-amber-500/10 text-amber-400';
     };

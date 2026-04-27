@@ -333,7 +333,7 @@ router.get('/leads-quentes', async (req, res) => {
         tenantId: tenant.id,
         temperatura: 'QUENTE',
         campanhaOrigemId: { not: null },
-        status: { in: ['NOVO', 'QUALIFICADO'] },
+        status: { in: ['NOVO'] },
       },
       include: {
         campanhaOrigem: {

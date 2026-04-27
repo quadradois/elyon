@@ -61,7 +61,7 @@ router.get('/', async (req, res) => {
     if (status) {
       baseWhere.status = String(status);
     } else {
-      baseWhere.status = { notIn: ['ARQUIVADO', 'PERDIDO', 'CAPTADO', 'CONVERTIDO', 'INATIVO'] };
+      baseWhere.status = { notIn: ['ARQUIVADO', 'PERDIDO', 'CAPTADO'] };
     }
 
     if (temperatura) {
@@ -445,7 +445,7 @@ router.get('/estatisticas', async (req, res) => {
       prisma.lead.count({
         where: {
           tenantId, // ✅ FILTRO
-          status: { notIn: ['ARQUIVADO', 'CAPTADO', 'CONVERTIDO', 'PERDIDO', 'INATIVO'] }
+          status: { notIn: ['ARQUIVADO', 'CAPTADO', 'PERDIDO'] }
         }
       }),
 
@@ -454,7 +454,7 @@ router.get('/estatisticas', async (req, res) => {
         where: {
           tenantId, // ✅ FILTRO
           temperatura: 'QUENTE',
-          status: { notIn: ['PERDIDO', 'CAPTADO', 'CONVERTIDO', 'INATIVO'] }
+          status: { notIn: ['PERDIDO', 'CAPTADO'] }
         }
       }),
 
@@ -462,7 +462,7 @@ router.get('/estatisticas', async (req, res) => {
       prisma.lead.count({
         where: {
           tenantId, // ✅ FILTRO
-          status: { notIn: ['ARQUIVADO', 'CAPTADO', 'CONVERTIDO', 'PERDIDO', 'INATIVO'] }, // ✅ Excluir arquivados e clientes
+          status: { notIn: ['ARQUIVADO', 'CAPTADO', 'PERDIDO'] }, // ✅ Excluir arquivados e clientes
           criadoEm: { gte: hoje, lt: amanha }
         }
       }),
@@ -480,7 +480,7 @@ router.get('/estatisticas', async (req, res) => {
         _count: true,
         where: {
           tenantId, // ✅ FILTRO
-          status: { notIn: ['PERDIDO', 'CAPTADO', 'CONVERTIDO', 'INATIVO'] }
+          status: { notIn: ['PERDIDO', 'CAPTADO'] }
         }
       }),
 
@@ -1441,7 +1441,7 @@ router.post('/:id/restaurar', async (req, res) => {
       where: { id },
       data: {
         deletadoEm: null,
-        status: 'QUALIFICADO'
+        status: 'NOVO'
       }
     });
 
@@ -1587,7 +1587,7 @@ router.post('/:id/reativar', async (req, res) => {
     await prisma.lead.update({
       where: { id },
       data: {
-        status: 'QUALIFICADO',
+        status: 'NOVO',
         temperatura: temperatura || 'MORNO',
         deletadoEm: null,
         ultimaInteracao: new Date()

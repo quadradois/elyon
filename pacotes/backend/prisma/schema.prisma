@@ -588,8 +588,8 @@ model Campanha {
 
 model Contato {
   id         String   @id @default(uuid())
-  campanhaId String
-  campanha   Campanha @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
+  campanhaId String?
+  campanha   Campanha? @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
 
   // Dados básicos
   nome String
@@ -700,8 +700,8 @@ model Contato {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  @@unique([campanhaId, telefone])
   @@index([campanhaId])
+  @@index([campanhaId, telefone])
   @@index([campanhaId, cpf])
   @@index([virouLead])
   @@index([statusProspeccao])
@@ -931,12 +931,6 @@ enum StatusLead {
   CAPTADO // Sucesso! Sai do Kanban → Carteira
   PERDIDO
   ARQUIVADO
-  // Deprecated (manter para compatibilidade)
-  CONTATANDO
-  QUALIFICADO
-  EM_NEGOCIACAO
-  CONVERTIDO
-  INATIVO
 }
 
 enum Temperatura {

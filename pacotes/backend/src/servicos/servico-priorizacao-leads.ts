@@ -179,9 +179,9 @@ export interface ResultadoPriorizacao {
 // ============================================
 
 function getFasePipeline(status: string): keyof PipelineResumo | null {
-  if (['NOVO', 'QUALIFICADO'].includes(status)) return 'qualificacao';
-  if (['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA', 'CONTATANDO'].includes(status)) return 'apresentacao';
-  if (['AVALIACAO_EM_ANDAMENTO', 'DOCUMENTACAO', 'EM_NEGOCIACAO'].includes(status)) return 'documentacao';
+  if (['NOVO'].includes(status)) return 'qualificacao';
+  if (['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA'].includes(status)) return 'apresentacao';
+  if (['AVALIACAO_EM_ANDAMENTO', 'DOCUMENTACAO'].includes(status)) return 'documentacao';
   if (['ONBOARDING'].includes(status)) return 'onboarding';
   return null;
 }
@@ -198,13 +198,10 @@ export function calcularQualificacao(lead: any): number {
   // ── Status por fase (pesos crescentes no pipeline) ──
   const statusPesos: Record<string, number> = {
     NOVO: 5,
-    QUALIFICADO: 8,
-    CONTATANDO: 8,
     TENTATIVA_AGENDAMENTO: 12,
     VISITA_AGENDADA: 14,
     AVALIACAO_EM_ANDAMENTO: 16,
     DOCUMENTACAO: 18,
-    EM_NEGOCIACAO: 18,
     ONBOARDING: 20,
   };
   pontos += statusPesos[lead.status] || 0;
@@ -353,7 +350,7 @@ export function calcularUrgencia(
     }
   }
 
-  // Leads finalizados (-30) — CAPTADO/CONVERTIDO/INATIVO nunca chegam aqui
+  // Leads finalizados (-30) — CAPTADO/ARQUIVADO nunca chegam aqui
   // pois são filtrados pela query Prisma em priorizarLeads()
   // Mantemos PERDIDO e ARQUIVADO pois calcularUrgencia() é exportada e pode ser chamada externamente
   if (['PERDIDO', 'ARQUIVADO'].includes(lead.status)) {
@@ -482,7 +479,7 @@ export async function priorizarLeads(
   const leads = await prisma.lead.findMany({
     where: {
       tenantId,
-      status: { notIn: ['ARQUIVADO', 'PERDIDO', 'CAPTADO', 'CONVERTIDO', 'INATIVO'] },
+      status: { notIn: ['ARQUIVADO', 'PERDIDO', 'CAPTADO'] },
     },
     orderBy: { criadoEm: 'desc' },
     take: 500,

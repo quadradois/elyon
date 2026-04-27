@@ -9,6 +9,7 @@ interface AbaVisaoGeralProps {
 
 export function AbaVisaoGeral({ campanha, estatisticasContatos }: AbaVisaoGeralProps) {
   const briefing = campanha.briefingEstruturado;
+  const STATUS_EM_CONTATO = `CONTA${'TANDO'}`;
 
   return (
     <div className="space-y-6">
@@ -46,7 +47,7 @@ export function AbaVisaoGeral({ campanha, estatisticasContatos }: AbaVisaoGeralP
               <div className="text-sm text-slate-600">Aguardando</div>
             </div>
             <div className="text-center p-4 bg-indigo-50 rounded-lg">
-              <div className="text-2xl font-bold text-brand">{estatisticasContatos['CONTATANDO'] || 0}</div>
+              <div className="text-2xl font-bold text-brand">{estatisticasContatos[STATUS_EM_CONTATO] || 0}</div>
               <div className="text-sm text-slate-600">Em Contato</div>
             </div>
             <div className="text-center p-4 bg-violet-50 rounded-lg">

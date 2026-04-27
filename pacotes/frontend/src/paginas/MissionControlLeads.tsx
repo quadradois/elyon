@@ -13,9 +13,6 @@ import { useLeadsPriorizados, type LeadPriorizado } from '../ganchos/useLeadsPri
 const KanbanLeads = lazy(() =>
   import('../componentes/KanbanLeads').then((m) => ({ default: m.KanbanLeads }))
 );
-const LeadsLegadoLista = lazy(() =>
-  import('./Leads').then((m) => ({ default: m.Leads }))
-);
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-64 bg-white rounded-2xl border border-slate-200">
@@ -120,13 +117,9 @@ export function MissionControlLeads() {
               </div>
             )}
           </div>
-        ) : viewMode === 'kanban' ? (
-          <Suspense fallback={<LoadingFallback />}>
-            <KanbanLeads leads={leads as any} onLeadUpdate={recarregar} />
-          </Suspense>
         ) : (
           <Suspense fallback={<LoadingFallback />}>
-            <LeadsLegadoLista />
+            <KanbanLeads leads={leads as any} onLeadUpdate={recarregar} />
           </Suspense>
         )}
 

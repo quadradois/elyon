@@ -34,12 +34,11 @@ const obterTenantIdOuResponder = (req: Request, res: Response): string | null =>
 };
 
 const STATUS_QUALIFICACAO: StatusLead[] = [
-  'QUALIFICADO',
+  'NOVO',
   'TENTATIVA_AGENDAMENTO',
   'VISITA_AGENDADA',
   'AVALIACAO_EM_ANDAMENTO',
   'DOCUMENTACAO',
-  'EM_NEGOCIACAO',
   'ONBOARDING',
   'CAPTADO',
 ] as const;

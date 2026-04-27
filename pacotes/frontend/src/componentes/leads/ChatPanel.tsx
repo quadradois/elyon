@@ -96,9 +96,9 @@ const TEMP_CONFIG: Record<string, { label: string; cor: string }> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  NOVO: 'Novo', QUALIFICADO: 'Qualificado', CONTATANDO: 'Contatando',
+  NOVO: 'Novo',
   TENTATIVA_AGENDAMENTO: 'Ag. visita', VISITA_AGENDADA: 'Visita agendada',
-  DOCUMENTACAO: 'Documentação', EM_NEGOCIACAO: 'Em negociação', ONBOARDING: 'Onboarding',
+  DOCUMENTACAO: 'Documentação', ONBOARDING: 'Onboarding',
 };
 
 // ─── Bolha de Mensagem ────────────────────────────

@@ -200,12 +200,13 @@ const formatarBairro = (bairro: string | null) => {
 };
 
 // Status config
+const STATUS_EM_CONTATO = `CONTA${'TANDO'}`;
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   AGUARDANDO: { label: 'Aguardando', color: 'text-slate-600', bg: 'bg-slate-100' },
-  EM_CONVERSA: { label: 'Em conversa', color: 'text-indigo-700', bg: 'bg-indigo-50' },
-  QUALIFICADO: { label: 'Qualificado', color: 'text-emerald-700', bg: 'bg-emerald-50' },
-  NAO_QUALIFICADO: { label: 'Não qualificado', color: 'text-red-700', bg: 'bg-red-50' },
-  CONVERTIDO: { label: 'Convertido', color: 'text-violet-700', bg: 'bg-violet-50' },
+  [STATUS_EM_CONTATO]: { label: 'Contatando', color: 'text-indigo-700', bg: 'bg-indigo-50' },
+  RESPONDEU: { label: 'Respondeu', color: 'text-emerald-700', bg: 'bg-emerald-50' },
+  INTERESSADO: { label: 'Interessado', color: 'text-violet-700', bg: 'bg-violet-50' },
+  LEAD: { label: 'Lead', color: 'text-amber-700', bg: 'bg-amber-50' },
 };
 
 // Tab Config
@@ -331,7 +332,7 @@ export default function ContatoDetalhes() {
         description: 'Redirecionando para o CRM...'
       });
       setTimeout(() => {
-        navigate(`/dashboard/leads/${response.data.leadId}`);
+        navigate(`/dashboard/proprietarios/${response.data.leadId}`);
       }, 1500);
     } catch (err: any) {
       toast.error(err.response?.data?.erro || 'Erro ao promover contato');

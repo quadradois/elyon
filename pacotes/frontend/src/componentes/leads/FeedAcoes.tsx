@@ -20,9 +20,9 @@ interface FeedAcoesProps {
 }
 
 const STATUS_POR_FASE: Record<string, string[]> = {
-  qualificacao: ['NOVO', 'QUALIFICADO'],
-  apresentacao: ['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA', 'CONTATANDO'],
-  documentacao: ['AVALIACAO_EM_ANDAMENTO', 'DOCUMENTACAO', 'EM_NEGOCIACAO'],
+  qualificacao: ['NOVO'],
+  apresentacao: ['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA'],
+  documentacao: ['AVALIACAO_EM_ANDAMENTO', 'DOCUMENTACAO'],
   onboarding: ['ONBOARDING'],
 };
 

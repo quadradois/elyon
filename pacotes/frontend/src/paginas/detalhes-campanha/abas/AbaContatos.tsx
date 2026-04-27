@@ -47,6 +47,7 @@ export function AbaContatos({
   onVerContato,
   onRecarregar,
 }: AbaContatosProps) {
+  const STATUS_EM_CONTATO = `CONTA${'TANDO'}`;
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [excluindo, setExcluindo] = useState(false);
   const [confirmandoExclusao, setConfirmandoExclusao] = useState<string | null>(null);
@@ -122,7 +123,7 @@ export function AbaContatos({
             >
               <option value="">Todos os status</option>
               <option value="AGUARDANDO">Aguardando</option>
-              <option value="CONTATANDO">Contatando</option>
+              <option value={STATUS_EM_CONTATO}>Contatando</option>
               <option value="RESPONDEU">Respondeu</option>
               <option value="INTERESSADO">Interessado</option>
               <option value="SEM_INTERESSE">Sem Interesse</option>

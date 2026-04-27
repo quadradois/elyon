@@ -165,7 +165,7 @@ export function useLeadDetalhes(): UseLeadDetalhesReturn {
             setSalvando(true);
             await api.delete(`/leads/${id}`);
             toast.success('Lead excluído permanentemente');
-            navigate('/dashboard/leads');
+            navigate('/dashboard/proprietarios');
             return true;
         } catch (error: any) {
             // Verificar se precisa de confirmação
@@ -188,7 +188,7 @@ export function useLeadDetalhes(): UseLeadDetalhesReturn {
             setSalvando(true);
             await api.delete(`/leads/${id}`, { data: { confirmacao: 'excluir' } });
             toast.success('Lead e todos os dados vinculados excluídos permanentemente');
-            navigate('/dashboard/leads');
+            navigate('/dashboard/proprietarios');
             return true;
         } catch (error: any) {
             toast.error(error.response?.data?.erro || 'Erro ao excluir');
@@ -245,7 +245,7 @@ export function useLeadDetalhes(): UseLeadDetalhesReturn {
     // HELPERS
     // ============================================
 
-    const voltar = () => navigate('/dashboard/leads');
+    const voltar = () => navigate('/dashboard/proprietarios');
 
     const copiarTelefone = () => {
         if (lead?.telefone) {

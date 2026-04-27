@@ -64,7 +64,7 @@ router.get('/', async (req, res) => {
             email: c.email,
             cpf: c.cpf,
             status: c.statusProspeccao,
-            campanha: c.campanha.nome,
+            campanha: c.campanha?.nome ?? 'Sem campanha',
             campanhaId: c.campanhaId,
             virouLead: c.virouLead,
             leadId: c.leadId,

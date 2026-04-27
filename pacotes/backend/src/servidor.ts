@@ -26,6 +26,7 @@ import rotaDocumentos from './rotas/documentos';
 import rotaDocumentosLead from './rotas/documentos-lead';
 import rotaListas from './rotas/listas';
 import rotaContatos from './rotas/contatos';
+import rotaProprietarios from './rotas/proprietarios';
 import rotaBlacklist from './rotas/blacklist';
 import rotaAlertas from './rotas/alertas';
 import rotaPesquisas from './rotas/pesquisas';
@@ -157,6 +158,7 @@ app.use('/api/documentos', rotaDocumentos); // Upload de documentos para RAG
 app.use('/api/leads', rotaDocumentosLead);  // Documentos capturados via WhatsApp por lead
 app.use('/api/listas', rotaListas);         // Listas de contatos minerados
 app.use('/api/contatos', rotaContatos);     // Busca global de contatos
+app.use('/api/proprietarios', rotaProprietarios); // Recurso unificado de proprietários (contatos + leads)
 app.use('/api/blacklist', rotaBlacklist);   // Blacklist de telefones
 app.use('/api/alertas', rotaAlertas);       // Alertas de escalação para corretores
 app.use('/api/pesquisas', rotaPesquisas);   // Pesquisas de empreendimento via Manus

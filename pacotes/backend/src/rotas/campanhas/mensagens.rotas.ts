@@ -358,6 +358,9 @@ router.post('/contatos/:id/mensagens', async (req, res) => {
     }
 
     // Descobrir o tenant correspondente à campanha do contato
+    if (!contato.campanha) {
+      return responderErro(res, 400, 'Contato sem campanha de origem');
+    }
     const tenantId = contato.campanha.tenantId;
 
     // Buscar a sessão WhatsApp ativa que pertence ao tenant da campanha

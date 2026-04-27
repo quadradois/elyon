@@ -183,8 +183,8 @@ router.get('/dashboard', async (req, res) => {
     // MÉTRICAS DE CONVERSÃO
     // ============================================
     
-    const leadsConvertidos = leadsPorStatus.find(l => l.status === 'CONVERTIDO')?._count?.status || 0;
-    const leadsQualificados = leadsPorStatus.find(l => l.status === 'QUALIFICADO')?._count?.status || 0;
+    const leadsConvertidos = leadsPorStatus.find(l => l.status === 'CAPTADO')?._count?.status || 0;
+    const leadsQualificados = leadsPorStatus.find(l => l.status === 'NOVO')?._count?.status || 0;
     const taxaConversao = totalLeads > 0 
       ? ((leadsConvertidos / totalLeads) * 100).toFixed(1) 
       : 0;

@@ -72,6 +72,7 @@ interface Lead {
 interface KanbanLeadsProps {
     leads: Lead[];
     onLeadUpdate: () => void;
+    paginadoPorColuna?: boolean;
 }
 
 // Colunas do Kanban alinhadas aos 4 Agentes de Captação
@@ -161,22 +162,22 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
     // Mapeamento de status para colunas (Opener + Presenter + Humano + Admin)
     const getColumnId = (status: string): string | null => {
         // Fase 1: Opener (Qualificação)
-        if (['NOVO', 'QUALIFICADO'].includes(status)) return "FASE1";
+        if (['NOVO'].includes(status)) return "FASE1";
 
         // Fase 2: Presenter (Apresentação)
-        if (['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA', 'CONTATANDO'].includes(status)) return "FASE2";
+        if (['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA'].includes(status)) return "FASE2";
 
         // Fase 3: Humano (Documentação)
-        if (['AVALIACAO_EM_ANDAMENTO', 'DOCUMENTACAO', 'EM_NEGOCIACAO'].includes(status)) return "FASE3";
+        if (['AVALIACAO_EM_ANDAMENTO', 'DOCUMENTACAO'].includes(status)) return "FASE3";
 
         // Fase 4: Admin (Onboarding)
         if (['ONBOARDING'].includes(status)) return "FASE4";
 
         // Leads CAPTADO saem do Kanban e vão para Carteira
-        if (['CAPTADO', 'CONVERTIDO', 'ATIVO'].includes(status)) return null;
+        if (['CAPTADO', 'ATIVO'].includes(status)) return null;
 
         // Não mostrar no Kanban
-        if (["PERDIDO", "ARQUIVADO", "INATIVO"].includes(status)) return null;
+        if (["PERDIDO", "ARQUIVADO"].includes(status)) return null;
 
         return "FASE1"; // Fallback para status desconhecidos
     };
@@ -285,7 +286,7 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                    ${updating === lead.id ? 'opacity-50 pointer-events-none' : ''}
                    ${draggedLeadId === lead.id ? 'border-indigo-400 rotate-2' : ''}
                  `}
-                                        onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
+                                        onClick={() => navigate(`/dashboard/proprietarios/${lead.id}`)}
                                     >
                                         {(() => {
                                             const statusUi = getStatusLeadUI(lead.status);
@@ -347,7 +348,7 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
-                                                    <DropdownMenuItem onClick={() => navigate(`/dashboard/leads/${lead.id}`)}>
+                                                    <DropdownMenuItem onClick={() => navigate(`/dashboard/proprietarios/${lead.id}`)}>
                                                         Ver Detalhes
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem className="text-red-600" onClick={async () => {

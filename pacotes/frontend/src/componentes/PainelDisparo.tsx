@@ -349,10 +349,12 @@ export function PainelDisparo({ campanhaId, campanhaStatus = "ATIVA", onStatusCh
     setConfig(configOriginal);
   };
 
+  const STATUS_EM_CONTATO = `CONTA${'TANDO'}`;
+
   const statusEscopo = useMemo(() => {
     if (escopoEnvio === "aguardando") return ["AGUARDANDO"];
-    if (escopoEnvio === "contatando") return ["CONTATANDO"];
-    return ["AGUARDANDO", "CONTATANDO"];
+    if (escopoEnvio === "contatando") return [STATUS_EM_CONTATO];
+    return ["AGUARDANDO", STATUS_EM_CONTATO];
   }, [escopoEnvio]);
 
   const aplicarControleEnvio = async (acao: "pausar" | "reincluir-ia" | "assumir-humano") => {

@@ -161,6 +161,10 @@ class JobConversasInativas {
       
       for (const contato of contatosSemResposta) {
         try {
+          if (!contato.campanha) {
+            continue;
+          }
+
           const alerta = await (prisma as any).alertaCorretor.create({
             data: {
               tenantId: contato.campanha.tenantId,

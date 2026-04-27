@@ -336,7 +336,7 @@ export function PreviewLead({ lead, onFechar, onLeadAtualizado }: PreviewLeadPro
           </div>
           <div className="flex items-center gap-1 ml-2 flex-shrink-0">
             <button
-              onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
+              onClick={() => navigate(`/dashboard/proprietarios/${lead.id}`)}
               className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-all"
             >
               <ExternalLink className="w-3 h-3" />
@@ -994,7 +994,7 @@ function AbaImovel({ lead }: { lead: LeadPriorizado }) {
                 {im.statusCaptacao && (
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                     im.statusCaptacao === 'CAPTADO' ? 'bg-emerald-100 text-emerald-700' :
-                    im.statusCaptacao === 'EM_NEGOCIACAO' ? 'bg-amber-100 text-amber-700' :
+                    im.statusCaptacao === 'DOCUMENTACAO' ? 'bg-amber-100 text-amber-700' :
                     'bg-indigo-100 text-indigo-600'
                   }`}>
                     {im.statusCaptacao}
@@ -1349,7 +1349,7 @@ function AbaTimeline({
           Mostrando as últimas 5 atividades •{' '}
           <button
             className="text-indigo-500 hover:underline font-medium"
-            onClick={() => window.open(`/dashboard/leads/${leadId}`, '_blank')}
+            onClick={() => window.open(`/dashboard/proprietarios/${leadId}`, '_blank')}
           >
             Ver todas
           </button>

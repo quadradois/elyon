@@ -103,7 +103,7 @@ export function CardContrato({ lead, onUpdate }: CardContratoProps) {
     };
 
     // Só mostrar se o lead está em status relevante
-    const statusRelevantes = ['TENTATIVA_AGENDAMENTO', 'DOCUMENTACAO', 'CAPTADO', 'CONVERTIDO', 'NOVO'];
+    const statusRelevantes = ['TENTATIVA_AGENDAMENTO', 'DOCUMENTACAO', 'CAPTADO', 'NOVO'];
     if (!statusRelevantes.includes(lead.status) && !temContrato) {
         return null;
     }

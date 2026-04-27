@@ -1,3 +1,4 @@
+// @deprecated — substituído por Proprietarios.tsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../componentes/ui/button";
@@ -113,10 +114,6 @@ function getStatusBadge(status: string): { label: string; className: string } {
     CAPTADO: { label: "Captado", className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
     PERDIDO: { label: "Perdido", className: "bg-red-100 text-red-700 border-red-200" },
     ARQUIVADO: { label: "Arquivado", className: "bg-gray-100 text-gray-700 border-gray-200" },
-    // Legado
-    CONTATANDO: { label: "Tentando Agendar", className: "bg-sky-100 text-sky-700 border-sky-200" },
-    QUALIFICADO: { label: "Novo", className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-    EM_NEGOCIACAO: { label: "Documentação", className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
   };
   return badges[status] || { label: status, className: "bg-gray-100 text-gray-700" };
 }
@@ -492,7 +489,7 @@ export function Leads() {
                       <TableRow
                         key={lead.id}
                         className="cursor-pointer hover:bg-gray-50"
-                        onClick={() => navigate(`/dashboard/leads/${lead.id}`)}
+                        onClick={() => navigate(`/dashboard/proprietarios/${lead.id}`)}
                       >
                         <TableCell>
                           <div className="font-medium text-gray-900">{nome}</div>
@@ -548,7 +545,7 @@ export function Leads() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => navigate(`/dashboard/leads/${lead.id}`)}>
+                              <DropdownMenuItem onClick={() => navigate(`/dashboard/proprietarios/${lead.id}`)}>
                                 <Eye className="h-4 w-4 mr-2" />
                                 Ver detalhes
                               </DropdownMenuItem>

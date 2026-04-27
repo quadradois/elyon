@@ -31,12 +31,9 @@ export const statusConfig: Record<string, { label: string; color: string; bgColo
     CAPTADO: { label: 'Captado', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
     PERDIDO: { label: 'Perdido', color: 'text-red-700', bgColor: 'bg-red-100' },
     ARQUIVADO: { label: 'Arquivado', color: 'text-gray-500', bgColor: 'bg-gray-50' },
-    // Legado (compatibilidade)
+    // Legado (compatibilidade não-deprecated)
     QUALIFICANDO: { label: 'Qualificando', color: 'text-indigo-700', bgColor: 'bg-indigo-100' },
-    QUALIFICADO: { label: 'Qualificado', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
-    NAO_QUALIFICADO: { label: 'Não Qualificado', color: 'text-red-700', bgColor: 'bg-red-100' },
     AGENDADO: { label: 'Agendado', color: 'text-violet-700', bgColor: 'bg-violet-100' },
-    CONVERTIDO: { label: 'Captado', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
 };
 
 // ============================================

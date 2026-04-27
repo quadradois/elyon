@@ -424,7 +424,7 @@ export function Mineracao() {
   const handleConclusao = () => {
     setModalOpen(false);
     setSelecionados([]);
-    navigate("/dashboard/leads");
+    navigate("/dashboard/proprietarios");
   };
 
   const voltarParaInicio = () => {

@@ -140,22 +140,20 @@ function BarraStatus({ status, quantidade, total }: { status: string; quantidade
   
   const cores: Record<string, string> = {
     NOVO:          "bg-indigo-500",
-    CONTATANDO:    "bg-amber-500",
-    QUALIFICADO:   "bg-violet-500",
-    EM_NEGOCIACAO: "bg-orange-500",
-    CONVERTIDO:    "bg-emerald-500",
+    TENTATIVA_AGENDAMENTO: "bg-amber-500",
+    DOCUMENTACAO: "bg-orange-500",
+    CAPTADO:    "bg-emerald-500",
     PERDIDO:       "bg-danger",
-    INATIVO:       "bg-slate-400"
+    ARQUIVADO:       "bg-slate-400"
   };
   
   const labels: Record<string, string> = {
     NOVO: "Novos",
-    CONTATANDO: "Contatando",
-    QUALIFICADO: "Qualificados",
-    EM_NEGOCIACAO: "Em Negociação",
-    CONVERTIDO: "Convertidos",
+    TENTATIVA_AGENDAMENTO: "Em alinhamento",
+    DOCUMENTACAO: "Documentação",
+    CAPTADO: "Captados",
     PERDIDO: "Perdidos",
-    INATIVO: "Inativos"
+    ARQUIVADO: "Arquivados"
   };
 
   return (

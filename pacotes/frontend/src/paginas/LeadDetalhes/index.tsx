@@ -434,10 +434,10 @@ export default function LeadDetalhes() {
     const scoreQualificacaoLocal = (() => {
         let pontos = 0;
         const statusPesos: Record<string, number> = {
-            NOVO: 5, QUALIFICADO: 8, CONTATANDO: 8,
+            NOVO: 5,
             TENTATIVA_AGENDAMENTO: 12, VISITA_AGENDADA: 14,
             AVALIACAO_EM_ANDAMENTO: 16, DOCUMENTACAO: 18,
-            EM_NEGOCIACAO: 18, ONBOARDING: 20,
+            ONBOARDING: 20,
         };
         pontos += statusPesos[lead.status] || 0;
         if (lead.imovel?.interesseEm) pontos += 8;

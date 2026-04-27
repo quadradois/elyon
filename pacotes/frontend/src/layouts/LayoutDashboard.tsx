@@ -1,16 +1,12 @@
 import {
   Bot,
   Users,
-  MessageSquare,
   LogOut,
   Building2,
   Menu,
-  Target,
   Sparkles,
   BarChart3,
-  List,
   Zap,
-  Shield,
   Receipt,
   UserPlus,
   Package,
@@ -132,60 +128,40 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
 
   // === DEFINIÇÃO DAS SEÇÕES DO MENU ===
   const menuSections: MenuSection[] = [
-    // === PROSPECÇÃO (Coleta de dados) ===
+    // === CAPTAÇÃO ===
     {
-      id: "prospeccao",
-      label: "Prospecção",
+      id: "captacao",
+      label: "Captação",
       defaultExpanded: true,
       items: [
         {
           icon: Sparkles,
-          label: "Prospecção com IA",
-          path: "/dashboard/captacao",
-          destaque: true,
+          label: "Mineração",
+          path: "/dashboard/mineracao",
         },
         {
-          icon: List,
-          label: "Listas",
-          path: "/dashboard/listas",
-        },
+          icon: Building2,
+          label: "Campanhas",
+          path: "/dashboard/campanhas",
+        }
       ],
     },
-    // === ATENDIMENTO (Interação com contatos) ===
+    // === FUNIL ===
     {
-      id: "atendimento",
-      label: "Atendimento",
+      id: "funil",
+      label: "Funil",
       defaultExpanded: true,
       items: [
         {
-          icon: Target,
-          label: "Campanhas",
-          path: "/dashboard/campanhas",
+          icon: Users,
+          label: "Proprietários",
+          path: "/dashboard/proprietarios",
+          destaque: true,
         },
         {
           icon: Calendar,
           label: "Agenda",
           path: "/dashboard/agenda",
-        },
-        {
-          icon: Users,
-          label: "Leads",
-          path: "/dashboard/leads",
-        },
-        {
-          icon: MessageSquare,
-          label: "Conversas",
-          path: "/dashboard/conversas",
-        },
-        {
-          icon: Bot,
-          label: "Meus Agentes",
-          path: "/dashboard/agentes",
-        },
-        {
-          icon: Phone,
-          label: "Sessões WhatsApp",
-          path: "/dashboard/sessoes-whatsapp",
         },
       ],
     },
@@ -211,6 +187,11 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           path: "/dashboard/cockpit-ia",
         },
         {
+          icon: Bot,
+          label: "Agentes",
+          path: "/dashboard/agentes",
+        },
+        {
           icon: Coins,
           label: "Créditos",
           path: "/dashboard/creditos",
@@ -226,6 +207,24 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           label: "Equipe",
           path: "/dashboard/equipe",
         }] : []),
+      ],
+    },
+    // === CONFIG ===
+    {
+      id: "config",
+      label: "Config",
+      defaultExpanded: true,
+      items: [
+        {
+          icon: Phone,
+          label: "WhatsApp",
+          path: "/dashboard/sessoes-whatsapp",
+        },
+        {
+          icon: Settings,
+          label: "Configurações",
+          path: "/dashboard/configuracoes",
+        }
       ],
     },
   ];
@@ -273,7 +272,9 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
 
   // Verifica se algum item da seção está ativo
   const isSectionActive = (section: MenuSection) => {
-    return section.items.some(item => location.pathname === item.path);
+    return section.items.some(item =>
+      location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
+    );
   };
 
   // Componente wrapper para tooltip condicional
@@ -408,7 +409,8 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
             sidebarOpen && "pl-2"
           )}>
             {section.items.map((item) => {
-              const isActive = location.pathname === item.path;
+              const isActive =
+                location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
               return renderMenuItem(item, isActive);
             })}
           </div>

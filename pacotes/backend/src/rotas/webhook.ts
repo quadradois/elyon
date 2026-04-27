@@ -395,7 +395,12 @@ async function buscarContatoProspeccao(telefone: string) {
           OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone4, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitos}
           OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone5, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitos}
         )
-      ORDER BY l.id IS NOT NULL DESC, c."atualizadoEm" DESC
+      ORDER BY
+        CASE
+          WHEN c."statusProspeccao" IN ('CONTATANDO', 'RESPONDEU', 'INTERESSADO') THEN 0
+          ELSE 1
+        END,
+        c."atualizadoEm" DESC
       LIMIT 1
     `);
 
@@ -427,7 +432,12 @@ async function buscarContatoProspeccao(telefone: string) {
             OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone2, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitosVar}
             OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone3, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitosVar}
           )
-        ORDER BY l.id IS NOT NULL DESC, c."atualizadoEm" DESC
+        ORDER BY
+          CASE
+            WHEN c."statusProspeccao" IN ('CONTATANDO', 'RESPONDEU', 'INTERESSADO') THEN 0
+            ELSE 1
+          END,
+          c."atualizadoEm" DESC
         LIMIT 1
       `);
     }
@@ -1492,6 +1502,12 @@ router.post('/', async (req, res) => {
 
               if (contatoProspeccao) {
                 console.log(`[Webhook] 🎯 Prospecção Ativa: ${contatoProspeccao.nome}`);
+
+                if (!contatoProspeccao.campanhaId) {
+                  console.log(`[Webhook] ⚠️ Contato ${contatoProspeccao.id} sem campanha vinculada - ignorando inbound`);
+                  registrarIgnorado(telefone, 'sem_campanha_vinculada', contatoProspeccao.id);
+                  continue;
+                }
 
                 // Verificar Blacklist
                 const telefoneNormalizado = telefone.replace(/\D/g, '').slice(-8);

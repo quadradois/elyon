@@ -490,7 +490,7 @@ export function CampanhaDetalhes() {
             onFiltroChange={(status) => { setFiltroStatus(status); setPaginaAtual(1); }}
             onPaginaChange={setPaginaAtual}
             onExportar={exportarContatos}
-            onVerContato={(contatoId) => navigate(`/dashboard/campanhas/${id}/contatos/${contatoId}`)}
+            onVerContato={(contatoId) => navigate(`/dashboard/proprietarios/${contatoId}`)}
             onRecarregar={carregarContatos}
           />
         </div>

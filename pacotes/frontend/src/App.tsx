@@ -1,17 +1,15 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { Toaster } from "sonner";
 import { Login } from "./paginas/Login";
 import { LayoutDashboard } from "./layouts/LayoutDashboard";
 import { ConfiguracaoAgente } from "./paginas/ConfiguracaoAgente";
 import { DashboardAgentes } from "./paginas/DashboardAgentes";
-import { MissionControlLeads } from "./paginas/MissionControlLeads";
-import LeadDetalhes from "./paginas/LeadDetalhes";
+import { Proprietarios } from "./paginas/Proprietarios";
+import ProprietarioDetalhes from "./paginas/ProprietarioDetalhes";
 import ConfirmarAgendamento from "./paginas/ConfirmarAgendamento";
 import { Mineracao } from "./paginas/Mineracao";
-import { Captacao } from "./paginas/Captacao";
 import { Campanhas } from "./paginas/Campanhas";
 import { CampanhaDetalhes } from "./paginas/detalhes-campanha";
-import ContatoDetalhes from "./paginas/ContatoDetalhes";
 import Listas from "./paginas/Listas";
 import ListaDetalhes from "./paginas/ListaDetalhes";
 import { Relatorios } from "./paginas/Relatorios";
@@ -58,6 +56,16 @@ function RotaAdmin({ children }: { children: React.ReactNode }) {
   }
 
   return <WhatsAppProvider>{children}</WhatsAppProvider>;
+}
+
+function RedirectLeadToProprietario() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/dashboard/proprietarios/${id || ''}`} replace />;
+}
+
+function RedirectContatoToProprietario() {
+  const { contatoId } = useParams<{ contatoId: string }>();
+  return <Navigate to={`/dashboard/proprietarios/${contatoId || ''}`} replace />;
 }
 
 function App() {
@@ -191,7 +199,7 @@ function App() {
           element={
             <RotaPrivada>
               <LayoutDashboard>
-                <MissionControlLeads />
+                <Navigate to="/dashboard/proprietarios" replace />
               </LayoutDashboard>
             </RotaPrivada>
           }
@@ -202,7 +210,29 @@ function App() {
           element={
             <RotaPrivada>
               <LayoutDashboard>
-                <LeadDetalhes />
+                <RedirectLeadToProprietario />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/proprietarios"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <Proprietarios />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/proprietarios/:id"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <ProprietarioDetalhes />
               </LayoutDashboard>
             </RotaPrivada>
           }
@@ -246,7 +276,7 @@ function App() {
           element={
             <RotaPrivada>
               <LayoutDashboard>
-                <ContatoDetalhes />
+                <RedirectContatoToProprietario />
               </LayoutDashboard>
             </RotaPrivada>
           }
@@ -301,7 +331,7 @@ function App() {
           element={
             <RotaPrivada>
               <LayoutDashboard>
-                <Captacao />
+                <Navigate to="/dashboard/mineracao" replace />
               </LayoutDashboard>
             </RotaPrivada>
           }

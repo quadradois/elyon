@@ -9,7 +9,6 @@ import {
   Zap,
   Snowflake,
   LayoutGrid,
-  LayoutList,
   Radio,
   Calendar,
   TrendingUp,
@@ -21,7 +20,7 @@ import { Input } from '../ui/input';
 import { NovoLeadDialog } from '../NovoLeadDialog';
 import type { EstatisticasPriorizadas } from '../../ganchos/useLeadsPriorizados';
 
-export type ViewMode = 'feed' | 'kanban' | 'lista';
+export type ViewMode = 'feed' | 'kanban';
 
 interface BarraComandoProps {
   estatisticas: EstatisticasPriorizadas;
@@ -178,7 +177,6 @@ export function BarraComando({
           {[
             { key: 'feed' as const, icon: <Radio className="w-4 h-4" />, label: 'Feed' },
             { key: 'kanban' as const, icon: <LayoutGrid className="w-4 h-4" />, label: 'Kanban' },
-            { key: 'lista' as const, icon: <LayoutList className="w-4 h-4" />, label: 'Lista' },
           ].map((view) => (
             <button
               key={view.key}

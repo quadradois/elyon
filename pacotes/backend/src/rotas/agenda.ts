@@ -105,7 +105,7 @@ router.post('/bloqueio', verificarAutenticacao, async (req, res) => {
                     tenantId,
                     nome: 'Agenda Interna',
                     telefone: '00000000000',
-                    status: 'INATIVO', // Para não aparecer em listas comerciais
+                    status: 'ARQUIVADO', // Para não aparecer em listas comerciais
                     origem: 'SISTEMA'
                 }
             });

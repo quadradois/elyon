@@ -24,14 +24,14 @@ export function FaseChecklist({ lead }: FaseChecklistProps) {
 
     const faseSpinAtual = lead.conversas?.[0]?.faseSPIN || "";
     const faseSpin = (faseSpinAtual || "").toUpperCase();
-    const faseSpinAvancada = ["IMPLICACAO", "NECESSIDADE", "SOLUCAO", "QUALIFICADO"].includes(faseSpin);
-    const apresentouSolucao = ["SOLUCAO", "QUALIFICADO"].includes(faseSpin);
+    const faseSpinAvancada = ["IMPLICACAO", "NECESSIDADE", "SOLUCAO"].includes(faseSpin);
+    const apresentouSolucao = ["SOLUCAO"].includes(faseSpin);
 
     const temAtividadeAvaliacao = lead.atividades?.some((a) => a.tipo === "AVALIACAO" && !!a.agendadoPara);
     const temDadosPessoais = !!lead.cpf && !!lead.nome && (!!lead.email || !!lead.telefone);
     const temEnderecoImovel = !!lead.imovel?.endereco;
 
-    const moveuParaFase3 = /movido para fase3/i.test(lead.ultimaAcaoIA || "") || ["DOCUMENTACAO", "EM_NEGOCIACAO", "ONBOARDING", "CAPTADO"].includes(status);
+    const moveuParaFase3 = /movido para fase3/i.test(lead.ultimaAcaoIA || "") || ["DOCUMENTACAO", "ONBOARDING", "CAPTADO"].includes(status);
     const moveuParaFase4 = /movido para fase4/i.test(lead.ultimaAcaoIA || "") || ["ONBOARDING", "CAPTADO"].includes(status);
 
     const temEvidenciaQualificacao =
@@ -58,24 +58,6 @@ export function FaseChecklist({ lead }: FaseChecklistProps) {
     const TAREFAS: Record<string, ChecklistItem[]> = {
         // Fase 1: Opener (Qualificação)
         'NOVO': [
-            {
-                label: "Confirmar intenção: vender ou alugar",
-                done: !!lead.imovel?.interesseEm
-            },
-            {
-                label: "Confirmar tipologia/configuração (tipo e quartos)",
-                done: !!lead.imovel?.tipo || lead.imovel?.quartos != null
-            },
-            {
-                label: "Confirmar metragem e ocupação do imóvel",
-                done: !!lead.imovel?.area || !!lead.imovel?.ocupacao
-            },
-            {
-                label: "Perguntar se já tem valor em mente",
-                done: !!lead.imovel?.valorPretendido
-            }
-        ],
-        'QUALIFICADO': [
             {
                 label: "Confirmar intenção: vender ou alugar",
                 done: !!lead.imovel?.interesseEm
@@ -159,24 +141,6 @@ export function FaseChecklist({ lead }: FaseChecklistProps) {
                 done: moveuParaFase4 || !!lead.contratoUrl || !!lead.prazoTrabalho
             }
         ],
-        'EM_NEGOCIACAO': [
-            {
-                label: "Time humano conduzir documentação e contrato",
-                done: !!lead.tipoAutorizacao || temEvidenciaAtividade(/exclusiv|simples|contrato/i)
-            },
-            {
-                label: "Definir comissão e modelo de autorização",
-                done: !!lead.comissaoAcordada || temEvidenciaAtividade(/comiss(ã|a)o/i)
-            },
-            {
-                label: "Registrar objeções e pendências de formalização",
-                done: (lead.spin?.necessidade?.objecoes?.length || 0) > 0 || temEvidenciaAtividade(/obje(ç|c)(ã|a)o/i)
-            },
-            {
-                label: "Concluir transição para onboarding pós-assinatura",
-                done: moveuParaFase4 || !!lead.contratoUrl || !!lead.prazoTrabalho
-            }
-        ],
         // Fase 4: Admin (Onboarding)
         'ONBOARDING': [
             {
@@ -205,9 +169,9 @@ export function FaseChecklist({ lead }: FaseChecklistProps) {
 
     // Identificar nome da fase para display
     const getNomeFase = (s: string) => {
-        if (['NOVO', 'QUALIFICADO'].includes(s)) return "Fase 1: Qualificação (Opener)";
+        if (['NOVO'].includes(s)) return "Fase 1: Qualificação (Opener)";
         if (['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA'].includes(s)) return "Fase 2: Apresentação (Presenter)";
-        if (['DOCUMENTACAO', 'AVALIACAO_EM_ANDAMENTO', 'EM_NEGOCIACAO'].includes(s)) return "Fase 3: Documentação (Humano)";
+        if (['DOCUMENTACAO', 'AVALIACAO_EM_ANDAMENTO'].includes(s)) return "Fase 3: Documentação (Humano)";
         if (['ONBOARDING'].includes(s)) return "Fase 4: Onboarding (Admin)";
         return "Checklist";
     };

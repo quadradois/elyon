@@ -27,6 +27,9 @@ export class EncaminharCorretorUseCase {
             if (!contato) {
                 return { success: false, error: 'Contato não encontrado' };
             }
+            if (!contato.campanha) {
+                return { success: false, error: 'Contato sem campanha de origem' };
+            }
 
             let leadId = contato.leadId;
 

@@ -82,7 +82,7 @@ export function useNotificacao() {
       duration: 8000,
       action: {
         label: "Ver Leads",
-        onClick: () => window.location.href = "/dashboard/leads",
+        onClick: () => window.location.href = "/dashboard/proprietarios",
       },
     });
   };
