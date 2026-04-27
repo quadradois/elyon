@@ -4,7 +4,7 @@ import { Login } from "./paginas/Login";
 import { LayoutDashboard } from "./layouts/LayoutDashboard";
 import { ConfiguracaoAgente } from "./paginas/ConfiguracaoAgente";
 import { DashboardAgentes } from "./paginas/DashboardAgentes";
-import { Proprietarios } from "./paginas/Proprietarios";
+import { MissionControlLeads } from "./paginas/MissionControlLeads";
 import ProprietarioDetalhes from "./paginas/ProprietarioDetalhes";
 import ConfirmarAgendamento from "./paginas/ConfirmarAgendamento";
 import { Mineracao } from "./paginas/Mineracao";
@@ -222,7 +222,7 @@ function App() {
           element={
             <RotaPrivada>
               <LayoutDashboard>
-                <Proprietarios />
+                <MissionControlLeads />
               </LayoutDashboard>
             </RotaPrivada>
           }
