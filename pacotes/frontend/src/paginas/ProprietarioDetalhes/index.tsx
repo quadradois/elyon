@@ -1,13 +1,56 @@
-import { useMemo, useState } from 'react';
+import { Suspense, lazy, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, MessageSquare, Home, Activity, FileText, Briefcase, UserPlus } from 'lucide-react';
+import {
+  ArrowLeft,
+  Phone,
+  Mail,
+  MapPin,
+  Building2,
+  MessageSquare,
+  Send,
+  Copy,
+  Check,
+  Loader2,
+  AlertCircle,
+  FileText,
+  User,
+  Bot,
+  Pause,
+  Briefcase,
+  Home,
+  Shield,
+  Activity,
+  Target,
+  Sparkles,
+  Users,
+  Rocket,
+  Link2,
+  CheckCircle2,
+  RefreshCw,
+  CalendarPlus
+} from 'lucide-react';
 import { Button } from '../../componentes/ui/button';
+import { Textarea } from '../../componentes/ui/textarea';
+import { Input } from '../../componentes/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../../componentes/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../componentes/ui/tabs';
-import { CardImovel, CardNegociacao, CardContrato, CardProprietario } from '../LeadDetalhes/componentes';
-import { useProprietarioDetalhes } from './hooks/useProprietarioDetalhes';
+import { Tabs, TabsContent } from '../../componentes/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../componentes/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../componentes/ui/select';
 import { api } from '../../servicos/api';
 import { toast } from 'sonner';
+import { useProprietarioDetalhes } from './hooks/useProprietarioDetalhes';
+import {
+  CardNegociacao,
+  CardContrato,
+  CardProprietario,
+  CardTrackingIA,
+  CardBriefingIA,
+  FaseChecklist,
+} from '../LeadDetalhes/componentes';
+
+const ChatModal = lazy(() => import('../../componentes/ChatModal').then((m) => ({ default: m.ChatModal })));
+
+type TabType = 'atendimento' | 'proprietario' | 'imovel' | 'qualificacao' | 'negociacao' | 'contrato' | 'atividades';
 
 const limparTexto = (valor: unknown): string | null => {
   if (valor === null || valor === undefined) return null;
@@ -17,21 +60,155 @@ const limparTexto = (valor: unknown): string | null => {
   return texto;
 };
 
+const formatarTelefone = (numero: string) => {
+  const limpo = numero.replace(/\D/g, '');
+  if (limpo.length === 11) return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 7)}-${limpo.slice(7)}`;
+  if (limpo.length === 10) return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 6)}-${limpo.slice(6)}`;
+  return numero;
+};
+
+const formatarCpf = (cpf: string) => {
+  const limpo = cpf.replace(/\D/g, '');
+  if (limpo.length === 11) return `${limpo.slice(0, 3)}.${limpo.slice(3, 6)}.${limpo.slice(6, 9)}-${limpo.slice(9)}`;
+  return cpf;
+};
+
+const formatarMoeda = (valor: number | string) => {
+  const texto = String(valor).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+  const num = Number(texto);
+  if (Number.isNaN(num)) return '-';
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(num);
+};
+
+const tempoRelativo = (data: string) => {
+  const agora = new Date();
+  const dataMsg = new Date(data);
+  const diffMs = agora.getTime() - dataMsg.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHora = Math.floor(diffMs / 3600000);
+  const diffDia = Math.floor(diffMs / 86400000);
+  if (diffMin < 1) return 'agora';
+  if (diffMin < 60) return `${diffMin}min`;
+  if (diffHora < 24) return `${diffHora}h`;
+  if (diffDia < 7) return `${diffDia}d`;
+  return dataMsg.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+};
+
+const formatarDataCurta = (data: string) =>
+  new Date(data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+
+const formatarDataHora = (data: string) =>
+  new Date(data).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+const formatarTipoImovel = (tipo: string | null) => {
+  if (!tipo) return '-';
+  const t = tipo.toUpperCase();
+  if (t.includes('PREDIAL') || t.includes('APTO') || t.includes('APARTAMENTO')) return 'Apartamento';
+  if (t.includes('TERRITORIAL') || t.includes('LOTE') || t.includes('TERRENO')) return 'Terreno/Lote';
+  if (t.includes('CASA') && t.includes('CONDOMINIO')) return 'Casa em Condomínio';
+  if (t.includes('CASA')) return 'Casa';
+  if (t.includes('COMERCIAL')) return 'Comercial';
+  return tipo;
+};
+
+const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  AGUARDANDO: { label: 'Aguardando', color: 'text-slate-600', bg: 'bg-slate-100' },
+  CONTATANDO: { label: 'Contatando', color: 'text-indigo-700', bg: 'bg-indigo-50' },
+  RESPONDEU: { label: 'Respondeu', color: 'text-emerald-700', bg: 'bg-emerald-50' },
+  INTERESSADO: { label: 'Interessado', color: 'text-violet-700', bg: 'bg-violet-50' },
+  LEAD: { label: 'Lead', color: 'text-amber-700', bg: 'bg-amber-50' },
+};
+
+function extrairTelefones(contato: any, lead: any) {
+  if (contato?.telefonesJson) {
+    try {
+      const parsed = typeof contato.telefonesJson === 'string' ? JSON.parse(contato.telefonesJson) : contato.telefonesJson;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((t: any) => (typeof t === 'string' ? { numero: t } : t))
+          .filter((t: any) => limparTexto(t?.numero));
+      }
+    } catch {
+      // fallback abaixo
+    }
+  }
+
+  const base: any[] = [];
+  const push = (numero: unknown, principal = false, whatsapp = false) => {
+    const limpo = limparTexto(numero);
+    if (limpo) base.push({ numero: limpo, principal, whatsapp });
+  };
+  push(contato?.telefone ?? lead?.telefone, true, true);
+  push(contato?.telefone2 ?? lead?.telefone2, false, true);
+  push(contato?.telefone3 ?? lead?.telefone3);
+  push(contato?.telefone4);
+  push(contato?.telefone5);
+  return base;
+}
+
+function extrairEmails(contato: any, lead: any) {
+  if (contato?.emailsJson) {
+    try {
+      const parsed = typeof contato.emailsJson === 'string' ? JSON.parse(contato.emailsJson) : contato.emailsJson;
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((e: any) => (typeof e === 'string' ? { email: e } : e))
+          .filter((e: any) => limparTexto(e?.email));
+      }
+    } catch {
+      // fallback abaixo
+    }
+  }
+  const base: any[] = [];
+  const push = (email: unknown) => {
+    const limpo = limparTexto(email);
+    if (limpo) base.push({ email: limpo });
+  };
+  push(contato?.email ?? lead?.email);
+  push(contato?.email2 ?? lead?.email2);
+  push(contato?.email3);
+  return base;
+}
+
 export default function ProprietarioDetalhes() {
   const navigate = useNavigate();
   const { dados, carregando, erro, recarregar } = useProprietarioDetalhes();
-  const [convertendo, setConvertendo] = useState(false);
 
-  const nome = dados?.contato?.nome || dados?.lead?.nome || 'Proprietário';
+  const [activeTab, setActiveTab] = useState<TabType>('atendimento');
+  const [novaMensagem, setNovaMensagem] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [alternandoModo, setAlternandoModo] = useState(false);
+  const [promovendo, setPromovendo] = useState(false);
+  const [copiado, setCopiado] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [processandoCrm, setProcessandoCrm] = useState<null | 'status' | 'enviar' | 'reenviar'>(null);
+  const [resumoCrm, setResumoCrm] = useState<string>('');
+  const [modalAtividade, setModalAtividade] = useState(false);
+  const [salvandoAtividade, setSalvandoAtividade] = useState(false);
+  const [formAtividade, setFormAtividade] = useState({
+    tipo: 'TAREFA',
+    titulo: '',
+    descricao: '',
+    agendadoPara: '',
+    resultado: '',
+  });
+  const mensagensRef = useRef<HTMLDivElement>(null);
+
   const campanha = dados?.campanha;
   const lead = dados?.lead;
   const contato = dados?.contato;
+  const nome = limparTexto(contato?.nome) || limparTexto(lead?.nome) || 'Proprietário';
   const temLeadReal = !!lead;
 
   const leadVisual = useMemo(() => {
-    if (lead) return lead;
+    if (lead) return { ...lead, imovel: lead.imovel || {} };
     if (!contato) return null;
-
     return {
       id: contato.id,
       nome: contato.nome,
@@ -64,151 +241,996 @@ export default function ProprietarioDetalhes() {
         vagas: null,
         valorPretendido: null,
         ocupacao: null,
-        interesseEm: null
+        interesseEm: null,
       },
-      status: 'NOVO'
+      status: 'NOVO',
+      atividades: [],
+      conversas: [],
+      spin: { problema: { doresIdentificadas: [] } },
     };
   }, [lead, contato]);
 
-  const mostrarConversao = useMemo(() => {
-    return contato?.statusProspeccao === 'INTERESSADO' && !contato?.virouLead;
-  }, [contato]);
+  const mensagensOrdenadas = useMemo(() => {
+    const base = Array.isArray(dados?.mensagensProspecao) ? dados.mensagensProspecao : [];
+    return [...base].sort((a: any, b: any) => new Date(a?.dataHora || 0).getTime() - new Date(b?.dataHora || 0).getTime());
+  }, [dados?.mensagensProspecao]);
 
-  const converterParaLead = async () => {
-    if (!contato?.id || convertendo) return;
+  const telefones = useMemo(() => extrairTelefones(contato, lead), [contato, lead]);
+  const emails = useMemo(() => extrairEmails(contato, lead), [contato, lead]);
+  const telefonePrincipal = useMemo(() => telefones.find((t: any) => t.principal) || telefones[0], [telefones]);
+  const emailPrincipal = useMemo(() => emails[0], [emails]);
+
+  const statusProspeccao = limparTexto(contato?.statusProspeccao) || (temLeadReal ? 'LEAD' : 'AGUARDANDO');
+  const statusInfo = statusConfig[statusProspeccao] || statusConfig.AGUARDANDO;
+  const mostrarConversao = statusProspeccao === 'INTERESSADO' && !contato?.virouLead;
+
+  const copiar = async (texto: string, tipo: string) => {
+    await navigator.clipboard.writeText(texto);
+    setCopiado(tipo);
+    toast.success(`${tipo} copiado`);
+    setTimeout(() => setCopiado(null), 2000);
+  };
+
+  const enviarMensagem = async () => {
+    if (!contato?.id || !novaMensagem.trim() || enviando) return;
     try {
-      setConvertendo(true);
-      await api.post('/leads', { contatoId: contato.id });
-      toast.success('Proprietário convertido para lead');
+      setEnviando(true);
+      await api.post(`/campanhas/contatos/${contato.id}/mensagens`, {
+        conteudo: novaMensagem,
+        direcao: 'SAIDA',
+      });
+      setNovaMensagem('');
       await recarregar();
-    } catch (error) {
-      console.error(error);
-      toast.error('Erro ao converter para lead');
+      toast.success('Mensagem enviada');
+      requestAnimationFrame(() => {
+        if (mensagensRef.current) mensagensRef.current.scrollTop = mensagensRef.current.scrollHeight;
+      });
+    } catch {
+      toast.error('Erro ao enviar mensagem');
     } finally {
-      setConvertendo(false);
+      setEnviando(false);
+    }
+  };
+
+  const alternarModo = async (novoModo: 'IA' | 'HUMANO' | 'PAUSADO') => {
+    if (!campanha?.id || !contato?.id || alternandoModo) return;
+    try {
+      setAlternandoModo(true);
+      const endpoints: Record<string, string> = {
+        IA: 'devolver-ia',
+        HUMANO: 'assumir-humano',
+        PAUSADO: 'pausar',
+      };
+      await api.post(`/campanhas/${campanha.id}/contatos/${contato.id}/${endpoints[novoModo]}`);
+      await recarregar();
+      const mensagensToast: Record<string, string> = {
+        IA: '🤖 IA reativada para este contato',
+        HUMANO: '👤 Você assumiu a conversa',
+        PAUSADO: '⏸️ Conversa pausada',
+      };
+      toast.success(mensagensToast[novoModo]);
+    } catch {
+      toast.error('Erro ao alternar modo');
+    } finally {
+      setAlternandoModo(false);
+    }
+  };
+
+  const promoverLead = async () => {
+    if (!campanha?.id || !contato?.id || promovendo) return;
+    try {
+      setPromovendo(true);
+      const response = await api.post(`/campanhas/${campanha.id}/contatos/${contato.id}/promover`);
+      const leadId = response?.data?.leadId;
+      toast.success('Contato promovido com sucesso!');
+      if (leadId) {
+        navigate(`/dashboard/proprietarios/${leadId}`);
+      } else {
+        await recarregar();
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.erro || 'Erro ao promover contato');
+    } finally {
+      setPromovendo(false);
+    }
+  };
+
+  const executarAcaoCrm = async (acao: 'status' | 'enviar' | 'reenviar') => {
+    if (!lead?.id || processandoCrm) return;
+    try {
+      setProcessandoCrm(acao);
+      if (acao === 'status') {
+        const response = await api.get(`/leads/${lead.id}/crm/status`);
+        const ok = !!response?.data?.sucesso;
+        const textoStatus =
+          response?.data?.resultado?.status ||
+          response?.data?.resultado?.syncStatus ||
+          response?.data?.resultado?.mensagem ||
+          (ok ? 'Status atualizado.' : response?.data?.resultado?.error || 'Sem confirmação.');
+        setResumoCrm(textoStatus);
+        if (ok) {
+          toast.success('Status do CRM atualizado.');
+        } else {
+          toast.warning(textoStatus);
+        }
+      } else {
+        const endpoint = acao === 'enviar' ? 'enviar' : 'reenviar';
+        const response = await api.post(`/leads/${lead.id}/crm/${endpoint}`);
+        const ok = !!response?.data?.sucesso;
+        const mensagem = response?.data?.mensagem || response?.data?.erro || (ok ? 'Operação concluída.' : 'Falha ao operar CRM.');
+        setResumoCrm(mensagem);
+        if (ok) {
+          toast.success(mensagem);
+        } else {
+          toast.error(mensagem);
+        }
+      }
+      await recarregar();
+    } catch (error: any) {
+      const mensagem = error?.response?.data?.erro || 'Erro ao executar ação CRM';
+      setResumoCrm(mensagem);
+      toast.error(mensagem);
+    } finally {
+      setProcessandoCrm(null);
+    }
+  };
+
+  const criarAtividade = async () => {
+    if (!lead?.id || !formAtividade.titulo.trim()) return;
+    try {
+      setSalvandoAtividade(true);
+      await api.post(`/leads/${lead.id}/atividades`, {
+        tipo: formAtividade.tipo,
+        titulo: formAtividade.titulo.trim(),
+        descricao: formAtividade.descricao.trim() || undefined,
+        agendadoPara: formAtividade.agendadoPara || undefined,
+        resultado: formAtividade.resultado.trim() || undefined,
+      });
+      toast.success('Atividade criada!');
+      setModalAtividade(false);
+      setFormAtividade({
+        tipo: 'TAREFA',
+        titulo: '',
+        descricao: '',
+        agendadoPara: '',
+        resultado: '',
+      });
+      await recarregar();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.erro || 'Erro ao criar atividade');
+    } finally {
+      setSalvandoAtividade(false);
     }
   };
 
   if (carregando) {
-    return <div className="h-[60vh] flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin text-slate-400" /></div>;
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-slate-400 mx-auto mb-3" />
+          <p className="text-sm text-slate-500">Carregando...</p>
+        </div>
+      </div>
+    );
   }
 
   if (erro || !dados) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" onClick={() => navigate('/dashboard/proprietarios')}><ArrowLeft className="w-4 h-4 mr-2" />Voltar</Button>
-        <Card><CardContent className="p-6 text-sm text-red-600">{erro || 'Proprietário não encontrado'}</CardContent></Card>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+          <h2 className="text-lg font-semibold text-slate-900 mb-2">Erro ao carregar</h2>
+          <p className="text-slate-500 mb-6">{erro || 'Proprietário não encontrado'}</p>
+          <Button variant="outline" onClick={() => navigate('/dashboard/proprietarios')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Voltar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
+    { id: 'atendimento', label: 'Atendimento', icon: <Activity className="w-4 h-4" /> },
+    { id: 'proprietario', label: 'Proprietário', icon: <User className="w-4 h-4" /> },
+    { id: 'imovel', label: 'Imóvel', icon: <Home className="w-4 h-4" /> },
+    { id: 'qualificacao', label: 'Qualificação', icon: <Briefcase className="w-4 h-4" /> },
+    { id: 'negociacao', label: 'Negociação', icon: <MessageSquare className="w-4 h-4" /> },
+    { id: 'contrato', label: 'Contrato', icon: <FileText className="w-4 h-4" /> },
+    { id: 'atividades', label: 'Atividades', icon: <Target className="w-4 h-4" /> },
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+        <div className="max-w-[1600px] mx-auto px-6 py-4">
+          <button
+            onClick={() => navigate('/dashboard/proprietarios')}
+            className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors mb-3"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Voltar para proprietários</span>
+          </button>
+
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center text-white text-lg font-bold shadow-lg flex-shrink-0">
+                {nome.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-xl font-bold text-slate-900 truncate">{nome}</h1>
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusInfo.color} ${statusInfo.bg}`}>
+                    {statusInfo.label}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 mt-1 text-sm text-slate-500 flex-wrap">
+                  {telefonePrincipal?.numero && (
+                    <span className="flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5" />
+                      {formatarTelefone(telefonePrincipal.numero)}
+                    </span>
+                  )}
+                  {emailPrincipal?.email && (
+                    <span className="flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5" />
+                      {emailPrincipal.email}
+                    </span>
+                  )}
+                  {limparTexto(contato?.cpf || lead?.cpf) && (
+                    <span className="flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5" />
+                      {formatarCpf(limparTexto(contato?.cpf || lead?.cpf)!)}
+                    </span>
+                  )}
+                  {campanha?.nome && (
+                    <button className="text-brand hover:underline" onClick={() => navigate(`/dashboard/campanhas/${campanha.id}`)}>
+                      {campanha.nome}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {telefonePrincipal?.numero && (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => window.open(`tel:${telefonePrincipal.numero}`, '_blank')}>
+                    <Phone className="w-4 h-4 mr-2" />
+                    Ligar
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-success hover:bg-success-dark text-white"
+                    onClick={() => window.open(`https://wa.me/55${telefonePrincipal.numero.replace(/\D/g, '')}`, '_blank')}
+                  >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    WhatsApp
+                  </Button>
+                </>
+              )}
+              {emailPrincipal?.email && (
+                <Button variant="outline" size="sm" onClick={() => window.open(`mailto:${emailPrincipal.email}`, '_blank')}>
+                  <Mail className="w-4 h-4 mr-2" />
+                  Email
+                </Button>
+              )}
+
+              {temLeadReal && (
+                <Button variant="outline" size="sm" onClick={() => setChatOpen(true)}>
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Chat do Lead
+                </Button>
+              )}
+
+              {mostrarConversao ? (
+                <Button className="bg-brand hover:bg-brand-dark text-white ml-2 shadow-sm" onClick={promoverLead} disabled={promovendo}>
+                  {promovendo ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Rocket className="w-4 h-4 mr-2" />}
+                  Promover a Oportunidade
+                </Button>
+              ) : contato?.virouLead ? (
+                <Button
+                  variant="outline"
+                  className="ml-2 border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
+                  onClick={() => navigate(`/dashboard/proprietarios/${contato?.leadId || lead?.id}`)}
+                >
+                  Ver no CRM
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-[1600px] mx-auto px-6 py-6">
+        <div className="flex gap-6">
+          <div className="flex-1 min-w-0">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="border-b border-slate-200">
+                <nav className="flex -mb-px overflow-x-auto">
+                  {tabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                        activeTab === tab.id
+                          ? 'border-brand text-brand'
+                          : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      {tab.icon}
+                      {tab.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+
+              <div className="p-6">
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
+                  <TabsContent value="atendimento">
+                    <TabAtendimento
+                      contato={contato}
+                      lead={lead}
+                      statusInfo={statusInfo}
+                      alternarModo={alternarModo}
+                      alternandoModo={alternandoModo}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="proprietario">
+                    <TabProprietario
+                      contato={contato || leadVisual}
+                      telefones={telefones}
+                      emails={emails}
+                      copiar={copiar}
+                      copiado={copiado}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="imovel">
+                    <TabImovel contato={contato || leadVisual} copiar={copiar} copiado={copiado} />
+                  </TabsContent>
+
+                  <TabsContent value="qualificacao">
+                    {leadVisual ? (
+                      <div className="space-y-4">
+                        {temLeadReal && <CardBriefingIA lead={leadVisual as any} />}
+                        <CardProprietario lead={leadVisual as any} />
+                        {temLeadReal && <FaseChecklist lead={leadVisual as any} />}
+                        {temLeadReal && <CardTrackingIA lead={leadVisual as any} />}
+                      </div>
+                    ) : (
+                      <Card>
+                        <CardContent className="p-4 text-sm text-slate-500">Sem dados de qualificação ainda.</CardContent>
+                      </Card>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="negociacao">
+                    {temLeadReal ? (
+                      <CardNegociacao lead={leadVisual as any} />
+                    ) : (
+                      <Card>
+                        <CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent>
+                      </Card>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="contrato">
+                    {temLeadReal ? (
+                      <CardContrato lead={leadVisual as any} onUpdate={recarregar} />
+                    ) : (
+                      <Card>
+                        <CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent>
+                      </Card>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="atividades">
+                    <div className="space-y-4">
+                      {temLeadReal && (
+                        <Card className="border-indigo-200">
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Bot className="w-4 h-4 text-indigo-500" />
+                              Integração CRM
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                              <p className="text-xs uppercase tracking-wider text-slate-500 mb-1">Status atual</p>
+                              <p className="text-sm font-medium text-slate-800">
+                                {resumoCrm || leadVisual?.crm?.syncStatus || 'Ainda não verificado nesta sessão.'}
+                              </p>
+                              {!!leadVisual?.crm?.syncError && <p className="text-xs text-red-600 mt-1">{leadVisual.crm.syncError}</p>}
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                              <Button variant="outline" disabled={processandoCrm !== null} onClick={() => executarAcaoCrm('status')}>
+                                {processandoCrm === 'status' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Link2 className="w-4 h-4 mr-2" />}
+                                Verificar
+                              </Button>
+                              <Button variant="outline" disabled={processandoCrm !== null} onClick={() => executarAcaoCrm('enviar')}>
+                                {processandoCrm === 'enviar' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                                Enviar
+                              </Button>
+                              <Button variant="outline" disabled={processandoCrm !== null} onClick={() => executarAcaoCrm('reenviar')}>
+                                {processandoCrm === 'reenviar' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                                Reenviar
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between gap-4">
+                          <CardTitle>Atividades</CardTitle>
+                          {temLeadReal && (
+                            <Button size="sm" onClick={() => setModalAtividade(true)}>
+                              <CalendarPlus className="w-4 h-4 mr-2" />
+                              Nova Atividade
+                            </Button>
+                          )}
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          {(dados.atividades || []).map((a: any) => (
+                            <div key={a.id} className="rounded-lg border border-slate-200 p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-semibold">{a.titulo || a.tipo}</p>
+                                {a.agendadoPara && <span className="text-[11px] text-slate-500">{formatarDataHora(a.agendadoPara)}</span>}
+                              </div>
+                              <p className="text-xs text-slate-500 mt-1">{a.descricao || 'Sem descrição'}</p>
+                              {a.resultado && <p className="text-xs text-slate-700 mt-2">Resultado: {a.resultado}</p>}
+                            </div>
+                          ))}
+                          {(dados.atividades || []).length === 0 && <p className="text-sm text-slate-500">Sem atividades registradas.</p>}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-[400px] flex-shrink-0">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm h-[calc(100vh-200px)] sticky top-[140px] flex flex-col">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-slate-400" />
+                  <h3 className="font-semibold text-slate-900">Conversa</h3>
+                </div>
+                {mensagensOrdenadas.length > 0 && (
+                  <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">{mensagensOrdenadas.length} msg</span>
+                )}
+              </div>
+
+              <div ref={mensagensRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+                {mensagensOrdenadas.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center">
+                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                      <MessageSquare className="w-7 h-7 text-slate-300" />
+                    </div>
+                    <p className="text-sm text-slate-400">Nenhuma mensagem ainda</p>
+                  </div>
+                ) : (
+                  mensagensOrdenadas.map((msg: any) => {
+                    const isSaida = msg?.direcao === 'SAIDA' || msg?.tipo === 'ENVIADA';
+                    const dataMsg = msg?.dataHora || msg?.timestamp || '';
+                    return (
+                      <div key={msg.id} className={`flex ${isSaida ? 'justify-end' : 'justify-start'}`}>
+                        <div className="max-w-[85%]">
+                          <div className={`rounded-2xl px-4 py-2.5 ${isSaida ? 'bg-brand text-white rounded-br-md' : 'bg-slate-100 text-slate-900 rounded-bl-md'}`}>
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg?.conteudo}</p>
+                          </div>
+                          {dataMsg && <p className={`text-xs text-slate-400 mt-1 ${isSaida ? 'text-right' : ''}`}>{tempoRelativo(dataMsg)}</p>}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="p-4 border-t border-slate-100">
+                <div className="flex gap-2">
+                  <Textarea
+                    value={novaMensagem}
+                    onChange={(e) => setNovaMensagem(e.target.value)}
+                    placeholder={contato?.id ? 'Digite uma mensagem...' : 'Disponível quando houver contato'}
+                    className="flex-1 min-h-[44px] max-h-24 resize-none text-sm"
+                    disabled={!contato?.id}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        enviarMensagem();
+                      }
+                    }}
+                  />
+                  <Button onClick={enviarMensagem} disabled={!contato?.id || !novaMensagem.trim() || enviando} className="bg-brand hover:bg-brand-dark h-[44px] w-[44px] p-0">
+                    {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {temLeadReal && (
+        <>
+          <Suspense fallback={null}>
+            <ChatModal
+              lead={{
+                id: leadVisual.id,
+                nome: leadVisual.nome || nome,
+                telefone: leadVisual.telefone || null,
+              }}
+              open={chatOpen}
+              onOpenChange={setChatOpen}
+            />
+          </Suspense>
+
+          <Dialog open={modalAtividade} onOpenChange={setModalAtividade}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Nova Atividade</DialogTitle>
+                <DialogDescription>Crie uma atividade de acompanhamento do proprietário.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-2">
+                <div>
+                  <label className="text-sm font-medium">Tipo</label>
+                  <Select value={formAtividade.tipo} onValueChange={(v) => setFormAtividade((prev) => ({ ...prev, tipo: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LIGACAO">Ligação</SelectItem>
+                      <SelectItem value="AVALIACAO">Avaliação</SelectItem>
+                      <SelectItem value="REUNIAO">Reunião</SelectItem>
+                      <SelectItem value="FOLLOW_UP">Follow-up</SelectItem>
+                      <SelectItem value="TAREFA">Tarefa</SelectItem>
+                      <SelectItem value="NOTA">Nota</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Título</label>
+                  <Input
+                    value={formAtividade.titulo}
+                    onChange={(e) => setFormAtividade((prev) => ({ ...prev, titulo: e.target.value }))}
+                    placeholder="Ex: confirmar documentação pendente"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Descrição</label>
+                  <Textarea
+                    value={formAtividade.descricao}
+                    onChange={(e) => setFormAtividade((prev) => ({ ...prev, descricao: e.target.value }))}
+                    placeholder="Detalhes da atividade"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Agendado para</label>
+                  <Input
+                    type="datetime-local"
+                    value={formAtividade.agendadoPara}
+                    onChange={(e) => setFormAtividade((prev) => ({ ...prev, agendadoPara: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Resultado (opcional)</label>
+                  <Input
+                    value={formAtividade.resultado}
+                    onChange={(e) => setFormAtividade((prev) => ({ ...prev, resultado: e.target.value }))}
+                    placeholder="Ex: cliente confirmou visita"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setModalAtividade(false)}>Cancelar</Button>
+                <Button onClick={criarAtividade} disabled={salvandoAtividade || !formAtividade.titulo.trim()}>
+                  {salvandoAtividade && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                  Criar atividade
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TabAtendimento({
+  contato,
+  lead,
+  statusInfo,
+  alternarModo,
+  alternandoModo,
+}: {
+  contato: any;
+  lead: any;
+  statusInfo: { label: string; color: string; bg: string };
+  alternarModo: (modo: 'IA' | 'HUMANO' | 'PAUSADO') => void;
+  alternandoModo: boolean;
+}) {
+  const modoAtual = contato?.modoAtendimento || 'IA';
+  const scoreAssertiva = contato?.scoreAssertiva ?? lead?.scoreAssertiva;
+  const scoreQualificacao = contato?.scoreQualificacao ?? lead?.scoreQualificacao;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+          <div className="flex items-center gap-2 mb-4">
+            <Target className="w-5 h-5 text-slate-400" />
+            <h3 className="font-semibold text-slate-700">Status da Prospecção</h3>
+          </div>
+          <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${statusInfo.color} ${statusInfo.bg}`}>{statusInfo.label}</div>
+          {contato?.criadoEm && <p className="text-xs text-slate-400 mt-3">Criado em {formatarDataCurta(contato.criadoEm)}</p>}
+        </div>
+
+        <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+          <div className="flex items-center gap-2 mb-4">
+            <Users className="w-5 h-5 text-slate-400" />
+            <h3 className="font-semibold text-slate-700">Modo de Atendimento</h3>
+          </div>
+          {contato?.id ? (
+            <div className="flex items-center gap-1 bg-white rounded-lg p-1 border border-slate-200">
+              <Button
+                variant={modoAtual === 'IA' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => alternarModo('IA')}
+                disabled={alternandoModo || modoAtual === 'IA'}
+                className={`flex-1 h-9 ${modoAtual === 'IA' ? 'bg-brand hover:bg-brand-dark text-white' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                <Bot className="w-4 h-4 mr-1.5" />
+                IA
+              </Button>
+              <Button
+                variant={modoAtual === 'HUMANO' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => alternarModo('HUMANO')}
+                disabled={alternandoModo || modoAtual === 'HUMANO'}
+                className={`flex-1 h-9 ${modoAtual === 'HUMANO' ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                <User className="w-4 h-4 mr-1.5" />
+                Humano
+              </Button>
+              <Button
+                variant={modoAtual === 'PAUSADO' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => alternarModo('PAUSADO')}
+                disabled={alternandoModo || modoAtual === 'PAUSADO'}
+                className={`flex-1 h-9 ${modoAtual === 'PAUSADO' ? 'bg-slate-600 hover:bg-slate-700 text-white' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                <Pause className="w-4 h-4 mr-1.5" />
+                Pausado
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">Modo de atendimento disponível apenas para contatos em prospecção.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {!!scoreAssertiva && (
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border border-indigo-100">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-indigo-500" />
+                <h3 className="font-semibold text-indigo-900">Score de Dados</h3>
+              </div>
+              <span className="text-3xl font-bold text-brand">{scoreAssertiva}</span>
+            </div>
+            <div className="h-2 bg-indigo-200 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all" style={{ width: `${Math.min(100, scoreAssertiva)}%` }} />
+            </div>
+          </div>
+        )}
+
+        {!!scoreQualificacao && scoreQualificacao > 0 && (
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-5 border border-amber-100">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-amber-500" />
+                <h3 className="font-semibold text-amber-900">Score de Interesse</h3>
+              </div>
+              <span className="text-3xl font-bold text-amber-600">{scoreQualificacao}</span>
+            </div>
+            <div className="h-2 bg-amber-200 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all" style={{ width: `${Math.min(100, scoreQualificacao)}%` }} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-amber-50 rounded-xl p-5 border border-amber-100">
+        <div className="flex items-center gap-2 mb-3">
+          <FileText className="w-5 h-5 text-amber-600" />
+          <h3 className="font-semibold text-amber-900">Observações</h3>
+        </div>
+        <p className="text-sm text-amber-800 leading-relaxed whitespace-pre-wrap">
+          {limparTexto(contato?.observacoes) || 'Nenhuma observação registrada.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function TabProprietario({
+  contato,
+  telefones,
+  emails,
+  copiar,
+  copiado,
+}: {
+  contato: any;
+  telefones: any[];
+  emails: any[];
+  copiar: (texto: string, tipo: string) => void;
+  copiado: string | null;
+}) {
+  if (!contato) return null;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+          <div className="flex items-center gap-2 mb-4">
+            <User className="w-5 h-5 text-slate-400" />
+            <h3 className="font-semibold text-slate-700">Dados Pessoais</h3>
+          </div>
+          <div className="space-y-3">
+            {(contato.idade || contato.sexo) && (
+              <div className="grid grid-cols-2 gap-3">
+                {contato.idade && (
+                  <div className="bg-white rounded-lg p-3 text-center border border-slate-200">
+                    <p className="text-2xl font-bold text-slate-900">{contato.idade}</p>
+                    <p className="text-xs text-slate-500">anos</p>
+                  </div>
+                )}
+                {contato.sexo && (
+                  <div className="bg-white rounded-lg p-3 text-center border border-slate-200">
+                    <p className="text-sm font-semibold text-slate-900">{contato.sexo}</p>
+                    {contato.signo && <p className="text-xs text-slate-500">{contato.signo}</p>}
+                  </div>
+                )}
+              </div>
+            )}
+            {limparTexto(contato.cpf) && (
+              <div className="flex justify-between py-2 border-b border-slate-200">
+                <span className="text-sm text-slate-500">CPF</span>
+                <span className="text-sm font-mono text-slate-900">{formatarCpf(contato.cpf)}</span>
+              </div>
+            )}
+            {limparTexto(contato.dataNascimento) && (
+              <div className="flex justify-between py-2 border-b border-slate-200">
+                <span className="text-sm text-slate-500">Nascimento</span>
+                <span className="text-sm text-slate-900">{String(contato.dataNascimento).includes('T') ? formatarDataCurta(contato.dataNascimento) : contato.dataNascimento}</span>
+              </div>
+            )}
+            {limparTexto(contato.nomeMae) && (
+              <div className="flex justify-between py-2 border-b border-slate-200">
+                <span className="text-sm text-slate-500">Mãe</span>
+                <span className="text-sm text-slate-900 text-right max-w-[60%] truncate">{contato.nomeMae}</span>
+              </div>
+            )}
+            {limparTexto(contato.situacaoCadastral) && (
+              <div className="flex justify-between py-2">
+                <span className="text-sm text-slate-500">Situação</span>
+                <span className={`text-sm font-medium ${contato.situacaoCadastral === 'REGULAR' ? 'text-emerald-600' : 'text-amber-600'}`}>{contato.situacaoCadastral}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-indigo-50 rounded-xl p-5 border border-indigo-100">
+          <div className="flex items-center gap-2 mb-4">
+            <Briefcase className="w-5 h-5 text-indigo-500" />
+            <h3 className="font-semibold text-indigo-900">Dados Profissionais</h3>
+          </div>
+          <div className="space-y-3">
+            {limparTexto(contato.empresaAtual) && (
+              <div>
+                <p className="text-xs text-indigo-500 uppercase mb-1">Empresa</p>
+                <p className="text-sm font-medium text-indigo-900">{contato.empresaAtual}</p>
+              </div>
+            )}
+            {limparTexto(contato.profissao) && (
+              <div>
+                <p className="text-xs text-indigo-500 uppercase mb-1">Cargo/Profissão</p>
+                <p className="text-sm text-indigo-800">{contato.profissao}</p>
+              </div>
+            )}
+            {limparTexto(contato.rendaEstimada) && (
+              <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-lg p-3 mt-3 border border-emerald-200">
+                <p className="text-xs text-emerald-600 uppercase mb-1">Renda Estimada</p>
+                <p className="text-xl font-bold text-emerald-700">{formatarMoeda(contato.rendaEstimada)}</p>
+                {limparTexto(contato.faixaSalarial) && <p className="text-xs text-emerald-600 mt-1">{contato.faixaSalarial}</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Phone className="w-5 h-5 text-emerald-500" />
+              <h3 className="font-semibold text-emerald-900">Telefones</h3>
+            </div>
+            <span className="text-xs font-medium text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">{telefones.length}</span>
+          </div>
+          <div className="space-y-2">
+            {telefones.slice(0, 5).map((tel: any, idx: number) => (
+              <div key={idx} className="group flex items-center justify-between p-2.5 rounded-lg bg-white border border-emerald-200 hover:border-emerald-300 transition-colors">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-slate-900">{formatarTelefone(tel.numero)}</span>
+                  {tel.whatsapp && <span className="text-[10px] font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">WhatsApp</span>}
+                </div>
+                <button onClick={() => copiar(tel.numero, 'Telefone')} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-emerald-100 transition-all">
+                  {copiado === 'Telefone' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-violet-50 rounded-xl p-5 border border-violet-100">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Mail className="w-5 h-5 text-violet-500" />
+              <h3 className="font-semibold text-violet-900">Emails</h3>
+            </div>
+            <span className="text-xs font-medium text-violet-600 bg-violet-100 px-2 py-0.5 rounded-full">{emails.filter((e: any) => e?.email).length}</span>
+          </div>
+          <div className="space-y-2">
+            {emails.filter((e: any) => e?.email).slice(0, 5).map((email: any, idx: number) => (
+              <div key={idx} className="group flex items-center justify-between p-2.5 rounded-lg bg-white border border-violet-200 hover:border-violet-300 transition-colors">
+                <span className="text-sm font-medium text-slate-900 truncate flex-1">{email.email}</span>
+                <button onClick={() => copiar(email.email, 'Email')} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-violet-100 transition-all flex-shrink-0">
+                  {copiado === 'Email' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TabImovel({
+  contato,
+  copiar,
+  copiado,
+}: {
+  contato: any;
+  copiar: (texto: string, tipo: string) => void;
+  copiado: string | null;
+}) {
+  if (!contato) return null;
+
+  const temDadosImovel = contato?.nomeEdificio || contato?.enderecoImovel || contato?.apartamento || contato?.inscricaoIptu;
+  if (!temDadosImovel) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+          <Home className="w-10 h-10 text-slate-300" />
+        </div>
+        <h3 className="text-lg font-semibold text-slate-600 mb-2">Sem dados do imóvel</h3>
+        <p className="text-sm text-slate-400 max-w-sm">As informações do imóvel serão exibidas aqui quando disponíveis.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <Button variant="ghost" className="-ml-3" onClick={() => navigate('/dashboard/proprietarios')}>
-            <ArrowLeft className="w-4 h-4 mr-2" />Voltar para Proprietários
-          </Button>
-          <h1 className="text-2xl font-bold text-slate-900">{nome}</h1>
-          <div className="text-sm text-slate-500 flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">{dados.estagio}</span>
-            {campanha?.id && (
-              <button className="text-brand hover:underline" onClick={() => navigate(`/dashboard/campanhas/${campanha.id}`)}>
-                {campanha.nome}
-              </button>
+    <div className="space-y-6">
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-indigo-100">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Building2 className="w-7 h-7 text-brand" />
+          </div>
+          <div className="flex-1">
+            {limparTexto(contato.nomeEdificio) && <h1 className="text-2xl font-black text-slate-900 tracking-tight">{contato.nomeEdificio}</h1>}
+            <p className="text-sm text-brand font-medium mt-1 uppercase tracking-wider">Identificação do Edifício</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm space-y-6">
+        <div className="flex items-center gap-2 pb-4 border-b border-slate-100">
+          <MapPin className="w-5 h-5 text-brand" />
+          <h3 className="font-bold text-lg text-slate-800">Dossiê de Localização e Unidade</h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-5">
+            <div>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Endereço Completo</p>
+              <p className="text-sm font-semibold text-slate-900">{limparTexto(contato.enderecoImovel) || '-'}</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Bairro</p>
+              <p className="text-sm font-semibold text-slate-900">{limparTexto(contato.bairroImovel) || '-'}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Quadra</p>
+                <p className="text-sm font-semibold text-slate-900">{limparTexto(contato.quadra) || '-'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Lote</p>
+                <p className="text-sm font-semibold text-slate-900">{limparTexto(contato.lote) || '-'}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-100 text-center">
+                <p className="text-[11px] text-indigo-500 font-bold uppercase tracking-wider mb-1">Unidade</p>
+                <p className="text-xl font-bold text-indigo-700">{limparTexto(contato.unidade) || '-'}</p>
+              </div>
+              <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-100 text-center">
+                <p className="text-[11px] text-indigo-500 font-bold uppercase tracking-wider mb-1">Bloco</p>
+                <p className="text-xl font-bold text-indigo-700">{limparTexto(contato.bloco) || '-'}</p>
+              </div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+              <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mb-1">Box/Garagem</p>
+              <p className="text-lg font-bold text-slate-700">{limparTexto(contato.box) || 'Não informado'}</p>
+            </div>
+            {limparTexto(contato.areaConstruida) && (
+              <div className="bg-emerald-600 rounded-lg p-4 text-white shadow-md text-center">
+                <p className="text-[11px] text-emerald-100 font-bold uppercase tracking-wider mb-1">Tamanho do Apartamento</p>
+                <p className="text-3xl font-black">{contato.areaConstruida} m²</p>
+              </div>
             )}
           </div>
         </div>
-        {mostrarConversao && (
-          <Button onClick={converterParaLead} disabled={convertendo}>
-            {convertendo ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
-            Converter para Lead
-          </Button>
+
+        {limparTexto(contato.inscricaoIptu) && (
+          <div className="pt-5 border-t border-slate-100 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1">Inscrição IPTU</p>
+              <p className="font-mono text-lg font-bold text-slate-700">{contato.inscricaoIptu}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => copiar(contato.inscricaoIptu, 'IPTU')} className="hover:bg-slate-50">
+              {copiado === 'IPTU' ? <Check className="w-4 h-4 text-emerald-500 mr-2" /> : <Copy className="w-4 h-4 text-slate-400 mr-2" />}
+              Copiar IPTU
+            </Button>
+          </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2">
-          <Tabs defaultValue="prospeccao" className="w-full">
-            <TabsList className="grid grid-cols-6 w-full">
-              <TabsTrigger value="prospeccao"><MessageSquare className="w-4 h-4 mr-1" />Prospecção</TabsTrigger>
-              <TabsTrigger value="imovel"><Home className="w-4 h-4 mr-1" />Imóvel</TabsTrigger>
-              <TabsTrigger value="qualificacao"><Briefcase className="w-4 h-4 mr-1" />Qualificação</TabsTrigger>
-              <TabsTrigger value="negociacao">Negociação</TabsTrigger>
-              <TabsTrigger value="contrato"><FileText className="w-4 h-4 mr-1" />Contrato</TabsTrigger>
-              <TabsTrigger value="atividades"><Activity className="w-4 h-4 mr-1" />Atividades</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="prospeccao">
-              <Card>
-                <CardHeader><CardTitle>Histórico de Mensagens</CardTitle></CardHeader>
-                <CardContent className="space-y-2 max-h-[50vh] overflow-auto">
-                  {(dados.mensagensProspecao || []).map((m: any) => (
-                    <div key={m.id} className={`rounded-lg p-3 border ${m.direcao === 'SAIDA' ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-200'}`}>
-                      <p className="text-xs text-slate-500 mb-1">{m.direcao === 'SAIDA' ? 'Saída' : 'Entrada'} · {new Date(m.dataHora).toLocaleString('pt-BR')}</p>
-                      <p className="text-sm whitespace-pre-wrap">{m.conteudo}</p>
-                    </div>
-                  ))}
-                  {(dados.mensagensProspecao || []).length === 0 && <p className="text-sm text-slate-500">Sem mensagens de prospecção.</p>}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="imovel">
-              {leadVisual ? (
-                <CardImovel
-                  lead={leadVisual as any}
-                  isPerdidoOuArquivado={true}
-                  isCaptado={false}
-                  onEditar={() => {}}
-                />
-              ) : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
-            </TabsContent>
-
-            <TabsContent value="qualificacao">
-              {leadVisual ? <CardProprietario lead={leadVisual as any} /> : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
-            </TabsContent>
-
-            <TabsContent value="negociacao">
-              {temLeadReal ? <CardNegociacao lead={lead as any} /> : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
-            </TabsContent>
-
-            <TabsContent value="contrato">
-              {temLeadReal ? <CardContrato lead={lead as any} onUpdate={recarregar} /> : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
-            </TabsContent>
-
-            <TabsContent value="atividades">
-              <Card>
-                <CardHeader><CardTitle>Atividades</CardTitle></CardHeader>
-                <CardContent className="space-y-2">
-                  {(dados.atividades || []).map((a: any) => (
-                    <div key={a.id} className="rounded-lg border border-slate-200 p-3">
-                      <p className="text-sm font-semibold">{a.titulo || a.tipo}</p>
-                      <p className="text-xs text-slate-500">{a.descricao || 'Sem descrição'}</p>
-                    </div>
-                  ))}
-                  {(dados.atividades || []).length === 0 && <p className="text-sm text-slate-500">Sem atividades registradas.</p>}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-
-        <div className="space-y-4">
-          <Card>
-            <CardHeader><CardTitle>Dados do Proprietário</CardTitle></CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <p><strong>Nome:</strong> {nome}</p>
-              <p><strong>CPF:</strong> {limparTexto(contato?.cpf) ? `***.***.***-${String(contato?.cpf).slice(-2)}` : '-'}</p>
-              <p><strong>Telefone:</strong> {limparTexto(contato?.telefone) || limparTexto(lead?.telefone) || '-'}</p>
-              <p><strong>Email:</strong> {limparTexto(contato?.email) || limparTexto(lead?.email) || '-'}</p>
-              <p><strong>Faixa salarial:</strong> {limparTexto(contato?.faixaSalarial) || limparTexto(lead?.faixaSalarial) || '-'}</p>
-              <p><strong>Empresa:</strong> {limparTexto(contato?.empresaAtual) || limparTexto(lead?.empresaAtual) || '-'}</p>
-              <p><strong>IPTU:</strong> {limparTexto(contato?.inscricaoIptu) || limparTexto(lead?.inscricaoIptu) || '-'}</p>
-              <p><strong>Endereço imóvel:</strong> {limparTexto(contato?.enderecoImovel) || limparTexto(lead?.enderecoImovel) || '-'}</p>
-              <p><strong>Valor venal:</strong> {limparTexto(contato?.valorVenal) || limparTexto(lead?.valorVenal) || '-'}</p>
-            </CardContent>
-          </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+          <div className="flex items-center gap-2 mb-4">
+            <Home className="w-5 h-5 text-slate-400" />
+            <h3 className="font-semibold text-slate-700">Outras Características</h3>
+          </div>
+          <div className="space-y-3">
+            {limparTexto(contato.tipoImovel) && (
+              <div className="flex justify-between py-2 border-b border-slate-200">
+                <span className="text-sm text-slate-500">Tipo de Imóvel</span>
+                <span className="text-sm font-medium text-slate-900">{formatarTipoImovel(contato.tipoImovel)}</span>
+              </div>
+            )}
+            {limparTexto(contato.areaTerreno) && (
+              <div className="flex justify-between py-2 border-b border-slate-200">
+                <span className="text-sm text-slate-500">Área do Condomínio</span>
+                <span className="text-sm font-medium text-slate-900">{contato.areaTerreno} m²</span>
+              </div>
+            )}
+            {limparTexto(contato.valorVenal) && (
+              <div className="flex justify-between py-2">
+                <span className="text-sm text-slate-500">Valor Venal</span>
+                <span className="text-sm font-medium text-emerald-600">{formatarMoeda(contato.valorVenal)}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
