@@ -575,7 +575,7 @@ export function DashboardProspeccao() {
                         {lead.imovel?.endereco && (
                           <p className="text-xs text-slate-400 flex items-center gap-1 mt-1">
                             <MapPin className="w-3 h-3" />
-                            {lead.imovel.endereco}
+                            {lead.imovel?.endereco}
                           </p>
                         )}
                       </div>
@@ -629,7 +629,7 @@ export function DashboardProspeccao() {
                         {av.imovel?.endereco && (
                           <p className="text-xs text-slate-400 flex items-center gap-1 mt-1">
                             <MapPin className="w-3 h-3" />
-                            {av.imovel.endereco}
+                            {av.imovel?.endereco}
                           </p>
                         )}
                       </div>

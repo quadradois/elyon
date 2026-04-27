@@ -17,7 +17,8 @@ interface CardImovelProps {
 }
 
 export function CardImovel({ lead, isPerdidoOuArquivado, isCaptado, onEditar }: CardImovelProps) {
-    const temDados = lead.imovel.endereco || lead.imovel.tipo || lead.imovel.interesseEm;
+    const imovel = lead.imovel ?? {};
+    const temDados = imovel.endereco || imovel.tipo || imovel.interesseEm;
 
     return (
         <Card>
@@ -30,64 +31,64 @@ export function CardImovel({ lead, isPerdidoOuArquivado, isCaptado, onEditar }: 
             <CardContent>
                 {temDados ? (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        {lead.imovel.endereco && (
+                        {imovel.endereco && (
                             <div className="col-span-2 md:col-span-3">
                                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Endereço</p>
                                 <p className="font-medium flex items-center gap-2">
                                     <MapPin className="w-4 h-4 text-slate-400" />
-                                    {lead.imovel.endereco}
+                                    {imovel.endereco}
                                 </p>
                             </div>
                         )}
 
-                        {lead.imovel.interesseEm && (
+                        {imovel.interesseEm && (
                             <div>
                                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Interesse em</p>
                                 <Badge variant="secondary" className="bg-indigo-50 text-indigo-700">
-                                    {lead.imovel.interesseEm}
+                                    {imovel.interesseEm}
                                 </Badge>
                             </div>
                         )}
 
-                        {lead.imovel.tipo && (
+                        {imovel.tipo && (
                             <div>
                                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Tipo</p>
-                                <p className="font-medium">{lead.imovel.tipo}</p>
+                                <p className="font-medium">{imovel.tipo}</p>
                             </div>
                         )}
 
-                        {lead.imovel.area && (
+                        {imovel.area && (
                             <div>
                                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Área</p>
-                                <p className="font-medium">{lead.imovel.area} m²</p>
+                                <p className="font-medium">{imovel.area} m²</p>
                             </div>
                         )}
 
-                        {lead.imovel.quartos && (
+                        {imovel.quartos && (
                             <div>
                                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Quartos</p>
-                                <p className="font-medium">{lead.imovel.quartos}</p>
+                                <p className="font-medium">{imovel.quartos}</p>
                             </div>
                         )}
 
-                        {lead.imovel.vagas && (
+                        {imovel.vagas && (
                             <div>
                                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Vagas</p>
-                                <p className="font-medium">{lead.imovel.vagas}</p>
+                                <p className="font-medium">{imovel.vagas}</p>
                             </div>
                         )}
 
-                        {lead.imovel.valorPretendido && (
+                        {imovel.valorPretendido && (
                             <div>
                                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Valor Pretendido</p>
-                                <p className="font-medium text-emerald-600">{formatarMoeda(lead.imovel.valorPretendido)}</p>
+                                <p className="font-medium text-emerald-600">{formatarMoeda(imovel.valorPretendido)}</p>
                             </div>
                         )}
 
-                        {lead.imovel.ocupacao && (
+                        {imovel.ocupacao && (
                             <div>
                                 <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Ocupação</p>
-                                <p className="font-medium">{lead.imovel.ocupacao}</p>
+                                <p className="font-medium">{imovel.ocupacao}</p>
                             </div>
                         )}
 

@@ -23,6 +23,7 @@ import {
   Calendar,
   UserCog,
   ShieldCheck,
+  Shield,
 } from "lucide-react";
 
 // ... (código intermediário omitido, vou usar replace separado para o ícone e menu se for longe)

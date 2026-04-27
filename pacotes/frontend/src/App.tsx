@@ -8,6 +8,7 @@ import { Proprietarios } from "./paginas/Proprietarios";
 import ProprietarioDetalhes from "./paginas/ProprietarioDetalhes";
 import ConfirmarAgendamento from "./paginas/ConfirmarAgendamento";
 import { Mineracao } from "./paginas/Mineracao";
+import { Captacao } from "./paginas/Captacao";
 import { Campanhas } from "./paginas/Campanhas";
 import { CampanhaDetalhes } from "./paginas/detalhes-campanha";
 import Listas from "./paginas/Listas";
@@ -317,6 +318,17 @@ function App() {
 
         <Route
           path="/dashboard/mineracao"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <Captacao />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+
+        <Route
+          path="/dashboard/mineracao-legado"
           element={
             <RotaPrivada>
               <LayoutDashboard>

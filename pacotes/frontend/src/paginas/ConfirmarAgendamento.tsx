@@ -302,7 +302,7 @@ export default function ConfirmarAgendamento() {
                       <div>
                         <p className="text-sm text-slate-500">Local</p>
                         <p className="font-medium text-slate-900">
-                          {dados.imovel.endereco}
+                          {dados.imovel?.endereco}
                         </p>
                       </div>
                     </div>
@@ -414,7 +414,7 @@ export default function ConfirmarAgendamento() {
                   <div>
                     <p className="text-sm text-slate-500">Local</p>
                     <p className="font-medium text-slate-900">
-                      {dados.imovel.endereco}
+                      {dados.imovel?.endereco}
                     </p>
                   </div>
                 </div>
@@ -426,7 +426,7 @@ export default function ConfirmarAgendamento() {
                   <div>
                     <p className="text-sm text-slate-500">Tipo de Imóvel</p>
                     <p className="font-medium text-slate-900">
-                      {dados.imovel.tipo}
+                      {dados.imovel?.tipo}
                     </p>
                   </div>
                 </div>

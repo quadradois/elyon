@@ -61,6 +61,80 @@ function whereStatusByEstagio(estagio?: string) {
   return undefined;
 }
 
+function paraStringOuNull(valor: unknown): string | null {
+  if (valor === null || valor === undefined) return null;
+  if (typeof valor === 'string') {
+    const texto = valor.trim();
+    if (!texto) return null;
+    if (texto.toLowerCase() === '[object object]') return null;
+    return texto;
+  }
+  if (typeof valor === 'number' || typeof valor === 'bigint' || typeof valor === 'boolean') return String(valor);
+  if (typeof (valor as any)?.toString === 'function') {
+    const convertido = (valor as any).toString();
+    return convertido === '[object Object]' ? null : convertido;
+  }
+  return null;
+}
+
+function normalizarLeadParaFrontend(lead: any, contato: any) {
+  if (!lead) return null;
+
+  const enderecoImovel = paraStringOuNull(lead.enderecoImovel) ?? paraStringOuNull(contato?.enderecoImovel);
+  const tipoImovel = paraStringOuNull(lead.tipoImovel) ?? paraStringOuNull(contato?.tipoImovel);
+  const inscricaoIptu = paraStringOuNull(lead.inscricaoIptu) ?? paraStringOuNull(contato?.inscricaoIptu);
+  const bairroImovel = paraStringOuNull(lead.bairroImovel) ?? paraStringOuNull(contato?.bairroImovel);
+  const nomeEdificio = paraStringOuNull(lead.nomeEdificio) ?? paraStringOuNull(contato?.nomeEdificio);
+  const areaImovel = paraStringOuNull(lead.areaImovel) ?? paraStringOuNull(contato?.areaConstruida);
+
+  return {
+    ...lead,
+    // Contrato esperado pelos componentes de LeadDetalhes (reutilizados em ProprietárioDetalhes)
+    imovel: {
+      endereco: enderecoImovel,
+      tipo: tipoImovel,
+      area: areaImovel,
+      quartos: lead.quartosImovel ?? null,
+      vagas: lead.vagasImovel ?? null,
+      valorPretendido: paraStringOuNull(lead.valorPretendido),
+      ocupacao: paraStringOuNull(lead.ocupacaoImovel),
+      interesseEm: paraStringOuNull(lead.interesseEm)
+    },
+
+    // Mantém campos legados planos usados em trechos da tela
+    enderecoImovel,
+    tipoImovel,
+    areaImovel,
+    inscricaoIptu,
+    bairroImovel,
+    nomeEdificio,
+
+    // Fallback assertiva (quando lead foi criado com dados parciais)
+    nome: paraStringOuNull(lead.nome) ?? paraStringOuNull(contato?.nome),
+    telefone: paraStringOuNull(lead.telefone) ?? paraStringOuNull(contato?.telefone),
+    telefone2: paraStringOuNull(lead.telefone2) ?? paraStringOuNull(contato?.telefone2),
+    telefone3: paraStringOuNull(lead.telefone3) ?? paraStringOuNull(contato?.telefone3),
+    email: paraStringOuNull(lead.email) ?? paraStringOuNull(contato?.email),
+    email2: paraStringOuNull(lead.email2) ?? paraStringOuNull(contato?.email2),
+    cpf: paraStringOuNull(lead.cpf) ?? paraStringOuNull(contato?.cpf),
+    enderecoPrincipal: paraStringOuNull(lead.enderecoPrincipal) ?? paraStringOuNull(contato?.endereco),
+    cidade: paraStringOuNull(lead.cidade) ?? paraStringOuNull(contato?.cidade),
+    estado: paraStringOuNull(lead.estado) ?? paraStringOuNull(contato?.estado),
+    cep: paraStringOuNull(lead.cep) ?? paraStringOuNull(contato?.cep),
+    idade: lead.idade ?? contato?.idade ?? null,
+    sexo: paraStringOuNull(lead.sexo) ?? paraStringOuNull(contato?.sexo),
+    scoreAssertiva: lead.scoreAssertiva ?? contato?.scoreAssertiva ?? null,
+    empresaAtual: paraStringOuNull(lead.empresaAtual) ?? paraStringOuNull(contato?.empresaAtual),
+    profissao: paraStringOuNull(lead.profissao) ?? paraStringOuNull(contato?.profissao),
+    setor: paraStringOuNull(lead.setor) ?? paraStringOuNull(contato?.setor),
+    cnpjEmpresa: paraStringOuNull(lead.cnpjEmpresa) ?? paraStringOuNull(contato?.cnpjEmpresa),
+    faixaSalarial: paraStringOuNull(lead.faixaSalarial) ?? paraStringOuNull(contato?.faixaSalarial),
+    rendaEstimada: paraStringOuNull(lead.rendaEstimada) ?? paraStringOuNull(contato?.rendaEstimada),
+    valorVenal: paraStringOuNull(lead.valorVenal) ?? paraStringOuNull(contato?.valorVenal),
+    statusProspeccao: paraStringOuNull(lead.statusProspeccao) ?? paraStringOuNull(contato?.statusProspeccao)
+  };
+}
+
 // GET /api/proprietarios
 router.get('/', async (req, res) => {
   try {
@@ -243,6 +317,8 @@ router.get('/:id', async (req, res) => {
         : Promise.resolve([])
     ]);
 
+    const leadNormalizado = normalizarLeadParaFrontend(lead, contato);
+
     const estagio = calcularEstagio({
       statusProspeccao: contato?.statusProspeccao,
       virouLead: contato?.virouLead || !!lead,
@@ -254,7 +330,7 @@ router.get('/:id', async (req, res) => {
         id: contato?.id || lead?.id,
         estagio,
         contato: contato || null,
-        lead: lead || null,
+        lead: leadNormalizado,
         campanha: contato?.campanha || null,
         mensagensProspecao: mensagens,
         atividades,

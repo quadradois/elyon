@@ -9,6 +9,14 @@ import { useProprietarioDetalhes } from './hooks/useProprietarioDetalhes';
 import { api } from '../../servicos/api';
 import { toast } from 'sonner';
 
+const limparTexto = (valor: unknown): string | null => {
+  if (valor === null || valor === undefined) return null;
+  const texto = String(valor).trim();
+  if (!texto) return null;
+  if (texto.toLowerCase() === '[object object]') return null;
+  return texto;
+};
+
 export default function ProprietarioDetalhes() {
   const navigate = useNavigate();
   const { dados, carregando, erro, recarregar } = useProprietarioDetalhes();
@@ -18,6 +26,49 @@ export default function ProprietarioDetalhes() {
   const campanha = dados?.campanha;
   const lead = dados?.lead;
   const contato = dados?.contato;
+  const temLeadReal = !!lead;
+
+  const leadVisual = useMemo(() => {
+    if (lead) return lead;
+    if (!contato) return null;
+
+    return {
+      id: contato.id,
+      nome: contato.nome,
+      telefone: limparTexto(contato.telefone),
+      telefone2: limparTexto(contato.telefone2),
+      telefone3: limparTexto(contato.telefone3),
+      email: limparTexto(contato.email),
+      email2: limparTexto(contato.email2),
+      cpf: limparTexto(contato.cpf),
+      idade: contato.idade,
+      sexo: limparTexto(contato.sexo),
+      rendaEstimada: limparTexto(contato.rendaEstimada),
+      faixaSalarial: limparTexto(contato.faixaSalarial),
+      scoreAssertiva: contato.scoreAssertiva,
+      empresaAtual: limparTexto(contato.empresaAtual),
+      profissao: limparTexto(contato.profissao),
+      setor: limparTexto(contato.setor),
+      cnpjEmpresa: limparTexto(contato.cnpjEmpresa),
+      enderecoImovel: limparTexto(contato.enderecoImovel),
+      tipoImovel: limparTexto(contato.tipoImovel),
+      nomeEdificio: limparTexto(contato.nomeEdificio),
+      bairroImovel: limparTexto(contato.bairroImovel),
+      inscricaoIptu: limparTexto(contato.inscricaoIptu),
+      valorVenal: limparTexto(contato.valorVenal),
+      imovel: {
+        endereco: limparTexto(contato.enderecoImovel),
+        tipo: limparTexto(contato.tipoImovel),
+        area: limparTexto(contato.areaConstruida),
+        quartos: null,
+        vagas: null,
+        valorPretendido: null,
+        ocupacao: null,
+        interesseEm: null
+      },
+      status: 'NOVO'
+    };
+  }, [lead, contato]);
 
   const mostrarConversao = useMemo(() => {
     return contato?.statusProspeccao === 'INTERESSADO' && !contato?.virouLead;
@@ -104,19 +155,26 @@ export default function ProprietarioDetalhes() {
             </TabsContent>
 
             <TabsContent value="imovel">
-              {lead ? <CardImovel lead={lead as any} /> : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
+              {leadVisual ? (
+                <CardImovel
+                  lead={leadVisual as any}
+                  isPerdidoOuArquivado={true}
+                  isCaptado={false}
+                  onEditar={() => {}}
+                />
+              ) : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
             </TabsContent>
 
             <TabsContent value="qualificacao">
-              {lead ? <CardProprietario lead={lead as any} /> : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
+              {leadVisual ? <CardProprietario lead={leadVisual as any} /> : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
             </TabsContent>
 
             <TabsContent value="negociacao">
-              {lead ? <CardNegociacao lead={lead as any} onAtualizar={recarregar} /> : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
+              {temLeadReal ? <CardNegociacao lead={lead as any} /> : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
             </TabsContent>
 
             <TabsContent value="contrato">
-              {lead ? <CardContrato lead={lead as any} onAtualizar={recarregar} /> : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
+              {temLeadReal ? <CardContrato lead={lead as any} onUpdate={recarregar} /> : <Card><CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent></Card>}
             </TabsContent>
 
             <TabsContent value="atividades">
@@ -141,14 +199,14 @@ export default function ProprietarioDetalhes() {
             <CardHeader><CardTitle>Dados do Proprietário</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
               <p><strong>Nome:</strong> {nome}</p>
-              <p><strong>CPF:</strong> {contato?.cpf ? `***.***.***-${String(contato.cpf).slice(-2)}` : '-'}</p>
-              <p><strong>Telefone:</strong> {contato?.telefone || lead?.telefone || '-'}</p>
-              <p><strong>Email:</strong> {contato?.email || lead?.email || '-'}</p>
-              <p><strong>Faixa salarial:</strong> {contato?.faixaSalarial || lead?.faixaSalarial || '-'}</p>
-              <p><strong>Empresa:</strong> {contato?.empresaAtual || lead?.empresaAtual || '-'}</p>
-              <p><strong>IPTU:</strong> {contato?.inscricaoIptu || lead?.inscricaoIptu || '-'}</p>
-              <p><strong>Endereço imóvel:</strong> {contato?.enderecoImovel || lead?.enderecoImovel || '-'}</p>
-              <p><strong>Valor venal:</strong> {contato?.valorVenal || lead?.valorVenal || '-'}</p>
+              <p><strong>CPF:</strong> {limparTexto(contato?.cpf) ? `***.***.***-${String(contato?.cpf).slice(-2)}` : '-'}</p>
+              <p><strong>Telefone:</strong> {limparTexto(contato?.telefone) || limparTexto(lead?.telefone) || '-'}</p>
+              <p><strong>Email:</strong> {limparTexto(contato?.email) || limparTexto(lead?.email) || '-'}</p>
+              <p><strong>Faixa salarial:</strong> {limparTexto(contato?.faixaSalarial) || limparTexto(lead?.faixaSalarial) || '-'}</p>
+              <p><strong>Empresa:</strong> {limparTexto(contato?.empresaAtual) || limparTexto(lead?.empresaAtual) || '-'}</p>
+              <p><strong>IPTU:</strong> {limparTexto(contato?.inscricaoIptu) || limparTexto(lead?.inscricaoIptu) || '-'}</p>
+              <p><strong>Endereço imóvel:</strong> {limparTexto(contato?.enderecoImovel) || limparTexto(lead?.enderecoImovel) || '-'}</p>
+              <p><strong>Valor venal:</strong> {limparTexto(contato?.valorVenal) || limparTexto(lead?.valorVenal) || '-'}</p>
             </CardContent>
           </Card>
         </div>

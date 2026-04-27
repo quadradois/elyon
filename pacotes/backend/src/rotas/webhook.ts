@@ -25,6 +25,7 @@ import {
 } from '../agentes/orchestrator';
 import { ragConversasService } from '../servicos/rag-conversas';
 import { ConverterParaLeadUseCase } from '../casos-de-uso/agentes/converter-para-lead.usecase';
+import { QualificarLeadUseCase } from '../casos-de-uso/agentes/qualificar-lead.usecase';
 import {
   DeteccaoInteresse,
   TelemetriaConversaoStatus,
@@ -43,6 +44,7 @@ const router = Router();
 const MODO_OUTBOUND_ONLY = process.env.MODO_OUTBOUND_ONLY !== 'false';
 const DESATIVAR_INBOUND = process.env.DESATIVAR_INBOUND !== 'false';
 const converterParaLeadUseCase = new ConverterParaLeadUseCase();
+const qualificarLeadUseCase = new QualificarLeadUseCase();
 const CAPTURA_DOCS_INCLUIR_AUDIO = process.env.CAPTURA_DOCS_INCLUIR_AUDIO === 'true';
 
 function lerEnvMs(nome: string, padrao: number, min: number = 100, max: number = 120000): number {
@@ -84,6 +86,16 @@ async function garantirConversaoAutomaticaSeElegivel(params: {
     return;
   }
 
+  // Primeiro tenta qualificar (fallback técnico),
+  // depois converter (idempotente) para manter o fluxo principal coerente.
+  const resultadoQualificacao = await qualificarLeadUseCase.execute({
+    contatoId: params.contatoId,
+    temperatura: deteccao.temperatura,
+    interesse: deteccao.tipoInteresse,
+    timeline: deteccao.timeline,
+    situacaoAtual: params.textoConversa
+  });
+
   const resultadoConversao = await converterParaLeadUseCase.execute({
     contatoId: params.contatoId,
     tipoInteresse: deteccao.tipoInteresse,
@@ -92,7 +104,7 @@ async function garantirConversaoAutomaticaSeElegivel(params: {
     situacaoAtual: params.textoConversa
   });
 
-  if (resultadoConversao.success) {
+  if (resultadoConversao.success || resultadoQualificacao.success) {
     const contatoPosConversao = await prisma.contato.findUnique({
       where: { id: params.contatoId },
       select: { virouLead: true, leadId: true }
@@ -110,15 +122,15 @@ async function garantirConversaoAutomaticaSeElegivel(params: {
       return;
     }
 
-    registrarTelemetriaConversao({
-      status: 'convertido',
-      contatoId: params.contatoId,
-      textoConversa: params.textoConversa,
-      deteccao,
-      reasonCode: resultadoConversao.reasonCode,
-      leadId: contatoPosConversao.leadId
-    });
-    return;
+      registrarTelemetriaConversao({
+        status: 'convertido',
+        contatoId: params.contatoId,
+        textoConversa: params.textoConversa,
+        deteccao,
+        reasonCode: resultadoConversao.reasonCode || (resultadoQualificacao.success ? 'QUALIFIED_AND_LINKED' : undefined),
+        leadId: contatoPosConversao.leadId
+      });
+      return;
   }
 
   if (resultadoConversao.reasonCode === 'ALREADY_LEAD') {
@@ -1628,13 +1640,6 @@ router.post('/', async (req, res) => {
 
                     try {
 
-                      // Trava técnica: garantir conversão para lead ao detectar intenção de vender/alugar
-                      // Executar antes da persistência para espelhar TODAS as mensagens no chat padrão do lead
-                      await garantirConversaoAutomaticaSeElegivel({
-                        contatoId: contatoProspeccao.id,
-                        textoConversa: textoConsolidado
-                      });
-
                       // Salvar TODAS as mensagens acumuladas
                       for (const msg of mensagensAcumuladas) {
                         await salvarMensagemProspeccao({
@@ -1786,6 +1791,21 @@ router.post('/', async (req, res) => {
                         }
                       );
                       console.log('[DEBUG_ORQUESTRADOR] Resposta bruta do processarMensagemOrquestrada:', JSON.stringify(resultado, null, 2));
+
+                      // Fallback técnico:
+                      // tenta auto-conversão somente se o fluxo principal (orquestrador/tools) ainda
+                      // não tiver vinculado o contato a um lead.
+                      const contatoPosOrquestrador = await prisma.contato.findUnique({
+                        where: { id: contatoProspeccao.id },
+                        select: { virouLead: true, leadId: true }
+                      });
+                      if (!contatoPosOrquestrador?.virouLead || !contatoPosOrquestrador?.leadId) {
+                        await garantirConversaoAutomaticaSeElegivel({
+                          contatoId: contatoProspeccao.id,
+                          textoConversa: textoConsolidado
+                        });
+                      }
+
                       if (resultado.sucesso) resposta = resultado.resposta;
                       if (!resposta || !resposta.trim()) {
                         registrarIgnorado(telefone, 'fallback_sem_silencio:orquestrador_sem_resposta', contatoProspeccao.id);

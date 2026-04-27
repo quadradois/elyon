@@ -90,19 +90,24 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
     setLoading(true);
 
     try {
+      const proprietario = dadosEncontrados?.proprietario ?? {};
+      const imovel = dadosEncontrados?.imovel ?? {};
+      const telefones = Array.isArray(proprietario?.telefones) ? proprietario.telefones : [];
+      const emails = Array.isArray(proprietario?.emails) ? proprietario.emails : [];
+
       // Salvar Lead Real
       // Mapear dados para o formato esperado pelo endpoint POST /leads
       const leadPayload = {
-        nome: dadosEncontrados.proprietario.nome || "Proprietário Desconhecido",
-        telefone: dadosEncontrados.proprietario.telefones[0]
-          ? dadosEncontrados.proprietario.telefones[0].replace(/\D/g, '') // Limpar formatação
+        nome: proprietario?.nome || "Proprietário Desconhecido",
+        telefone: telefones[0]
+          ? String(telefones[0]).replace(/\D/g, '') // Limpar formatação
           : "",
-        email: dadosEncontrados.proprietario.emails[0] || "",
-        cpf: dadosEncontrados.proprietario.cpfEnriquecido || dadosEncontrados.proprietario.cpf,
+        email: emails[0] || "",
+        cpf: proprietario?.cpfEnriquecido || proprietario?.cpf,
 
         // Dados do Imóvel
-        enderecoImovel: dadosEncontrados.imovel.endereco,
-        tipoImovel: dadosEncontrados.imovel.tipo,
+        enderecoImovel: imovel?.endereco || null,
+        tipoImovel: imovel?.tipo || null,
 
         status: "NOVO",
         origem: "IPTU_HUNTING"
@@ -190,7 +195,7 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
                     <div>
                       <span className="text-slate-500 block">Endereço</span>
                       <span className="font-medium">
-                        {dadosEncontrados.imovel.endereco}
+                        {dadosEncontrados?.imovel?.endereco || "Não informado"}
                       </span>
                     </div>
                     <div>
@@ -198,7 +203,7 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
                         Área Construída
                       </span>
                       <span className="font-medium">
-                        {dadosEncontrados.imovel.area}
+                        {dadosEncontrados?.imovel?.area || "Não informado"}
                       </span>
                     </div>
                   </div>
@@ -215,14 +220,14 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
                   <div className="bg-slate-50 p-4 rounded-lg space-y-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-brand font-bold">
-                        {dadosEncontrados.proprietario.nome.charAt(0)}
+                        {(dadosEncontrados?.proprietario?.nome || "P").charAt(0)}
                       </div>
                       <div>
                         <p className="font-medium text-slate-900">
-                          {dadosEncontrados.proprietario.nome}
+                          {dadosEncontrados?.proprietario?.nome || "Proprietário Desconhecido"}
                         </p>
                         <p className="text-xs text-slate-500">
-                          CPF: {dadosEncontrados.proprietario.cpfEnriquecido}
+                          CPF: {dadosEncontrados?.proprietario?.cpfEnriquecido || dadosEncontrados?.proprietario?.cpf || "Não informado"}
                         </p>
                       </div>
                     </div>
@@ -233,7 +238,7 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
                           Telefone Principal
                         </span>
                         <span className="font-medium text-slate-700">
-                          {dadosEncontrados.proprietario.telefones[0]}
+                          {dadosEncontrados?.proprietario?.telefones?.[0] || "Não informado"}
                         </span>
                       </div>
                       <div className="bg-white p-2 rounded border">
@@ -241,7 +246,7 @@ export function NovoLeadDialog({ onLeadCreated }: NovoLeadDialogProps) {
                           Score de Crédito
                         </span>
                         <span className="font-medium text-emerald-600">
-                          {dadosEncontrados.proprietario.score} (Alto)
+                          {dadosEncontrados?.proprietario?.score ?? "N/A"} {dadosEncontrados?.proprietario?.score ? "(Alto)" : ""}
                         </span>
                       </div>
                     </div>
