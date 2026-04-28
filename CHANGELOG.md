@@ -5,6 +5,18 @@ Todas as mudanças notáveis deste projeto serão documentadas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.6.1] - 2026-04-28
+
+### Corrigido
+- Zerado relatório `npm audit` com atualização segura de dependências transitivas e diretas.
+- Atualizado `bcrypt` para `6.0.0`, removendo cadeia vulnerável de `@mapbox/node-pre-gyp`/`tar`.
+- Atualizado `uuid` para `14.0.0`.
+- Atualizado `vite` para `8.0.10` e `@vitejs/plugin-react` para `6.0.1`, removendo vulnerabilidade transitiva de `esbuild`.
+- Adicionado override pontual para `@typescript-eslint/typescript-estree -> minimatch@^9.0.7`.
+
+### Validado
+- `npm audit` retorna `0 vulnerabilities`.
+
 ## [0.6.0] - 2026-04-28
 
 ### Adicionado
@@ -234,5 +246,6 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 [0.2.3]: https://github.com/elyon-ai/elyon/compare/v0.2.2...v0.2.3
 [0.1.0]: https://github.com/elyon-ai/elyon/releases/tag/v0.1.0
 
+[0.6.1]: https://github.com/quadradois/elyon/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/quadradois/elyon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/quadradois/elyon/compare/v0.4.0...v0.5.0
