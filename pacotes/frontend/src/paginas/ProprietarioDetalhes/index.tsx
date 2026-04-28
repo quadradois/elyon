@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -7,7 +7,6 @@ import {
   MapPin,
   Building2,
   MessageSquare,
-  Send,
   Copy,
   Check,
   Loader2,
@@ -30,9 +29,21 @@ import {
   CalendarPlus,
   AlertTriangle,
   HelpCircle,
-  ClipboardCheck
+  ClipboardCheck,
+  MoreVertical,
+  BellOff,
+  ShieldBan,
+  UserMinus,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '../../componentes/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../../componentes/ui/dropdown-menu';
 import { Textarea } from '../../componentes/ui/textarea';
 import { Input } from '../../componentes/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../../componentes/ui/card';
@@ -94,20 +105,6 @@ const formatarMoeda = (valor: number | string) => {
   const num = Number(texto);
   if (Number.isNaN(num)) return '-';
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(num);
-};
-
-const tempoRelativo = (data: string) => {
-  const agora = new Date();
-  const dataMsg = new Date(data);
-  const diffMs = agora.getTime() - dataMsg.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHora = Math.floor(diffMs / 3600000);
-  const diffDia = Math.floor(diffMs / 86400000);
-  if (diffMin < 1) return 'agora';
-  if (diffMin < 60) return `${diffMin}min`;
-  if (diffHora < 24) return `${diffHora}h`;
-  if (diffDia < 7) return `${diffDia}d`;
-  return dataMsg.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 };
 
 const formatarDataCurta = (data: string) =>
@@ -197,8 +194,6 @@ export default function ProprietarioDetalhes() {
   const { dados, carregando, erro, recarregar } = useProprietarioDetalhes();
 
   const [activeTab, setActiveTab] = useState<TabType>('atendimento');
-  const [novaMensagem, setNovaMensagem] = useState('');
-  const [enviando, setEnviando] = useState(false);
   const [alternandoModo, setAlternandoModo] = useState(false);
   const [promovendo, setPromovendo] = useState(false);
   const [copiado, setCopiado] = useState<string | null>(null);
@@ -214,7 +209,9 @@ export default function ProprietarioDetalhes() {
     agendadoPara: '',
     resultado: '',
   });
-  const mensagensRef = useRef<HTMLDivElement>(null);
+
+  const [processandoGestao, setProcessandoGestao] = useState(false);
+  const [confirmGestao, setConfirmGestao] = useState<null | 'desativar' | 'blacklist' | 'removerLead' | 'excluir'>(null);
 
   const campanha = dados?.campanha;
   const lead = dados?.lead;
@@ -279,11 +276,6 @@ export default function ProprietarioDetalhes() {
     };
   }, [lead, contato, dados?.atividades, dados?.conversas]);
 
-  const mensagensOrdenadas = useMemo(() => {
-    const base = Array.isArray(dados?.mensagensProspecao) ? dados.mensagensProspecao : [];
-    return [...base].sort((a: any, b: any) => new Date(a?.dataHora || 0).getTime() - new Date(b?.dataHora || 0).getTime());
-  }, [dados?.mensagensProspecao]);
-
   const telefones = useMemo(() => extrairTelefones(contato, lead), [contato, lead]);
   const emails = useMemo(() => extrairEmails(contato, lead), [contato, lead]);
   const telefonePrincipal = useMemo(() => telefones.find((t: any) => t.principal) || telefones[0], [telefones]);
@@ -298,27 +290,6 @@ export default function ProprietarioDetalhes() {
     setCopiado(tipo);
     toast.success(`${tipo} copiado`);
     setTimeout(() => setCopiado(null), 2000);
-  };
-
-  const enviarMensagem = async () => {
-    if (!contato?.id || !novaMensagem.trim() || enviando) return;
-    try {
-      setEnviando(true);
-      await api.post(`/campanhas/contatos/${contato.id}/mensagens`, {
-        conteudo: novaMensagem,
-        direcao: 'SAIDA',
-      });
-      setNovaMensagem('');
-      await recarregar();
-      toast.success('Mensagem enviada');
-      requestAnimationFrame(() => {
-        if (mensagensRef.current) mensagensRef.current.scrollTop = mensagensRef.current.scrollHeight;
-      });
-    } catch {
-      toast.error('Erro ao enviar mensagem');
-    } finally {
-      setEnviando(false);
-    }
   };
 
   const alternarModo = async (novoModo: 'IA' | 'HUMANO' | 'PAUSADO') => {
@@ -342,6 +313,64 @@ export default function ProprietarioDetalhes() {
       toast.error('Erro ao alternar modo');
     } finally {
       setAlternandoModo(false);
+    }
+  };
+
+  const desativarContato = async () => {
+    if (!campanha?.id || !contato?.id || processandoGestao) return;
+    try {
+      setProcessandoGestao(true);
+      await api.patch(`/campanhas/${campanha.id}/contatos/${contato.id}`, { statusProspeccao: 'SEM_INTERESSE' });
+      toast.success('Contato desativado');
+      setConfirmGestao(null);
+      await recarregar();
+    } catch {
+      toast.error('Erro ao desativar contato');
+    } finally {
+      setProcessandoGestao(false);
+    }
+  };
+
+  const blacklistContato = async () => {
+    if (!campanha?.id || !contato?.id || processandoGestao) return;
+    try {
+      setProcessandoGestao(true);
+      await api.post(`/campanhas/${campanha.id}/contatos/${contato.id}/blacklist`, { motivo: 'MANUAL' });
+      toast.success('Telefone adicionado à blacklist');
+      setConfirmGestao(null);
+      await recarregar();
+    } catch {
+      toast.error('Erro ao adicionar à blacklist');
+    } finally {
+      setProcessandoGestao(false);
+    }
+  };
+
+  const removerLead = async () => {
+    if (!campanha?.id || !contato?.id || processandoGestao) return;
+    try {
+      setProcessandoGestao(true);
+      await api.post(`/campanhas/${campanha.id}/contatos/${contato.id}/remover-lead`);
+      toast.success('Lead removido. Contato restaurado como prospect.');
+      setConfirmGestao(null);
+      await recarregar();
+    } catch {
+      toast.error('Erro ao remover lead');
+    } finally {
+      setProcessandoGestao(false);
+    }
+  };
+
+  const excluirContato = async () => {
+    if (!campanha?.id || !contato?.id || processandoGestao) return;
+    try {
+      setProcessandoGestao(true);
+      await api.delete(`/campanhas/${campanha.id}/contatos/${contato.id}`);
+      toast.success('Contato excluído');
+      navigate('/dashboard/proprietarios');
+    } catch {
+      toast.error('Erro ao excluir contato');
+      setProcessandoGestao(false);
     }
   };
 
@@ -557,6 +586,68 @@ export default function ProprietarioDetalhes() {
                 </Button>
               )}
 
+              {/* Dropdown de gestão manual */}
+              {campanha?.id && contato?.id && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem
+                      onClick={desativarContato}
+                      className="gap-2 cursor-pointer"
+                      disabled={processandoGestao}
+                    >
+                      <BellOff className="w-4 h-4 text-slate-500" />
+                      Desativar contato
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem
+                      onClick={() => setConfirmGestao('blacklist')}
+                      className="gap-2 cursor-pointer text-orange-700"
+                      disabled={processandoGestao}
+                    >
+                      <ShieldBan className="w-4 h-4" />
+                      Enviar para blacklist
+                    </DropdownMenuItem>
+
+                    {contato?.virouLead && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => setConfirmGestao('removerLead')}
+                          className="gap-2 cursor-pointer text-violet-700"
+                          disabled={processandoGestao}
+                        >
+                          <UserMinus className="w-4 h-4" />
+                          Remover de leads
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setConfirmGestao('removerLead')}
+                          className="gap-2 cursor-pointer text-violet-700"
+                          disabled={processandoGestao}
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Definir como contato
+                        </DropdownMenuItem>
+                      </>
+                    )}
+
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setConfirmGestao('excluir')}
+                      className="gap-2 cursor-pointer text-red-600 focus:text-red-600"
+                      disabled={processandoGestao}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Excluir contato
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
               {mostrarConversao ? (
                 <Button className="bg-brand hover:bg-brand-dark text-white ml-2 shadow-sm" onClick={promoverLead} disabled={promovendo}>
                   {promovendo ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Rocket className="w-4 h-4 mr-2" />}
@@ -576,211 +667,183 @@ export default function ProprietarioDetalhes() {
         </div>
       </header>
 
+      {/* Dialog de confirmação de ações destrutivas */}
+      <Dialog open={confirmGestao !== null} onOpenChange={(open) => { if (!open) setConfirmGestao(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmGestao === 'blacklist' && 'Enviar para blacklist?'}
+              {confirmGestao === 'removerLead' && 'Remover de leads?'}
+              {confirmGestao === 'excluir' && 'Excluir contato?'}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmGestao === 'blacklist' && 'O telefone deste contato será bloqueado e não receberá mais nenhuma mensagem. Esta ação pode ser revertida na lista de blacklist.'}
+              {confirmGestao === 'removerLead' && 'O lead associado a este contato será removido e ele voltará ao status de prospect qualificado (Interessado). As conversas e atividades do lead serão perdidas.'}
+              {confirmGestao === 'excluir' && 'O contato e todos os dados associados (mensagens, lead, atividades) serão excluídos permanentemente. Esta ação não pode ser desfeita.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmGestao(null)} disabled={processandoGestao}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={processandoGestao}
+              onClick={() => {
+                if (confirmGestao === 'blacklist') blacklistContato();
+                else if (confirmGestao === 'removerLead') removerLead();
+                else if (confirmGestao === 'excluir') excluirContato();
+              }}
+            >
+              {processandoGestao ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              {confirmGestao === 'blacklist' && 'Confirmar blacklist'}
+              {confirmGestao === 'removerLead' && 'Remover lead'}
+              {confirmGestao === 'excluir' && 'Excluir permanentemente'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <main className="max-w-[1600px] mx-auto px-6 py-6">
-        <div className="flex gap-6">
-          <div className="flex-1 min-w-0">
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="border-b border-slate-200">
-                <nav className="flex -mb-px overflow-x-auto">
-                  {tabs.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                        activeTab === tab.id
-                          ? 'border-brand text-brand'
-                          : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                      }`}
-                    >
-                      {tab.icon}
-                      {tab.label}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-
-              <div className="p-6">
-                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
-                  <TabsContent value="atendimento">
-                    <TabAtendimento
-                      contato={contato}
-                      lead={lead}
-                      statusInfo={statusInfo}
-                      alternarModo={alternarModo}
-                      alternandoModo={alternandoModo}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="proprietario">
-                    <TabProprietario
-                      contato={contato || leadVisual}
-                      telefones={telefones}
-                      emails={emails}
-                      copiar={copiar}
-                      copiado={copiado}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="imovel">
-                    <TabImovel contato={contato || leadVisual} copiar={copiar} copiado={copiado} />
-                  </TabsContent>
-
-                  <TabsContent value="qualificacao">
-                    {leadVisual ? (
-                      <TabQualificacao lead={leadVisual as any} temLeadReal={temLeadReal} />
-                    ) : (
-                      <Card>
-                        <CardContent className="p-4 text-sm text-slate-500">Sem dados de qualificação ainda.</CardContent>
-                      </Card>
-                    )}
-                  </TabsContent>
-
-                  <TabsContent value="negociacao">
-                    {temLeadReal ? (
-                      <CardNegociacao lead={leadVisual as any} />
-                    ) : (
-                      <Card>
-                        <CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent>
-                      </Card>
-                    )}
-                  </TabsContent>
-
-                  <TabsContent value="contrato">
-                    {temLeadReal ? (
-                      <CardContrato lead={leadVisual as any} onUpdate={recarregar} />
-                    ) : (
-                      <Card>
-                        <CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent>
-                      </Card>
-                    )}
-                  </TabsContent>
-
-                  <TabsContent value="atividades">
-                    <div className="space-y-4">
-                      {temLeadReal && (
-                        <Card className="border-indigo-200">
-                          <CardHeader>
-                            <CardTitle className="text-base flex items-center gap-2">
-                              <Bot className="w-4 h-4 text-indigo-500" />
-                              Integração CRM
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-3">
-                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                              <p className="text-xs uppercase tracking-wider text-slate-500 mb-1">Status atual</p>
-                              <p className="text-sm font-medium text-slate-800">
-                                {resumoCrm || leadVisual?.crm?.syncStatus || 'Ainda não verificado nesta sessão.'}
-                              </p>
-                              {!!leadVisual?.crm?.syncError && <p className="text-xs text-red-600 mt-1">{leadVisual.crm.syncError}</p>}
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                              <Button variant="outline" disabled={processandoCrm !== null} onClick={() => executarAcaoCrm('status')}>
-                                {processandoCrm === 'status' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Link2 className="w-4 h-4 mr-2" />}
-                                Verificar
-                              </Button>
-                              <Button variant="outline" disabled={processandoCrm !== null} onClick={() => executarAcaoCrm('enviar')}>
-                                {processandoCrm === 'enviar' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-                                Enviar
-                              </Button>
-                              <Button variant="outline" disabled={processandoCrm !== null} onClick={() => executarAcaoCrm('reenviar')}>
-                                {processandoCrm === 'reenviar' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-                                Reenviar
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
-
-                      <Card>
-                        <CardHeader className="flex flex-row items-center justify-between gap-4">
-                          <CardTitle>Atividades</CardTitle>
-                          {temLeadReal && (
-                            <Button size="sm" onClick={() => setModalAtividade(true)}>
-                              <CalendarPlus className="w-4 h-4 mr-2" />
-                              Nova Atividade
-                            </Button>
-                          )}
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                          {(dados.atividades || []).map((a: any) => (
-                            <div key={a.id} className="rounded-lg border border-slate-200 p-3">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm font-semibold">{a.titulo || a.tipo}</p>
-                                {a.agendadoPara && <span className="text-[11px] text-slate-500">{formatarDataHora(a.agendadoPara)}</span>}
-                              </div>
-                              <p className="text-xs text-slate-500 mt-1">{a.descricao || 'Sem descrição'}</p>
-                              {a.resultado && <p className="text-xs text-slate-700 mt-2">Resultado: {a.resultado}</p>}
-                            </div>
-                          ))}
-                          {(dados.atividades || []).length === 0 && <p className="text-sm text-slate-500">Sem atividades registradas.</p>}
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </div>
-            </div>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="border-b border-slate-200">
+            <nav className="flex -mb-px overflow-x-auto">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'border-brand text-brand'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
           </div>
 
-          <div className="w-[400px] flex-shrink-0">
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm h-[calc(100vh-200px)] sticky top-[140px] flex flex-col">
-              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-slate-400" />
-                  <h3 className="font-semibold text-slate-900">Conversa</h3>
-                </div>
-                {mensagensOrdenadas.length > 0 && (
-                  <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">{mensagensOrdenadas.length} msg</span>
-                )}
-              </div>
+          <div className="p-6">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
+              <TabsContent value="atendimento">
+                <TabAtendimento
+                  contato={contato}
+                  lead={lead}
+                  statusInfo={statusInfo}
+                  alternarModo={alternarModo}
+                  alternandoModo={alternandoModo}
+                />
+              </TabsContent>
 
-              <div ref={mensagensRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-                {mensagensOrdenadas.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center">
-                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-3">
-                      <MessageSquare className="w-7 h-7 text-slate-300" />
-                    </div>
-                    <p className="text-sm text-slate-400">Nenhuma mensagem ainda</p>
-                  </div>
+              <TabsContent value="proprietario">
+                <TabProprietario
+                  contato={contato || leadVisual}
+                  telefones={telefones}
+                  emails={emails}
+                  copiar={copiar}
+                  copiado={copiado}
+                />
+              </TabsContent>
+
+              <TabsContent value="imovel">
+                <TabImovel contato={contato || leadVisual} copiar={copiar} copiado={copiado} />
+              </TabsContent>
+
+              <TabsContent value="qualificacao">
+                {leadVisual ? (
+                  <TabQualificacao lead={leadVisual as any} temLeadReal={temLeadReal} />
                 ) : (
-                  mensagensOrdenadas.map((msg: any) => {
-                    const isSaida = msg?.direcao === 'SAIDA' || msg?.tipo === 'ENVIADA';
-                    const dataMsg = msg?.dataHora || msg?.timestamp || '';
-                    return (
-                      <div key={msg.id} className={`flex ${isSaida ? 'justify-end' : 'justify-start'}`}>
-                        <div className="max-w-[85%]">
-                          <div className={`rounded-2xl px-4 py-2.5 ${isSaida ? 'bg-brand text-white rounded-br-md' : 'bg-slate-100 text-slate-900 rounded-bl-md'}`}>
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg?.conteudo}</p>
-                          </div>
-                          {dataMsg && <p className={`text-xs text-slate-400 mt-1 ${isSaida ? 'text-right' : ''}`}>{tempoRelativo(dataMsg)}</p>}
-                        </div>
-                      </div>
-                    );
-                  })
+                  <Card>
+                    <CardContent className="p-4 text-sm text-slate-500">Sem dados de qualificação ainda.</CardContent>
+                  </Card>
                 )}
-              </div>
+              </TabsContent>
 
-              <div className="p-4 border-t border-slate-100">
-                <div className="flex gap-2">
-                  <Textarea
-                    value={novaMensagem}
-                    onChange={(e) => setNovaMensagem(e.target.value)}
-                    placeholder={contato?.id ? 'Digite uma mensagem...' : 'Disponível quando houver contato'}
-                    className="flex-1 min-h-[44px] max-h-24 resize-none text-sm"
-                    disabled={!contato?.id}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        enviarMensagem();
-                      }
-                    }}
-                  />
-                  <Button onClick={enviarMensagem} disabled={!contato?.id || !novaMensagem.trim() || enviando} className="bg-brand hover:bg-brand-dark h-[44px] w-[44px] p-0">
-                    {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  </Button>
+              <TabsContent value="negociacao">
+                {temLeadReal ? (
+                  <CardNegociacao lead={leadVisual as any} />
+                ) : (
+                  <Card>
+                    <CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              <TabsContent value="contrato">
+                {temLeadReal ? (
+                  <CardContrato lead={leadVisual as any} onUpdate={recarregar} />
+                ) : (
+                  <Card>
+                    <CardContent className="p-4 text-sm text-slate-500">Disponível após conversão em lead.</CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              <TabsContent value="atividades">
+                <div className="space-y-4">
+                  {temLeadReal && (
+                    <Card className="border-indigo-200">
+                      <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Bot className="w-4 h-4 text-indigo-500" />
+                          Integração CRM
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <p className="text-xs uppercase tracking-wider text-slate-500 mb-1">Status atual</p>
+                          <p className="text-sm font-medium text-slate-800">
+                            {resumoCrm || leadVisual?.crm?.syncStatus || 'Ainda não verificado nesta sessão.'}
+                          </p>
+                          {!!leadVisual?.crm?.syncError && <p className="text-xs text-red-600 mt-1">{leadVisual.crm.syncError}</p>}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          <Button variant="outline" disabled={processandoCrm !== null} onClick={() => executarAcaoCrm('status')}>
+                            {processandoCrm === 'status' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Link2 className="w-4 h-4 mr-2" />}
+                            Verificar
+                          </Button>
+                          <Button variant="outline" disabled={processandoCrm !== null} onClick={() => executarAcaoCrm('enviar')}>
+                            {processandoCrm === 'enviar' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                            Enviar
+                          </Button>
+                          <Button variant="outline" disabled={processandoCrm !== null} onClick={() => executarAcaoCrm('reenviar')}>
+                            {processandoCrm === 'reenviar' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                            Reenviar
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between gap-4">
+                      <CardTitle>Atividades</CardTitle>
+                      {temLeadReal && (
+                        <Button size="sm" onClick={() => setModalAtividade(true)}>
+                          <CalendarPlus className="w-4 h-4 mr-2" />
+                          Nova Atividade
+                        </Button>
+                      )}
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {(dados.atividades || []).map((a: any) => (
+                        <div key={a.id} className="rounded-lg border border-slate-200 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-semibold">{a.titulo || a.tipo}</p>
+                            {a.agendadoPara && <span className="text-[11px] text-slate-500">{formatarDataHora(a.agendadoPara)}</span>}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">{a.descricao || 'Sem descrição'}</p>
+                          {a.resultado && <p className="text-xs text-slate-700 mt-2">Resultado: {a.resultado}</p>}
+                        </div>
+                      ))}
+                      {(dados.atividades || []).length === 0 && <p className="text-sm text-slate-500">Sem atividades registradas.</p>}
+                    </CardContent>
+                  </Card>
                 </div>
-              </div>
-            </div>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </main>

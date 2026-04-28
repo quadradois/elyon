@@ -12,7 +12,7 @@ import {
   Snowflake, AlertCircle, Clock, UserCheck, Building2,
   TrendingUp, FileText, BadgeCheck, Users, MapPin,
   DoorOpen, Layers, Car, Maximize2, Loader2, RefreshCw, ShieldAlert,
-  ShieldCheck, Send, Repeat, Plus,
+  ShieldCheck, Plus,
 } from 'lucide-react';
 import { ChatPanel } from './ChatPanel';
 import { AbaDocumentos } from './AbaDocumentos';
@@ -29,45 +29,6 @@ interface PreviewLeadProps {
   onFechar: () => void;
   onLeadAtualizado?: () => Promise<void> | void;
 }
-
-type CockpitAdminResponse = {
-  agenteAdmin: {
-    id: string;
-    nome: string;
-    tipoAgente: string;
-    status: string;
-    estaAtivo: boolean;
-    sessaoWhatsapp?: {
-      id: string;
-      nome: string;
-      numeroWhatsapp: string | null;
-      status: string;
-    } | null;
-  } | null;
-  integracaoCRM: {
-    id: string;
-    ativo: boolean;
-    apiUrl: string;
-    temApiKey: boolean;
-    tenantIdDestino: number | null;
-    ultimoTesteEm: string | null;
-    ultimoTesteOk: boolean | null;
-    ultimoErro: string | null;
-    totalEnvios: number;
-    totalSucessos: number;
-    totalFalhas: number;
-    ultimoEnvioEm: string | null;
-  } | null;
-  crmLead: {
-    statusLead: string;
-    proprietarioId: number | null;
-    propertyId: number | null;
-    propertyCode: string | null;
-    syncStatus: string | null;
-    syncError: string | null;
-    enviadoEm: string | null;
-  };
-};
 
 type CockpitEvento = {
   id: string;
@@ -142,13 +103,10 @@ function SecaoCard({ titulo, children }: { titulo: string; children: React.React
 // ─── Componente principal ────────────────────────────────────────────────────
 export function PreviewLead({ lead, onFechar, onLeadAtualizado }: PreviewLeadProps) {
   const navigate = useNavigate();
-  const [aba, setAba] = useState<AbaPreview>('resumo');
+  const [aba, setAba] = useState<AbaPreview>('chat');
   const [copiado, setCopiado] = useState<string | null>(null);
-  const [cockpitAdmin, setCockpitAdmin] = useState<CockpitAdminResponse | null>(null);
   const [eventosCockpit, setEventosCockpit] = useState<CockpitEvento[]>([]);
   const [governanca, setGovernanca] = useState<GovernancaLead | null>(null);
-  const [carregandoOperacao, setCarregandoOperacao] = useState(false);
-  const [processandoCrm, setProcessandoCrm] = useState<null | 'enviar' | 'reenviar' | 'status'>(null);
 
   const [atividades, setAtividades] = useState<AtividadePriorizado[]>(lead.atividades || []);
   const [criandoAtividade, setCriandoAtividade] = useState(false);
@@ -168,20 +126,17 @@ export function PreviewLead({ lead, onFechar, onLeadAtualizado }: PreviewLeadPro
 
   const carregarOperacao = async () => {
     try {
-      setCarregandoOperacao(true);
       const [adminRes, eventosRes, leadRes] = await Promise.all([
         api.get(`/leads/${lead.id}/cockpit-admin`),
         api.get(`/leads/${lead.id}/cockpit-eventos?limite=20`),
         api.get(`/leads/${lead.id}`),
       ]);
-      setCockpitAdmin(adminRes.data || null);
+      void adminRes;
       setEventosCockpit(eventosRes.data?.eventos || []);
       setGovernanca(leadRes.data?.governanca || null);
     } catch (error) {
       console.error('Erro ao carregar operação do lead:', error);
       toast.error('Erro ao carregar dados operacionais do lead');
-    } finally {
-      setCarregandoOperacao(false);
     }
   };
 
@@ -194,41 +149,6 @@ export function PreviewLead({ lead, onFechar, onLeadAtualizado }: PreviewLeadPro
       await api.post(`/leads/${lead.id}/cockpit-evento`, { acao, detalhes });
     } catch (error) {
       console.error('Erro ao registrar evento do cockpit:', error);
-    }
-  };
-
-  const executarAcaoCrm = async (acao: 'enviar' | 'reenviar' | 'status') => {
-    try {
-      setProcessandoCrm(acao);
-      await registrarEventoCockpit('CRM_ACAO', { tipo: acao, etapa: 'inicio' });
-
-      if (acao === 'status') {
-        const resp = await api.get(`/leads/${lead.id}/crm/status`);
-        if (resp.data?.sucesso) {
-          toast.success('Status CRM atualizado');
-          await registrarEventoCockpit('CRM_RESULTADO', { tipo: acao, sucesso: true });
-        } else {
-          toast.warning(resp.data?.resultado?.error || 'Sem confirmação de status no CRM');
-          await registrarEventoCockpit('CRM_RESULTADO', { tipo: acao, sucesso: false, resposta: resp.data?.resultado?.error });
-        }
-      } else {
-        const endpoint = acao === 'enviar' ? 'enviar' : 'reenviar';
-        const resp = await api.post(`/leads/${lead.id}/crm/${endpoint}`);
-        if (resp.data?.sucesso) {
-          toast.success(resp.data?.mensagem || 'Operação CRM concluída');
-          await registrarEventoCockpit('CRM_RESULTADO', { tipo: acao, sucesso: true });
-        } else {
-          toast.error(resp.data?.erro || 'Falha ao operar CRM');
-          await registrarEventoCockpit('CRM_RESULTADO', { tipo: acao, sucesso: false, resposta: resp.data?.erro });
-        }
-      }
-
-      await carregarOperacao();
-    } catch (error: any) {
-      toast.error(error?.response?.data?.erro || 'Erro ao executar ação CRM');
-      await registrarEventoCockpit('CRM_RESULTADO', { tipo: acao, sucesso: false, resposta: error?.response?.data?.erro || 'erro' });
-    } finally {
-      setProcessandoCrm(null);
     }
   };
 
@@ -448,14 +368,9 @@ export function PreviewLead({ lead, onFechar, onLeadAtualizado }: PreviewLeadPro
         {aba === 'resumo'   && (
           <AbaResumo
             lead={lead}
-            cockpitAdmin={cockpitAdmin}
             governanca={governanca}
             eventosCockpit={eventosCockpit}
-            carregandoOperacao={carregandoOperacao}
-            processandoCrm={processandoCrm}
             pendentesCriticos={pendentesCriticos}
-            onAtualizarOperacao={carregarOperacao}
-            onAcaoCrm={executarAcaoCrm}
           />
         )}
         {aba === 'contato'  && <AbaContato lead={lead} />}
@@ -497,112 +412,20 @@ export function PreviewLead({ lead, onFechar, onLeadAtualizado }: PreviewLeadPro
 // ══════════════════════════════════════════════════
 function AbaResumo({
   lead,
-  cockpitAdmin,
   governanca,
   eventosCockpit,
-  carregandoOperacao,
-  processandoCrm,
   pendentesCriticos,
-  onAtualizarOperacao,
-  onAcaoCrm,
 }: {
   lead: LeadPriorizado;
-  cockpitAdmin: CockpitAdminResponse | null;
   governanca: GovernancaLead | null;
   eventosCockpit: CockpitEvento[];
-  carregandoOperacao: boolean;
-  processandoCrm: null | 'enviar' | 'reenviar' | 'status';
   pendentesCriticos: string[];
-  onAtualizarOperacao: () => Promise<void>;
-  onAcaoCrm: (acao: 'enviar' | 'reenviar' | 'status') => Promise<void>;
 }) {
   const temSpin = lead.situacaoAtual || lead.motivacaoVenda || lead.prazoDesejado ||
     lead.consequencias || lead.custosAtuais || lead.expectativaServico;
 
   return (
     <div className="p-3 space-y-3">
-      {/* Cockpit operacional */}
-      <div className="rounded-xl border border-slate-200 overflow-hidden">
-        <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Cockpit Operacional</p>
-          <button
-            onClick={onAtualizarOperacao}
-            className="w-6 h-6 rounded-md hover:bg-slate-200/70 flex items-center justify-center transition-colors"
-            title="Atualizar operação"
-            disabled={carregandoOperacao}
-          >
-            {carregandoOperacao ? <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" /> : <RefreshCw className="w-3.5 h-3.5 text-slate-500" />}
-          </button>
-        </div>
-        <div className="p-3 space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg border border-slate-200 bg-white p-2">
-              <p className="text-[10px] text-slate-400 font-bold uppercase">Agente</p>
-              <p className="text-xs font-semibold text-slate-700 mt-0.5">{cockpitAdmin?.agenteAdmin?.nome || 'Não configurado'}</p>
-              <p className={`text-[11px] mt-0.5 ${cockpitAdmin?.agenteAdmin?.estaAtivo ? 'text-emerald-600' : 'text-amber-600'}`}>
-                {cockpitAdmin?.agenteAdmin?.estaAtivo ? 'Ativo' : 'Inativo'}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-2">
-              <p className="text-[10px] text-slate-400 font-bold uppercase">WhatsApp Sessão</p>
-              <p className="text-xs font-semibold text-slate-700 mt-0.5">{cockpitAdmin?.agenteAdmin?.sessaoWhatsapp?.nome || 'Sem sessão'}</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">{cockpitAdmin?.agenteAdmin?.sessaoWhatsapp?.status || '---'}</p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-2">
-              <p className="text-[10px] text-slate-400 font-bold uppercase">Integração CRM</p>
-              <p className={`text-xs font-semibold mt-0.5 ${cockpitAdmin?.integracaoCRM?.ativo ? 'text-emerald-600' : 'text-amber-600'}`}>
-                {cockpitAdmin?.integracaoCRM?.ativo ? 'Ativa' : 'Inativa'}
-              </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                {cockpitAdmin?.integracaoCRM?.ultimoEnvioEm
-                  ? `Último envio: ${new Date(cockpitAdmin.integracaoCRM.ultimoEnvioEm).toLocaleDateString('pt-BR')}`
-                  : 'Sem envios'}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-white p-2">
-              <p className="text-[10px] text-slate-400 font-bold uppercase">Lead no CRM</p>
-              <p className="text-xs font-semibold text-slate-700 mt-0.5">{cockpitAdmin?.crmLead?.syncStatus || 'Sem status'}</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                {cockpitAdmin?.crmLead?.propertyCode ? `Código: ${cockpitAdmin.crmLead.propertyCode}` : 'Sem código'}
-              </p>
-            </div>
-          </div>
-
-          {cockpitAdmin?.crmLead?.syncError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2">
-              <p className="text-[11px] font-semibold text-red-700">Erro CRM: {cockpitAdmin.crmLead.syncError}</p>
-            </div>
-          )}
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => onAcaoCrm('enviar')}
-              disabled={processandoCrm !== null}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50"
-            >
-              {processandoCrm === 'enviar' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              Enviar CRM
-            </button>
-            <button
-              onClick={() => onAcaoCrm('reenviar')}
-              disabled={processandoCrm !== null}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 disabled:opacity-50"
-            >
-              {processandoCrm === 'reenviar' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Repeat className="w-3.5 h-3.5" />}
-              Reenviar CRM
-            </button>
-            <button
-              onClick={() => onAcaoCrm('status')}
-              disabled={processandoCrm !== null}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50"
-            >
-              {processandoCrm === 'status' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-              Atualizar Status CRM
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Governança */}
       <div className={`
         rounded-xl border overflow-hidden
