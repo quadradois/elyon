@@ -216,6 +216,8 @@ export default function ProprietarioDetalhes() {
   const campanha = dados?.campanha;
   const lead = dados?.lead;
   const contato = dados?.contato;
+  const podeGerenciarContato = !!campanha?.id && !!contato?.id;
+  const podeExcluirLeadManual = !podeGerenciarContato && !!lead?.id;
   const nome = limparTexto(contato?.nome) || limparTexto(lead?.nome) || 'Proprietário';
   const temLeadReal = !!lead;
 
@@ -362,14 +364,25 @@ export default function ProprietarioDetalhes() {
   };
 
   const excluirContato = async () => {
-    if (!campanha?.id || !contato?.id || processandoGestao) return;
+    if (processandoGestao) return;
     try {
       setProcessandoGestao(true);
-      await api.delete(`/campanhas/${campanha.id}/contatos/${contato.id}`);
-      toast.success('Contato excluído');
+
+      if (podeGerenciarContato) {
+        await api.delete(`/campanhas/${campanha!.id}/contatos/${contato!.id}`);
+        toast.success('Contato excluído');
+      } else if (podeExcluirLeadManual) {
+        await api.delete(`/leads/${lead!.id}`, { data: { confirmacao: 'excluir' } });
+        toast.success('Lead excluído');
+      } else {
+        toast.error('Não foi possível identificar o registro para exclusão');
+        setProcessandoGestao(false);
+        return;
+      }
+
       navigate('/dashboard/proprietarios');
-    } catch {
-      toast.error('Erro ao excluir contato');
+    } catch (error: any) {
+      toast.error(error?.response?.data?.erro || 'Erro ao excluir');
       setProcessandoGestao(false);
     }
   };
@@ -587,7 +600,7 @@ export default function ProprietarioDetalhes() {
               )}
 
               {/* Dropdown de gestão manual */}
-              {campanha?.id && contato?.id && (
+              {(podeGerenciarContato || podeExcluirLeadManual) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm">
@@ -595,54 +608,59 @@ export default function ProprietarioDetalhes() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuItem
-                      onClick={desativarContato}
-                      className="gap-2 cursor-pointer"
-                      disabled={processandoGestao}
-                    >
-                      <BellOff className="w-4 h-4 text-slate-500" />
-                      Desativar contato
-                    </DropdownMenuItem>
-
-                    <DropdownMenuItem
-                      onClick={() => setConfirmGestao('blacklist')}
-                      className="gap-2 cursor-pointer text-orange-700"
-                      disabled={processandoGestao}
-                    >
-                      <ShieldBan className="w-4 h-4" />
-                      Enviar para blacklist
-                    </DropdownMenuItem>
-
-                    {contato?.virouLead && (
+                    {podeGerenciarContato && (
                       <>
+                        <DropdownMenuItem
+                          onClick={desativarContato}
+                          className="gap-2 cursor-pointer"
+                          disabled={processandoGestao}
+                        >
+                          <BellOff className="w-4 h-4 text-slate-500" />
+                          Desativar contato
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem
+                          onClick={() => setConfirmGestao('blacklist')}
+                          className="gap-2 cursor-pointer text-orange-700"
+                          disabled={processandoGestao}
+                        >
+                          <ShieldBan className="w-4 h-4" />
+                          Enviar para blacklist
+                        </DropdownMenuItem>
+
+                        {contato?.virouLead && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => setConfirmGestao('removerLead')}
+                              className="gap-2 cursor-pointer text-violet-700"
+                              disabled={processandoGestao}
+                            >
+                              <UserMinus className="w-4 h-4" />
+                              Remover de leads
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setConfirmGestao('removerLead')}
+                              className="gap-2 cursor-pointer text-violet-700"
+                              disabled={processandoGestao}
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                              Definir como contato
+                            </DropdownMenuItem>
+                          </>
+                        )}
+
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => setConfirmGestao('removerLead')}
-                          className="gap-2 cursor-pointer text-violet-700"
-                          disabled={processandoGestao}
-                        >
-                          <UserMinus className="w-4 h-4" />
-                          Remover de leads
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => setConfirmGestao('removerLead')}
-                          className="gap-2 cursor-pointer text-violet-700"
-                          disabled={processandoGestao}
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                          Definir como contato
-                        </DropdownMenuItem>
                       </>
                     )}
 
-                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => setConfirmGestao('excluir')}
                       className="gap-2 cursor-pointer text-red-600 focus:text-red-600"
                       disabled={processandoGestao}
                     >
                       <Trash2 className="w-4 h-4" />
-                      Excluir contato
+                      {podeGerenciarContato ? 'Excluir contato' : 'Excluir lead'}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -674,12 +692,14 @@ export default function ProprietarioDetalhes() {
             <DialogTitle>
               {confirmGestao === 'blacklist' && 'Enviar para blacklist?'}
               {confirmGestao === 'removerLead' && 'Remover de leads?'}
-              {confirmGestao === 'excluir' && 'Excluir contato?'}
+              {confirmGestao === 'excluir' && (podeGerenciarContato ? 'Excluir contato?' : 'Excluir lead?')}
             </DialogTitle>
             <DialogDescription>
               {confirmGestao === 'blacklist' && 'O telefone deste contato será bloqueado e não receberá mais nenhuma mensagem. Esta ação pode ser revertida na lista de blacklist.'}
               {confirmGestao === 'removerLead' && 'O lead associado a este contato será removido e ele voltará ao status de prospect qualificado (Interessado). As conversas e atividades do lead serão perdidas.'}
-              {confirmGestao === 'excluir' && 'O contato e todos os dados associados (mensagens, lead, atividades) serão excluídos permanentemente. Esta ação não pode ser desfeita.'}
+              {confirmGestao === 'excluir' && (podeGerenciarContato
+                ? 'O contato e todos os dados associados (mensagens, lead, atividades) serão excluídos permanentemente. Esta ação não pode ser desfeita.'
+                : 'O lead e todos os dados associados serão excluídos permanentemente. Esta ação não pode ser desfeita.')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
