@@ -1923,6 +1923,22 @@ router.post('/', async (req, res) => {
                       await finalizarProcessamentoSerializado(contatoProspeccao.id, assinaturaLote, deveMarcarLoteComoProcessado);
                     }
 
+                    // Se chegaram novas mensagens enquanto este lote era processado,
+                    // mantém apenas as pendentes para uma nova rodada do debounce.
+                    const filaPosProcessamento = filasDebounce.get(contatoProspeccao.id);
+                    if (filaPosProcessamento) {
+                      const quantidadeProcessada = mensagensAcumuladas.length;
+                      if (filaPosProcessamento.mensagens.length > quantidadeProcessada) {
+                        filaPosProcessamento.mensagens = filaPosProcessamento.mensagens.slice(quantidadeProcessada);
+                        filaPosProcessamento.reagendado = false;
+                        console.log(`[Debounce] ♻️ ${filaPosProcessamento.mensagens.length} mensagem(ns) chegaram durante o processamento; reagendando próximo lote`);
+                        return false;
+                      }
+
+                      // Sem novas mensagens no meio do processamento: lote totalmente consumido.
+                      filaPosProcessamento.mensagens = [];
+                    }
+
                     return true;
 
                   } catch (err) {

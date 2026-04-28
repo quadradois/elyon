@@ -66,7 +66,9 @@ export async function estaNoCooldown(contatoId: string): Promise<boolean> {
 // MUTEX DE PROCESSAMENTO (substitui processandoContato Map)
 // ─────────────────────────────────────────────────
 
-const TTL_MUTEX_S = lerEnvSegundos('WEBHOOK_MUTEX_TTL_S', 30, 5, 300); // 30s default
+// Importante: o processamento do orquestrador pode ultrapassar 30s em horários de latência alta.
+// Se o mutex expira cedo, outro worker/timeout pode reprocessar o mesmo lote e enviar resposta duplicada.
+const TTL_MUTEX_S = lerEnvSegundos('WEBHOOK_MUTEX_TTL_S', 180, 30, 600); // 180s default
 
 export async function adquirirMutexContato(contatoId: string): Promise<boolean> {
   try {

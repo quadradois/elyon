@@ -696,7 +696,7 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
     parameters: z.object({
         contatoId: z.string().describe('ID do contato (mesmo usado nas outras tools)'),
         dataHora: z.string().describe('Data e hora confirmada: "DD/MM/YYYY HH:mm"'),
-        modalidade: z.enum(['google_meet', 'whatsapp_video', 'zoom']).default('google_meet').describe('Tipo de reunião virtual'),
+        modalidade: z.enum(['google_meet', 'whatsapp_video', 'zoom']).default('whatsapp_video').describe('Tipo de reunião virtual'),
         observacoesCloser: z.string().nullable().describe('RELATÓRIO DA CONVERSA para o Corretor Humano: dores SPIN identificadas, nível de interesse, objeções levantadas, PVAM inferido, contexto da negociação')
     }),
 
@@ -802,17 +802,9 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                 console.warn(`[TOOL] agendar_reuniao_closer - Google Calendar indisponível (fallback local): ${gcalError.message}`);
             }
 
-            // 4. Fallback: gerar link local se Google Calendar não disponível
-            if (!linkReuniao) {
-                if (args.modalidade === 'google_meet') {
-                    const meetCode = `elyon-${leadId.substring(0, 8)}`;
-                    linkReuniao = `https://meet.google.com/${meetCode}`;
-                } else if (args.modalidade === 'zoom') {
-                    const meetCode = `elyon-${leadId.substring(0, 8)}`;
-                    linkReuniao = `https://zoom.us/j/${meetCode}`;
-                }
-                // whatsapp_video: sem link prévio
-            }
+            // 4. Sem Google Calendar, não gerar links sintéticos/falsos.
+            // Se não houver integração ativa, o agendamento fica registrado localmente
+            // e o atendimento deve ocorrer por WhatsApp ou canal alinhado com o cliente.
 
             // 5. Registrar como atividade no lead (sempre — banco local)
             await prisma.atividade.create({
@@ -823,7 +815,7 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                     descricao: [
                         `Data/Hora: ${args.dataHora}`,
                         `Modalidade: ${args.modalidade}`,
-                        linkReuniao ? `Link: ${linkReuniao}` : 'Link: WhatsApp Video (sem link prévio)',
+                        linkReuniao ? `Link: ${linkReuniao}` : 'Link: sem link automático (Google Calendar indisponível)',
                         eventoGoogleId ? `Google Event ID: ${eventoGoogleId}` : '',
                         usouGoogleCalendar ? '✅ Sincronizado com Google Calendar' : '⚠️ Apenas registro local (Google Calendar não configurado)',
                         args.observacoesCloser ? `Contexto: ${args.observacoesCloser}` : ''
@@ -841,9 +833,9 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                 detalhes: `Agendado para ${args.dataHora} via ${args.modalidade}${usouGoogleCalendar ? ' (Google Calendar)' : ' (local)'}`
             });
 
-            const mensagem = linkReuniao
-                ? `✅ Agendamento confirmado! Envie ao lead: "Ótimo! Está marcado para ${args.dataHora}. Aqui está o link: ${linkReuniao} 😊"`
-                : `✅ Agendamento confirmado! Nosso consultor entrará em contato pelo WhatsApp no dia ${args.dataHora}.`;
+            const mensagem = (usouGoogleCalendar && linkReuniao)
+                ? `✅ Agendamento confirmado! Envie ao lead: "Ótimo! Está marcado para ${args.dataHora}. Aqui está o link oficial da reunião: ${linkReuniao} 😊"`
+                : `✅ Agendamento confirmado no CRM para ${args.dataHora}. Não envie link de reunião. Oriente o lead que o corretor fará o atendimento no horário combinado e, se necessário, enviará o convite oficial depois.`;
 
             return JSON.stringify({
                 success: true,

@@ -54,6 +54,36 @@ export const agendaService = {
         return response.data;
     },
 
+    cancelarAgendamento: async (
+        id: string,
+        payload: { motivo?: string; avisarCliente?: boolean } = {}
+    ): Promise<{ sucesso: boolean; mensagem: string }> => {
+        const response = await api.post(`/agenda/${id}/cancelar`, payload);
+        return response.data;
+    },
+
+    reagendarAgendamento: async (
+        id: string,
+        payload: { novoHorario: Date; motivo?: string; avisarCliente?: boolean }
+    ): Promise<{ sucesso: boolean; mensagem: string }> => {
+        const response = await api.post(`/agenda/${id}/reagendar`, {
+            ...payload,
+            novoHorario: payload.novoHorario.toISOString(),
+        });
+        return response.data;
+    },
+
+    proporNovoHorario: async (
+        id: string,
+        payload: { horarioProposto: Date; mensagem?: string }
+    ): Promise<{ sucesso: boolean; mensagem: string }> => {
+        const response = await api.post(`/agenda/${id}/propor-horario`, {
+            ...payload,
+            horarioProposto: payload.horarioProposto.toISOString(),
+        });
+        return response.data;
+    },
+
     listarBloqueios: async (): Promise<Array<{
         id: string;
         titulo: string;

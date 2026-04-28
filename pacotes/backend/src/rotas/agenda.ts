@@ -7,6 +7,37 @@ import { googleCalendarService } from '../servicos/google-calendar';
 
 const router = Router();
 
+function formatarDataHoraPtBr(data?: Date | null): string {
+    if (!data) return 'data a confirmar';
+    return new Date(data).toLocaleDateString('pt-BR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+async function enviarWhatsappAgenda(params: {
+    tenantId: string;
+    telefone?: string | null;
+    mensagem: string;
+}) {
+    if (!params.telefone) return;
+    const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
+        where: { tenantId: params.tenantId, status: 'CONECTADO' }
+    });
+    if (!sessaoWhatsapp) return;
+
+    try {
+        const { getWhatsAppService } = await import('../servicos/whatsapp');
+        const whatsapp = getWhatsAppService(sessaoWhatsapp.instanceName);
+        await whatsapp.enviarMensagemTexto(params.telefone, params.mensagem);
+    } catch (error) {
+        console.error('[Agenda] Erro ao enviar WhatsApp:', error);
+    }
+}
+
 // ====================================
 // GET /api/agenda - Listar Eventos
 // ====================================
@@ -284,48 +315,20 @@ router.post('/:id/aprovar', verificarAutenticacao, async (req, res) => {
             }
         });
 
-        // 3. Buscar sessão WhatsApp do tenant para enviar mensagem
-        const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
-            where: { tenantId, status: 'CONECTADO' }
-        });
-
-        if (sessaoWhatsapp && atividade.lead.telefone) {
-            try {
-                // Formatar data para exibição
-                const dataFormatada = atividade.agendadoPara
-                    ? new Date(atividade.agendadoPara).toLocaleDateString('pt-BR', {
-                        weekday: 'long',
-                        day: 'numeric',
-                        month: 'long',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    })
-                    : 'data a confirmar';
-
-                const mensagemConfirmacao = `✅ *Visita Confirmada!*
+        const mensagemConfirmacao = `✅ *Visita Confirmada!*
 
 Olá, ${atividade.lead.nome}! 
 
 Sua avaliação foi confirmada pelo corretor para:
-📅 ${dataFormatada}
+📅 ${formatarDataHoraPtBr(atividade.agendadoPara)}
 
 Aguardamos você! Se precisar reagendar, é só me avisar. 🏡`;
 
-                // Importar serviço WhatsApp
-                const { getWhatsAppService } = await import('../servicos/whatsapp');
-                const whatsapp = getWhatsAppService(sessaoWhatsapp.instanceName);
-
-                await whatsapp.enviarMensagemTexto(
-                    atividade.lead.telefone,
-                    mensagemConfirmacao
-                );
-
-                console.log(`[Agenda] Confirmação enviada para ${atividade.lead.telefone}`);
-            } catch (whatsappError) {
-                console.error('[Agenda] Erro ao enviar WhatsApp:', whatsappError);
-                // Não falha a aprovação se o WhatsApp falhar
-            }
-        }
+        await enviarWhatsappAgenda({
+            tenantId,
+            telefone: atividade.lead.telefone,
+            mensagem: mensagemConfirmacao
+        });
 
         res.json({
             sucesso: true,
@@ -336,6 +339,159 @@ Aguardamos você! Se precisar reagendar, é só me avisar. 🏡`;
     } catch (error) {
         console.error('[Agenda] Erro ao aprovar:', error);
         responderErro(res, 500, 'Erro interno ao aprovar agendamento');
+    }
+});
+
+const CancelarAgendamentoSchema = z.object({
+    motivo: z.string().trim().max(500).optional(),
+    avisarCliente: z.boolean().optional().default(true),
+});
+
+router.post('/:id/cancelar', verificarAutenticacao, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const tenantId = req.tenantId;
+        if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+
+        const body = CancelarAgendamentoSchema.parse(req.body || {});
+
+        const atividade = await prisma.atividade.findUnique({
+            where: { id },
+            include: { lead: { select: { id: true, nome: true, telefone: true, tenantId: true } } }
+        });
+        if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
+        if (atividade.lead.tenantId !== tenantId) return responderErro(res, 403, 'Sem permissão para este agendamento');
+
+        const atividadeAtualizada = await prisma.atividade.update({
+            where: { id },
+            data: {
+                statusAgendamento: 'CANCELADO',
+                canceladoPor: req.usuario?.email || 'corretor',
+                canceladoEm: new Date(),
+                motivoCancelamento: body.motivo || null
+            }
+        });
+
+        if (body.avisarCliente) {
+            const mensagem = `⚠️ *Atualização do agendamento*
+
+Olá, ${atividade.lead.nome}.
+Seu atendimento de ${formatarDataHoraPtBr(atividade.agendadoPara)} foi cancelado.${body.motivo ? `\nMotivo: ${body.motivo}` : ''}
+
+Se quiser, já te proponho novos horários para reagendar.`;
+
+            await enviarWhatsappAgenda({ tenantId, telefone: atividade.lead.telefone, mensagem });
+        }
+
+        return res.json({ sucesso: true, mensagem: 'Agendamento cancelado com sucesso', atividade: atividadeAtualizada });
+    } catch (error) {
+        console.error('[Agenda] Erro ao cancelar:', error);
+        if (error instanceof z.ZodError) return responderErro(res, 400, 'Dados inválidos', { detalhes: error.errors });
+        return responderErro(res, 500, 'Erro interno ao cancelar agendamento');
+    }
+});
+
+const ReagendarAgendamentoSchema = z.object({
+    novoHorario: z.string().datetime(),
+    motivo: z.string().trim().max(500).optional(),
+    avisarCliente: z.boolean().optional().default(true),
+});
+
+router.post('/:id/reagendar', verificarAutenticacao, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const tenantId = req.tenantId;
+        if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+
+        const body = ReagendarAgendamentoSchema.parse(req.body || {});
+        const novoHorario = new Date(body.novoHorario);
+        if (isNaN(novoHorario.getTime())) return responderErro(res, 400, 'novoHorario inválido');
+
+        const atividade = await prisma.atividade.findUnique({
+            where: { id },
+            include: { lead: { select: { id: true, nome: true, telefone: true, tenantId: true } } }
+        });
+        if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
+        if (atividade.lead.tenantId !== tenantId) return responderErro(res, 403, 'Sem permissão para este agendamento');
+
+        const atividadeAtualizada = await prisma.atividade.update({
+            where: { id },
+            data: {
+                agendadoPara: novoHorario,
+                statusAgendamento: 'PENDENTE',
+                confirmadoPor: null,
+                confirmadoEm: null,
+                canceladoPor: null,
+                canceladoEm: null,
+                motivoCancelamento: null,
+                descricao: [atividade.descricao, body.motivo ? `Reagendamento: ${body.motivo}` : 'Reagendamento realizado pelo corretor'].filter(Boolean).join(' | ')
+            }
+        });
+
+        if (body.avisarCliente) {
+            const mensagem = `📅 *Reagendamento de atendimento*
+
+Olá, ${atividade.lead.nome}.
+Seu atendimento foi reagendado para:
+${formatarDataHoraPtBr(novoHorario)}${body.motivo ? `\nMotivo: ${body.motivo}` : ''}
+
+Pode me confirmar se esse horário funciona para você?`;
+
+            await enviarWhatsappAgenda({ tenantId, telefone: atividade.lead.telefone, mensagem });
+        }
+
+        return res.json({ sucesso: true, mensagem: 'Agendamento reagendado com sucesso', atividade: atividadeAtualizada });
+    } catch (error) {
+        console.error('[Agenda] Erro ao reagendar:', error);
+        if (error instanceof z.ZodError) return responderErro(res, 400, 'Dados inválidos', { detalhes: error.errors });
+        return responderErro(res, 500, 'Erro interno ao reagendar agendamento');
+    }
+});
+
+const ProporNovoHorarioSchema = z.object({
+    horarioProposto: z.string().datetime(),
+    mensagem: z.string().trim().max(500).optional(),
+});
+
+router.post('/:id/propor-horario', verificarAutenticacao, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const tenantId = req.tenantId;
+        if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+
+        const body = ProporNovoHorarioSchema.parse(req.body || {});
+        const horarioProposto = new Date(body.horarioProposto);
+        if (isNaN(horarioProposto.getTime())) return responderErro(res, 400, 'horarioProposto inválido');
+
+        const atividade = await prisma.atividade.findUnique({
+            where: { id },
+            include: { lead: { select: { id: true, nome: true, telefone: true, tenantId: true } } }
+        });
+        if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
+        if (atividade.lead.tenantId !== tenantId) return responderErro(res, 403, 'Sem permissão para este agendamento');
+
+        const atividadeAtualizada = await prisma.atividade.update({
+            where: { id },
+            data: {
+                statusAgendamento: 'PENDENTE',
+                descricao: [atividade.descricao, `Horário proposto ao cliente: ${formatarDataHoraPtBr(horarioProposto)}`].filter(Boolean).join(' | ')
+            }
+        });
+
+        const mensagem = body.mensagem?.trim() || `Oi, ${atividade.lead.nome}! 😊
+
+Te proponho este novo horário para o atendimento:
+${formatarDataHoraPtBr(horarioProposto)}
+
+Se não funcionar, me fala que te envio outras opções.`;
+
+        await enviarWhatsappAgenda({ tenantId, telefone: atividade.lead.telefone, mensagem });
+
+        return res.json({ sucesso: true, mensagem: 'Novo horário proposto ao cliente', atividade: atividadeAtualizada });
+    } catch (error) {
+        console.error('[Agenda] Erro ao propor novo horário:', error);
+        if (error instanceof z.ZodError) return responderErro(res, 400, 'Dados inválidos', { detalhes: error.errors });
+        return responderErro(res, 500, 'Erro interno ao propor novo horário');
     }
 });
 
