@@ -20,6 +20,9 @@ import Papa from 'papaparse';
 import { normalizarTelefone } from '../../utils/telefone';
 import { getTenantId } from '../../utils/tenant';
 import { cascadeDeleteLeads } from '../../utils/cascade-delete';
+import { BlacklistService } from '../../servicos/blacklist';
+
+const blacklistService = new BlacklistService();
 
 const router = Router();
 
@@ -149,6 +152,7 @@ router.get('/:id/contatos', async (req, res) => {
       respondeu: c.respondeu,
       manifestouInteresse: c.manifestouInteresse,
       virouLead: c.virouLead,
+      leadId: c.leadId,
       observacoes: c.observacoes,
       criadoEm: c.criadoEm,
     }));
@@ -389,6 +393,75 @@ router.patch('/:campanhaId/contatos/:contatoId', async (req, res) => {
   } catch (error: any) {
     logger.error('Erro');
     return responderErro(res, 500, 'Erro ao atualizar contato');
+  }
+});
+
+/**
+ * POST /:campanhaId/contatos/:contatoId/blacklist
+ * Adiciona o telefone do contato à blacklist e marca como OPTOUT
+ */
+router.post('/:campanhaId/contatos/:contatoId/blacklist', async (req, res) => {
+  try {
+    const { campanhaId, contatoId } = req.params;
+    const tenantId = getTenantId(req);
+    const motivo = req.body.motivo || 'MANUAL';
+
+    const campanha = await verificarCampanhaTenant(campanhaId, tenantId);
+    if (campanha === null) return responderErro(res, 404, 'Campanha não encontrada');
+    if (campanha === 'forbidden') return responderErro(res, 403, 'Acesso negado');
+
+    const contato = await prisma.contato.findFirst({ where: { id: contatoId, campanhaId } });
+    if (!contato) return responderErro(res, 404, 'Contato não encontrado');
+    if (!contato.telefone) return responderErro(res, 400, 'Contato sem telefone cadastrado');
+
+    await blacklistService.adicionar({
+      telefone: contato.telefone,
+      motivo,
+      tenantId: tenantId ?? undefined,
+      nomeContato: contato.nome,
+      campanhaOrigem: campanhaId,
+      observacoes: req.body.observacoes,
+    });
+
+    await prisma.contato.update({
+      where: { id: contatoId },
+      data: { statusProspeccao: 'OPTOUT' },
+    });
+
+    return res.json({ sucesso: true });
+
+  } catch (error: any) {
+    logger.error('Erro ao adicionar à blacklist');
+    return responderErro(res, 500, 'Erro ao adicionar à blacklist');
+  }
+});
+
+/**
+ * POST /:campanhaId/contatos/:contatoId/remover-lead
+ * Remove o lead associado ao contato e restaura o contato como prospect
+ */
+router.post('/:campanhaId/contatos/:contatoId/remover-lead', async (req, res) => {
+  try {
+    const { campanhaId, contatoId } = req.params;
+    const tenantId = getTenantId(req);
+
+    const campanha = await verificarCampanhaTenant(campanhaId, tenantId);
+    if (campanha === null) return responderErro(res, 404, 'Campanha não encontrada');
+    if (campanha === 'forbidden') return responderErro(res, 403, 'Acesso negado');
+
+    const contato = await prisma.contato.findFirst({ where: { id: contatoId, campanhaId } });
+    if (!contato) return responderErro(res, 404, 'Contato não encontrado');
+    if (!contato.virouLead || !contato.leadId) {
+      return responderErro(res, 400, 'Este contato não possui um lead associado');
+    }
+
+    await cascadeDeleteLeads([contato.leadId]);
+
+    return res.json({ sucesso: true, mensagem: 'Lead removido, contato restaurado como prospect' });
+
+  } catch (error: any) {
+    logger.error('Erro ao remover lead');
+    return responderErro(res, 500, 'Erro ao remover lead do contato');
   }
 });
 

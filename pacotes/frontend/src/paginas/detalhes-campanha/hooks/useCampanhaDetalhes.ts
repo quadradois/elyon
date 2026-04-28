@@ -76,6 +76,7 @@ export interface Contato {
   respondeu: boolean;
   manifestouInteresse: boolean;
   virouLead: boolean;
+  leadId: string | null;
   observacoes: string | null;
   criadoEm: string;
 }
