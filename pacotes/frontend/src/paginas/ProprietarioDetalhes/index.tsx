@@ -1325,10 +1325,18 @@ function TabProprietario({
               </div>
             )}
             {limparTexto(contato.situacaoCadastral) && (
-              <div className="flex justify-between py-2">
-                <span className="text-sm text-slate-500">Situação</span>
-                <span className={`text-sm font-medium ${contato.situacaoCadastral === 'REGULAR' ? 'text-emerald-600' : 'text-amber-600'}`}>{contato.situacaoCadastral}</span>
-              </div>
+              <>
+                <div className="flex justify-between py-2">
+                  <span className="text-sm text-slate-500">Situação</span>
+                  <span className={`text-sm font-medium ${contato.situacaoCadastral === 'REGULAR' ? 'text-emerald-600' : 'text-amber-600'}`}>{contato.situacaoCadastral}</span>
+                </div>
+                {String(contato.situacaoCadastral).toUpperCase() === 'SUSPENSA' && (
+                  <p className="text-[11px] leading-4 text-slate-500 pb-2">
+                    Situação cadastral do CPF na Receita: cadastro pode estar incompleto ou com divergência de dados.
+                    Oriente o cliente a regularizar o CPF na Receita Federal.
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>
