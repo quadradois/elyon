@@ -914,7 +914,7 @@ router.post('/:id/vincular-leads-minerados', async (req, res) => {
           participacoesEmpresas: lead.participacoesEmpresas,
           redesSociais: lead.redesSociais,
           perfilInvestidor: Array.isArray(lead.participacoesEmpresas) && lead.participacoesEmpresas.length > 0,
-          scoreAssertiva: lead.score,
+          scoreAssertiva: lead.scoreAssertiva ?? lead.score ?? null,
           fonteEnriquecimento: lead.fonteEnriquecimento || 'ASSERTIVA',
           enriquecidoEm: new Date(),
           statusProspeccao: 'AGUARDANDO',

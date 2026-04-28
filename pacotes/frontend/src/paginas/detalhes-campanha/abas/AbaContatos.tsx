@@ -379,7 +379,7 @@ export function AbaContatos({
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Telefone</th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Email</th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Imóvel</th>
-                    <th className="text-left px-4 py-3 font-medium text-slate-600">Score</th>
+                    <th className="text-left px-4 py-3 font-medium text-slate-600">Score de Crédito</th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
                     <th className="text-center px-4 py-3 font-medium text-slate-600">Ações</th>
                   </tr>
