@@ -68,6 +68,10 @@ const confirmarSchema = z.object({
     lote: z.string().nullable().optional(),
     nomeEdificio: z.string().nullable().optional(),
     tipoImovel: z.string().nullable().optional(),
+    areaTerreno: z.union([z.number(), z.string()]).nullable().optional(),
+    areaConstruida: z.union([z.number(), z.string()]).nullable().optional(),
+    valorVenal: z.union([z.number(), z.string()]).nullable().optional(),
+    anoConstituicao: z.union([z.number(), z.string()]).nullable().optional(),
   }))
 });
 
@@ -93,8 +97,20 @@ interface LeadEnriquecido {
   lote?: string;
   nomeEdificio?: string;
   tipoImovel?: string;
+  areaTerreno?: number | string;
+  areaConstruida?: number | string;
+  valorVenal?: number | string;
+  anoConstituicao?: number | string;
   telefones?: { numero: string; tipo: string; whatsapp: boolean }[];
   emails?: string[];
+  estadoCivil?: string;
+  cpfMae?: string;
+  escolaridade?: string;
+  tipoLogradouro?: string;
+  ppe?: boolean;
+  obitoProvavel?: boolean;
+  participacoesEmpresas?: any[];
+  redesSociais?: any[];
   leadId?: string;
   imovelId?: string;
 }
@@ -362,6 +378,27 @@ router.post('/confirmar-leads', async (req, res) => {
           telefones: dadosCache.telefones || [],
           emails: dadosCache.emails || [],
           score: dadosCache.score || 80,
+          dataNascimento: dadosCache.dataNascimento,
+          idade: dadosCache.idade,
+          sexo: dadosCache.sexo,
+          estadoCivil: dadosCache.estadoCivil,
+          signo: dadosCache.signo,
+          situacaoCadastral: dadosCache.situacaoCadastral,
+          obitoProvavel: dadosCache.obitoProvavel,
+          nomeMae: dadosCache.nomeMae,
+          cpfMae: dadosCache.cpfMae,
+          escolaridade: dadosCache.escolaridade,
+          ppe: dadosCache.ppe,
+          rendaEstimada: dadosCache.rendaEstimada,
+          faixaSalarial: dadosCache.faixaSalarial,
+          profissao: dadosCache.profissao,
+          setor: dadosCache.setor,
+          empresaAtual: dadosCache.empresaAtual,
+          cnpjEmpresa: dadosCache.cnpjEmpresa,
+          endereco: dadosCache.endereco,
+          tipoLogradouro: dadosCache.tipoLogradouro || dadosCache.endereco?.tipoLogradouro,
+          participacoesEmpresas: dadosCache.participacoesEmpresas,
+          redesSociais: dadosCache.redesSociais,
         } as LeadEnriquecido;
 
         // COBRANÇA DE CRÉDITO (Apenas se tiver telefone)
@@ -461,10 +498,13 @@ router.post('/confirmar-leads', async (req, res) => {
               dataNascimento: enriquecido.dataNascimento,
               idade: enriquecido.idade,
               sexo: enriquecido.sexo,
+              estadoCivil: enriquecido.estadoCivil,
               signo: enriquecido.signo,
               situacaoCadastral: enriquecido.situacaoCadastral,
               obitoProvavel: enriquecido.obitoProvavel,
               nomeMae: enriquecido.nomeMae,
+              cpfMae: enriquecido.cpfMae,
+              escolaridade: enriquecido.escolaridade,
               ppe: enriquecido.ppe,
               rendaEstimada: enriquecido.rendaEstimada,
               faixaSalarial: enriquecido.faixaSalarial,
@@ -473,6 +513,7 @@ router.post('/confirmar-leads', async (req, res) => {
               empresaAtual: enriquecido.empresaAtual,
               cnpjEmpresa: enriquecido.cnpjEmpresa,
               endereco: enriquecido.endereco,
+              tipoLogradouro: enriquecido.endereco?.tipoLogradouro,
               participacoesEmpresas: enriquecido.participacoesEmpresas,
               redesSociais: enriquecido.redesSociais,
             };
@@ -785,8 +826,8 @@ router.post('/iptu-unitario', async (req, res) => {
       nome: dadosEnriquecidos.nome,
       cpf: dadosEnriquecidos.cpf, // ou CNPJ
       cpfEnriquecido: dadosEnriquecidos.cpf,
-      telefones: dadosEnriquecidos.telefones.map(t => `(${t.numero.slice(0, 2)}) ${t.numero.slice(2)}`), // Formatar visualmente
-      emails: dadosEnriquecidos.emails,
+      telefones: (dadosEnriquecidos.telefones || []).map(t => `(${t.numero.slice(0, 2)}) ${t.numero.slice(2)}`), // Formatar visualmente
+      emails: dadosEnriquecidos.emails || [],
       score: dadosEnriquecidos.score,
       // Extras
       idade: dadosEnriquecidos.idade,
@@ -805,8 +846,10 @@ router.post('/iptu-unitario', async (req, res) => {
       tipo: dadosEnriquecidos ? 'ENRIQUECIDO' : 'BASICO',
       imovel: {
         endereco: dadosProprietario.endereco_correspondencia,
-        area: 'N/D', // Scraper atual não pega área construída, futuro improvement
-        valorVenal: 'N/D',
+        area: dadosProprietario.areaConstruida ?? null,
+        areaTerreno: dadosProprietario.areaTerreno ?? null,
+        valorVenal: dadosProprietario.valorVenal ?? null,
+        anoConstituicao: dadosProprietario.anoConstituicao ?? null,
         // Dados parseados úteis
         apartamento: dadosProprietario.apartamento,
         bloco: dadosProprietario.bloco,

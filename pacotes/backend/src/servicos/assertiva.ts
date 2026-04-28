@@ -16,6 +16,7 @@ interface DadosEnriquecidos {
   dataNascimento?: string;
   idade?: number;
   sexo?: 'Masculino' | 'Feminino';
+  estadoCivil?: string;
   signo?: string;
   situacaoCadastral?: string;
   obitoProvavel?: boolean;
@@ -230,6 +231,7 @@ export class AssertivaService {
         dataNascimento: cadastro.dataNascimento,
         idade: cadastro.idade,
         sexo: cadastro.sexo,
+        estadoCivil: cadastro.estadoCivil,
         signo: cadastro.signo,
         situacaoCadastral: cadastro.situacaoCadastral,
         obitoProvavel: cadastro.obitoProvavel || false,

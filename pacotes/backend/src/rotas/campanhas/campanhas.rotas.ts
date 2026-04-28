@@ -12,6 +12,7 @@ import { Router, Request } from 'express';
 import { prisma } from '../../lib/db';
 import { consultaCEP } from '../../servicos/cep';
 import { ragEmpreendimentos } from '../../servicos/rag-empreendimentos';
+import { resumoEstruturalEmpreendimento } from '../../servicos/resumo-estrutural-empreendimento';
 import { z } from 'zod';
 import { ServicoAuditoria } from '../../servicos/servico-auditoria';
 
@@ -31,6 +32,77 @@ const getTenantIdFromHeader = (req: Request): string | null => {
     return tenantId;
   }
   return null;
+};
+
+const prepararConhecimentoMapa = async (dados: {
+  tenantId: string;
+  nomeEmpreendimento?: string | null;
+  tipoImovel?: string | null;
+  localizacao: string;
+  cep?: string | null;
+  logradouro?: string | null;
+  bairro?: string | null;
+}) => {
+  const resumo = await resumoEstruturalEmpreendimento.buscarResumo({
+    nomeEmpreendimento: dados.nomeEmpreendimento,
+    logradouro: dados.logradouro,
+    bairro: dados.bairro,
+  });
+
+  if (!resumo) return {};
+
+  const nome = dados.nomeEmpreendimento || resumo.nomeEdificio;
+  const tipo = dados.tipoImovel || 'RESIDENCIAL';
+
+  const existente = await prisma.empreendimentoConhecimento.findUnique({
+    where: {
+      nome_localizacao: {
+        nome,
+        localizacao: dados.localizacao,
+      },
+    },
+  });
+
+  const briefingCompleto = resumoEstruturalEmpreendimento.anexarBlocoTexto(
+    existente?.briefingCompleto,
+    resumo
+  ) || '';
+  const briefingEstruturado = resumoEstruturalEmpreendimento.mesclarBriefingEstruturado(
+    existente?.briefingEstruturado,
+    resumo
+  );
+
+  const empreendimento = existente
+    ? await prisma.empreendimentoConhecimento.update({
+        where: { id: existente.id },
+        data: {
+          briefingCompleto,
+          briefingEstruturado: briefingEstruturado as any,
+          ultimaAtualizacao: new Date(),
+          versao: { increment: 1 },
+        },
+      })
+    : await prisma.empreendimentoConhecimento.create({
+        data: {
+          tenantId: dados.tenantId,
+          nome,
+          localizacao: dados.localizacao,
+          cep: dados.cep,
+          tipo,
+          briefingCompleto,
+          briefingEstruturado: briefingEstruturado as any,
+          confiabilidade: 0.55,
+          versao: 1,
+        },
+      });
+
+  return {
+    empreendimentoId: empreendimento.id,
+    briefingCompleto,
+    briefingEstruturado,
+    briefingGeradoEm: new Date(),
+    briefingConfiabilidade: '0.55',
+  };
 };
 
 // ============================================
@@ -104,6 +176,16 @@ router.post('/', async (req, res) => {
       return responderErro(res, 400, 'Tenant não encontrado. Verifique o X-Tenant-Id.');
     }
 
+    const conhecimentoMapa = await prepararConhecimentoMapa({
+      tenantId: tenant.id,
+      nomeEmpreendimento: dados.nomeEmpreendimento,
+      tipoImovel: dados.tipoImovel,
+      localizacao: localizacaoCompleta,
+      cep: dados.cep,
+      logradouro: dados.logradouro,
+      bairro: dados.bairro,
+    });
+
     const campanha = await prisma.campanha.create({
       data: {
         tenantId: tenant.id,
@@ -121,6 +203,7 @@ router.post('/', async (req, res) => {
         localizacao: localizacaoCompleta,
         tipoImovel: dados.tipoImovel,
         perfilImovel: dados.perfilImovel,
+        ...conhecimentoMapa,
       },
     });
 
@@ -142,9 +225,12 @@ router.post('/', async (req, res) => {
         id: campanha.id,
         nome: campanha.nome,
         nomeEmpreendimento: campanha.nomeEmpreendimento,
+        empreendimentoId: campanha.empreendimentoId,
         status: campanha.status,
       },
-      mensagem: 'Campanha criada! Preencha o briefing do empreendimento.',
+      mensagem: campanha.empreendimentoId
+        ? 'Campanha criada com dados estruturais da prefeitura/MAPA injetados no briefing.'
+        : 'Campanha criada! Preencha o briefing do empreendimento.',
     });
 
   } catch (error: any) {
@@ -181,6 +267,16 @@ router.post('/criar-com-pesquisa', async (req, res) => {
       return responderErro(res, 400, 'Tenant não encontrado.');
     }
 
+    const conhecimentoMapa = await prepararConhecimentoMapa({
+      tenantId: tenant.id,
+      nomeEmpreendimento: dados.nomeEmpreendimento,
+      tipoImovel: dados.tipoImovel,
+      localizacao: localizacaoCompleta,
+      cep: dados.cep,
+      logradouro: dados.logradouro,
+      bairro: dados.bairro,
+    });
+
     const campanha = await prisma.campanha.create({
       data: {
         tenantId: tenant.id,
@@ -198,13 +294,16 @@ router.post('/criar-com-pesquisa', async (req, res) => {
         localizacao: localizacaoCompleta,
         tipoImovel: dados.tipoImovel,
         perfilImovel: dados.perfilImovel,
+        ...conhecimentoMapa,
       },
     });
 
     return res.status(201).json({
       sucesso: true,
-      campanha: { id: campanha.id, nome: campanha.nome },
-      mensagem: 'Campanha criada. Pesquisa IA desativada - preencha o briefing manualmente.',
+      campanha: { id: campanha.id, nome: campanha.nome, empreendimentoId: campanha.empreendimentoId },
+      mensagem: campanha.empreendimentoId
+        ? 'Campanha criada com dados estruturais da prefeitura/MAPA injetados no briefing.'
+        : 'Campanha criada. Pesquisa IA desativada - preencha o briefing manualmente.',
     });
 
   } catch (error: any) {
@@ -357,13 +456,27 @@ router.put('/:id/briefing', async (req, res) => {
       return responderErro(res, 403, 'Acesso negado');
     }
 
-    const novaConfiabilidade = dados.briefingEstruturado?.confiabilidade;
+    const resumoMapa = await resumoEstruturalEmpreendimento.buscarResumo({
+      nomeEmpreendimento: campanha.nomeEmpreendimento,
+      logradouro: campanha.logradouro,
+      bairro: campanha.bairro,
+    });
+    const briefingCompletoFinal = resumoEstruturalEmpreendimento.anexarBlocoTexto(
+      dados.briefingCompleto ?? campanha.briefingCompleto,
+      resumoMapa
+    );
+    const briefingEstruturadoFinal = resumoEstruturalEmpreendimento.mesclarBriefingEstruturado(
+      dados.briefingEstruturado ?? campanha.briefingEstruturado,
+      resumoMapa
+    );
+    const deveAtualizarBriefingEstruturado = dados.briefingEstruturado !== undefined || !!resumoMapa;
+    const novaConfiabilidade = briefingEstruturadoFinal?.confiabilidade;
 
     const campanhaAtualizada = await prisma.campanha.update({
       where: { id },
       data: {
-        ...(dados.briefingCompleto && { briefingCompleto: dados.briefingCompleto }),
-        ...(dados.briefingEstruturado && { briefingEstruturado: dados.briefingEstruturado as any }),
+        ...(briefingCompletoFinal && { briefingCompleto: briefingCompletoFinal }),
+        ...(deveAtualizarBriefingEstruturado && { briefingEstruturado: briefingEstruturadoFinal as any }),
         ...(novaConfiabilidade !== undefined && { briefingConfiabilidade: String(novaConfiabilidade) }),
         editadoPor: usuarioId,
         editadoEm: new Date(),
@@ -380,8 +493,8 @@ router.put('/:id/briefing', async (req, res) => {
       console.log(`[RAG] Atualizando conhecimento vinculado: ${campanha.empreendimentoId}`);
       try {
         await ragEmpreendimentos.atualizar(campanha.empreendimentoId, {
-          briefingCompleto: dados.briefingCompleto,
-          briefingEstruturado: dados.briefingEstruturado,
+          briefingCompleto: briefingCompletoFinal,
+          briefingEstruturado: deveAtualizarBriefingEstruturado ? briefingEstruturadoFinal : undefined,
           validado: dados.validar,
           validadoPor: dados.validar ? usuarioId : undefined
         });

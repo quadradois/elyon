@@ -27,7 +27,10 @@ import {
   Link2,
   CheckCircle2,
   RefreshCw,
-  CalendarPlus
+  CalendarPlus,
+  AlertTriangle,
+  HelpCircle,
+  ClipboardCheck
 } from 'lucide-react';
 import { Button } from '../../componentes/ui/button';
 import { Textarea } from '../../componentes/ui/textarea';
@@ -42,7 +45,6 @@ import { useProprietarioDetalhes } from './hooks/useProprietarioDetalhes';
 import {
   CardNegociacao,
   CardContrato,
-  CardProprietario,
   CardTrackingIA,
   CardBriefingIA,
   FaseChecklist,
@@ -58,6 +60,20 @@ const limparTexto = (valor: unknown): string | null => {
   if (!texto) return null;
   if (texto.toLowerCase() === '[object object]') return null;
   return texto;
+};
+
+const normalizarLista = (valor: unknown): any[] => {
+  if (!valor) return [];
+  if (Array.isArray(valor)) return valor;
+  if (typeof valor === 'string') {
+    try {
+      const parsed = JSON.parse(valor);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
 };
 
 const formatarTelefone = (numero: string) => {
@@ -207,7 +223,14 @@ export default function ProprietarioDetalhes() {
   const temLeadReal = !!lead;
 
   const leadVisual = useMemo(() => {
-    if (lead) return { ...lead, imovel: lead.imovel || {} };
+    if (lead) {
+      return {
+        ...lead,
+        imovel: lead.imovel || {},
+        atividades: dados?.atividades || lead.atividades || [],
+        conversas: dados?.conversas || lead.conversas || [],
+      };
+    }
     if (!contato) return null;
     return {
       id: contato.id,
@@ -246,9 +269,15 @@ export default function ProprietarioDetalhes() {
       status: 'NOVO',
       atividades: [],
       conversas: [],
-      spin: { problema: { doresIdentificadas: [] } },
+      spin: {
+        situacao: {},
+        problema: { doresIdentificadas: [] },
+        implicacao: {},
+        necessidade: { objecoes: [] },
+        observacoes: null,
+      },
     };
-  }, [lead, contato]);
+  }, [lead, contato, dados?.atividades, dados?.conversas]);
 
   const mensagensOrdenadas = useMemo(() => {
     const base = Array.isArray(dados?.mensagensProspecao) ? dados.mensagensProspecao : [];
@@ -488,6 +517,11 @@ export default function ProprietarioDetalhes() {
                       {campanha.nome}
                     </button>
                   )}
+                  {campanha?.empreendimento?.nome && (
+                    <span className="text-slate-400">
+                      Empreendimento: <span className="text-slate-700 font-medium">{campanha.empreendimento.nome}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -593,12 +627,7 @@ export default function ProprietarioDetalhes() {
 
                   <TabsContent value="qualificacao">
                     {leadVisual ? (
-                      <div className="space-y-4">
-                        {temLeadReal && <CardBriefingIA lead={leadVisual as any} />}
-                        <CardProprietario lead={leadVisual as any} />
-                        {temLeadReal && <FaseChecklist lead={leadVisual as any} />}
-                        {temLeadReal && <CardTrackingIA lead={leadVisual as any} />}
-                      </div>
+                      <TabQualificacao lead={leadVisual as any} temLeadReal={temLeadReal} />
                     ) : (
                       <Card>
                         <CardContent className="p-4 text-sm text-slate-500">Sem dados de qualificação ainda.</CardContent>
@@ -957,6 +986,199 @@ function TabAtendimento({
   );
 }
 
+const temValorQualificacao = (valor: unknown) => {
+  if (Array.isArray(valor)) return valor.length > 0;
+  if (typeof valor === 'boolean') return true;
+  return !!limparTexto(valor);
+};
+
+const formatarBooleanoQualificacao = (valor: unknown) => {
+  if (valor === true) return 'Sim';
+  if (valor === false) return 'Não';
+  return null;
+};
+
+function CampoQualificacao({ label, valor }: { label: string; valor: unknown }) {
+  const texto = Array.isArray(valor)
+    ? valor.join(', ')
+    : formatarBooleanoQualificacao(valor) || limparTexto(valor);
+
+  if (!texto) {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 px-3 py-2">
+        <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
+        <p className="text-sm text-slate-400">Ainda não identificado</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-sm font-medium text-slate-800">{texto}</p>
+    </div>
+  );
+}
+
+function TabQualificacao({ lead, temLeadReal }: { lead: any; temLeadReal: boolean }) {
+  const spin = lead?.spin || {};
+  const situacao = spin.situacao || {};
+  const problema = spin.problema || {};
+  const implicacao = spin.implicacao || {};
+  const necessidade = spin.necessidade || {};
+  const faseSPIN = lead?.conversas?.[0]?.faseSPIN || 'Não iniciada';
+
+  const campos = [
+    situacao.situacaoAtual,
+    situacao.tempoDecisao,
+    situacao.tentativasAnteriores,
+    situacao.comCorretorAtualmente,
+    problema.motivacaoVenda,
+    problema.doresIdentificadas,
+    implicacao.prazoDesejado,
+    implicacao.urgencia,
+    implicacao.consequencias,
+    implicacao.custosAtuais,
+    implicacao.pressaoTempo,
+    necessidade.expectativaServico,
+    necessidade.objecoes,
+    necessidade.interesseAvaliacao,
+    spin.observacoes,
+  ];
+  const preenchidos = campos.filter(temValorQualificacao).length;
+  const percentual = Math.round((preenchidos / campos.length) * 100);
+
+  const lacunas = [
+    !temValorQualificacao(situacao.situacaoAtual) && 'Situação atual do imóvel',
+    !temValorQualificacao(problema.motivacaoVenda) && 'Motivação para vender/alugar',
+    !temValorQualificacao(problema.doresIdentificadas) && 'Dores explícitas do proprietário',
+    !temValorQualificacao(implicacao.prazoDesejado) && 'Prazo/urgência desejada',
+    !temValorQualificacao(necessidade.expectativaServico) && 'Expectativa sobre a solução/imobiliária',
+    !temValorQualificacao(necessidade.objecoes) && 'Objeções ou travas de decisão',
+  ].filter(Boolean) as string[];
+
+  const resumoAtendimento =
+    limparTexto(lead?.briefingCloser) ||
+    limparTexto(spin.observacoes) ||
+    limparTexto(lead?.ultimaAcaoIA) ||
+    null;
+
+  if (!temLeadReal) {
+    return (
+      <Card className="border-amber-200 bg-amber-50/50">
+        <CardContent className="p-5 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-amber-900">Qualificação ainda não iniciada</h3>
+            <p className="text-sm text-amber-800 mt-1">
+              Este proprietário ainda não virou lead qualificado. A aba será preenchida quando a IA coletar dados de atendimento, SPIN e intenção comercial.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-slate-200">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <ClipboardCheck className="w-5 h-5 text-brand" />
+            Diagnóstico Comercial e SPIN
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-indigo-500">Fase SPIN</p>
+              <p className="text-xl font-bold text-indigo-900 mt-1">{faseSPIN}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-emerald-600">Completude</p>
+              <p className="text-xl font-bold text-emerald-800 mt-1">{percentual}%</p>
+              <div className="mt-2 h-2 rounded-full bg-emerald-100 overflow-hidden">
+                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${percentual}%` }} />
+              </div>
+            </div>
+            <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-amber-600">Urgência</p>
+              <p className="text-xl font-bold text-amber-800 mt-1">{limparTexto(implicacao.urgencia) || 'Não mapeada'}</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Bot className="w-4 h-4 text-slate-500" />
+              <h3 className="font-semibold text-slate-800">Resumo do Atendimento IA</h3>
+            </div>
+            <p className="text-sm text-slate-700 leading-relaxed">
+              {resumoAtendimento || 'A IA ainda não registrou um resumo comercial para este lead.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-slate-400" />
+                S - Situação
+              </h3>
+              <CampoQualificacao label="Situação atual" valor={situacao.situacaoAtual} />
+              <CampoQualificacao label="Tempo de decisão" valor={situacao.tempoDecisao} />
+              <CampoQualificacao label="Tentativas anteriores" valor={situacao.tentativasAnteriores} />
+              <CampoQualificacao label="Com corretor atualmente" valor={situacao.comCorretorAtualmente} />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-bold text-slate-700">P - Problema</h3>
+              <CampoQualificacao label="Motivação" valor={problema.motivacaoVenda} />
+              <CampoQualificacao label="Dores identificadas" valor={problema.doresIdentificadas} />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-bold text-slate-700">I - Implicação</h3>
+              <CampoQualificacao label="Prazo desejado" valor={implicacao.prazoDesejado} />
+              <CampoQualificacao label="Consequências" valor={implicacao.consequencias} />
+              <CampoQualificacao label="Custos atuais" valor={implicacao.custosAtuais} />
+              <CampoQualificacao label="Pressão de tempo" valor={implicacao.pressaoTempo} />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-bold text-slate-700">N - Necessidade de Solução</h3>
+              <CampoQualificacao label="Expectativa de serviço" valor={necessidade.expectativaServico} />
+              <CampoQualificacao label="Objeções" valor={necessidade.objecoes} />
+              <CampoQualificacao label="Aceitou avaliação" valor={necessidade.interesseAvaliacao} />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 p-4">
+            <h3 className="font-semibold text-amber-900 mb-2">Lacunas para a próxima interação</h3>
+            {lacunas.length > 0 ? (
+              <ul className="space-y-1">
+                {lacunas.map((lacuna) => (
+                  <li key={lacuna} className="text-sm text-amber-800 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    {lacuna}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-emerald-700 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                Diagnóstico comercial mínimo preenchido.
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <CardBriefingIA lead={lead} />
+      <FaseChecklist lead={lead} />
+      <CardTrackingIA lead={lead} />
+    </div>
+  );
+}
+
 function TabProprietario({
   contato,
   telefones,
@@ -971,6 +1193,8 @@ function TabProprietario({
   copiado: string | null;
 }) {
   if (!contato) return null;
+  const participacoesEmpresas = normalizarLista(contato?.participacoesEmpresas);
+  const redesSociais = normalizarLista(contato?.redesSociais);
 
   return (
     <div className="space-y-6">
@@ -1015,6 +1239,24 @@ function TabProprietario({
                 <span className="text-sm text-slate-900 text-right max-w-[60%] truncate">{contato.nomeMae}</span>
               </div>
             )}
+            {limparTexto(contato.cpfMae) && (
+              <div className="flex justify-between py-2 border-b border-slate-200">
+                <span className="text-sm text-slate-500">CPF da mãe</span>
+                <span className="text-sm font-mono text-slate-900">{formatarCpf(contato.cpfMae)}</span>
+              </div>
+            )}
+            {limparTexto(contato.estadoCivil) && (
+              <div className="flex justify-between py-2 border-b border-slate-200">
+                <span className="text-sm text-slate-500">Estado civil</span>
+                <span className="text-sm text-slate-900">{contato.estadoCivil}</span>
+              </div>
+            )}
+            {limparTexto(contato.escolaridade) && (
+              <div className="flex justify-between py-2 border-b border-slate-200">
+                <span className="text-sm text-slate-500">Escolaridade</span>
+                <span className="text-sm text-slate-900 text-right max-w-[60%]">{contato.escolaridade}</span>
+              </div>
+            )}
             {limparTexto(contato.situacaoCadastral) && (
               <div className="flex justify-between py-2">
                 <span className="text-sm text-slate-500">Situação</span>
@@ -1040,6 +1282,18 @@ function TabProprietario({
               <div>
                 <p className="text-xs text-indigo-500 uppercase mb-1">Cargo/Profissão</p>
                 <p className="text-sm text-indigo-800">{contato.profissao}</p>
+              </div>
+            )}
+            {limparTexto(contato.setor) && (
+              <div>
+                <p className="text-xs text-indigo-500 uppercase mb-1">Setor</p>
+                <p className="text-sm text-indigo-800">{contato.setor}</p>
+              </div>
+            )}
+            {limparTexto(contato.cnpjEmpresa) && (
+              <div>
+                <p className="text-xs text-indigo-500 uppercase mb-1">CNPJ Empresa</p>
+                <p className="text-sm font-mono text-indigo-900">{contato.cnpjEmpresa}</p>
               </div>
             )}
             {limparTexto(contato.rendaEstimada) && (
@@ -1097,6 +1351,82 @@ function TabProprietario({
           </div>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-amber-50 rounded-xl p-5 border border-amber-100">
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="w-5 h-5 text-amber-600" />
+            <h3 className="font-semibold text-amber-900">Compliance e Risco</h3>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between rounded-lg bg-white border border-amber-200 px-3 py-2">
+              <span className="text-sm text-slate-600">PPE</span>
+              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${contato?.ppe ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}`}>
+                {contato?.ppe ? 'Sim' : 'Não'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-white border border-amber-200 px-3 py-2">
+              <span className="text-sm text-slate-600">Óbito provável</span>
+              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${contato?.obitoProvavel ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                {contato?.obitoProvavel ? 'Sim' : 'Não'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-sky-50 rounded-xl p-5 border border-sky-100">
+          <div className="flex items-center gap-2 mb-4">
+            <MapPin className="w-5 h-5 text-sky-600" />
+            <h3 className="font-semibold text-sky-900">Endereço Residencial</h3>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-sm text-slate-800 font-medium">
+              {limparTexto(contato.endereco) || '-'}
+            </p>
+            <p className="text-xs text-slate-600">
+              {[limparTexto(contato.cidade), limparTexto(contato.estado)].filter(Boolean).join(' - ') || '-'}
+            </p>
+            {limparTexto(contato.cep) && <p className="text-xs text-slate-500">CEP: {contato.cep}</p>}
+          </div>
+        </div>
+      </div>
+
+      {(participacoesEmpresas.length > 0 || redesSociais.length > 0) && (
+        <div className="bg-white rounded-xl p-5 border border-slate-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-slate-800">Dados Societários e Redes</h3>
+            {contato?.perfilInvestidor && <span className="text-xs font-semibold bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">Perfil investidor</span>}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wider text-slate-500">Participações</p>
+              {participacoesEmpresas.length === 0 && <p className="text-sm text-slate-400">Sem participações registradas.</p>}
+              {participacoesEmpresas.slice(0, 5).map((p: any, idx: number) => (
+                <div key={idx} className="rounded-lg border border-slate-200 p-2.5">
+                  <p className="text-sm font-medium text-slate-800">{p?.razaoSocial || '-'}</p>
+                  <p className="text-xs text-slate-500">{p?.cnpj || '-'}{p?.participacao ? ` • ${p.participacao}` : ''}</p>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wider text-slate-500">Redes Sociais</p>
+              {redesSociais.length === 0 && <p className="text-sm text-slate-400">Sem redes sociais registradas.</p>}
+              {redesSociais.slice(0, 5).map((r: any, idx: number) => (
+                <a
+                  key={idx}
+                  href={limparTexto(r?.url) || '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-lg border border-slate-200 p-2.5 hover:bg-slate-50"
+                >
+                  <p className="text-sm font-medium text-slate-800">{limparTexto(r?.rede) || 'Rede'}</p>
+                  <p className="text-xs text-slate-500 truncate">{limparTexto(r?.url) || '-'}</p>
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1228,6 +1558,12 @@ function TabImovel({
               <div className="flex justify-between py-2">
                 <span className="text-sm text-slate-500">Valor Venal</span>
                 <span className="text-sm font-medium text-emerald-600">{formatarMoeda(contato.valorVenal)}</span>
+              </div>
+            )}
+            {limparTexto(contato.anoConstituicao) && (
+              <div className="flex justify-between py-2 border-t border-slate-200">
+                <span className="text-sm text-slate-500">Ano de Constituição</span>
+                <span className="text-sm font-medium text-slate-900">{contato.anoConstituicao}</span>
               </div>
             )}
           </div>

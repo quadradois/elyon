@@ -635,6 +635,8 @@ model Contato {
   idade             Int?
   sexo              String? // Masculino, Feminino
   estadoCivil       String?
+  cpfMae            String?
+  escolaridade      String?
   profissao         String? // cboDescricao
   rendaEstimada     Decimal? // Valor numérico da renda
   faixaSalarial     String? // "De 3 a 5 Salários Mínimos"
@@ -660,6 +662,7 @@ model Contato {
 
   // Endereço de correspondência
   endereco String? // Endereço pessoal (diferente do imóvel)
+  tipoLogradouro String?
   cidade   String?
   estado   String?
   cep      String?

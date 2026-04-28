@@ -24,6 +24,7 @@ import {
   gerarResumoTextual,
   BriefingEmpreendimentoJSON
 } from '../servicos/manus';
+import { resumoEstruturalEmpreendimento } from '../servicos/resumo-estrutural-empreendimento';
 import { getTenantId } from '../utils/tenant';
 
 const router = Router();
@@ -433,6 +434,20 @@ router.post('/:id/aplicar', async (req, res) => {
       ? (tipoMap[dadosJson.tipo_imovel] || 'RESIDENCIAL')
       : 'RESIDENCIAL';
 
+    const resumoMapa = await resumoEstruturalEmpreendimento.buscarResumo({
+      nomeEmpreendimento: dadosJson?.nome_empreendimento || pesquisa.nomeEmpreendimento,
+      logradouro: dadosJson?.endereco?.logradouro || pesquisa.endereco,
+      bairro: dadosJson?.endereco?.bairro || pesquisa.bairro,
+    });
+    const briefingEstruturadoComMapa = resumoEstruturalEmpreendimento.mesclarBriefingEstruturado(
+      briefingEstruturado,
+      resumoMapa
+    );
+    const briefingCompletoComMapa = resumoEstruturalEmpreendimento.anexarBlocoTexto(
+      pesquisa.resultado,
+      resumoMapa
+    ) || pesquisa.resultado;
+
     // Criar ou atualizar EmpreendimentoConhecimento (RAG)
     const empreendimento = await prisma.empreendimentoConhecimento.upsert({
       where: {
@@ -446,14 +461,14 @@ router.post('/:id/aplicar', async (req, res) => {
         nome: pesquisa.nomeEmpreendimento,
         localizacao: localizacao,
         tipo: tipoImovel,
-        briefingCompleto: pesquisa.resultado,
-        briefingEstruturado: briefingEstruturado,
+        briefingCompleto: briefingCompletoComMapa,
+        briefingEstruturado: briefingEstruturadoComMapa,
         confiabilidade: 0.7,
         versao: 1,
       },
       update: {
-        briefingCompleto: pesquisa.resultado,
-        briefingEstruturado: briefingEstruturado,
+        briefingCompleto: briefingCompletoComMapa,
+        briefingEstruturado: briefingEstruturadoComMapa,
         ultimaAtualizacao: new Date(),
         versao: { increment: 1 },
       }
@@ -472,8 +487,8 @@ router.post('/:id/aplicar', async (req, res) => {
         empreendimentoId: empreendimento.id,
         
         // Briefing completo e estruturado
-        briefingCompleto: pesquisa.resultado,
-        briefingEstruturado: briefingEstruturado,
+        briefingCompleto: briefingCompletoComMapa,
+        briefingEstruturado: briefingEstruturadoComMapa,
         briefingGeradoEm: new Date(),
         briefingConfiabilidade: 0.7,
         

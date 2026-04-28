@@ -16,7 +16,47 @@ interface DadosProprietario {
   nomeEdificio?: string;
   box?: string;
   tipoImovel?: string;     // PREDIAL, TERRITORIAL, etc
+  areaConstruida?: number;
+  areaTerreno?: number;
+  valorVenal?: number;
+  anoConstituicao?: number;
   origem: 'CACHE' | 'SCRAPER_LOCAL' | 'SCRAPER_WEB' | 'MOCK';
+}
+
+function limparHtml(valor: string): string {
+  return String(valor || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extrairCampoHtml(html: string, labelRegex: RegExp): string | undefined {
+  const pattern = new RegExp(`${labelRegex.source}<\\/td>\\s*<td[^>]*>:<\\/td>\\s*<td[^>]*>([\\s\\S]*?)<\\/td>`, 'i');
+  const match = html.match(pattern);
+  if (!match?.[1]) return undefined;
+  const texto = limparHtml(match[1]);
+  return texto || undefined;
+}
+
+function parseNumeroBr(valor?: string): number | undefined {
+  if (!valor) return undefined;
+  const normalizado = valor
+    .replace(/R\$\s*/gi, '')
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+
+  const numero = Number(normalizado);
+  return Number.isFinite(numero) ? numero : undefined;
+}
+
+function parseAno(valor?: string): number | undefined {
+  if (!valor) return undefined;
+  const m = valor.match(/(19|20)\d{2}/);
+  if (!m) return undefined;
+  const ano = Number(m[0]);
+  return Number.isFinite(ano) ? ano : undefined;
 }
 
 // Função para parsear o endereço da Prefeitura (exportada para uso em outros módulos)
@@ -107,7 +147,7 @@ export class ScraperIPTUService {
           cpf.includes('ENCAMINHAR') ||
           cpf.includes('SECRETARIA MUNICIPAL') ||
           cpf.includes('*') || // Máscaras de LGPD: ***.123.456-**
-          cpf.replace(/\\D/g, '').length < 11 || // Lixo muito curto
+          cpf.replace(/\D/g, '').length < 11 || // Lixo muito curto
           cpf.length > 20 // CPFs/CNPJs reais não são tão longos
         )) {
           console.log(`[Scraper] CPF/CNPJ inválido/mascarado detectado: "${cpf}". Ignorando documento.`);
@@ -120,6 +160,10 @@ export class ScraperIPTUService {
         // Extrair tipo de imóvel (PREDIAL, TERRITORIAL)
         const tipoMatch = html.match(/TIPO<\/td>\s*<td>:<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>/i);
         const tipoImovel = tipoMatch ? tipoMatch[1].trim() : undefined;
+        const areaConstruida = parseNumeroBr(extrairCampoHtml(html, /(?:AREA|ÁREA)\s*(?:EDIFICADA|CONSTRU(?:I|Í)DA|CONSTRUIDA)/));
+        const areaTerreno = parseNumeroBr(extrairCampoHtml(html, /(?:AREA|ÁREA)\s*(?:DO\s*)?TERRENO/));
+        const valorVenal = parseNumeroBr(extrairCampoHtml(html, /VALOR\s*VENAL/));
+        const anoConstituicao = parseAno(extrairCampoHtml(html, /ANO\s*(?:DE\s*)?(?:CONSTITUI(?:C|Ç)(?:A|Ã)O|CONSTRU(?:C|Ç)(?:A|Ã)O)/));
 
         // Parsear endereço para extrair campos separados
         const dadosParsed = parsearEnderecoPrefeitura(endereco);
@@ -135,6 +179,10 @@ export class ScraperIPTUService {
           cpf,
           endereco_correspondencia: endereco,
           tipoImovel,
+          areaConstruida,
+          areaTerreno,
+          valorVenal,
+          anoConstituicao,
           ...dadosParsed,
           origem: 'SCRAPER_WEB'
         };

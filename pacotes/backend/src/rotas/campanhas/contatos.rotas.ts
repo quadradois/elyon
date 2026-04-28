@@ -700,6 +700,9 @@ const vincularLeadsMineradosSchema = z.object({
     dataNascimento: z.string().optional(),
     idade: z.number().optional(),
     sexo: z.string().optional(),
+    estadoCivil: z.string().optional(),
+    cpfMae: z.string().optional(),
+    escolaridade: z.string().optional(),
     signo: z.string().optional(),
     situacaoCadastral: z.string().optional(),
     obitoProvavel: z.boolean().optional(),
@@ -712,6 +715,7 @@ const vincularLeadsMineradosSchema = z.object({
     empresaAtual: z.string().optional(),
     cnpjEmpresa: z.string().optional(),
     endereco: z.object({
+      tipoLogradouro: z.string().optional(),
       logradouro: z.string().optional(),
       numero: z.string().optional(),
       complemento: z.string().optional(),
@@ -771,7 +775,10 @@ router.post('/:id/vincular-leads-minerados', async (req, res) => {
         if (lead.endereco) {
           const e = lead.endereco;
           enderecoCompleto = [
-            e.logradouro, e.numero ? `nº ${e.numero}` : null, e.complemento,
+            e.tipoLogradouro,
+            e.logradouro,
+            e.numero ? `nº ${e.numero}` : null,
+            e.complemento,
             e.bairro, e.cidade, e.uf, e.cep ? `CEP: ${e.cep}` : null
           ].filter(Boolean).join(', ');
         }
@@ -812,6 +819,9 @@ router.post('/:id/vincular-leads-minerados', async (req, res) => {
           dataNascimento: lead.dataNascimento ? new Date(lead.dataNascimento.split('/').reverse().join('-')) : null,
           idade: lead.idade,
           sexo: lead.sexo,
+          estadoCivil: lead.estadoCivil,
+          cpfMae: lead.cpfMae,
+          escolaridade: lead.escolaridade,
           signo: lead.signo,
           situacaoCadastral: lead.situacaoCadastral,
           obitoProvavel: lead.obitoProvavel || false,
@@ -824,11 +834,13 @@ router.post('/:id/vincular-leads-minerados', async (req, res) => {
           empresaAtual: lead.empresaAtual,
           cnpjEmpresa: lead.cnpjEmpresa,
           endereco: enderecoCompleto,
+          tipoLogradouro: lead.endereco?.tipoLogradouro,
           cidade: lead.endereco?.cidade,
           estado: lead.endereco?.uf,
           cep: lead.endereco?.cep,
           participacoesEmpresas: lead.participacoesEmpresas,
           redesSociais: lead.redesSociais,
+          perfilInvestidor: Array.isArray(lead.participacoesEmpresas) && lead.participacoesEmpresas.length > 0,
           scoreAssertiva: lead.score,
           fonteEnriquecimento: lead.fonteEnriquecimento || 'ASSERTIVA',
           enriquecidoEm: new Date(),
@@ -952,8 +964,11 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
       let dataNascimento: Date | null = null;
       let idade: number | null = null;
       let sexo: string | null = null;
+      let estadoCivil: string | null = null;
       let signo: string | null = null;
       let nomeMae: string | null = null;
+      let cpfMae: string | null = null;
+      let escolaridade: string | null = null;
       let situacaoCadastral: string | null = null;
       let obitoProvavel = false;
       let ppe = false;
@@ -964,7 +979,10 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
       let empresaAtual: string | null = null;
       let cnpjEmpresa: string | null = null;
       let scoreAssertiva: number | null = null;
+      let participacoesEmpresas: any = null;
+      let redesSociais: any = null;
       let enderecoPessoal: string | null = null;
+      let tipoLogradouroPessoal: string | null = null;
       let cidadePessoal: string | null = null;
       let estadoPessoal: string | null = null;
       let cepPessoal: string | null = null;
@@ -1021,8 +1039,11 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
           }
           idade = dados.idade || null;
           sexo = dados.sexo || null;
+          estadoCivil = dados.estadoCivil || null;
           signo = dados.signo || null;
           nomeMae = dados.nomeMae || null;
+          cpfMae = dados.cpfMae || null;
+          escolaridade = dados.escolaridade || null;
           situacaoCadastral = dados.situacaoCadastral || null;
           obitoProvavel = dados.obitoProvavel || false;
           ppe = dados.ppe || false;
@@ -1033,9 +1054,12 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
           empresaAtual = dados.empresaAtual || null;
           cnpjEmpresa = dados.cnpjEmpresa || null;
           scoreAssertiva = dados.score || null;
+          participacoesEmpresas = dados.participacoesEmpresas || null;
+          redesSociais = dados.redesSociais || null;
 
           if (dados.endereco) {
             const end = dados.endereco;
+            tipoLogradouroPessoal = end.tipoLogradouro || null;
             enderecoPessoal = [end.tipoLogradouro, end.logradouro, end.numero, end.complemento]
               .filter(Boolean).join(' ').trim() || null;
             cidadePessoal = end.cidade || null;
@@ -1084,6 +1108,9 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
           dataNascimento,
           idade,
           sexo,
+          estadoCivil,
+          cpfMae,
+          escolaridade,
           signo,
           nomeMae,
           situacaoCadastral,
@@ -1097,9 +1124,13 @@ router.post('/:id/vincular-leads-banco', async (req, res) => {
           cnpjEmpresa,
           scoreAssertiva,
           endereco: enderecoPessoal,
+          tipoLogradouro: tipoLogradouroPessoal,
           cidade: cidadePessoal,
           estado: estadoPessoal,
           cep: cepPessoal,
+          participacoesEmpresas,
+          redesSociais,
+          perfilInvestidor: Array.isArray(participacoesEmpresas) && participacoesEmpresas.length > 0,
           fonteEnriquecimento: temCacheAssertiva ? 'ASSERTIVA' : null,
           enriquecidoEm: temCacheAssertiva ? new Date() : null,
           statusProspeccao: 'AGUARDANDO',

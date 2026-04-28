@@ -21,6 +21,30 @@ interface Edificio {
   nome: string;
   logradouro: string;
   totalUnidades?: number;
+  codigoEdificio?: number;
+  numeroPavimentos?: number | null;
+  numeroElevadores?: number | null;
+  vagasCobertas?: number | null;
+  vagasDescobertas?: number | null;
+  numeroGaragens?: number | null;
+  areaTerreno?: number | null;
+  areaEdificada?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  tipoEdificacao1?: number | null;
+  tipoEdificacao2?: number | null;
+  estrutura?: number | null;
+  esquadrias?: number | null;
+  piso?: number | null;
+  forro?: number | null;
+  descricoes?: {
+    tipoEdificacao1?: string | null;
+    tipoEdificacao2?: string | null;
+    estrutura?: string | null;
+    esquadrias?: string | null;
+    piso?: string | null;
+    forro?: string | null;
+  };
 }
 
 interface UnidadeImovel {
@@ -34,6 +58,159 @@ interface UnidadeImovel {
 }
 
 export class MapaService {
+
+  private sanitizarInteiroPositivo(valor?: number | null): number | null {
+    if (typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0) return null;
+    return Math.trunc(valor);
+  }
+
+  private sanitizarArea(valor?: number | null, maximo: number = 1_000_000): number | null {
+    if (typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0 || valor > maximo) return null;
+    return Number(valor.toFixed(2));
+  }
+
+  private primeiroNumeroValido(valores: Array<number | null | undefined>): number | null {
+    for (const valor of valores) {
+      if (typeof valor === 'number' && Number.isFinite(valor) && valor > 0) return valor;
+    }
+    return null;
+  }
+
+  private codigoMaisFrequente(valores: Array<number | null | undefined>): number | null {
+    const frequencias = new Map<number, number>();
+
+    for (const valor of valores) {
+      if (typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0) continue;
+      frequencias.set(valor, (frequencias.get(valor) || 0) + 1);
+    }
+
+    let melhor: number | null = null;
+    let maiorFrequencia = 0;
+
+    for (const [valor, frequencia] of frequencias.entries()) {
+      if (frequencia > maiorFrequencia) {
+        melhor = valor;
+        maiorFrequencia = frequencia;
+      }
+    }
+
+    return melhor;
+  }
+
+  private maximoValido(valores: Array<number | null | undefined>): number | null {
+    const validos = valores
+      .map((valor) => this.sanitizarInteiroPositivo(valor))
+      .filter((valor): valor is number => valor !== null);
+
+    return validos.length ? Math.max(...validos) : null;
+  }
+
+  private somaValida(valores: Array<number | null | undefined>): number | null {
+    const soma = valores.reduce((total: number, valor) => {
+      const normalizado = this.sanitizarInteiroPositivo(valor);
+      return total + (normalizado || 0);
+    }, 0 as number);
+
+    return soma > 0 ? soma : null;
+  }
+
+  private descreverTipoEdificacao(codigo?: number | null): string | null {
+    if (!codigo) return null;
+
+    const mapa: Record<number, string> = {
+      1: 'Casa',
+      2: 'Apartamento',
+      3: 'Sala/Loja',
+      4: 'Galpão'
+    };
+
+    return mapa[codigo] || `Código ${codigo}`;
+  }
+
+  private descreverCodigoConstrutivo(codigo?: number | null): string | null {
+    if (!codigo) return null;
+    return `Código ${codigo}`;
+  }
+
+  private async enriquecerEdificiosComResumo(edificios: Edificio[]): Promise<Edificio[]> {
+    const codigos = [...new Set(edificios.map((ed) => ed.codigo).filter((codigo) => codigo > 0))];
+    if (!codigos.length) return edificios;
+
+    const imoveis = await prisma.imovel.findMany({
+      where: { codigoEdificio: { in: codigos } },
+      select: {
+        codigoEdificio: true,
+        areaTerreno: true,
+        areaEdificada: true,
+        latitude: true,
+        longitude: true,
+        numeroPavimentos: true,
+        numeroElevadores: true,
+        vagasCobertas: true,
+        vagasDescobertas: true,
+        numeroGaragens: true,
+        tipoEdificacao1: true,
+        tipoEdificacao2: true,
+        estrutura: true,
+        esquadrias: true,
+        piso: true,
+        forro: true
+      }
+    });
+
+    const porCodigo = new Map<number, typeof imoveis>();
+    for (const imovel of imoveis) {
+      if (!imovel.codigoEdificio) continue;
+      porCodigo.set(imovel.codigoEdificio, [...(porCodigo.get(imovel.codigoEdificio) || []), imovel]);
+    }
+
+    return edificios.map((edificio) => {
+      const unidades = porCodigo.get(edificio.codigo) || [];
+      if (!unidades.length) return edificio;
+
+      const areasEdificadasValidas = unidades
+        .map((unidade) => this.sanitizarArea(unidade.areaEdificada, 1000))
+        .filter((area): area is number => area !== null);
+
+      const tipoEdificacao1 = this.codigoMaisFrequente(unidades.map((u) => u.tipoEdificacao1));
+      const tipoEdificacao2 = this.codigoMaisFrequente(unidades.map((u) => u.tipoEdificacao2));
+      const estrutura = this.codigoMaisFrequente(unidades.map((u) => u.estrutura));
+      const esquadrias = this.codigoMaisFrequente(unidades.map((u) => u.esquadrias));
+      const piso = this.codigoMaisFrequente(unidades.map((u) => u.piso));
+      const forro = this.codigoMaisFrequente(unidades.map((u) => u.forro));
+
+      return {
+        ...edificio,
+        totalUnidades: edificio.totalUnidades || unidades.length,
+        codigoEdificio: edificio.codigo,
+        numeroPavimentos: this.maximoValido(unidades.map((u) => u.numeroPavimentos)),
+        numeroElevadores: this.maximoValido(unidades.map((u) => u.numeroElevadores)),
+        vagasCobertas: this.somaValida(unidades.map((u) => u.vagasCobertas)),
+        vagasDescobertas: this.somaValida(unidades.map((u) => u.vagasDescobertas)),
+        numeroGaragens: this.somaValida(unidades.map((u) => u.numeroGaragens)),
+        areaTerreno: this.sanitizarArea(Math.max(...unidades.map((u) => this.sanitizarArea(u.areaTerreno) || 0))),
+        areaEdificada: areasEdificadasValidas.length
+          ? Number(areasEdificadasValidas.reduce((total, area) => total + area, 0).toFixed(2))
+          : null,
+        latitude: this.primeiroNumeroValido(unidades.map((u) => u.latitude)),
+        longitude: this.primeiroNumeroValido(unidades.map((u) => u.longitude)),
+        tipoEdificacao1,
+        tipoEdificacao2,
+        estrutura,
+        esquadrias,
+        piso,
+        forro,
+        descricoes: {
+          tipoEdificacao1: this.descreverTipoEdificacao(tipoEdificacao1),
+          tipoEdificacao2: this.descreverTipoEdificacao(tipoEdificacao2),
+          estrutura: this.descreverCodigoConstrutivo(estrutura),
+          esquadrias: this.descreverCodigoConstrutivo(esquadrias),
+          piso: this.descreverCodigoConstrutivo(piso),
+          forro: this.descreverCodigoConstrutivo(forro)
+        }
+      };
+    });
+  }
 
   // ============================================
   // NOVOS MÉTODOS: Busca Hierárquica
@@ -124,12 +301,12 @@ export class MapaService {
       });
 
       if (edificiosLocais.length > 0) {
-        return edificiosLocais.map((ed) => ({
+        return this.enriquecerEdificiosComResumo(edificiosLocais.map((ed) => ({
           codigo: ed.codigo,
           nome: ed.nome,
           logradouro: ed.logradouro || '',
           totalUnidades: ed.totalUnidades || 0
-        }));
+        })));
       }
 
       if (MODO_BASE_LOCAL_ONLY) {
@@ -189,7 +366,7 @@ export class MapaService {
       const edificios = Array.from(edificiosMap.values());
       console.log(`[MapaService] ✅ ${edificios.length} edifícios da API (bairro ${cdbairro})`);
 
-      return edificios;
+      return this.enriquecerEdificiosComResumo(edificios);
 
     } catch (error) {
       console.error('[MapaService] ❌ Erro ao listar edifícios:', error);
@@ -467,7 +644,7 @@ export class MapaService {
 
       const locais = Array.from(mapaEdificios.values()).slice(0, limite);
       if (locais.length > 0) {
-        return locais;
+        return this.enriquecerEdificiosComResumo(locais);
       }
 
       if (MODO_BASE_LOCAL_ONLY) {
@@ -534,7 +711,7 @@ export class MapaService {
         console.error('[MapaService] Erro ao salvar cache de edifícios:', err)
       );
 
-      return edificios;
+      return this.enriquecerEdificiosComResumo(edificios);
 
     } catch (error) {
       console.error('[MapaService] ❌ Erro na API externa:', error);
@@ -599,11 +776,11 @@ export class MapaService {
       });
 
       if (edificio) {
-        return [{
+        return this.enriquecerEdificiosComResumo([{
           codigo: edificio.codigo,
           nome: edificio.nome,
           logradouro: edificio.logradouro || edificio.bairro?.nome || ''
-        }];
+        }]);
       }
 
       const imovel = await prisma.imovel.findFirst({
@@ -616,11 +793,11 @@ export class MapaService {
       });
 
       if (imovel?.nomeEdificio) {
-        return [{
+        return this.enriquecerEdificiosComResumo([{
           codigo,
           nome: imovel.nomeEdificio,
           logradouro: `${imovel.logradouro || ''} - ${imovel.bairro || ''}`
-        }];
+        }]);
       }
 
       return [];

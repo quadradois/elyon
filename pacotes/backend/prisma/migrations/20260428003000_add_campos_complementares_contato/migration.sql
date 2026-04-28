@@ -1,0 +1,4 @@
+ALTER TABLE "contatos"
+  ADD COLUMN IF NOT EXISTS "cpfMae" TEXT,
+  ADD COLUMN IF NOT EXISTS "escolaridade" TEXT,
+  ADD COLUMN IF NOT EXISTS "tipoLogradouro" TEXT;

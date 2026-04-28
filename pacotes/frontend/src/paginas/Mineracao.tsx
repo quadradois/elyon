@@ -27,6 +27,11 @@ import {
   Sparkles,
   Trees,
   Zap,
+  Layers,
+  Car,
+  Ruler,
+  Hash,
+  MapPinned,
 } from "lucide-react";
 
 import { ModalProcessamento } from "../componentes/ModalProcessamento";
@@ -43,6 +48,30 @@ interface Edificio {
   nome: string;
   logradouro: string;
   totalUnidades?: number;
+  codigoEdificio?: number;
+  numeroPavimentos?: number | null;
+  numeroElevadores?: number | null;
+  vagasCobertas?: number | null;
+  vagasDescobertas?: number | null;
+  numeroGaragens?: number | null;
+  areaTerreno?: number | null;
+  areaEdificada?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  tipoEdificacao1?: number | null;
+  tipoEdificacao2?: number | null;
+  estrutura?: number | null;
+  esquadrias?: number | null;
+  piso?: number | null;
+  forro?: number | null;
+  descricoes?: {
+    tipoEdificacao1?: string | null;
+    tipoEdificacao2?: string | null;
+    estrutura?: string | null;
+    esquadrias?: string | null;
+    piso?: string | null;
+    forro?: string | null;
+  };
 }
 
 interface UnidadeImovel {
@@ -57,6 +86,77 @@ interface UnidadeImovel {
   nrlote?: string;
   nrimovel?: string;
   tipo?: 'casa' | 'apartamento';
+}
+
+const formatarInteiro = (valor?: number | null) => {
+  if (typeof valor !== "number" || !Number.isFinite(valor) || valor <= 0) return null;
+  return Math.trunc(valor).toLocaleString("pt-BR");
+};
+
+const formatarArea = (valor?: number | null) => {
+  if (typeof valor !== "number" || !Number.isFinite(valor) || valor <= 0) return null;
+  return `${valor.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m²`;
+};
+
+const temResumoEstrutural = (edificio: Edificio) =>
+  Boolean(
+    edificio.totalUnidades ||
+    edificio.numeroPavimentos ||
+    edificio.numeroElevadores ||
+    edificio.vagasCobertas ||
+    edificio.vagasDescobertas ||
+    edificio.numeroGaragens ||
+    edificio.areaTerreno ||
+    edificio.areaEdificada ||
+    edificio.latitude ||
+    edificio.longitude ||
+    edificio.codigoEdificio ||
+    edificio.descricoes?.tipoEdificacao1
+  );
+
+function ResumoEstruturalEdificio({
+  edificio,
+  claro = false,
+}: {
+  edificio: Edificio;
+  claro?: boolean;
+}) {
+  const vagas =
+    (edificio.vagasCobertas || 0) + (edificio.vagasDescobertas || 0) ||
+    edificio.numeroGaragens ||
+    null;
+
+  const itens = [
+    edificio.totalUnidades ? { icone: Home, texto: `${formatarInteiro(edificio.totalUnidades)} unid.` } : null,
+    edificio.numeroPavimentos ? { icone: Layers, texto: `${formatarInteiro(edificio.numeroPavimentos)} pav.` } : null,
+    edificio.numeroElevadores ? { icone: Building2, texto: `${formatarInteiro(edificio.numeroElevadores)} elev.` } : null,
+    vagas ? { icone: Car, texto: `${formatarInteiro(vagas)} vagas` } : null,
+    edificio.areaTerreno ? { icone: Ruler, texto: `Terreno ${formatarArea(edificio.areaTerreno)}` } : null,
+    edificio.areaEdificada ? { icone: Ruler, texto: `Edif. ${formatarArea(edificio.areaEdificada)}` } : null,
+    edificio.descricoes?.tipoEdificacao1 ? { icone: Building2, texto: edificio.descricoes.tipoEdificacao1 } : null,
+    edificio.latitude && edificio.longitude ? { icone: MapPinned, texto: "Geo" } : null,
+    edificio.codigoEdificio || edificio.codigo ? { icone: Hash, texto: `Cód. ${edificio.codigoEdificio || edificio.codigo}` } : null,
+  ].filter(Boolean) as Array<{ icone: typeof Home; texto: string }>;
+
+  if (!itens.length) return null;
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {itens.map(({ icone: Icone, texto }) => (
+        <span
+          key={texto}
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
+            claro
+              ? "bg-white/15 text-white ring-1 ring-white/20"
+              : "bg-slate-100 text-slate-600 group-hover:bg-white"
+          }`}
+        >
+          <Icone className="h-3.5 w-3.5" />
+          {texto}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 // Tipo para controle de etapa
@@ -685,22 +785,18 @@ export function Mineracao() {
                 <button
                   key={edificio.codigo}
                   onClick={() => handleSelecionarEdificio(edificio)}
-                  className="w-full p-4 text-left hover:bg-indigo-50 transition-colors flex items-center justify-between group"
+                  className="w-full p-4 text-left hover:bg-indigo-50 transition-colors flex items-start justify-between gap-4 group"
                 >
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="font-medium text-slate-900 group-hover:text-brand">
                       {edificio.nome}
                     </div>
                     <div className="text-sm text-slate-500">
                       {edificio.logradouro}
                     </div>
+                    <ResumoEstruturalEdificio edificio={edificio} />
                   </div>
-                  <div className="flex items-center gap-2">
-                    {edificio.totalUnidades && (
-                      <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">
-                        {edificio.totalUnidades} unid.
-                      </span>
-                    )}
+                  <div className="flex items-center gap-2 pt-2">
                     <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-brand" />
                   </div>
                 </button>
@@ -794,17 +890,18 @@ export function Mineracao() {
                 <button
                   key={edificio.codigo}
                   onClick={() => handleSelecionarEdificio(edificio)}
-                  className="w-full p-4 text-left hover:bg-indigo-50 transition-colors flex items-center justify-between group"
+                  className="w-full p-4 text-left hover:bg-indigo-50 transition-colors flex items-start justify-between gap-4 group"
                 >
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="font-medium text-slate-900 group-hover:text-brand">
                       {edificio.nome}
                     </div>
                     <div className="text-sm text-slate-500">
                       {edificio.logradouro}
                     </div>
+                    <ResumoEstruturalEdificio edificio={edificio} />
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-brand" />
+                  <ChevronRight className="mt-2 w-5 h-5 text-slate-400 group-hover:text-brand" />
                 </button>
               ))}
             </div>
@@ -1113,6 +1210,9 @@ export function Mineracao() {
             : `${unidades[0]?.nmlogradou}, ${unidades[0]?.nmbairro}`
           }
         </p>
+        {edificioSelecionado && temResumoEstrutural(edificioSelecionado) && (
+          <ResumoEstruturalEdificio edificio={edificioSelecionado} claro />
+        )}
       </div>
 
       {/* Erro */}

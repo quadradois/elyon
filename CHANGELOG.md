@@ -5,6 +5,35 @@ Todas as mudanças notáveis deste projeto serão documentadas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.6.0] - 2026-04-28
+
+### Adicionado
+- **Pipeline de dados Mineração → CRM** documentado com plano, achados e evidências em `docs/MAPA_GAPS_PIPELINE_DADOS/`.
+- Captura e propagação de novos dados da Prefeitura/IPTU: `valorVenal`, `areaConstruida`, `areaTerreno` e `anoConstituicao`.
+- Persistência de campos complementares de enriquecimento Assertiva em `Contato`: `cpfMae`, `escolaridade`, `tipoLogradouro` e `estadoCivil`.
+- Resumo estrutural MAPA para empreendimentos, com agregação de unidades, áreas, pavimentos, elevadores, vagas, geolocalização e códigos construtivos quando disponíveis.
+- Injeção automática de dados estruturais MAPA no `EmpreendimentoConhecimento` e no briefing da IA ao criar/aplicar campanhas.
+- Testes para resumo estrutural de empreendimento e sincronização de cascade de leads.
+
+### Melhorado
+- Tela de mineração passa a exibir dados estruturais do edifício na seleção e no cabeçalho do prédio selecionado.
+- Detalhe do proprietário passa a mostrar mais dados operacionais: compliance, risco, endereço residencial, dados profissionais, societários, redes sociais e contexto de empreendimento.
+- Aba `Qualificação` do proprietário foi reorganizada para focar em SPIN Selling, resumo do atendimento IA, checklist e lacunas da próxima interação, reduzindo repetição dos dados cadastrais.
+- Backfills locais sincronizaram dados ricos do cache Assertiva e da tabela `imoveis` para contatos já minerados.
+
+### Corrigido
+- Remoção/cascade de leads agora limpa `leadId`, `virouLead`, `virouLeadEm` e restaura `statusProspeccao`, evitando contatos fantasma marcados como lead.
+- Campanha `ED PEDRA DA LUA` foi saneada no banco local para zerar vínculos de lead e manter todos os 198 contatos como `AGUARDANDO`.
+- Áreas construídas inválidas ou corrompidas são descartadas para evitar exibição de metragem incorreta.
+- Busca de dados estruturais evita casar empreendimento por nome genérico quando logradouro/bairro foram informados.
+
+### Alterado
+- **Versionamento do produto para `0.6.0`** em monorepo, backend, frontend e `package-lock.json`.
+- `package-lock.json` foi realinhado com a versão real do projeto.
+
+### Removido
+- Documentação legada em `docs/raio-x/RAIO_X_LEADS_CONTATOS/`, conforme limpeza operacional de arquivos obsoletos.
+
 ## [0.5.0] - 2026-04-26
 
 ### Adicionado
@@ -205,4 +234,5 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 [0.2.3]: https://github.com/elyon-ai/elyon/compare/v0.2.2...v0.2.3
 [0.1.0]: https://github.com/elyon-ai/elyon/releases/tag/v0.1.0
 
+[0.6.0]: https://github.com/quadradois/elyon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/quadradois/elyon/compare/v0.4.0...v0.5.0

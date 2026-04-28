@@ -10,7 +10,7 @@ import { prisma } from '../lib/db';
  * 4. Atividades
  * 5. Desvincular clientes (origemLeadId → null)
  * 6. Desvincular imóveis (leadId → null)
- * 7. Desvincular contatos (leadId → null)
+ * 7. Desvincular contatos e restaurar status operacional
  * 8. Leads
  */
 export async function cascadeDeleteLeads(leadIds: string[]): Promise<void> {
@@ -56,10 +56,15 @@ export async function cascadeDeleteLeads(leadIds: string[]): Promise<void> {
     data: { leadId: null },
   });
 
-  // 7. Desvincular contatos
+  // 7. Desvincular contatos e remover o estado "lead ativo"
   await prisma.contato.updateMany({
     where: { leadId: { in: leadIds } },
-    data: { leadId: null },
+    data: {
+      leadId: null,
+      virouLead: false,
+      virouLeadEm: null,
+      statusProspeccao: 'INTERESSADO',
+    },
   });
 
   // 8. Deletar leads

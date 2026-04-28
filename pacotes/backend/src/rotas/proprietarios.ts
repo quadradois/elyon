@@ -127,6 +127,33 @@ function normalizarLeadParaFrontend(lead: any, contato: any, imovelRef?: any | n
       interesseEm: paraStringOuNull(lead.interesseEm)
     },
 
+    // Mesmo contrato usado em LeadDetalhes para a aba de qualificação comercial.
+    spin: {
+      situacao: {
+        situacaoAtual: paraStringOuNull(lead.situacaoAtual),
+        tempoDecisao: paraStringOuNull(lead.tempoDecisao),
+        tentativasAnteriores: paraStringOuNull(lead.tentativasAnteriores),
+        comCorretorAtualmente: lead.comCorretorAtualmente ?? null
+      },
+      problema: {
+        motivacaoVenda: paraStringOuNull(lead.motivacaoVenda),
+        doresIdentificadas: Array.isArray(lead.doresIdentificadas) ? lead.doresIdentificadas : []
+      },
+      implicacao: {
+        prazoDesejado: paraStringOuNull(lead.prazoDesejado),
+        urgencia: paraStringOuNull(lead.urgencia),
+        consequencias: paraStringOuNull(lead.consequencias),
+        custosAtuais: paraStringOuNull(lead.custosAtuais),
+        pressaoTempo: lead.pressaoTempo ?? null
+      },
+      necessidade: {
+        expectativaServico: paraStringOuNull(lead.expectativaServico),
+        objecoes: Array.isArray(lead.objecoes) ? lead.objecoes : [],
+        interesseAvaliacao: lead.interesseAvaliacao ?? null
+      },
+      observacoes: paraStringOuNull(lead.observacoesSpin)
+    },
+
     // Mantém campos legados planos usados em trechos da tela
     enderecoImovel,
     tipoImovel,
@@ -157,7 +184,17 @@ function normalizarLeadParaFrontend(lead: any, contato: any, imovelRef?: any | n
     faixaSalarial: paraStringOuNull(lead.faixaSalarial) ?? paraStringOuNull(contato?.faixaSalarial),
     rendaEstimada: paraStringOuNull(lead.rendaEstimada) ?? paraStringOuNull(contato?.rendaEstimada),
     valorVenal: paraStringOuNull(lead.valorVenal) ?? paraStringOuNull(contato?.valorVenal),
-    statusProspeccao: paraStringOuNull(lead.statusProspeccao) ?? paraStringOuNull(contato?.statusProspeccao)
+    statusProspeccao: paraStringOuNull(lead.statusProspeccao) ?? paraStringOuNull(contato?.statusProspeccao),
+    estadoCivil: paraStringOuNull(lead.estadoCivil) ?? paraStringOuNull(contato?.estadoCivil),
+    cpfMae: paraStringOuNull(lead.cpfMae) ?? paraStringOuNull(contato?.cpfMae),
+    escolaridade: paraStringOuNull(lead.escolaridade) ?? paraStringOuNull(contato?.escolaridade),
+    ppe: (lead.ppe ?? contato?.ppe) ?? false,
+    obitoProvavel: (lead.obitoProvavel ?? contato?.obitoProvavel) ?? false,
+    participacoesEmpresas: lead.participacoesEmpresas ?? contato?.participacoesEmpresas ?? null,
+    redesSociais: lead.redesSociais ?? contato?.redesSociais ?? null,
+    perfilInvestidor: (lead.perfilInvestidor ?? contato?.perfilInvestidor) ?? false,
+    anoConstituicao: lead.anoConstituicao ?? contato?.anoConstituicao ?? null,
+    enderecoResidencial: paraStringOuNull(lead.enderecoPrincipal) ?? paraStringOuNull(contato?.endereco)
   };
 }
 
@@ -281,7 +318,7 @@ router.get('/:id', async (req, res) => {
         campanha: { tenantId }
       },
       include: {
-        campanha: true,
+        campanha: { include: { empreendimento: true } },
         lead: true
       }
     });
@@ -293,7 +330,7 @@ router.get('/:id', async (req, res) => {
           campanha: { tenantId }
         },
         include: {
-          campanha: true,
+          campanha: { include: { empreendimento: true } },
           lead: true
         }
       });

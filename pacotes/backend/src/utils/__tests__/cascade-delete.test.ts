@@ -67,7 +67,12 @@ describe('cascadeDeleteLeads', () => {
 
     expect(mockPrisma.contato.updateMany).toHaveBeenCalledWith({
       where: { leadId: { in: ids } },
-      data: { leadId: null },
+      data: {
+        leadId: null,
+        virouLead: false,
+        virouLeadEm: null,
+        statusProspeccao: 'INTERESSADO',
+      },
     });
 
     expect(mockPrisma.lead.deleteMany).toHaveBeenCalledWith({

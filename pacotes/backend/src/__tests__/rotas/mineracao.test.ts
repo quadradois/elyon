@@ -3,6 +3,7 @@ import request from 'supertest';
 import express from 'express';
 import { prisma } from '../../lib/db';
 import { assertivaService } from '../../servicos/assertiva';
+import { scraperIPTU } from '../../servicos/scraper-iptu';
 
 // Mock do banco de dados — todas as tabelas/métodos usados pela rota
 jest.mock('../../lib/db', () => ({
@@ -139,6 +140,79 @@ describe('Rotas de Mineração - API', () => {
       expect(res.body.sucesso).toBeGreaterThanOrEqual(0);
       expect(assertivaService.enriquecerDocumento).toHaveBeenCalledTimes(1);
       expect(prisma.cacheCpf.upsert).toHaveBeenCalledTimes(1);
+    });
+
+    it('deve persistir novos campos da Assertiva no cache (cpfMae, escolaridade, estadoCivil, tipoLogradouro)', async () => {
+      // @ts-ignore
+      (assertivaService.enriquecerDocumento as jest.Mock).mockResolvedValue({
+        nome: 'João Silva Teste',
+        telefones: [{ numero: '11999999999', tipo: 'CELULAR', whatsapp: true }],
+        emails: ['joao@test.com'],
+        estadoCivil: 'Casado',
+        cpfMae: '11122233344',
+        escolaridade: 'Superior Completo',
+        endereco: {
+          tipoLogradouro: 'Rua',
+          logradouro: 'Das Flores',
+          numero: '123',
+          cidade: 'Goiânia',
+          uf: 'GO',
+        }
+      });
+
+      const res = await request(app)
+        .post('/api/mineracao/confirmar-leads')
+        .send({
+          proprietarios: [
+            { nrinscr: '00000001', cpf: '12345678901', nome: 'João', origem: 'MANUAL' }
+          ]
+        });
+
+      expect(res.status).toBe(200);
+      expect(prisma.cacheCpf.upsert).toHaveBeenCalledTimes(1);
+      const payloadUpsert: any = (prisma.cacheCpf.upsert as jest.Mock).mock.calls[0][0];
+      expect(payloadUpsert.update.dados.estadoCivil).toBe('Casado');
+      expect(payloadUpsert.update.dados.cpfMae).toBe('11122233344');
+      expect(payloadUpsert.update.dados.escolaridade).toBe('Superior Completo');
+      expect(payloadUpsert.update.dados.tipoLogradouro).toBe('Rua');
+    });
+  });
+
+  describe('POST /api/mineracao/iptu-unitario', () => {
+    it('deve retornar dados avançados do imóvel extraídos pelo scraper', async () => {
+      // @ts-ignore
+      (scraperIPTU.consultarProprietario as jest.Mock).mockResolvedValue({
+        nrinscr: '123456',
+        nome: 'Maria',
+        cpf: '12345678901',
+        endereco_correspondencia: 'Rua Teste, 10',
+        tipoImovel: 'PREDIAL',
+        areaConstruida: 82.5,
+        areaTerreno: 120,
+        valorVenal: 450000,
+        anoConstituicao: 2018,
+        apartamento: '806',
+        bloco: 'B',
+        nomeEdificio: 'Residencial Exemplo',
+      });
+      // @ts-ignore
+      (assertivaService.enriquecerDocumento as jest.Mock).mockResolvedValue({
+        nome: 'Maria',
+        cpf: '12345678901',
+        telefones: [],
+        emails: [],
+        score: 90,
+      });
+
+      const res = await request(app)
+        .post('/api/mineracao/iptu-unitario')
+        .send({ iptu: '123456' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.imovel.area).toBe(82.5);
+      expect(res.body.imovel.areaTerreno).toBe(120);
+      expect(res.body.imovel.valorVenal).toBe(450000);
+      expect(res.body.imovel.anoConstituicao).toBe(2018);
     });
   });
 });
