@@ -412,7 +412,14 @@ export function AbaContatos({
 
                         {/* Nome */}
                         <td className="px-4 py-3">
-                          <div className="font-medium text-slate-900">{contato.nome}</div>
+                          <button
+                            type="button"
+                            onClick={() => onVerContato(contato.id)}
+                            className="font-medium text-slate-900 hover:text-brand hover:underline underline-offset-2 transition-colors text-left"
+                            title="Abrir detalhes do contato"
+                          >
+                            {contato.nome}
+                          </button>
                           {contato.cpf && (
                             <div className="text-xs text-slate-500">CPF: {contato.cpf}</div>
                           )}
