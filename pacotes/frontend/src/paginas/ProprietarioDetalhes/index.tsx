@@ -1427,7 +1427,13 @@ function TabProprietario({
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between rounded-lg bg-white border border-amber-200 px-3 py-2">
-              <span className="text-sm text-slate-600">PPE</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-slate-600">PPE</span>
+                <HelpCircle
+                  className="w-3.5 h-3.5 text-slate-400"
+                  title="PPE significa Pessoa Politicamente Exposta (também chamada PEP): pessoa com cargo ou função pública relevante, atual ou nos últimos 5 anos, conforme regras de compliance/PLD."
+                />
+              </div>
               <span className={`text-xs font-semibold px-2 py-1 rounded-full ${contato?.ppe ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}`}>
                 {contato?.ppe ? 'Sim' : 'Não'}
               </span>
