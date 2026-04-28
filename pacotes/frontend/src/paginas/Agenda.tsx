@@ -12,6 +12,8 @@ import { Input } from '../componentes/ui/input';
 import { Label } from '../componentes/ui/label';
 import { Badge } from '../componentes/ui/badge';
 import { Textarea } from '../componentes/ui/textarea';
+import { PageHeader } from '../componentes/ui/page-header';
+import { EmptyStateInline } from '../componentes/ui/empty-state';
 import { toast } from 'sonner';
 
 import { agendaService, EventoAgenda } from '../servicos/apiAgenda';
@@ -368,11 +370,11 @@ export function Agenda() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Agenda</h1>
-                    <p className="text-muted-foreground">Gerencie sua disponibilidade e visualize agendamentos.</p>
-                </div>
+            <PageHeader
+                title="Agenda"
+                description="Gerencie sua disponibilidade e visualize agendamentos."
+                icon={<CalendarIcon className="w-5 h-5" />}
+                actions={(
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={handleOpenConfig}>
                         <Settings className="mr-2 h-4 w-4" />
@@ -387,7 +389,8 @@ export function Agenda() {
                         Bloquear Horário
                     </Button>
                 </div>
-            </div>
+                )}
+            />
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <Card className="lg:col-span-1">
@@ -401,7 +404,7 @@ export function Agenda() {
                         {loadingBloqueios ? (
                             <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                         ) : bloqueios.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-4">Nenhum bloqueio ativo</p>
+                            <EmptyStateInline mensagem="Nenhum bloqueio ativo" />
                         ) : (
                             bloqueios.map((b) => (
                                 <div key={b.id} className="p-3 border rounded-lg bg-red-50 dark:bg-red-950/20">
@@ -410,7 +413,7 @@ export function Agenda() {
                                             <p className="text-sm font-medium">{new Date(b.agendadoPara).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}</p>
                                             <p className="text-xs text-muted-foreground">{new Date(b.agendadoPara).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                                         </div>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-100" onClick={() => handleExcluirBloqueio(b.id)}>
+                                        <Button variant="ghost" size="icon" aria-label="Excluir bloqueio de agenda" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-100" onClick={() => handleExcluirBloqueio(b.id)}>
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
                                     </div>
@@ -598,7 +601,7 @@ export function Agenda() {
                     ) : expediente ? (
                         <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
                             {expediente.dias.map((dia) => (
-                                <div key={dia.diaSemana} className={`flex items-center gap-4 p-3 rounded-lg border ${dia.ativo ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200' : 'bg-gray-50 dark:bg-gray-900 border-gray-200'}`}>
+                                <div key={dia.diaSemana} className={`flex items-center gap-4 p-3 rounded-lg border ${dia.ativo ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200' : 'bg-slate-50 dark:bg-slate-900 border-slate-200'}`}>
                                     <input
                                         type="checkbox"
                                         checked={dia.ativo}

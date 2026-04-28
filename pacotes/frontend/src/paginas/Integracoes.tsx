@@ -10,6 +10,7 @@ import {
 import { Button } from '../componentes/ui/button';
 import { Input } from '../componentes/ui/input';
 import { Label } from '../componentes/ui/label';
+import { PageHeader } from '../componentes/ui/page-header';
 import {
     ArrowLeft,
     Link2,
@@ -192,25 +193,20 @@ export function Integracoes() {
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
             {/* Header */}
-            <div className="flex items-center gap-4">
-                <button
-                    onClick={() => navigate('/dashboard/configuracoes')}
-                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                    <ArrowLeft className="w-5 h-5 text-slate-600" />
-                </button>
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                        <Link2 className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-bold text-slate-900">Integrações</h1>
-                        <p className="text-sm text-slate-500">
-                            Configure conexões com sistemas externos
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <PageHeader
+                title="Integrações"
+                description="Configure conexões com sistemas externos"
+                icon={<Link2 className="w-5 h-5" />}
+                actions={(
+                    <Button
+                        variant="outline"
+                        onClick={() => navigate('/dashboard/configuracoes')}
+                    >
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Voltar
+                    </Button>
+                )}
+            />
 
             {/* Mensagem de feedback */}
             {mensagem && (
@@ -278,7 +274,7 @@ export function Integracoes() {
                         <CardContent className="space-y-6">
                             {/* Estatísticas se configurado */}
                             {crmIntegracao && (
-                                <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
                                     <div className="text-center">
                                         <p className="text-2xl font-bold text-slate-900">{crmIntegracao.totalEnvios}</p>
                                         <p className="text-xs text-slate-500">Total Envios</p>

@@ -31,6 +31,7 @@ import {
   Check,
 } from "lucide-react";
 import { api } from "../servicos/api";
+import { PageHeader } from "../componentes/ui/page-header";
 
 interface ContatoLista {
   id: string;
@@ -212,29 +213,19 @@ export default function ListaDetalhes() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
+      <PageHeader
+        title={lista.nome}
+        description={lista.nomeEdificio}
+        icon={<Building2 className="w-5 h-5" />}
+        actions={<div className="flex gap-2">
           <Button
-            variant="ghost"
+            variant="outline"
             onClick={() => navigate("/dashboard/listas")}
-            className="gap-2 -ml-3 mb-2"
+            className="gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
             Voltar para Listas
           </Button>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-brand" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">{lista.nome}</h1>
-              <p className="text-slate-500">{lista.nomeEdificio}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
           <Button
             onClick={() => setModalCampanhaOpen(true)}
             className="gap-2"
@@ -243,8 +234,8 @@ export default function ListaDetalhes() {
             <Plus className="w-4 h-4" />
             Adicionar à Campanha
           </Button>
-        </div>
-      </div>
+        </div>}
+      />
 
       {/* Estatísticas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -465,10 +456,11 @@ export default function ListaDetalhes() {
           </DialogHeader>
 
           <div className="py-4">
-            <label className="text-sm font-medium text-slate-700 mb-2 block">
+            <label htmlFor="lista-detalhes-campanha" className="text-sm font-medium text-slate-700 mb-2 block">
               Selecione a campanha
             </label>
             <select
+              id="lista-detalhes-campanha"
               value={campanhaSelecionada}
               onChange={(e) => setCampanhaSelecionada(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand focus:border-brand"

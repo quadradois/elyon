@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../servicos/api";
 import { Button } from "../componentes/ui/button";
 import { Input } from "../componentes/ui/input";
+import { Switch } from "../componentes/ui/switch";
 import {
   Table,
   TableBody,
@@ -19,6 +20,7 @@ import {
   CheckSquare,
   Square,
   Loader2,
+  Zap,
   Download,
   AlertCircle,
   ChevronRight,
@@ -26,7 +28,6 @@ import {
   ArrowLeft,
   Sparkles,
   Trees,
-  Zap,
   Layers,
   Car,
   Ruler,
@@ -36,6 +37,8 @@ import {
 
 import { ModalProcessamento } from "../componentes/ModalProcessamento";
 import { toast } from "sonner";
+import { PageHeader } from "../componentes/ui/page-header";
+import { EmptyState } from "../componentes/ui/empty-state";
 
 // Interfaces
 interface Bairro {
@@ -556,16 +559,11 @@ export function Mineracao() {
   if (etapa === "selecionar-modo") {
     return (
       <div className="space-y-8">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Building2 className="w-8 h-8 text-brand" />
-            Mineração de Leads
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Escolha como deseja buscar os imóveis para captação.
-          </p>
-        </div>
+        <PageHeader
+          title="Mineração de Leads"
+          description="Escolha como deseja buscar os imóveis para captação."
+          icon={<Building2 className="w-5 h-5" />}
+        />
 
         {/* Cards de Opção */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -807,10 +805,12 @@ export function Mineracao() {
                 e.nome.toLowerCase().includes(filtroEdificio.toLowerCase()) ||
                 e.logradouro.toLowerCase().includes(filtroEdificio.toLowerCase())
               ).length === 0 && (
-                <div className="p-8 text-center text-slate-500">
-                  <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>Nenhum edifício encontrado com "<strong>{filtroEdificio}</strong>"</p>
-                  <p className="text-sm mt-1">Tente outro termo de busca</p>
+                <div className="p-4">
+                  <EmptyState
+                    tipo="busca-sem-resultado"
+                    titulo={`Nenhum edifício encontrado com "${filtroEdificio}"`}
+                    descricao="Tente outro termo de busca."
+                  />
                 </div>
               )}
             </div>
@@ -856,7 +856,8 @@ export function Mineracao() {
               disabled={loading || termoBusca.length < 2}
               className="h-12 px-6"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Buscar"}
+              {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Buscar
             </Button>
           </div>
           
@@ -950,7 +951,8 @@ export function Mineracao() {
               disabled={loading || termoCondominio.length < 2}
               className="h-12 px-6 bg-success hover:bg-success-dark"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Buscar"}
+              {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Buscar
             </Button>
           </div>
           
@@ -1067,7 +1069,8 @@ export function Mineracao() {
                 disabled={loading || enderecoBusca.length < 3}
                 className="h-12 px-6 bg-orange-600 hover:bg-orange-700"
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Buscar"}
+                {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Buscar
               </Button>
             </div>
             
@@ -1124,7 +1127,8 @@ export function Mineracao() {
               disabled={loading || !iptuBusca}
               className="h-12 px-6"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Buscar"}
+              {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Buscar
             </Button>
           </div>
         </div>
@@ -1247,30 +1251,20 @@ export function Mineracao() {
 
             <div className="flex items-center gap-4">
               {/* Toggle Modo Turbo */}
-              <label 
+              <label
+                htmlFor="mineracao-modo-turbo"
                 className="flex items-center gap-2 cursor-pointer group"
                 title="Pula a etapa de revisão e executa automaticamente"
               >
                 <span className={`text-xs font-medium transition-colors ${modoTurbo ? 'text-amber-700' : 'text-slate-500'}`}>
                   Modo Turbo
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setModoTurbo(!modoTurbo)}
-                  className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2 ${
-                    modoTurbo 
-                      ? 'bg-warning' 
-                      : 'bg-slate-300 hover:bg-slate-400'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform flex items-center justify-center ${
-                      modoTurbo ? 'translate-x-4' : 'translate-x-0'
-                    }`}
-                  >
-                    {modoTurbo && <Zap className="w-2.5 h-2.5 text-amber-500" />}
-                  </span>
-                </button>
+                <Switch
+                  id="mineracao-modo-turbo"
+                  checked={modoTurbo}
+                  onCheckedChange={setModoTurbo}
+                  aria-label="Alternar modo turbo"
+                />
               </label>
 
               <Button

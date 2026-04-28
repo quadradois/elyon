@@ -32,13 +32,10 @@ const buttonVariants = cva(
   }
 );
 
-export interface ButtonProps extends VariantProps<typeof buttonVariants> {
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
   asChild?: boolean;
-  children?: React.ReactNode;
-  className?: string;
-  onClick?: (e?: any) => void;
-  disabled?: boolean;
-  type?: "button" | "submit" | "reset";
   size?: "default" | "sm" | "lg" | "icon" | null | undefined;
   variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link" | null | undefined;
 }
@@ -49,8 +46,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref as any}
-        {...props as any}
+        ref={ref}
+        {...props}
       />
     );
   }

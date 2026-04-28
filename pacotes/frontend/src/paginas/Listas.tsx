@@ -22,6 +22,9 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { api } from "../servicos/api";
+import { PageHeader } from "../componentes/ui/page-header";
+import { SkeletonTable } from "../componentes/ui/skeleton";
+import { EmptyState } from "../componentes/ui/empty-state";
 
 interface Lista {
   id: string;
@@ -86,45 +89,36 @@ export default function Listas() {
 
   if (carregando) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-brand" />
+      <div className="p-2">
+        <SkeletonTable rows={6} columns={4} />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Listas de Contatos</h1>
-          <p className="text-slate-500 mt-1">
-            Gerencie suas listas de contatos extraídos de empreendimentos
-          </p>
-        </div>
-        <Button onClick={() => navigate('/dashboard/captacao')} className="gap-2">
-          <Plus className="w-4 h-4" />
-          Nova Captação
-        </Button>
-      </div>
+      <PageHeader
+        title="Listas de Contatos"
+        description="Gerencie suas listas de contatos extraídos de empreendimentos"
+        icon={<List className="w-5 h-5" />}
+        actions={(
+          <Button onClick={() => navigate('/dashboard/captacao')} className="gap-2">
+            <Plus className="w-4 h-4" />
+            Nova Captação
+          </Button>
+        )}
+      />
 
       {/* Lista vazia */}
       {listas.length === 0 && (
         <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-              <List className="w-8 h-8 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">
-              Nenhuma lista criada
-            </h3>
-            <p className="text-slate-500 text-center max-w-md mb-6">
-              Use o assistente de Captação para pesquisar um empreendimento e criar sua primeira lista de contatos.
-            </p>
-            <Button onClick={() => navigate('/dashboard/captacao')}>
-              <Plus className="w-4 h-4 mr-2" />
-              Iniciar Captação
-            </Button>
+          <CardContent className="py-10">
+            <EmptyState
+              tipo="generico"
+              titulo="Nenhuma lista criada"
+              descricao="Use o assistente de Captação para criar sua primeira lista de contatos."
+              acao={{ texto: "Iniciar Captação", onClick: () => navigate('/dashboard/captacao') }}
+            />
           </CardContent>
         </Card>
       )}
@@ -135,7 +129,8 @@ export default function Listas() {
           {listas.map((lista) => (
             <Card 
               key={lista.id} 
-              className="hover:shadow-md transition-shadow cursor-pointer group"
+              interactive
+              className="cursor-pointer group"
               onClick={() => navigate(`/dashboard/listas/${lista.id}`)}
             >
               <CardHeader className="pb-3">
@@ -154,6 +149,7 @@ export default function Listas() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={`Excluir lista ${lista.nome}`}
                     className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
                     onClick={(e) => {
                       e.stopPropagation();

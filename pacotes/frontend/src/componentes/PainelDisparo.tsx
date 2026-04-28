@@ -19,8 +19,6 @@ import {
   Settings,
   Loader2,
   MessageSquare,
-  UserX,
-  Clock,
   Zap,
   RefreshCw,
   AlertTriangle,
@@ -32,7 +30,6 @@ import {
   Timer,
   CalendarDays,
   Activity,
-  Target,
   TrendingUp,
   Flame,
   RotateCcw,
@@ -138,6 +135,12 @@ export function PainelDisparo({ campanhaId, campanhaStatus = "ATIVA", onStatusCh
   const [salvandoConfig, setSalvandoConfig] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
+  const [feedbackDisparo, setFeedbackDisparo] = useState<{
+    ativo: boolean;
+    progresso: number;
+    concluido: boolean;
+    contatos: number;
+  }>({ ativo: false, progresso: 0, concluido: false, contatos: 0 });
   const [modoDisparo, setModoDisparo] = useState<DisparoModo>("lote");
   const [escopoEnvio, setEscopoEnvio] = useState<EscopoEnvio>("todos-elegiveis");
   const [processandoGestao, setProcessandoGestao] = useState(false);
@@ -253,6 +256,19 @@ export function PainelDisparo({ campanhaId, campanhaStatus = "ATIVA", onStatusCh
 
       if (response.data.sucesso) {
         setSucesso(`Disparo iniciado no modo ${modo === "lote" ? "lote" : "contínuo"}.`);
+        setFeedbackDisparo({ ativo: true, progresso: 0, concluido: false, contatos: calculos.aguardando });
+        let progressoAtual = 0;
+        const interval = window.setInterval(() => {
+          progressoAtual = Math.min(100, progressoAtual + 14);
+          setFeedbackDisparo((prev) => ({ ...prev, progresso: progressoAtual }));
+          if (progressoAtual >= 100) {
+            window.clearInterval(interval);
+            setFeedbackDisparo((prev) => ({ ...prev, concluido: true }));
+            window.setTimeout(() => {
+              setFeedbackDisparo({ ativo: false, progresso: 0, concluido: false, contatos: 0 });
+            }, 2800);
+          }
+        }, 180);
         setDisparando(true);
         setModoDisparo(modo);
         await buscarStatus();
@@ -540,6 +556,25 @@ export function PainelDisparo({ campanhaId, campanhaStatus = "ATIVA", onStatusCh
           <CheckCircle2 className="w-5 h-5" />
           {sucesso}
         </div>
+      )}
+      {feedbackDisparo.ativo && (
+        <Card className="card-premium border-emerald-200/70 bg-gradient-to-r from-emerald-50 to-white animate-fade-in">
+          <CardContent className="py-4 space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-emerald-800">
+                {feedbackDisparo.concluido ? "Campanha disparada com sucesso" : "Preparando disparo da campanha"}
+              </span>
+              <span className="font-semibold tabular-nums text-emerald-700">{feedbackDisparo.progresso}%</span>
+            </div>
+            <Progress value={feedbackDisparo.progresso} className="h-2 bg-emerald-100" />
+            {feedbackDisparo.concluido && (
+              <p className="text-sm text-emerald-700 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                Campanha disparada para <span className="font-semibold tabular-nums">{feedbackDisparo.contatos}</span> contatos.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       <Card className="order-1 card-premium rounded-2xl overflow-hidden border-indigo-200/70 animate-fade-in" style={{ animationDelay: "20ms" }}>

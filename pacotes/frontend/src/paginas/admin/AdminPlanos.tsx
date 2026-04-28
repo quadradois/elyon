@@ -224,10 +224,11 @@ function ModalEditarPlano({
                 <form onSubmit={handleSubmit} className="p-4 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm text-slate-300 mb-1">
+                            <label htmlFor="plano-valor-mensal" className="block text-sm text-slate-300 mb-1">
                                 Valor Mensal (R$)
                             </label>
                             <input
+                                id="plano-valor-mensal"
                                 type="number"
                                 step="0.01"
                                 value={form.valorMensal}
@@ -236,10 +237,11 @@ function ModalEditarPlano({
                             />
                         </div>
                         <div>
-                            <label className="block text-sm text-slate-300 mb-1">
+                            <label htmlFor="plano-creditos-mensais" className="block text-sm text-slate-300 mb-1">
                                 Créditos Mensais
                             </label>
                             <input
+                                id="plano-creditos-mensais"
                                 type="number"
                                 value={form.creditosMensais}
                                 onChange={e => setForm({ ...form, creditosMensais: parseInt(e.target.value) || 0 })}
@@ -250,10 +252,11 @@ function ModalEditarPlano({
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm text-slate-300 mb-1">
+                            <label htmlFor="plano-custo-extra" className="block text-sm text-slate-300 mb-1">
                                 Custo por Crédito Extra (R$)
                             </label>
                             <input
+                                id="plano-custo-extra"
                                 type="number"
                                 step="0.01"
                                 value={form.custoPorCreditoExtra}
@@ -262,10 +265,11 @@ function ModalEditarPlano({
                             />
                         </div>
                         <div>
-                            <label className="block text-sm text-slate-300 mb-1">
+                            <label htmlFor="plano-taxa-setup" className="block text-sm text-slate-300 mb-1">
                                 Taxa de Setup (R$)
                             </label>
                             <input
+                                id="plano-taxa-setup"
                                 type="number"
                                 step="0.01"
                                 value={form.taxaSetup}
@@ -276,10 +280,11 @@ function ModalEditarPlano({
                     </div>
 
                     <div>
-                        <label className="block text-sm text-slate-300 mb-1">
+                        <label htmlFor="plano-descricao" className="block text-sm text-slate-300 mb-1">
                             Descrição
                         </label>
                         <input
+                            id="plano-descricao"
                             type="text"
                             value={form.descricao}
                             onChange={e => setForm({ ...form, descricao: e.target.value })}
@@ -288,8 +293,9 @@ function ModalEditarPlano({
                     </div>
 
                     <div>
-                        <label className="flex items-center gap-2 cursor-pointer">
+                        <label htmlFor="plano-destaque" className="flex items-center gap-2 cursor-pointer">
                             <input
+                                id="plano-destaque"
                                 type="checkbox"
                                 checked={form.destaque}
                                 onChange={e => setForm({ ...form, destaque: e.target.checked })}

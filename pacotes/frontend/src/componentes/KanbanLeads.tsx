@@ -247,14 +247,15 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
 
     return (
         <>
-            <div className="flex h-[calc(100vh-220px)] overflow-x-auto pb-4 gap-4 items-start">
-                {KANBAN_COLUMNS.map((col) => (
-                    <div
-                        key={col.id}
-                        className="flex-1 min-w-[280px] flex flex-col h-full rounded-xl bg-slate-50/50 border border-slate-200/60"
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, col.id)}
-                    >
+            <div className="relative">
+                <div className="flex h-[calc(100vh-220px)] overflow-x-auto pb-4 gap-4 items-start">
+                    {KANBAN_COLUMNS.map((col) => (
+                        <div
+                            key={col.id}
+                            className="flex-1 min-w-[280px] flex flex-col h-full rounded-xl bg-slate-50/50 border border-slate-200/60"
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, col.id)}
+                        >
                         {/* Header da Coluna */}
                         <div className={`p-3 border-b border-slate-200 flex items-center justify-between font-semibold ${col.text} rounded-t-xl bg-white sticky top-0 z-10 shadow-sm`}>
                             <span>{col.label}</span>
@@ -450,8 +451,10 @@ export function KanbanLeads({ leads, onLeadUpdate }: KanbanLeadsProps) {
                                 );
                             })}
                         </div>
-                    </div>
-                ))}
+                        </div>
+                    ))}
+                </div>
+                <div className="absolute right-0 top-0 bottom-4 w-8 bg-gradient-to-l from-slate-50 pointer-events-none lg:hidden" />
             </div>
 
             {/* Modal de Blacklist */}

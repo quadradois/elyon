@@ -65,9 +65,9 @@ export function ModalImportarLista({
             </div>
           ) : (
             <div className="space-y-3">
-              <label className="text-sm font-medium text-slate-700 mb-2 block">
+              <p className="text-sm font-medium text-slate-700 mb-2 block">
                 Selecione a lista
-              </label>
+              </p>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {listas.map((lista) => {
                   const disponiveis = lista.totalContatos - lista.totalUsados;

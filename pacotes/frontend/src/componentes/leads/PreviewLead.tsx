@@ -11,7 +11,7 @@ import {
   MessageSquare, Activity, Copy, Check, Flame, Zap,
   Snowflake, AlertCircle, Clock, UserCheck, Building2,
   TrendingUp, FileText, BadgeCheck, Users, MapPin,
-  DoorOpen, Layers, Car, Maximize2, Loader2, RefreshCw, ShieldAlert,
+  DoorOpen, Layers, Car, Maximize2, Loader2, ShieldAlert,
   ShieldCheck, Plus,
 } from 'lucide-react';
 import { ChatPanel } from './ChatPanel';

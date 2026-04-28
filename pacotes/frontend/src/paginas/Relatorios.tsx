@@ -17,6 +17,7 @@ import { Button } from "@/componentes/ui/button";
 import { Badge } from "@/componentes/ui/badge";
 import { SkeletonDashboard } from "@/componentes/ui/skeleton";
 import { EmptyState } from "@/componentes/ui/empty-state";
+import { PageHeader } from "@/componentes/ui/page-header";
 import { toast } from "sonner";
 import { api } from "@/servicos/api";
 
@@ -253,22 +254,17 @@ export function Relatorios() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <BarChart3 className="w-7 h-7 text-brand" />
-            Painel Gerencial
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Visão geral de leads, campanhas e performance
-          </p>
-        </div>
-        <Button onClick={carregarDados} variant="outline" size="sm">
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Atualizar
-        </Button>
-      </div>
+      <PageHeader
+        title="Painel Gerencial"
+        description="Visão geral de leads, campanhas e performance"
+        icon={<BarChart3 className="w-5 h-5" />}
+        actions={(
+          <Button onClick={carregarDados} variant="outline" size="sm">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Atualizar
+          </Button>
+        )}
+      />
 
       {/* Cards de Métricas Principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

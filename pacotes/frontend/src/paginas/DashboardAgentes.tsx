@@ -21,6 +21,7 @@ import {
   Lightbulb
 } from "lucide-react";
 import { Button } from "../componentes/ui/button";
+import { PageHeader } from "../componentes/ui/page-header";
 
 interface ResumoMetricas {
   periodo: string;
@@ -285,51 +286,44 @@ export function DashboardAgentes() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Bot className="w-7 h-7 text-brand" />
-            Cockpit IA
-          </h1>
-          <p className="text-slate-500">
-            Qualidade, gargalos, erros e sugestões para evolução dos agentes em tempo real
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          {/* Seletor de Período */}
-          <div className="flex bg-slate-100 rounded-lg p-1">
-            {(['24h', '7d', '30d'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriodo(p)}
-                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-                  periodo === p 
-                    ? 'bg-white text-brand shadow-sm' 
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {p === '24h' ? '24 horas' : p === '7d' ? '7 dias' : '30 dias'}
-              </button>
-            ))}
+      <PageHeader
+        title="Cockpit IA"
+        description="Qualidade, gargalos, erros e sugestões para evolução dos agentes em tempo real"
+        icon={<Bot className="w-5 h-5" />}
+        actions={(
+          <div className="flex items-center gap-3">
+            <div className="flex bg-slate-100 rounded-lg p-1">
+              {(['24h', '7d', '30d'] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriodo(p)}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    periodo === p
+                      ? 'bg-white text-brand shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {p === '24h' ? '24 horas' : p === '7d' ? '7 dias' : '30 dias'}
+                </button>
+              ))}
+            </div>
+
+            <Button variant="outline" onClick={carregarDados}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Atualizar
+            </Button>
           </div>
-          
-          <Button variant="outline" onClick={carregarDados}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Atualizar
-          </Button>
-        </div>
-      </div>
+        )}
+      />
 
       {/* Cards de Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Conversas */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 card-premium">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-500">Total de Conversas</p>
-              <p className="text-3xl font-bold text-slate-900 mt-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Total de Conversas</p>
+              <p className="text-3xl font-bold tabular-nums tracking-tight text-slate-900 mt-1">
                 {resumo?.resumo.totalConversas || 0}
               </p>
               <p className="text-sm text-emerald-600 mt-1 flex items-center gap-1">
@@ -344,11 +338,11 @@ export function DashboardAgentes() {
         </div>
 
         {/* Leads Qualificados */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 card-premium">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-500">Leads Qualificados</p>
-              <p className="text-3xl font-bold text-slate-900 mt-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Leads Qualificados</p>
+              <p className="text-3xl font-bold tabular-nums tracking-tight text-slate-900 mt-1">
                 {resumo?.resumo.leadsQualificados || 0}
               </p>
               <p className="text-sm text-emerald-600 mt-1 flex items-center gap-1">
@@ -363,11 +357,11 @@ export function DashboardAgentes() {
         </div>
 
         {/* Taxa de Conversão */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 card-premium">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-500">Taxa de Conversão</p>
-              <p className="text-3xl font-bold text-slate-900 mt-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Taxa de Conversão</p>
+              <p className="text-3xl font-bold tabular-nums tracking-tight text-slate-900 mt-1">
                 {resumo?.resumo.taxaConversao || '0%'}
               </p>
               <p className="text-sm text-slate-500 mt-1">
@@ -381,11 +375,11 @@ export function DashboardAgentes() {
         </div>
 
         {/* Conversas Ativas */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 card-premium">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-500">Conversas Ativas</p>
-              <p className="text-3xl font-bold text-slate-900 mt-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Conversas Ativas</p>
+              <p className="text-3xl font-bold tabular-nums tracking-tight text-slate-900 mt-1">
                 {resumo?.resumo.conversasAtivas || 0}
               </p>
               <p className="text-sm text-slate-500 mt-1">
@@ -511,7 +505,7 @@ export function DashboardAgentes() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <p className="text-slate-500">Conversas hoje</p>
-                    <p className="font-semibold text-slate-900">{worker.conversasHoje}</p>
+                    <p className="font-semibold tabular-nums text-slate-900">{worker.conversasHoje}</p>
                   </div>
                   <div>
                     <p className="text-slate-500">Tempo médio</p>
@@ -567,10 +561,10 @@ export function DashboardAgentes() {
           
           <div className="mt-4 flex items-center justify-between text-sm">
             <span className="text-slate-500">
-              Total: {dadosGrafico.reduce((acc, d) => acc + d.conversas, 0)} conversas
+              Total: <span className="tabular-nums">{dadosGrafico.reduce((acc, d) => acc + d.conversas, 0)}</span> conversas
             </span>
             <span className="text-slate-500">
-              Média: {Math.round(dadosGrafico.reduce((acc, d) => acc + d.conversas, 0) / Math.max(dadosGrafico.length, 1))} /dia
+              Média: <span className="tabular-nums">{Math.round(dadosGrafico.reduce((acc, d) => acc + d.conversas, 0) / Math.max(dadosGrafico.length, 1))}</span> /dia
             </span>
           </div>
         </div>
@@ -604,7 +598,7 @@ export function DashboardAgentes() {
                       {atividade.preview}
                     </p>
                   </div>
-                  <span className="text-xs text-slate-400 flex-shrink-0">
+                  <span className="text-xs text-slate-500 flex-shrink-0">
                     {formatarTempo(atividade.tempo)}
                   </span>
                 </div>
@@ -619,14 +613,14 @@ export function DashboardAgentes() {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-xl font-semibold">
-              {resumo?.resumo.totalMensagens || 0} mensagens processadas
+              <span className="tabular-nums">{resumo?.resumo.totalMensagens || 0}</span> mensagens processadas
             </h3>
             <p className="text-indigo-100 mt-1">
               Média de {resumo?.resumo.mediaMensagensPorConversa || 0} mensagens por conversa
             </p>
           </div>
           <div className="text-right">
-            <p className="text-3xl font-bold">
+            <p className="text-3xl font-bold tabular-nums">
               {workers.length}
             </p>
             <p className="text-indigo-100">workers ativos</p>
@@ -651,15 +645,15 @@ export function DashboardAgentes() {
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-500">Aderência ao fluxo</span>
-              <span className="font-semibold text-slate-900">{hasCockpitSample ? `${cockpit?.qualidade.aderenciaFluxo ?? 0}%` : 'Sem amostra'}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{hasCockpitSample ? `${cockpit?.qualidade.aderenciaFluxo ?? 0}%` : 'Sem amostra'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Contexto válido</span>
-              <span className="font-semibold text-slate-900">{hasCockpitSample ? `${cockpit?.qualidade.contextoValido ?? 0}%` : 'Sem amostra'}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{hasCockpitSample ? `${cockpit?.qualidade.contextoValido ?? 0}%` : 'Sem amostra'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Repetição de perguntas</span>
-              <span className="font-semibold text-amber-600">{hasCockpitSample ? `${cockpit?.qualidade.taxaRepeticaoPerguntas ?? 0}%` : 'Sem amostra'}</span>
+              <span className="font-semibold tabular-nums text-amber-600">{hasCockpitSample ? `${cockpit?.qualidade.taxaRepeticaoPerguntas ?? 0}%` : 'Sem amostra'}</span>
             </div>
           </div>
         </div>
@@ -672,19 +666,19 @@ export function DashboardAgentes() {
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-500">Latência média</span>
-              <span className="font-semibold text-slate-900">{hasCockpitSample ? `${cockpit?.gargalos.latenciaMs.media ?? 0}ms` : 'Sem amostra'}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{hasCockpitSample ? `${cockpit?.gargalos.latenciaMs.media ?? 0}ms` : 'Sem amostra'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Latência p95</span>
-              <span className="font-semibold text-slate-900">{hasCockpitSample ? `${cockpit?.gargalos.latenciaMs.p95 ?? 0}ms` : 'Sem amostra'}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{hasCockpitSample ? `${cockpit?.gargalos.latenciaMs.p95 ?? 0}ms` : 'Sem amostra'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Tool calls/turno</span>
-              <span className="font-semibold text-slate-900">{hasCockpitSample ? (cockpit?.gargalos.mediaToolCalls ?? 0) : 'Sem amostra'}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{hasCockpitSample ? (cockpit?.gargalos.mediaToolCalls ?? 0) : 'Sem amostra'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Handoffs/turno</span>
-              <span className="font-semibold text-slate-900">{hasCockpitSample ? (cockpit?.gargalos.mediaHandoffs ?? 0) : 'Sem amostra'}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{hasCockpitSample ? (cockpit?.gargalos.mediaHandoffs ?? 0) : 'Sem amostra'}</span>
             </div>
           </div>
         </div>
@@ -697,19 +691,19 @@ export function DashboardAgentes() {
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-500">Exceptions</span>
-              <span className="font-semibold text-slate-900">{hasCockpitSample ? (cockpit?.erros.exceptions ?? 0) : 'Sem amostra'}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{hasCockpitSample ? (cockpit?.erros.exceptions ?? 0) : 'Sem amostra'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Fallback provedor</span>
-              <span className="font-semibold text-slate-900">{hasCockpitSample ? (cockpit?.erros.providerFallback ?? 0) : 'Sem amostra'}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{hasCockpitSample ? (cockpit?.erros.providerFallback ?? 0) : 'Sem amostra'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Falha de tools</span>
-              <span className="font-semibold text-slate-900">{hasCockpitSample ? `${cockpit?.erros.tools.taxaFalha ?? 0}%` : 'Sem amostra'}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{hasCockpitSample ? `${cockpit?.erros.tools.taxaFalha ?? 0}%` : 'Sem amostra'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Opt-outs</span>
-              <span className="font-semibold text-slate-900">{hasCockpitSample ? (cockpit?.erros.optOuts ?? 0) : 'Sem amostra'}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{hasCockpitSample ? (cockpit?.erros.optOuts ?? 0) : 'Sem amostra'}</span>
             </div>
           </div>
         </div>

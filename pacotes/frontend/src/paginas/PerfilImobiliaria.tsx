@@ -29,6 +29,7 @@ import { Textarea } from "../componentes/ui/textarea";
 import { Switch } from "../componentes/ui/switch";
 import { Slider } from "../componentes/ui/slider";
 import { Progress } from "../componentes/ui/progress";
+import { PageHeader } from "../componentes/ui/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../componentes/ui/tabs";
 import { 
   Tooltip,
@@ -213,11 +214,11 @@ function Campo({
 }) {
   return (
     <div className={cn("space-y-2", className)}>
-      <label className="text-sm font-medium text-slate-700 flex items-center">
+      <p className="text-sm font-medium text-slate-700 flex items-center">
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
         {help && <HelpTip>{help}</HelpTip>}
-      </label>
+      </p>
       {children}
     </div>
   );
@@ -586,20 +587,11 @@ export function PerfilImobiliaria() {
   
   return (
     <div className="max-w-4xl mx-auto pb-24">
-      {/* ========== HEADER ========== */}
-      <div className="mb-8">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <Building2 className="w-7 h-7 text-brand" />
-              Perfil da Imobiliária
-            </h1>
-            <p className="text-slate-500 mt-1">
-              Configure as informações da sua imobiliária
-            </p>
-          </div>
-          
-          {/* Progresso */}
+      <PageHeader
+        title="Perfil da Imobiliária"
+        description="Configure as informações da sua imobiliária"
+        icon={<Building2 className="w-5 h-5" />}
+        actions={(
           <div className="text-right">
             <div className="flex items-center gap-2 mb-1">
               <Progress value={progresso} className="w-32 h-2" />
@@ -607,12 +599,12 @@ export function PerfilImobiliaria() {
             </div>
             <p className="text-xs text-slate-500">Perfil completo</p>
           </div>
-        </div>
-      </div>
+        )}
+      />
       
       {/* ========== TABS ========== */}
       <Tabs value={tabAtiva} onValueChange={setTabAtiva} className="w-full">
-        <TabsList className="grid grid-cols-5 w-full mb-6">
+        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full mb-6 h-auto gap-1">
           <TabsTrigger value="empresa" className="flex items-center gap-2">
             <Building2 className="w-4 h-4" />
             <span className="hidden sm:inline">Empresa</span>
@@ -853,11 +845,11 @@ export function PerfilImobiliaria() {
             
             {/* Garantias Aceitas */}
             <div className="space-y-3">
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+              <p className="text-sm font-medium text-slate-700 flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4" />
                 Garantias Aceitas
                 <HelpTip>Selecione todas as formas de garantia que sua imobiliária aceita</HelpTip>
-              </label>
+              </p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {GARANTIAS_OPCOES.map((g) => (
                   <button
@@ -884,11 +876,11 @@ export function PerfilImobiliaria() {
             
             {/* Taxa de Administração */}
             <div className="space-y-3">
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+              <p className="text-sm font-medium text-slate-700 flex items-center gap-2">
                 <Percent className="w-4 h-4" />
                 Taxa de Administração
                 <span className="ml-auto text-emerald-600 font-bold">{perfil.perfilLocacao?.taxaAdministracao || 10}%</span>
-              </label>
+              </p>
               <Slider
                 value={[perfil.perfilLocacao?.taxaAdministracao || 10]}
                 onValueChange={(vals) => atualizarLocacao({ taxaAdministracao: vals[0] })}
@@ -954,11 +946,11 @@ export function PerfilImobiliaria() {
             
             {/* Comissão Padrão */}
             <div className="space-y-3">
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+              <p className="text-sm font-medium text-slate-700 flex items-center gap-2">
                 <Percent className="w-4 h-4" />
                 Comissão Padrão
                 <span className="ml-auto text-violet-600 font-bold">{perfil.perfilVenda?.comissaoPadrao || 6}%</span>
-              </label>
+              </p>
               <Slider
                 value={[perfil.perfilVenda?.comissaoPadrao || 6]}
                 onValueChange={(vals) => atualizarVenda({ comissaoPadrao: vals[0] })}
@@ -976,7 +968,7 @@ export function PerfilImobiliaria() {
             
             {/* Modalidades de venda */}
             <div className="space-y-3">
-              <label className="text-sm font-medium text-slate-700">Modalidades de autorização de venda</label>
+              <p className="text-sm font-medium text-slate-700">Modalidades de autorização de venda</p>
               <div className="grid grid-cols-2 gap-3">
                 <SwitchField
                   label="Não exclusiva"
@@ -1137,10 +1129,10 @@ export function PerfilImobiliaria() {
             
             {/* Portais */}
             <div className="space-y-3">
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+              <p className="text-sm font-medium text-slate-700 flex items-center gap-2">
                 <Globe className="w-4 h-4" />
                 Onde anuncia os imóveis?
-              </label>
+              </p>
               <div className="flex flex-wrap gap-2">
                 {PORTAIS_OPCOES.map((portal) => (
                   <button
@@ -1175,10 +1167,10 @@ export function PerfilImobiliaria() {
               
               {perfil.perfilVenda?.temParcerias && (
                 <div className="ml-4 p-3 bg-violet-50 rounded-lg border border-violet-100 animate-in slide-in-from-top-2 duration-200">
-                  <label className="text-sm font-medium text-slate-600 flex items-center gap-2">
+                  <p className="text-sm font-medium text-slate-600 flex items-center gap-2">
                     Percentual da parceria
                     <span className="ml-auto text-violet-600 font-bold">{perfil.perfilVenda?.percentualParceria || 50}%</span>
-                  </label>
+                  </p>
                   <Slider
                     value={[perfil.perfilVenda?.percentualParceria || 50]}
                     onValueChange={(vals) => atualizarVenda({ percentualParceria: vals[0] })}

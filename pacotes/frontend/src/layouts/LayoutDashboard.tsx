@@ -70,6 +70,7 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Estado de seções colapsadas (salva no localStorage)
@@ -197,12 +198,6 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           label: "Créditos",
           path: "/dashboard/creditos",
         },
-        {
-          icon: Crown,
-          label: "Meu Plano",
-          path: "/dashboard/upgrade",
-          destaque: true,
-        },
         ...((["ADMIN", "SUPER_ADMIN"].includes(usuario.papel)) ? [{
           icon: UserCog,
           label: "Equipe",
@@ -309,6 +304,9 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
       <Link
         key={item.path}
         to={item.path}
+        onClick={() => {
+          if (window.innerWidth < 1024) setMobileSidebarOpen(false);
+        }}
         className={cn(
           "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium relative group border border-transparent",
           isActive
@@ -426,12 +424,21 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
       <ModalUpgrade />
 
       <div className="min-h-screen bg-slate-50 flex">
+        {mobileSidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar */}
         <aside
           style={{ backgroundColor: '#0f172a', borderRightColor: '#1e293b' }}
           className={cn(
             "border-r fixed inset-y-0 left-0 z-50 transition-all duration-300 flex flex-col shadow-xl",
-            sidebarOpen ? "w-64" : "w-[72px]"
+            "w-64 lg:w-auto",
+            mobileSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+            sidebarOpen ? "lg:w-64" : "lg:w-[72px]"
           )}
         >
           {/* Logo */}
@@ -590,6 +597,14 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
                     Perfil da Imobiliária
                   </Link>
                   <Link
+                    to="/dashboard/upgrade"
+                    onClick={() => toggleSection("userMenu")}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-700 transition-colors text-sm text-amber-300"
+                  >
+                    <Crown className="w-4 h-4 text-amber-400" />
+                    Meu Plano
+                  </Link>
+                  <Link
                     to="/dashboard/configuracoes"
                     onClick={() => toggleSection("userMenu")}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-700 transition-colors text-sm text-slate-200"
@@ -659,6 +674,7 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="Sair da conta"
                   className="h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50 mt-2 mx-auto"
                   onClick={handleLogout}
                 >
@@ -681,7 +697,14 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label={sidebarOpen ? "Recolher menu lateral" : "Expandir menu lateral"}
+              onClick={() => {
+                if (window.innerWidth < 1024) {
+                  setMobileSidebarOpen(!mobileSidebarOpen);
+                  return;
+                }
+                setSidebarOpen(!sidebarOpen);
+              }}
               className="text-slate-500 hover:text-slate-700 hover:bg-slate-100"
             >
               <Menu className="w-5 h-5" />
@@ -697,7 +720,7 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           </header>
 
           {/* Page Content */}
-          <div className="p-8 flex-1">{children}</div>
+          <div className="p-6 flex-1 bg-slate-50">{children}</div>
         </main>
       </div>
     </TooltipProvider>

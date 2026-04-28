@@ -85,7 +85,7 @@ export function EtapaFerramentas({ dados, setDados }: WizardEtapaProps) {
           <Wrench className="w-8 h-8 text-emerald-600" />
         </div>
         <h2 className="text-2xl font-bold">Ferramentas (Tools)</h2>
-        <p className="text-gray-500 dark:text-gray-400">
+        <p className="text-slate-500 dark:text-slate-400">
           Defina as ações que seu agente pode executar
         </p>
       </div>

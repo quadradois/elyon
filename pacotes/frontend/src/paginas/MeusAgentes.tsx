@@ -28,6 +28,8 @@ import {
 } from "../componentes/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { PageHeader } from "../componentes/ui/page-header";
+import { EmptyState } from "../componentes/ui/empty-state";
 
 interface Agente {
   id: string;
@@ -103,22 +105,20 @@ export function MeusAgentes() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Bot className="w-7 h-7 text-brand" />
-            Meus Agentes
-          </h1>
-          <p className="text-slate-500">Gerencie seus assistentes virtuais</p>
-        </div>
-        <Button
-          onClick={() => navigate("/dashboard/agente/novo")}
-          className="bg-brand hover:bg-brand-dark"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Novo Agente
-        </Button>
-      </div>
+      <PageHeader
+        title="Meus Agentes"
+        description="Gerencie seus assistentes virtuais"
+        icon={<Bot className="w-5 h-5" />}
+        actions={(
+          <Button
+            onClick={() => navigate("/dashboard/agente/novo")}
+            className="bg-brand hover:bg-brand-dark"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Agente
+          </Button>
+        )}
+      />
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -126,23 +126,13 @@ export function MeusAgentes() {
         </div>
       ) : agentes.length === 0 ? (
         <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mb-4">
-              <Bot className="w-8 h-8 text-brand" />
-            </div>
-            <h3 className="text-lg font-semibold text-slate-900">
-              Nenhum agente encontrado
-            </h3>
-            <p className="text-slate-500 max-w-sm mt-2 mb-6">
-              Crie seu primeiro agente para começar a atender leads
-              automaticamente.
-            </p>
-            <Button
-              onClick={() => navigate("/dashboard/agente/novo")}
-              variant="outline"
-            >
-              Criar Primeiro Agente
-            </Button>
+          <CardContent className="py-10">
+            <EmptyState
+              tipo="generico"
+              titulo="Nenhum agente encontrado"
+              descricao="Crie seu primeiro agente para começar a atender leads automaticamente."
+              acao={{ texto: "Criar Primeiro Agente", onClick: () => navigate("/dashboard/agente/novo") }}
+            />
           </CardContent>
         </Card>
       ) : (
@@ -150,7 +140,8 @@ export function MeusAgentes() {
           {agentes.map((agente) => (
             <Card
               key={agente.id}
-              className="overflow-hidden hover:shadow-md transition-shadow"
+              interactive
+              className="overflow-hidden card-premium"
             >
               <CardHeader className="pb-3 bg-slate-50/50 border-b border-slate-100">
                 <div className="flex items-start justify-between">
@@ -200,7 +191,7 @@ export function MeusAgentes() {
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
+                      <Button variant="ghost" size="icon" aria-label="Mais opções do agente">
                         <MoreVertical className="w-4 h-4 text-slate-500" />
                       </Button>
                     </DropdownMenuTrigger>

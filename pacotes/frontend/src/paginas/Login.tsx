@@ -65,12 +65,13 @@ export function Login() {
           <div className="space-y-4">
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
+              <label htmlFor="email" className="text-sm font-medium text-slate-700">
                 Email
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                 <Input
+                  id="email"
                   type="email"
                   placeholder="seu@email.com"
                   className="pl-10"
@@ -82,12 +83,13 @@ export function Login() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
+              <label htmlFor="senha" className="text-sm font-medium text-slate-700">
                 Senha
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                 <Input
+                  id="senha"
                   type="password"
                   placeholder="••••••••"
                   className="pl-10"

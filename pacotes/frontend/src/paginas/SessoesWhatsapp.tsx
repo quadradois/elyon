@@ -28,6 +28,7 @@ import {
 import { Switch } from "../componentes/ui/switch";
 import { Badge } from "../componentes/ui/badge";
 import { toast } from "sonner";
+import { PageHeader } from "../componentes/ui/page-header";
 
 interface SessaoWhatsapp {
   id: string;
@@ -245,24 +246,20 @@ export function SessoesWhatsapp() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Smartphone className="w-7 h-7 text-emerald-600" />
-            Sessões WhatsApp
-          </h1>
-          <p className="text-slate-500">
-            Gerencie suas conexões do WhatsApp para os agentes
-          </p>
-        </div>
-        <Button
-          onClick={() => setModalCriarOpen(true)}
-          className="bg-success hover:bg-success-dark"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nova Sessão
-        </Button>
-      </div>
+      <PageHeader
+        title="Sessões WhatsApp"
+        description="Gerencie suas conexões do WhatsApp para os agentes"
+        icon={<Smartphone className="w-5 h-5" />}
+        actions={(
+          <Button
+            onClick={() => setModalCriarOpen(true)}
+            className="bg-success hover:bg-success-dark"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nova Sessão
+          </Button>
+        )}
+      />
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -291,7 +288,8 @@ export function SessoesWhatsapp() {
           {sessoes.map((sessao) => (
             <Card
               key={sessao.id}
-              className="overflow-hidden hover:shadow-md transition-shadow"
+              interactive
+              className="overflow-hidden"
             >
               <CardHeader className="pb-3 bg-slate-50/50 border-b border-slate-100">
                 <div className="flex items-start justify-between">
@@ -387,6 +385,7 @@ export function SessoesWhatsapp() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label="Excluir sessão do WhatsApp"
                     className="text-red-500 hover:text-red-700 hover:bg-red-50"
                     onClick={() => excluirSessao(sessao.id)}
                     title="Excluir sessão"
@@ -413,18 +412,20 @@ export function SessoesWhatsapp() {
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Nome da Sessão</label>
+              <label htmlFor="nome-sessao" className="text-sm font-medium">Nome da Sessão</label>
               <Input
+                id="nome-sessao"
                 placeholder="Ex: Vendas Principal"
                 value={novoNome}
                 onChange={(e) => setNovoNome(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">
+              <label htmlFor="descricao-sessao" className="text-sm font-medium">
                 Descrição (Opcional)
               </label>
               <Input
+                id="descricao-sessao"
                 placeholder="Ex: Utilizado pelo time de vendas"
                 value={novaDescricao}
                 onChange={(e) => setNovaDescricao(e.target.value)}
@@ -510,7 +511,7 @@ export function SessoesWhatsapp() {
             <div className="py-4 space-y-6">
               <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg">
                 <div className="space-y-0.5">
-                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  <label htmlFor="ignorar-grupos" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                     Ignorar Grupos
                   </label>
                   <p className="text-sm text-slate-500">
@@ -518,6 +519,7 @@ export function SessoesWhatsapp() {
                   </p>
                 </div>
                 <Switch
+                  id="ignorar-grupos"
                   checked={ignorarGrupos}
                   onCheckedChange={setIgnorarGrupos}
                 />
@@ -525,7 +527,7 @@ export function SessoesWhatsapp() {
 
               <div className="flex items-center justify-between space-x-2 border p-4 rounded-lg border-amber-200 bg-amber-50/50">
                 <div className="space-y-0.5">
-                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                  <label htmlFor="webhook-base64" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                     Webhook Base64 (Áudios)
                   </label>
                   <p className="text-sm text-slate-500">
@@ -533,6 +535,7 @@ export function SessoesWhatsapp() {
                   </p>
                 </div>
                 <Switch
+                  id="webhook-base64"
                   checked={webhookBase64}
                   onCheckedChange={setWebhookBase64}
                 />

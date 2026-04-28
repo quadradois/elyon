@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "../componentes/ui/button";
 import { Input } from "../componentes/ui/input";
 import { Card, CardContent } from "../componentes/ui/card";
+import { PageHeader } from "../componentes/ui/page-header";
 import {
   Table,
   TableBody,
@@ -235,20 +236,21 @@ function ModalCriarUsuario({
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "8px 0" }}>
             <div>
-              <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Nome completo *</label>
-              <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="João Silva" />
+              <label htmlFor="novo-usuario-nome" style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Nome completo *</label>
+              <Input id="novo-usuario-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="João Silva" />
             </div>
             <div>
-              <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Email *</label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="joao@imobiliaria.com" />
+              <label htmlFor="novo-usuario-email" style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Email *</label>
+              <Input id="novo-usuario-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="joao@imobiliaria.com" />
             </div>
             <div>
-              <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Telefone</label>
-              <Input value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="(11) 99999-9999" />
+              <label htmlFor="novo-usuario-telefone" style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Telefone</label>
+              <Input id="novo-usuario-telefone" value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="(11) 99999-9999" />
             </div>
             <div>
-              <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Papel</label>
+              <label htmlFor="novo-usuario-papel" style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Papel</label>
               <select
+                id="novo-usuario-papel"
                 value={papel}
                 onChange={(e) => setPapel(e.target.value as any)}
                 style={{ width: "100%", padding: "8px 12px", border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", fontSize: 14 }}
@@ -381,16 +383,17 @@ function ModalEditarUsuario({
           </div>
 
           <div>
-            <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Nome</label>
-            <Input value={nome} onChange={(e) => setNome(e.target.value)} />
+            <label htmlFor="editar-usuario-nome" style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Nome</label>
+            <Input id="editar-usuario-nome" value={nome} onChange={(e) => setNome(e.target.value)} />
           </div>
           <div>
-            <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Telefone</label>
-            <Input value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="(11) 99999-9999" />
+            <label htmlFor="editar-usuario-telefone" style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Telefone</label>
+            <Input id="editar-usuario-telefone" value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="(11) 99999-9999" />
           </div>
           <div>
-            <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Papel</label>
+            <label htmlFor="editar-usuario-papel" style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Papel</label>
             <select
+              id="editar-usuario-papel"
               value={papel}
               onChange={(e) => setPapel(e.target.value)}
               style={{ width: "100%", padding: "8px 12px", border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", fontSize: 14 }}
@@ -502,17 +505,11 @@ export default function GestaoUsuarios() {
 
   return (
     <div style={{ padding: "24px 32px", maxWidth: 1100, margin: "0 auto" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
-            <Users size={22} /> Gestão de Equipe
-          </h1>
-          <p style={{ color: "#888", fontSize: 13, marginTop: 4 }}>
-            {totalUsuarios} usuário{totalUsuarios !== 1 ? "s" : ""} · {ativos} ativo{ativos !== 1 ? "s" : ""}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
+      <PageHeader
+        title="Gestão de Equipe"
+        description={`${totalUsuarios} usuário${totalUsuarios !== 1 ? "s" : ""} · ${ativos} ativo${ativos !== 1 ? "s" : ""}`}
+        icon={<Users size={20} />}
+        actions={<div style={{ display: "flex", gap: 10 }}>
           <Button variant="outline" onClick={() => carregarUsuarios(paginaAtual)} title="Atualizar">
             <RefreshCw size={15} />
           </Button>
@@ -521,8 +518,8 @@ export default function GestaoUsuarios() {
               <UserPlus size={16} /> Novo Usuário
             </Button>
           )}
-        </div>
-      </div>
+        </div>}
+      />
 
       {/* Stats rápidas */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>

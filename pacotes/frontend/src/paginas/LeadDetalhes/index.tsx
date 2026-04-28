@@ -14,6 +14,8 @@ import {
     Plus,
     Check,
     MessageSquare,
+    MessageCircle,
+    Phone,
     Home,
     RefreshCw,
     CheckCircle2,
@@ -36,6 +38,7 @@ import { Progress } from "../../componentes/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../componentes/ui/tabs";
 import { Input } from "../../componentes/ui/input";
 import { Textarea } from "../../componentes/ui/textarea";
+import { PageHeader } from "../../componentes/ui/page-header";
 import { api } from "../../servicos/api";
 import { toast } from "sonner";
 import {
@@ -119,6 +122,47 @@ export default function LeadDetalhes() {
     const [modalAtividade, setModalAtividade] = useState(false);
     const [abaPrincipal, setAbaPrincipal] = useState("atendimento");
     const [chatOpen, setChatOpen] = useState(false);
+
+    const celebrarConversao = () => {
+        const host = document.createElement("div");
+        host.style.position = "fixed";
+        host.style.inset = "0";
+        host.style.pointerEvents = "none";
+        host.style.zIndex = "9999";
+        document.body.appendChild(host);
+
+        const cores = ["#2563EB", "#7C3AED", "#10B981", "#F59E0B"];
+        const total = 80;
+        for (let i = 0; i < total; i += 1) {
+            const p = document.createElement("div");
+            const tamanho = 6 + Math.random() * 6;
+            p.style.position = "absolute";
+            p.style.width = `${tamanho}px`;
+            p.style.height = `${tamanho}px`;
+            p.style.left = "50%";
+            p.style.top = "55%";
+            p.style.background = cores[Math.floor(Math.random() * cores.length)];
+            p.style.borderRadius = "2px";
+            p.style.opacity = "0.95";
+            p.style.transform = "translate(-50%, -50%)";
+            p.style.transition = "transform 900ms cubic-bezier(.2,.9,.2,1), opacity 900ms ease-out";
+            host.appendChild(p);
+
+            const ang = (Math.PI * 2 * i) / total;
+            const dist = 80 + Math.random() * 140;
+            const x = Math.cos(ang) * dist;
+            const y = Math.sin(ang) * dist - 60;
+
+            requestAnimationFrame(() => {
+                p.style.transform = `translate(${x}px, ${y}px) rotate(${Math.random() * 360}deg)`;
+                p.style.opacity = "0";
+            });
+        }
+
+        window.setTimeout(() => {
+            host.remove();
+        }, 1000);
+    };
 
     const [cockpitAdmin, setCockpitAdmin] = useState<{
         agenteAdmin: {
@@ -774,6 +818,35 @@ export default function LeadDetalhes() {
         setModalAtividade(true);
     };
 
+    const telefoneLimpo = (lead.telefone || "").replace(/\D/g, "");
+    const numeroWhatsapp = telefoneLimpo.startsWith("55") ? telefoneLimpo : `55${telefoneLimpo}`;
+
+    const handleLigarMobile = () => {
+        if (!telefoneLimpo) {
+            toast.error("Telefone indisponível para ligação.");
+            return;
+        }
+        window.open(`tel:${telefoneLimpo}`, "_self");
+    };
+
+    const handleWhatsAppMobile = () => {
+        if (!telefoneLimpo) {
+            toast.error("Telefone indisponível para WhatsApp.");
+            return;
+        }
+        window.open(`https://wa.me/${numeroWhatsapp}`, "_blank");
+    };
+
+    const handleAgendarMobile = () => {
+        setFormAtividade({
+            tipo: "REUNIAO",
+            titulo: "Agendar visita com o proprietário",
+            descricao: "",
+            agendadoPara: "",
+        });
+        setModalAtividade(true);
+    };
+
     const metricasSLA = (() => {
         const agora = Date.now();
         const ultimoEvento = eventosCockpit
@@ -906,7 +979,15 @@ export default function LeadDetalhes() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-24 lg:pb-0">
+            <PageHeader
+                title={lead.nome}
+                description="Detalhes completos do lead"
+                breadcrumb={[
+                    { label: "Leads", href: "/dashboard/leads" },
+                    { label: lead.nome },
+                ]}
+            />
             {/* HEADER */}
             <LeadHeader
                 lead={lead}
@@ -939,7 +1020,7 @@ export default function LeadDetalhes() {
                         <Card className="card-premium">
                             <CardContent className="pt-5">
                                 <p className="text-xs uppercase tracking-wider text-slate-500" title="Qualificação×40% + Urgência×60% — mesmo critério do Mission Control">Score Composto ⓘ</p>
-                                <p className="text-3xl font-bold text-slate-900 mt-1">{scoreLead}<span className="text-base font-normal text-slate-400">/100</span></p>
+                                <p className="text-3xl font-bold text-slate-900 mt-1">{scoreLead}<span className="text-base font-normal text-slate-500">/100</span></p>
                                 <p className="text-sm text-emerald-600 mt-1">{scoreLead >= 60 ? "Alto potencial" : scoreLead >= 35 ? "Potencial em evolução" : "Em qualificação"}</p>
                                 <div className="flex items-center gap-3 mt-2 pt-2 border-t border-slate-100">
                                     <span className="text-[10px] text-slate-400">
@@ -1043,7 +1124,7 @@ export default function LeadDetalhes() {
             )}
 
             <Tabs value={abaPrincipal} onValueChange={setAbaPrincipal} className="w-full">
-                <TabsList className="grid w-full grid-cols-3 max-w-3xl">
+                <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 max-w-3xl h-auto gap-1">
                     <TabsTrigger value="atendimento">Dados do Atendimento</TabsTrigger>
                     <TabsTrigger value="cliente">Dados do Cliente</TabsTrigger>
                     <TabsTrigger value="imovel">Dados do Imóvel</TabsTrigger>
@@ -1791,37 +1872,37 @@ export default function LeadDetalhes() {
                     <div className="grid gap-4 py-4">
                         {/* Dados básicos */}
                         <div>
-                            <label className="text-sm font-medium">Nome</label>
-                            <Input value={formEditar.nome || ''} onChange={(e) => setFormEditar({ ...formEditar, nome: e.target.value })} />
+                            <label htmlFor="editar-nome" className="text-sm font-medium">Nome</label>
+                            <Input id="editar-nome" value={formEditar.nome || ''} onChange={(e) => setFormEditar({ ...formEditar, nome: e.target.value })} />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="text-sm font-medium">Telefone</label>
-                                <Input value={formEditar.telefone || ''} onChange={(e) => setFormEditar({ ...formEditar, telefone: e.target.value })} />
+                                <label htmlFor="editar-telefone" className="text-sm font-medium">Telefone</label>
+                                <Input id="editar-telefone" value={formEditar.telefone || ''} onChange={(e) => setFormEditar({ ...formEditar, telefone: e.target.value })} />
                             </div>
                             <div>
-                                <label className="text-sm font-medium">Email</label>
-                                <Input value={formEditar.email || ''} onChange={(e) => setFormEditar({ ...formEditar, email: e.target.value })} />
+                                <label htmlFor="editar-email" className="text-sm font-medium">Email</label>
+                                <Input id="editar-email" value={formEditar.email || ''} onChange={(e) => setFormEditar({ ...formEditar, email: e.target.value })} />
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="text-sm font-medium">CPF</label>
-                                <Input value={formEditar.cpf || ''} onChange={(e) => setFormEditar({ ...formEditar, cpf: e.target.value })} />
+                                <label htmlFor="editar-cpf" className="text-sm font-medium">CPF</label>
+                                <Input id="editar-cpf" value={formEditar.cpf || ''} onChange={(e) => setFormEditar({ ...formEditar, cpf: e.target.value })} />
                             </div>
                             <div>
-                                <label className="text-sm font-medium">Endereço do Proprietário</label>
-                                <Input value={formEditar.enderecoPrincipal || ''} onChange={(e) => setFormEditar({ ...formEditar, enderecoPrincipal: e.target.value })} />
+                                <label htmlFor="editar-endereco-principal" className="text-sm font-medium">Endereço do Proprietário</label>
+                                <Input id="editar-endereco-principal" value={formEditar.enderecoPrincipal || ''} onChange={(e) => setFormEditar({ ...formEditar, enderecoPrincipal: e.target.value })} />
                             </div>
                         </div>
                         <div>
-                            <label className="text-sm font-medium">Complemento do Endereço (Proprietário)</label>
-                            <Input value={formEditar.complementoPrincipal || ''} onChange={(e) => setFormEditar({ ...formEditar, complementoPrincipal: e.target.value })} />
+                            <label htmlFor="editar-complemento-principal" className="text-sm font-medium">Complemento do Endereço (Proprietário)</label>
+                            <Input id="editar-complemento-principal" value={formEditar.complementoPrincipal || ''} onChange={(e) => setFormEditar({ ...formEditar, complementoPrincipal: e.target.value })} />
                         </div>
                         <div>
-                            <label className="text-sm font-medium">Temperatura</label>
+                            <label htmlFor="editar-temperatura" className="text-sm font-medium">Temperatura</label>
                             <Select value={formEditar.temperatura} onValueChange={(v) => setFormEditar({ ...formEditar, temperatura: v })}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger id="editar-temperatura"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="QUENTE">🔥 Quente</SelectItem>
                                     <SelectItem value="MORNO">🌤️ Morno</SelectItem>
@@ -1837,39 +1918,39 @@ export default function LeadDetalhes() {
                             </p>
                         </div>
                         <div>
-                            <label className="text-sm font-medium">Endereço do Imóvel</label>
-                            <Input value={formEditar.enderecoImovel || ''} onChange={(e) => setFormEditar({ ...formEditar, enderecoImovel: e.target.value })} />
+                            <label htmlFor="editar-endereco-imovel" className="text-sm font-medium">Endereço do Imóvel</label>
+                            <Input id="editar-endereco-imovel" value={formEditar.enderecoImovel || ''} onChange={(e) => setFormEditar({ ...formEditar, enderecoImovel: e.target.value })} />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="text-sm font-medium">Tipo de Imóvel</label>
-                                <Input value={formEditar.tipoImovel || ''} onChange={(e) => setFormEditar({ ...formEditar, tipoImovel: e.target.value })} placeholder="Apartamento, Casa..." />
+                                <label htmlFor="editar-tipo-imovel" className="text-sm font-medium">Tipo de Imóvel</label>
+                                <Input id="editar-tipo-imovel" value={formEditar.tipoImovel || ''} onChange={(e) => setFormEditar({ ...formEditar, tipoImovel: e.target.value })} placeholder="Apartamento, Casa..." />
                             </div>
                             <div>
-                                <label className="text-sm font-medium">Valor Pretendido</label>
-                                <Input type="number" value={formEditar.valorPretendido || ''} onChange={(e) => setFormEditar({ ...formEditar, valorPretendido: Number(e.target.value) })} />
+                                <label htmlFor="editar-valor-pretendido" className="text-sm font-medium">Valor Pretendido</label>
+                                <Input id="editar-valor-pretendido" type="number" value={formEditar.valorPretendido || ''} onChange={(e) => setFormEditar({ ...formEditar, valorPretendido: Number(e.target.value) })} />
                             </div>
                         </div>
                         <div>
-                            <label className="text-sm font-medium">Inscrição IPTU</label>
-                            <Input value={formEditar.inscricaoIptu || ''} onChange={(e) => setFormEditar({ ...formEditar, inscricaoIptu: e.target.value })} />
+                            <label htmlFor="editar-inscricao-iptu" className="text-sm font-medium">Inscrição IPTU</label>
+                            <Input id="editar-inscricao-iptu" value={formEditar.inscricaoIptu || ''} onChange={(e) => setFormEditar({ ...formEditar, inscricaoIptu: e.target.value })} />
                         </div>
 
                         {/* Dados de qualificação (novos campos) */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="text-sm font-medium">Situação Financeira</label>
+                                <label htmlFor="editar-situacao-financeira" className="text-sm font-medium">Situação Financeira</label>
                                 <Select value={formEditar.situacaoFinanceira || ''} onValueChange={(v) => setFormEditar({ ...formEditar, situacaoFinanceira: v })}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                    <SelectTrigger id="editar-situacao-financeira"><SelectValue placeholder="Selecione" /></SelectTrigger>
                                     <SelectContent>
                                         {situacaoFinanceiraOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div>
-                                <label className="text-sm font-medium">Estado de Conservação</label>
+                                <label htmlFor="editar-estado-conservacao" className="text-sm font-medium">Estado de Conservação</label>
                                 <Select value={formEditar.estadoConservacao || ''} onValueChange={(v) => setFormEditar({ ...formEditar, estadoConservacao: v })}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                    <SelectTrigger id="editar-estado-conservacao"><SelectValue placeholder="Selecione" /></SelectTrigger>
                                     <SelectContent>
                                         {estadoConservacaoOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                     </SelectContent>
@@ -1885,13 +1966,13 @@ export default function LeadDetalhes() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="text-sm font-medium">Comissão Acordada</label>
-                                <Input value={formEditar.comissaoAcordada || ''} onChange={(e) => setFormEditar({ ...formEditar, comissaoAcordada: e.target.value })} placeholder="Ex: 6%" />
+                                <label htmlFor="editar-comissao" className="text-sm font-medium">Comissão Acordada</label>
+                                <Input id="editar-comissao" value={formEditar.comissaoAcordada || ''} onChange={(e) => setFormEditar({ ...formEditar, comissaoAcordada: e.target.value })} placeholder="Ex: 6%" />
                             </div>
                             <div>
-                                <label className="text-sm font-medium">Tipo de Autorização</label>
+                                <label htmlFor="editar-tipo-autorizacao" className="text-sm font-medium">Tipo de Autorização</label>
                                 <Select value={formEditar.tipoAutorizacao || ''} onValueChange={(v) => setFormEditar({ ...formEditar, tipoAutorizacao: v })}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                    <SelectTrigger id="editar-tipo-autorizacao"><SelectValue placeholder="Selecione" /></SelectTrigger>
                                     <SelectContent>
                                         {tipoAutorizacaoOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                     </SelectContent>
@@ -1900,9 +1981,9 @@ export default function LeadDetalhes() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="text-sm font-medium">Prazo de Trabalho</label>
+                                <label htmlFor="editar-prazo-trabalho" className="text-sm font-medium">Prazo de Trabalho</label>
                                 <Select value={formEditar.prazoTrabalho?.toString() || ''} onValueChange={(v) => setFormEditar({ ...formEditar, prazoTrabalho: Number(v) })}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                    <SelectTrigger id="editar-prazo-trabalho"><SelectValue placeholder="Selecione" /></SelectTrigger>
                                     <SelectContent>
                                         {prazoTrabalhoOptions.map(o => <SelectItem key={o.value} value={o.value.toString()}>{o.label}</SelectItem>)}
                                     </SelectContent>
@@ -1942,17 +2023,17 @@ export default function LeadDetalhes() {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div>
-                            <label className="text-sm font-medium">Motivo</label>
+                            <label htmlFor="perdido-motivo" className="text-sm font-medium">Motivo</label>
                             <Select value={formPerdido.motivo} onValueChange={(v) => setFormPerdido({ ...formPerdido, motivo: v })}>
-                                <SelectTrigger><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
+                                <SelectTrigger id="perdido-motivo"><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
                                 <SelectContent>
                                     {motivosPerdaOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
                         <div>
-                            <label className="text-sm font-medium">Observações (opcional)</label>
-                            <Textarea value={formPerdido.observacoes} onChange={(e) => setFormPerdido({ ...formPerdido, observacoes: e.target.value })} placeholder="Detalhes adicionais..." />
+                            <label htmlFor="perdido-observacoes" className="text-sm font-medium">Observações (opcional)</label>
+                            <Textarea id="perdido-observacoes" value={formPerdido.observacoes} onChange={(e) => setFormPerdido({ ...formPerdido, observacoes: e.target.value })} placeholder="Detalhes adicionais..." />
                         </div>
                     </div>
                     <DialogFooter>
@@ -1977,9 +2058,9 @@ export default function LeadDetalhes() {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div>
-                            <label className="text-sm font-medium">Tipo de Contrato</label>
+                            <label htmlFor="captado-tipo-contrato" className="text-sm font-medium">Tipo de Contrato</label>
                             <Select value={formCaptado.tipoContrato} onValueChange={(v) => setFormCaptado({ ...formCaptado, tipoContrato: v })}>
-                                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                <SelectTrigger id="captado-tipo-contrato"><SelectValue placeholder="Selecione" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="VENDA_EXCLUSIVA">Venda Exclusiva</SelectItem>
                                     <SelectItem value="VENDA_COMPARTILHADA">Venda Compartilhada</SelectItem>
@@ -1989,17 +2070,17 @@ export default function LeadDetalhes() {
                             </Select>
                         </div>
                         <div>
-                            <label className="text-sm font-medium">Valor do Contrato (R$)</label>
-                            <Input type="number" value={formCaptado.valorContrato} onChange={(e) => setFormCaptado({ ...formCaptado, valorContrato: e.target.value })} placeholder="500000" />
+                            <label htmlFor="captado-valor-contrato" className="text-sm font-medium">Valor do Contrato (R$)</label>
+                            <Input id="captado-valor-contrato" type="number" value={formCaptado.valorContrato} onChange={(e) => setFormCaptado({ ...formCaptado, valorContrato: e.target.value })} placeholder="500000" />
                         </div>
                         <div>
-                            <label className="text-sm font-medium">Observações (opcional)</label>
-                            <Textarea value={formCaptado.observacoes} onChange={(e) => setFormCaptado({ ...formCaptado, observacoes: e.target.value })} placeholder="Detalhes do fechamento..." />
+                            <label htmlFor="captado-observacoes" className="text-sm font-medium">Observações (opcional)</label>
+                            <Textarea id="captado-observacoes" value={formCaptado.observacoes} onChange={(e) => setFormCaptado({ ...formCaptado, observacoes: e.target.value })} placeholder="Detalhes do fechamento..." />
                         </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalCaptado(false)}>Cancelar</Button>
-                        <Button className="bg-success hover:bg-success-dark" onClick={async () => { if (await marcarCaptado()) setModalCaptado(false); }} disabled={salvando}>
+                        <Button className="bg-success hover:bg-success-dark" onClick={async () => { if (await marcarCaptado()) { celebrarConversao(); setModalCaptado(false); } }} disabled={salvando}>
                             {salvando && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                             🎉 Confirmar Captação
                         </Button>
@@ -2140,9 +2221,9 @@ export default function LeadDetalhes() {
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div>
-                            <label className="text-sm font-medium">Tipo</label>
+                            <label htmlFor="atividade-tipo" className="text-sm font-medium">Tipo</label>
                             <Select value={formAtividade.tipo} onValueChange={(v) => setFormAtividade({ ...formAtividade, tipo: v })}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger id="atividade-tipo"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="LIGACAO">📞 Ligação</SelectItem>
                                     <SelectItem value="AVALIACAO">🏠 Avaliação</SelectItem>
@@ -2154,16 +2235,16 @@ export default function LeadDetalhes() {
                             </Select>
                         </div>
                         <div>
-                            <label className="text-sm font-medium">Título</label>
-                            <Input value={formAtividade.titulo} onChange={(e) => setFormAtividade({ ...formAtividade, titulo: e.target.value })} placeholder="Ex: Ligar para confirmar interesse" />
+                            <label htmlFor="atividade-titulo" className="text-sm font-medium">Título</label>
+                            <Input id="atividade-titulo" value={formAtividade.titulo} onChange={(e) => setFormAtividade({ ...formAtividade, titulo: e.target.value })} placeholder="Ex: Ligar para confirmar interesse" />
                         </div>
                         <div>
-                            <label className="text-sm font-medium">Descrição (opcional)</label>
-                            <Textarea value={formAtividade.descricao} onChange={(e) => setFormAtividade({ ...formAtividade, descricao: e.target.value })} />
+                            <label htmlFor="atividade-descricao" className="text-sm font-medium">Descrição (opcional)</label>
+                            <Textarea id="atividade-descricao" value={formAtividade.descricao} onChange={(e) => setFormAtividade({ ...formAtividade, descricao: e.target.value })} />
                         </div>
                         <div>
-                            <label className="text-sm font-medium">Data/Hora (opcional)</label>
-                            <Input type="datetime-local" value={formAtividade.agendadoPara} onChange={(e) => setFormAtividade({ ...formAtividade, agendadoPara: e.target.value })} />
+                            <label htmlFor="atividade-datahora" className="text-sm font-medium">Data/Hora (opcional)</label>
+                            <Input id="atividade-datahora" type="datetime-local" value={formAtividade.agendadoPara} onChange={(e) => setFormAtividade({ ...formAtividade, agendadoPara: e.target.value })} />
                         </div>
                     </div>
                     <DialogFooter>
@@ -2175,6 +2256,25 @@ export default function LeadDetalhes() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Barra de ações mobile — one-handed */}
+            {!isPerdidoOuArquivado && (
+                <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white p-3 lg:hidden">
+                    <div className="flex gap-2">
+                        <Button className="flex-1 h-12 min-w-12" onClick={handleLigarMobile}>
+                            <Phone className="w-4 h-4 mr-2" />
+                            Ligar
+                        </Button>
+                        <Button className="flex-1 h-12 min-w-12" variant="outline" onClick={handleWhatsAppMobile}>
+                            <MessageCircle className="w-4 h-4 mr-2" />
+                            WhatsApp
+                        </Button>
+                        <Button className="h-12 min-w-12" variant="outline" onClick={handleAgendarMobile} aria-label="Agendar atividade">
+                            <Calendar className="w-4 h-4" />
+                        </Button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

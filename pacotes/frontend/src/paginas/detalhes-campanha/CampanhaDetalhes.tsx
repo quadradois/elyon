@@ -4,6 +4,7 @@ import { UploadCSV } from "../../componentes/UploadCSV";
 import { EditorBriefing } from "../../componentes/EditorBriefing";
 import { PainelDisparo } from "../../componentes/PainelDisparo";
 import { BotaoPesquisaManus } from "../../componentes/campanhas/PesquisaManus";
+import { PageHeader } from "../../componentes/ui/page-header";
 import {
   Card,
   CardContent,
@@ -167,6 +168,14 @@ export function CampanhaDetalhes() {
 
   return (
     <div className="mx-auto w-full max-w-[1440px] px-2 md:px-4 space-y-5 md:space-y-6 animate-fade-in">
+      <PageHeader
+        title={campanha.nome}
+        description="Acompanhe métricas e operação de disparo da campanha"
+        breadcrumb={[
+          { label: "Campanhas", href: "/dashboard/campanhas" },
+          { label: campanha.nome },
+        ]}
+      />
       {/* Header */}
       <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-indigo-50/70 p-4 md:p-6 card-premium">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">

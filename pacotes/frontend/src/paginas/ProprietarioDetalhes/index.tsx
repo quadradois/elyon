@@ -870,9 +870,9 @@ export default function ProprietarioDetalhes() {
               </DialogHeader>
               <div className="grid gap-4 py-2">
                 <div>
-                  <label className="text-sm font-medium">Tipo</label>
+                  <label htmlFor="atividade-tipo" className="text-sm font-medium">Tipo</label>
                   <Select value={formAtividade.tipo} onValueChange={(v) => setFormAtividade((prev) => ({ ...prev, tipo: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="atividade-tipo"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="LIGACAO">Ligação</SelectItem>
                       <SelectItem value="AVALIACAO">Avaliação</SelectItem>
@@ -884,32 +884,36 @@ export default function ProprietarioDetalhes() {
                   </Select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Título</label>
+                  <label htmlFor="atividade-titulo" className="text-sm font-medium">Título</label>
                   <Input
+                    id="atividade-titulo"
                     value={formAtividade.titulo}
                     onChange={(e) => setFormAtividade((prev) => ({ ...prev, titulo: e.target.value }))}
                     placeholder="Ex: confirmar documentação pendente"
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Descrição</label>
+                  <label htmlFor="atividade-descricao" className="text-sm font-medium">Descrição</label>
                   <Textarea
+                    id="atividade-descricao"
                     value={formAtividade.descricao}
                     onChange={(e) => setFormAtividade((prev) => ({ ...prev, descricao: e.target.value }))}
                     placeholder="Detalhes da atividade"
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Agendado para</label>
+                  <label htmlFor="atividade-agendado-para" className="text-sm font-medium">Agendado para</label>
                   <Input
+                    id="atividade-agendado-para"
                     type="datetime-local"
                     value={formAtividade.agendadoPara}
                     onChange={(e) => setFormAtividade((prev) => ({ ...prev, agendadoPara: e.target.value }))}
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Resultado (opcional)</label>
+                  <label htmlFor="atividade-resultado" className="text-sm font-medium">Resultado (opcional)</label>
                   <Input
+                    id="atividade-resultado"
                     value={formAtividade.resultado}
                     onChange={(e) => setFormAtividade((prev) => ({ ...prev, resultado: e.target.value }))}
                     placeholder="Ex: cliente confirmou visita"

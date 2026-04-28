@@ -40,6 +40,7 @@ import {
 } from "../componentes/ui/select";
 import { Switch } from "../componentes/ui/switch";
 import { ModalUpgradeAgente } from "../componentes/ModalUpgradeAgente";
+import { PageHeader } from "../componentes/ui/page-header";
 
 // Interface para documentos salvos no backend
 interface DocumentoSalvo {
@@ -649,17 +650,11 @@ export function ConfiguracaoAgente() {
         onClose={() => setModalUpgradeOpen(false)}
         limiteAtual={limiteAtual}
       />
-      {/* Header da Página */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">
-            Configuração do Agente
-          </h1>
-          <p className="text-slate-500">
-            Personalize a identidade e comportamento de {formData.nome}
-          </p>
-        </div>
-        <div className="flex gap-2">
+      <PageHeader
+        title="Configuração do Agente"
+        description={`Personalize a identidade e comportamento de ${formData.nome}`}
+        icon={<Bot className="w-5 h-5" />}
+        actions={<div className="flex gap-2">
           <Button
             variant="outline"
             onClick={() => navigate("/dashboard/agentes")}
@@ -704,8 +699,8 @@ export function ConfiguracaoAgente() {
               </>
             )}
           </Button>
-        </div>
-      </div>
+        </div>}
+      />
 
       {/* Banner de Termos não aceitos */}
       {agenteExiste && !termosAceitos && (
@@ -801,10 +796,11 @@ export function ConfiguracaoAgente() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
+              <label htmlFor="agente-nome" className="text-sm font-medium text-slate-700">
                 Nome do Agente
               </label>
               <Input
+                id="agente-nome"
                 value={formData.nome}
                 onChange={(e) =>
                   setFormData({ ...formData, nome: e.target.value })
@@ -822,7 +818,7 @@ export function ConfiguracaoAgente() {
             </h3>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
+              <label htmlFor="agente-sessao-whatsapp" className="text-sm font-medium text-slate-700">
                 Sessão Vinculada
               </label>
               <Select
@@ -831,7 +827,7 @@ export function ConfiguracaoAgente() {
                   setFormData({ ...formData, sessaoWhatsappId: val })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="agente-sessao-whatsapp">
                   <SelectValue placeholder="Selecione uma sessão" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1197,11 +1193,12 @@ export function ConfiguracaoAgente() {
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                <label htmlFor="agente-bairros" className="text-sm font-medium text-slate-700 flex items-center gap-2">
                   <MapPin className="w-4 h-4" />
                   Bairros de Atuação
                 </label>
                 <Input
+                  id="agente-bairros"
                   placeholder="Ex: Centro, Jardins, Bueno, Marista..."
                   value={formData.bairros}
                   onChange={(e) =>
@@ -1211,11 +1208,12 @@ export function ConfiguracaoAgente() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                <label htmlFor="agente-tipos-imovel" className="text-sm font-medium text-slate-700 flex items-center gap-2">
                   <Home className="w-4 h-4" />
                   Tipos de Imóvel (Foco)
                 </label>
                 <Input
+                  id="agente-tipos-imovel"
                   placeholder="Ex: Apartamentos, Casas de Condomínio, Lotes..."
                   value={formData.tiposImovel}
                   onChange={(e) =>

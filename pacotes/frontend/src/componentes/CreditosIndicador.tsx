@@ -78,7 +78,7 @@ export function CreditosIndicador() {
   if (erro || !saldo) {
     return (
       <button
-        onClick={carregarSaldo}
+        onClick={() => carregarSaldo()}
         className="flex items-center gap-2 px-3 py-1.5 bg-red-50 rounded-lg text-red-600 hover:bg-red-100 transition-colors"
         title="Clique para tentar novamente"
       >
@@ -93,7 +93,7 @@ export function CreditosIndicador() {
 
   return (
     <button
-      onClick={carregarSaldo}
+      onClick={() => carregarSaldo()}
       className={cn(
         "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all hover:scale-105",
         isCritico

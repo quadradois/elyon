@@ -6,7 +6,7 @@ function Skeleton({ className, ...props }: SkeletonProps) {
   return (
     <div
       className={cn(
-        "animate-pulse rounded-md bg-gray-200/80",
+        "animate-pulse rounded-md bg-slate-200/80",
         className
       )}
       {...props}
@@ -47,7 +47,7 @@ function SkeletonTableRow({ columns = 4 }: { columns?: number }) {
 function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
   return (
     <div className="rounded-lg border bg-white overflow-hidden">
-      <div className="border-b bg-gray-50 p-4">
+      <div className="border-b bg-slate-50 p-4">
         <div className="flex gap-4">
           {Array.from({ length: columns }).map((_, i) => (
             <Skeleton key={i} className="h-4 flex-1" />

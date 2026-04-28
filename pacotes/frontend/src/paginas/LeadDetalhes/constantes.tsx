@@ -30,7 +30,7 @@ export const statusConfig: Record<string, { label: string; color: string; bgColo
     DOCUMENTACAO: { label: 'Documentação', color: 'text-amber-700', bgColor: 'bg-amber-100' },
     CAPTADO: { label: 'Captado', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
     PERDIDO: { label: 'Perdido', color: 'text-red-700', bgColor: 'bg-red-100' },
-    ARQUIVADO: { label: 'Arquivado', color: 'text-gray-500', bgColor: 'bg-gray-50' },
+    ARQUIVADO: { label: 'Arquivado', color: 'text-slate-500', bgColor: 'bg-slate-50' },
     // Legado (compatibilidade não-deprecated)
     QUALIFICANDO: { label: 'Qualificando', color: 'text-indigo-700', bgColor: 'bg-indigo-100' },
     AGENDADO: { label: 'Agendado', color: 'text-violet-700', bgColor: 'bg-violet-100' },
@@ -58,7 +58,7 @@ export const tipoAtividadeConfig: Record<string, { label: string; icon: React.Re
     REUNIAO: { label: 'Reunião', icon: <Calendar className="w-4 h-4" />, color: 'text-indigo-500' },
     TAREFA: { label: 'Tarefa', icon: <CheckCircle2 className="w-4 h-4" />, color: 'text-slate-500' },
     NOTA: { label: 'Nota', icon: <Edit className="w-4 h-4" />, color: 'text-slate-400' },
-    OUTRO: { label: 'Outro', icon: <Target className="w-4 h-4" />, color: 'text-gray-500' },
+    OUTRO: { label: 'Outro', icon: <Target className="w-4 h-4" />, color: 'text-slate-500' },
 };
 
 // ============================================
@@ -70,7 +70,7 @@ export const statusAgendamentoConfig: Record<string, { label: string; color: str
     CONFIRMADO: { label: 'Confirmado', color: 'bg-emerald-100 text-emerald-700' },
     CANCELADO: { label: 'Cancelado', color: 'bg-red-100 text-red-700' },
     REALIZADO: { label: 'Realizado', color: 'bg-indigo-100 text-indigo-700' },
-    NAO_COMPARECEU: { label: 'Não Compareceu', color: 'bg-gray-100 text-gray-700' },
+    NAO_COMPARECEU: { label: 'Não Compareceu', color: 'bg-slate-100 text-slate-700' },
 };
 
 // ============================================

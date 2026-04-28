@@ -230,11 +230,11 @@ export default function ConfirmarAgendamento() {
           <CardContent className="pt-6">
             <div className="text-center">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                isConfirmado ? 'bg-emerald-100' : 'bg-gray-100'
+                isConfirmado ? 'bg-emerald-100' : 'bg-slate-100'
               }`}>
                 {isConfirmado 
                   ? <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-                  : <XCircle className="w-8 h-8 text-gray-500" />
+                  : <XCircle className="w-8 h-8 text-slate-500" />
                 }
               </div>
               <h2 className="text-xl font-bold text-slate-900 mb-2">
@@ -327,8 +327,8 @@ export default function ConfirmarAgendamento() {
         <Card className="max-w-md mx-auto mt-12">
           <CardContent className="pt-6">
             <div className="text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <XCircle className="w-8 h-8 text-gray-500" />
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <XCircle className="w-8 h-8 text-slate-500" />
               </div>
               <h2 className="text-xl font-bold text-slate-900 mb-2">
                 Agendamento Cancelado
@@ -445,10 +445,11 @@ export default function ConfirmarAgendamento() {
             {mostrarCancelamento ? (
               <div className="space-y-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label htmlFor="motivo-cancelamento" className="block text-sm font-medium text-slate-700 mb-2">
                     Motivo do cancelamento (opcional)
                   </label>
                   <Textarea
+                    id="motivo-cancelamento"
                     placeholder="Ex: Surgiu um compromisso, prefiro remarcar para outro dia..."
                     value={motivoCancelamento}
                     onChange={(e) => setMotivoCancelamento(e.target.value)}

@@ -33,7 +33,7 @@ export function EtapaObjetivo({ dados, setDados }: WizardEtapaProps) {
           <Target className="w-8 h-8 text-violet-600" />
         </div>
         <h2 className="text-2xl font-bold">Objetivo e Contexto</h2>
-        <p className="text-gray-500 dark:text-gray-400">
+        <p className="text-slate-500 dark:text-slate-400">
           Defina claramente o que seu agente deve fazer
         </p>
       </div>
@@ -64,7 +64,7 @@ export function EtapaObjetivo({ dados, setDados }: WizardEtapaProps) {
           value={dados.objetivo || ''}
           onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDados(prev => ({ ...prev, objetivo: e.target.value }))}
         />
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-slate-500">
           Descreva claramente qual o objetivo principal do seu agente. 
           Seja específico sobre o tipo de atendimento esperado.
         </p>
@@ -82,7 +82,7 @@ export function EtapaObjetivo({ dados, setDados }: WizardEtapaProps) {
           value={dados.contexto || ''}
           onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDados(prev => ({ ...prev, contexto: e.target.value }))}
         />
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-slate-500">
           Informações adicionais que ajudem o agente a entender o contexto do negócio.
         </p>
       </div>
@@ -132,7 +132,7 @@ export function EtapaObjetivo({ dados, setDados }: WizardEtapaProps) {
           </div>
         )}
         
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-slate-500">
           Defina o que o agente NÃO deve fazer ou falar.
         </p>
       </div>

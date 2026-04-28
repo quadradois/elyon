@@ -4,7 +4,8 @@
  */
 
 import { useState, useCallback, lazy, Suspense, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Users } from 'lucide-react';
+import { PageHeader } from '../componentes/ui/page-header';
 import { BarraComando, type ViewMode } from '../componentes/leads/BarraComando';
 import { FeedAcoes } from '../componentes/leads/FeedAcoes';
 import { PreviewLead } from '../componentes/leads/PreviewLead';
@@ -55,6 +56,11 @@ export function MissionControlLeads() {
   return (
     <div className="min-h-screen bg-slate-50/70">
       <div className="max-w-[1640px] mx-auto p-4 lg:p-5 space-y-4">
+        <PageHeader
+          title="Proprietários"
+          description="Acompanhe e priorize os leads proprietários em um único painel."
+          icon={<Users className="w-5 h-5" />}
+        />
 
         {/* BARRA DE COMANDO */}
         <BarraComando

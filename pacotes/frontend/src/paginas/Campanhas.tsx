@@ -33,6 +33,9 @@ import {
   FileEdit,
 } from "lucide-react";
 import { api } from "../servicos/api";
+import { PageHeader } from "../componentes/ui/page-header";
+import { SkeletonTable } from "../componentes/ui/skeleton";
+import { EmptyState } from "../componentes/ui/empty-state";
 
 interface Campanha {
   id: string;
@@ -205,14 +208,11 @@ export function Campanhas() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Campanhas</h1>
-          <p className="text-slate-500">
-            Gerencie suas campanhas de prospecção com inteligência automática.
-          </p>
-        </div>
-
+      <PageHeader
+        title="Campanhas"
+        description="Gerencie suas campanhas de prospecção com inteligência automática."
+        icon={<TrendingUp className="w-5 h-5" />}
+        actions={(
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
@@ -230,10 +230,11 @@ export function Campanhas() {
 
             <div className="space-y-4 mt-4">
               <div>
-                <label className="text-sm font-medium">
+                <label htmlFor="nome-campanha" className="text-sm font-medium">
                   Nome da Campanha *
                 </label>
                 <Input
+                  id="nome-campanha"
                   placeholder="Ex: Prospecção Reserva Buriti - Dez/2025"
                   value={formData.nome}
                   onChange={(e) =>
@@ -243,10 +244,11 @@ export function Campanhas() {
               </div>
 
               <div>
-                <label className="text-sm font-medium">
+                <label htmlFor="nome-empreendimento" className="text-sm font-medium">
                   Nome do Empreendimento *
                 </label>
                 <Input
+                  id="nome-empreendimento"
                   placeholder="Ex: Reserva Buriti"
                   value={formData.nomeEmpreendimento}
                   onChange={(e) =>
@@ -265,11 +267,12 @@ export function Campanhas() {
                   <span className="text-sm font-medium text-slate-700">Endereço do Empreendimento</span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-xs font-medium text-slate-600">CEP</label>
+                    <label htmlFor="cep-empreendimento" className="text-xs font-medium text-slate-600">CEP</label>
                     <div className="relative">
                       <Input
+                        id="cep-empreendimento"
                         placeholder="00000-000"
                         value={formData.cep}
                         onChange={(e) => {
@@ -287,8 +290,9 @@ export function Campanhas() {
                     </div>
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs font-medium text-slate-600">Logradouro</label>
+                    <label htmlFor="logradouro-empreendimento" className="text-xs font-medium text-slate-600">Logradouro</label>
                     <Input
+                      id="logradouro-empreendimento"
                       placeholder="Rua/Avenida"
                       value={formData.logradouro}
                       onChange={(e) =>
@@ -298,10 +302,11 @@ export function Campanhas() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-3 mt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                   <div>
-                    <label className="text-xs font-medium text-slate-600">Número</label>
+                    <label htmlFor="numero-empreendimento" className="text-xs font-medium text-slate-600">Número</label>
                     <Input
+                      id="numero-empreendimento"
                       placeholder="123"
                       value={formData.numero}
                       onChange={(e) =>
@@ -310,8 +315,9 @@ export function Campanhas() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-slate-600">Complemento</label>
+                    <label htmlFor="complemento-empreendimento" className="text-xs font-medium text-slate-600">Complemento</label>
                     <Input
+                      id="complemento-empreendimento"
                       placeholder="Bloco A"
                       value={formData.complemento}
                       onChange={(e) =>
@@ -320,8 +326,9 @@ export function Campanhas() {
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs font-medium text-slate-600">Bairro *</label>
+                    <label htmlFor="bairro-empreendimento" className="text-xs font-medium text-slate-600">Bairro *</label>
                     <Input
+                      id="bairro-empreendimento"
                       placeholder="Vila Rosa"
                       value={formData.bairro}
                       onChange={(e) =>
@@ -332,10 +339,11 @@ export function Campanhas() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 mt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                   <div className="col-span-2">
-                    <label className="text-xs font-medium text-slate-600">Cidade *</label>
+                    <label htmlFor="cidade-empreendimento" className="text-xs font-medium text-slate-600">Cidade *</label>
                     <Input
+                      id="cidade-empreendimento"
                       placeholder="Goiânia"
                       value={formData.cidade}
                       onChange={(e) =>
@@ -446,7 +454,8 @@ export function Campanhas() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
+        )}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -511,8 +520,8 @@ export function Campanhas() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <Loader2 className="w-8 h-8 animate-spin text-brand" />
+          <div className="p-4">
+            <SkeletonTable rows={6} columns={7} />
           </div>
         ) : (
           <Table>
@@ -530,11 +539,12 @@ export function Campanhas() {
             <TableBody>
               {campanhasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="text-center h-32 text-slate-500"
-                  >
-                    Nenhuma campanha encontrada.
+                  <TableCell colSpan={7} className="py-8">
+                    <EmptyState
+                      tipo="nenhuma-campanha"
+                      titulo="Nenhuma campanha encontrada"
+                      descricao="Crie uma nova campanha para começar os disparos."
+                    />
                   </TableCell>
                 </TableRow>
               ) : (

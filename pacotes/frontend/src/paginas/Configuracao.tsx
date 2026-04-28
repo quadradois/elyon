@@ -22,6 +22,7 @@ import {
   Brain,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { PageHeader } from "../componentes/ui/page-header";
 
 interface ConfigCard {
   id: string;
@@ -206,18 +207,11 @@ export function Configuracao() {
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl flex items-center justify-center shadow-lg">
-          <Building2 className="w-6 h-6 text-white" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Configurações</h1>
-          <p className="text-slate-500">
-            Gerencie as configurações do sistema e integrações
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Configurações"
+        description="Gerencie as configurações do sistema e integrações"
+        icon={<Building2 className="w-5 h-5" />}
+      />
 
       {/* Cards Ativos */}
       <div>

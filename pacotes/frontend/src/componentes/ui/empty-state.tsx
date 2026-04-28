@@ -35,7 +35,7 @@ const CONFIGURACOES = {
     icone: Search,
     titulo: "Nenhum resultado encontrado",
     descricao: "Tente buscar com outros termos ou verifique a ortografia.",
-    cor: "text-gray-400"
+    cor: "text-slate-400"
   },
   "nenhum-lead": {
     icone: Users,
@@ -71,7 +71,7 @@ const CONFIGURACOES = {
     icone: Inbox,
     titulo: "Nada por aqui",
     descricao: "Este espaço está vazio no momento.",
-    cor: "text-gray-400"
+    cor: "text-slate-400"
   }
 };
 
@@ -100,19 +100,19 @@ export function EmptyState({
         <div className="absolute inset-0 -m-4">
           <div className={cn(
             "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
-            "w-24 h-24 rounded-full bg-gray-100/50 animate-pulse"
+            "w-24 h-24 rounded-full bg-slate-100/50 animate-pulse"
           )} />
           <div className={cn(
             "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
-            "w-16 h-16 rounded-full bg-gray-100"
+            "w-16 h-16 rounded-full bg-slate-100"
           )} />
         </div>
         
         {/* Ícone principal */}
         <div className={cn(
           "relative z-10 p-4 rounded-full",
-          "bg-gradient-to-br from-gray-50 to-gray-100",
-          "shadow-sm border border-gray-200/50"
+          "bg-gradient-to-br from-slate-50 to-slate-100",
+          "shadow-sm border border-slate-200/50"
         )}>
           <Icone className={cn("h-8 w-8", config.cor)} strokeWidth={1.5} />
         </div>
@@ -128,10 +128,10 @@ export function EmptyState({
       </div>
 
       {/* Texto */}
-      <h3 className="text-lg font-semibold text-gray-700 mb-2">
+      <h3 className="text-lg font-semibold text-slate-700 mb-2">
         {titulo || config.titulo}
       </h3>
-      <p className="text-sm text-gray-500 max-w-sm mb-6">
+      <p className="text-sm text-slate-500 max-w-sm mb-6">
         {descricao || config.descricao}
       </p>
 
@@ -158,7 +158,7 @@ export function EmptyStateInline({
   icone?: React.ElementType;
 }) {
   return (
-    <div className="flex items-center justify-center gap-3 py-8 text-gray-400">
+    <div className="flex items-center justify-center gap-3 py-8 text-slate-400">
       <Icone className="h-5 w-5" />
       <span className="text-sm">{mensagem}</span>
     </div>

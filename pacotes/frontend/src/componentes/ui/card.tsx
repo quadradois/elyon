@@ -1,16 +1,33 @@
 import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../../lib/utils";
+
+const cardVariants = cva(
+  "rounded-xl border border-slate-200 bg-white text-slate-950 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] transition-all duration-300",
+  {
+    variants: {
+      interactive: {
+        true: "cursor-pointer hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] hover:-translate-y-0.5",
+        false: "",
+      },
+    },
+    defaultVariants: {
+      interactive: false,
+    },
+  }
+);
+
+export interface CardProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof cardVariants> {}
 
 const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
+  CardProps
+>(({ className, interactive, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      "rounded-xl border border-slate-200/80 bg-white text-slate-950 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] transition-all duration-300 hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] hover:-translate-y-0.5",
-      className
-    )}
+    className={cn(cardVariants({ interactive }), className)}
     {...props}
   />
 ));

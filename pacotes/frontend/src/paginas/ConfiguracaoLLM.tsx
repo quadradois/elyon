@@ -10,6 +10,7 @@ import {
 import { Button } from '../componentes/ui/button';
 import { Input } from '../componentes/ui/input';
 import { Label } from '../componentes/ui/label';
+import { PageHeader } from '../componentes/ui/page-header';
 import {
     ArrowLeft,
     Brain,
@@ -240,26 +241,17 @@ export function ConfiguracaoLLM() {
 
     return (
         <div className="space-y-6 max-w-3xl mx-auto">
-            {/* Header */}
-            <div className="flex items-center gap-4">
-                <button
-                    onClick={() => navigate('/dashboard/configuracoes')}
-                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                    <ArrowLeft className="w-5 h-5 text-slate-600" />
-                </button>
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                        <Brain className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-bold text-slate-900">Provedor de IA (BYOK)</h1>
-                        <p className="text-sm text-slate-500">
-                            Use sua própria chave de API para OpenAI ou OpenRouter
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <PageHeader
+                title="Provedor de IA (BYOK)"
+                description="Use sua própria chave de API para OpenAI ou OpenRouter"
+                icon={<Brain className="w-5 h-5" />}
+                actions={(
+                    <Button variant="outline" onClick={() => navigate('/dashboard/configuracoes')}>
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Voltar
+                    </Button>
+                )}
+            />
 
             {/* Feedback */}
             {mensagem && (

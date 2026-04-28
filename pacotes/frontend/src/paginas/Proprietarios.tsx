@@ -8,6 +8,7 @@ import { Card, CardContent } from '../componentes/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../componentes/ui/table';
 import { useProprietarios, type EstagioProprietario, type ProprietarioItem } from '../ganchos/useProprietarios';
 import { NovoLeadDialog } from '../componentes/NovoLeadDialog';
+import { PageHeader } from '../componentes/ui/page-header';
 
 const ESTAGIOS: Array<EstagioProprietario | 'Todos'> = ['Todos', 'Em Prospecção', 'Respondeu', 'Qualificado', 'Em Negociação', 'Captado'];
 
@@ -130,23 +131,24 @@ export function Proprietarios() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Proprietários</h1>
-          <p className="text-slate-500">Visão unificada de prospecção e qualificação de proprietários.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={hookLista.recarregar}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${hookLista.carregando ? 'animate-spin' : ''}`} />
-            Atualizar
-          </Button>
-          <NovoLeadDialog onLeadCreated={hookLista.recarregar} />
-          <Button onClick={() => navigate('/dashboard/proprietarios')}>
-            <UserPlus className="w-4 h-4 mr-2" />
-            Novo Proprietário
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Proprietários"
+        description="Visão unificada de prospecção e qualificação de proprietários."
+        icon={<UserPlus className="w-5 h-5" />}
+        actions={(
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={hookLista.recarregar}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${hookLista.carregando ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+            <NovoLeadDialog onLeadCreated={hookLista.recarregar} />
+            <Button onClick={() => navigate('/dashboard/proprietarios')}>
+              <UserPlus className="w-4 h-4 mr-2" />
+              Novo Proprietário
+            </Button>
+          </div>
+        )}
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card><CardContent className="p-3"><p className="text-xs text-slate-500">Total</p><p className="text-2xl font-bold">{chips.total}</p></CardContent></Card>

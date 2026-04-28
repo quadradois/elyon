@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../servicos/api";
 import { Button } from "../componentes/ui/button";
@@ -13,6 +13,8 @@ import { EmptyState } from "../componentes/ui/empty-state";
 import { Combobox } from "../componentes/ui/combobox";
 import { BotaoPesquisaManus } from "../componentes/campanhas/PesquisaManus";
 import { ModalCreditosInsuficientes } from "../componentes/ModalCreditosInsuficientes";
+import { PageHeader } from "../componentes/ui/page-header";
+import { Switch } from "../componentes/ui/switch";
 import {
   Table,
   TableBody,
@@ -36,12 +38,9 @@ import {
   CheckCircle2,
   Loader2,
   AlertCircle,
-  TrendingUp,
   Filter,
   Users,
-  Database,
   XCircle,
-  FileSpreadsheet,
   X,
   Target,
   Sparkles,
@@ -439,12 +438,9 @@ export function Captacao() {
   // ESTADOS GERAIS ADICIONAIS
   // ============================================
 
-  const [buscandoIptu, setBuscandoIptu] = useState(false);
-  const [iptuInput, setIptuInput] = useState("");
+  const [iptuInput] = useState("");
   const ambienteMineracao = "SP_DEFAULT"; // TODO fix according to actual usage
   const buscarIdCobrancaAtiva = () => "mock-cobranca";
-
-  const [alertaIptuMinerado, setAlertaIptuMinerado] = useState<string | null>(null);
 
   const buscarPorIptu = async () => {
     if (!iptuInput.trim()) {
@@ -452,8 +448,7 @@ export function Captacao() {
       return;
     }
 
-    setBuscandoIptu(true);
-    setAlertaIptuMinerado(null); // Reset alert before new search
+    
 
     try {
       if (!ambienteMineracao) {
@@ -470,7 +465,6 @@ export function Captacao() {
 
       // Se a API retornar um aviso (ex: já minerado recentemente), podemos checar
       if (response.data?.aviso) {
-         setAlertaIptuMinerado(response.data.aviso);
       }
 
       if (response.data && response.data.sucesso === false) {
@@ -496,7 +490,7 @@ export function Captacao() {
       console.error('Erro na busca unitária:', error);
       toast.error(error.message || "Falha ao buscar IPTU individual. Tente buscar múltiplos.");
     } finally {
-      setBuscandoIptu(false);
+      
     }
   };
 
@@ -894,16 +888,11 @@ export function Captacao() {
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center justify-center gap-2">
-          <Sparkles className="w-6 h-6 text-amber-500" />
-          Wizard de Captação
-        </h1>
-        <p className="text-slate-500">
-          Mineração + Campanha em um único fluxo guiado
-        </p>
-      </div>
+      <PageHeader
+        title="Wizard de Captação"
+        description="Mineração + Campanha em um único fluxo guiado"
+        icon={<Sparkles className="w-5 h-5" />}
+      />
 
       {/* Stepper */}
       <div className="bg-white rounded-xl border border-slate-200 p-6">
@@ -948,7 +937,7 @@ export function Captacao() {
               }}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-3 mb-6 max-w-lg mx-auto">
+              <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 mb-6 max-w-lg mx-auto h-auto gap-1">
                 <TabsTrigger value="local">Empreendimentos</TabsTrigger>
                 <TabsTrigger value="bairro">Por Bairro/Condomínio</TabsTrigger>
                 <TabsTrigger value="iptu">Por IPTU</TabsTrigger>
@@ -1189,27 +1178,18 @@ export function Captacao() {
 
               <div className="flex items-center gap-4">
                 {/* Toggle Modo Turbo */}
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label htmlFor="modo-turbo" className="flex items-center gap-2 cursor-pointer">
                   <span
                     className={`text-xs font-medium ${modoTurbo ? "text-amber-700" : "text-slate-500"}`}
                   >
                     Modo Turbo
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setModoTurbo(!modoTurbo)}
-                    className={`relative w-9 h-5 rounded-full transition-colors ${modoTurbo ? "bg-warning" : "bg-slate-300"
-                      }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform flex items-center justify-center ${modoTurbo ? "translate-x-4" : ""
-                        }`}
-                    >
-                      {modoTurbo && (
-                        <Zap className="w-2.5 h-2.5 text-amber-500" />
-                      )}
-                    </span>
-                  </button>
+                  <Switch
+                    id="modo-turbo"
+                    checked={modoTurbo}
+                    onCheckedChange={setModoTurbo}
+                    aria-label="Alternar modo turbo"
+                  />
                 </label>
               </div>
             </div>
@@ -1237,10 +1217,11 @@ export function Captacao() {
                   {/* Filtros Comuns (Endereço) */}
                   <div className="flex gap-3">
                     <div className="flex-[2]">
-                      <label className="text-xs text-slate-500 mb-1 block">
+                      <label htmlFor="filtro-logradouro" className="text-xs text-slate-500 mb-1 block">
                         Rua/Avenida (Logradouro)
                       </label>
                       <Input
+                        id="filtro-logradouro"
                         placeholder="Ex: T-63, Av. Jamel Cecílio..."
                         value={filtroLogradouro}
                         onChange={(e) => setFiltroLogradouro(e.target.value)}
@@ -1248,10 +1229,11 @@ export function Captacao() {
                       />
                     </div>
                     <div className="flex-1">
-                      <label className="text-xs text-slate-500 mb-1 block">
+                      <label htmlFor="filtro-numero" className="text-xs text-slate-500 mb-1 block">
                         Número
                       </label>
                       <Input
+                        id="filtro-numero"
                         placeholder="Ex: 1234, 50..."
                         value={filtroNumero}
                         onChange={(e) => setFiltroNumero(e.target.value)}
@@ -1265,10 +1247,11 @@ export function Captacao() {
                     // Filtros para Condomínio Horizontal
                     <div className="flex gap-3">
                       <div className="flex-1">
-                        <label className="text-xs text-slate-500 mb-1 block">
+                        <label htmlFor="filtro-quadra" className="text-xs text-slate-500 mb-1 block">
                           Quadra
                         </label>
                         <Input
+                          id="filtro-quadra"
                           placeholder="Ex: 5, A, B..."
                           value={filtroQuadra}
                           onChange={(e) => setFiltroQuadra(e.target.value)}
@@ -1276,10 +1259,11 @@ export function Captacao() {
                         />
                       </div>
                       <div className="flex-1">
-                        <label className="text-xs text-slate-500 mb-1 block">
+                        <label htmlFor="filtro-lote" className="text-xs text-slate-500 mb-1 block">
                           Lote
                         </label>
                         <Input
+                          id="filtro-lote"
                           placeholder="Ex: 12, 15..."
                           value={filtroLote}
                           onChange={(e) => setFiltroLote(e.target.value)}
@@ -1290,10 +1274,11 @@ export function Captacao() {
                   ) : (
                     // Filtro para Edifício
                     <div>
-                      <label className="text-xs text-slate-500 mb-1 block">
+                      <label htmlFor="filtro-unidade" className="text-xs text-slate-500 mb-1 block">
                         Apartamento / Unidade
                       </label>
                       <Input
+                        id="filtro-unidade"
                         placeholder="Ex: 1008B, 501, Cobertura..."
                         value={filtroUnidade}
                         onChange={(e) => setFiltroUnidade(e.target.value)}
@@ -1473,7 +1458,7 @@ export function Captacao() {
                   {selecionados.length} de {unidades.length} selecionadas
                 </span>
                 <Button
-                  onClick={iniciarProcessamento}
+                  onClick={() => iniciarProcessamento()}
                   disabled={selecionados.length === 0}
                   className={
                     modoTurbo ? "bg-warning hover:bg-amber-600" : ""
@@ -1749,7 +1734,7 @@ export function Captacao() {
                     </p>
                   </div>
                   <Button
-                    onClick={iniciarProcessamento}
+                    onClick={() => iniciarProcessamento()}
                     className="bg-danger hover:bg-red-700 text-white shadow-lg w-full max-w-xs"
                   >
                     <Zap className="w-5 h-5 mr-2" />
@@ -1845,10 +1830,11 @@ export function Captacao() {
                 <div className="max-w-md mx-auto space-y-4">
                   <div className="space-y-4">
                     <div>
-                      <label className="text-sm font-medium text-slate-700">
+                      <label htmlFor="nome-lista-captacao" className="text-sm font-medium text-slate-700">
                         Nome da Lista
                       </label>
                       <Input
+                        id="nome-lista-captacao"
                         value={nomeLista}
                         onChange={(e) => {
                           setNomeLista(e.target.value);
@@ -1867,7 +1853,7 @@ export function Captacao() {
                         id="criarCampanhaToggle"
                         checked={criarCampanha}
                         onChange={(e) => setCriarCampanha(e.target.checked)}
-                        className="mt-1 w-4 h-4 text-brand rounded border-gray-300 focus:ring-brand cursor-pointer"
+                        className="mt-1 w-4 h-4 text-brand rounded border-slate-300 focus:ring-brand cursor-pointer"
                       />
                       <label htmlFor="criarCampanhaToggle" className="cursor-pointer font-medium leading-tight">
                         Criar campanha automaticamente
@@ -1879,10 +1865,11 @@ export function Captacao() {
 
                     {criarCampanha && (
                       <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                        <label className="text-sm font-medium text-slate-700">
+                        <label htmlFor="nome-campanha-captacao" className="text-sm font-medium text-slate-700">
                           Nome da Campanha
                         </label>
                         <Input
+                          id="nome-campanha-captacao"
                           value={nomeCampanha}
                           onChange={(e) => setNomeCampanha(e.target.value)}
                           placeholder="Ex: Campanha Reserva do Parque"

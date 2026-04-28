@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { Button } from "../componentes/ui/button";
 import { Textarea } from "../componentes/ui/textarea";
+import { PageHeader } from "../componentes/ui/page-header";
 import { api } from "../servicos/api";
 import { toast } from "sonner";
 
@@ -188,15 +189,6 @@ const formatarTipoImovel = (tipo: string | null) => {
   if (t.includes('CASA')) return 'Casa';
   if (t.includes('COMERCIAL')) return 'Comercial';
   return tipo;
-};
-
-const formatarBairro = (bairro: string | null) => {
-  if (!bairro) return '-';
-  if (bairro.includes(',')) {
-    const partes = bairro.split(',');
-    return partes[partes.length - 1].trim();
-  }
-  return bairro;
 };
 
 // Status config
@@ -427,6 +419,16 @@ export default function ContatoDetalhes() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <div className="max-w-[1600px] mx-auto px-6 pt-4">
+        <PageHeader
+          title={contato.nome}
+          description="Detalhes de contato e andamento da negociação"
+          breadcrumb={[
+            { label: "Campanhas", href: "/dashboard/campanhas" },
+            { label: contato.nome },
+          ]}
+        />
+      </div>
       <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
         <div className="max-w-[1600px] mx-auto px-6 py-4">
           <button
@@ -534,7 +536,7 @@ export default function ContatoDetalhes() {
                   <MessageSquare className="w-5 h-5 text-slate-400" />
                   <h3 className="font-semibold text-slate-900">Conversa</h3>
                 </div>
-                {mensagens.length > 0 && <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">{mensagens.length} msg</span>}
+                {mensagens.length > 0 && <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">{mensagens.length} msg</span>}
               </div>
               <div ref={mensagensRef} className="flex-1 overflow-y-auto p-4 space-y-3">
                 {mensagens.length === 0 ? (
@@ -542,7 +544,7 @@ export default function ContatoDetalhes() {
                     <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-3">
                       <MessageSquare className="w-7 h-7 text-slate-300" />
                     </div>
-                    <p className="text-sm text-slate-400">Nenhuma mensagem ainda</p>
+                    <p className="text-sm text-slate-500">Nenhuma mensagem ainda</p>
                   </div>
                 ) : (
                   mensagens.map((msg) => {
@@ -554,7 +556,7 @@ export default function ContatoDetalhes() {
                           <div className={`rounded-2xl px-4 py-2.5 ${isSaida ? 'bg-brand text-white rounded-br-md' : 'bg-slate-100 text-slate-900 rounded-bl-md'}`}>
                             <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.conteudo}</p>
                           </div>
-                          {dataMsg && <p className={`text-xs text-slate-400 mt-1 ${isSaida ? 'text-right' : ''}`}>{tempoRelativo(dataMsg)}</p>}
+                          {dataMsg && <p className={`text-xs text-slate-500 mt-1 ${isSaida ? 'text-right' : ''}`}>{tempoRelativo(dataMsg)}</p>}
                         </div>
                       </div>
                     );
@@ -604,7 +606,7 @@ function TabAtendimento({ contato, statusInfo, alternarModo, alternandoModo }: {
             <h3 className="font-semibold text-slate-700">Status da Prospecção</h3>
           </div>
           <div className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${statusInfo.color} ${statusInfo.bg}`}>{statusInfo.label}</div>
-          <p className="text-xs text-slate-400 mt-3">Criado em {formatarDataCurta(contato.criadoEm)}</p>
+          <p className="text-xs text-slate-500 mt-3">Criado em {formatarDataCurta(contato.criadoEm)}</p>
         </div>
         <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
           <div className="flex items-center gap-2 mb-4">
@@ -729,7 +731,7 @@ function TabImovel({ contato, copiar, copiado }: {
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4"><Home className="w-10 h-10 text-slate-300" /></div>
         <h3 className="text-lg font-semibold text-slate-600 mb-2">Sem dados do imóvel</h3>
-        <p className="text-sm text-slate-400 max-w-sm">As informações do imóvel serão exibidas aqui quando disponíveis.</p>
+        <p className="text-sm text-slate-500 max-w-sm">As informações do imóvel serão exibidas aqui quando disponíveis.</p>
       </div>
     );
   }

@@ -5,8 +5,12 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
+import { PageHeader } from "./ui/page-header";
+import { SkeletonKPI } from "./ui/skeletons/SkeletonKPI";
+import { SkeletonLead } from "./ui/skeletons/SkeletonLead";
 import {
   BarChart3,
   TrendingUp,
@@ -18,7 +22,6 @@ import {
   Clock,
   Zap,
   RefreshCw,
-  Loader2,
   Phone,
   Calendar,
   Target,
@@ -125,6 +128,7 @@ interface AvaliacaoAgendada {
 // ============================================
 
 export function DashboardProspeccao() {
+  const navigate = useNavigate();
   const [metricas, setMetricas] = useState<MetricasGlobais | null>(null);
   const [campanhas, setCampanhas] = useState<MetricasCampanha[]>([]);
   const [blacklist, setBlacklist] = useState<MetricasBlacklist | null>(null);
@@ -265,8 +269,26 @@ export function DashboardProspeccao() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-brand" />
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <SkeletonKPI />
+          <SkeletonKPI />
+          <SkeletonKPI />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SkeletonKPI />
+          <SkeletonKPI />
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Leads Quentes</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <SkeletonLead />
+            <SkeletonLead />
+            <SkeletonLead />
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -274,29 +296,60 @@ export function DashboardProspeccao() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <BarChart3 className="w-7 h-7 text-brand" />
-            Dashboard de Prospecção
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Métricas em tempo real das campanhas ativas
-          </p>
+      <PageHeader
+        title="Dashboard de Prospecção"
+        description="Métricas em tempo real das campanhas ativas"
+        icon={<BarChart3 className="w-5 h-5" />}
+        actions={(
+          <Button
+            variant="outline"
+            onClick={() => buscarDados(true)}
+            disabled={atualizando}
+            className="gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${atualizando ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
+        )}
+      />
+
+      {/* ZONA 1 — O que importa hoje */}
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Zona 1: O que importa hoje</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="border-l-4 border-l-emerald-500">
+            <CardContent className="pt-6">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Agendamentos do dia</p>
+              <p className="text-3xl font-bold tabular-nums tracking-tight text-slate-900 mt-1">
+                {avaliacoes.length}
+              </p>
+              <p className="text-sm text-slate-500 mt-1">Visitas com horário definido hoje</p>
+            </CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-amber-500">
+            <CardContent className="pt-6">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Conversas abertas</p>
+              <p className="text-3xl font-bold tabular-nums tracking-tight text-slate-900 mt-1">
+                {metricas?.totalRespostas || 0}
+              </p>
+              <p className="text-sm text-slate-500 mt-1">Leads que já interagiram com campanhas</p>
+            </CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-red-500">
+            <CardContent className="pt-6">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Alertas</p>
+              <p className="text-3xl font-bold tabular-nums tracking-tight text-slate-900 mt-1">
+                {(blacklist?.total || 0) + (metricas?.totalOptout || 0)}
+              </p>
+              <p className="text-sm text-slate-500 mt-1">Opt-outs e contatos bloqueados</p>
+            </CardContent>
+          </Card>
         </div>
-        
-        <Button
-          variant="outline"
-          onClick={() => buscarDados(true)}
-          disabled={atualizando}
-          className="gap-2"
-        >
-          <RefreshCw className={`w-4 h-4 ${atualizando ? 'animate-spin' : ''}`} />
-          Atualizar
-        </Button>
       </div>
 
-      {/* Cards de Métricas Principais */}
+      {/* ZONA 2 — Performance */}
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Zona 2: Performance</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="card-premium relative overflow-hidden bg-white/70 backdrop-blur-md border-0 ring-1 ring-slate-200/50">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-indigo-600" />
@@ -304,7 +357,7 @@ export function DashboardProspeccao() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">Total Contatos</p>
-                <p className="text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+                <p className="text-3xl font-extrabold tabular-nums text-slate-900 tracking-tight mt-1">
                   {metricas?.totalContatos.toLocaleString() || 0}
                 </p>
               </div>
@@ -321,7 +374,7 @@ export function DashboardProspeccao() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">Disparados</p>
-                <p className="text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+                <p className="text-3xl font-extrabold tabular-nums text-slate-900 tracking-tight mt-1">
                   {metricas?.totalDisparados.toLocaleString() || 0}
                 </p>
               </div>
@@ -338,7 +391,7 @@ export function DashboardProspeccao() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">Respostas</p>
-                <p className="text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+                <p className="text-3xl font-extrabold tabular-nums text-slate-900 tracking-tight mt-1">
                   {metricas?.totalRespostas.toLocaleString() || 0}
                 </p>
                 <p className="text-xs font-medium text-emerald-600 flex items-center gap-1 mt-1.5">
@@ -359,7 +412,7 @@ export function DashboardProspeccao() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">Interessados</p>
-                <p className="text-3xl font-extrabold text-emerald-600 tracking-tight mt-1">
+                <p className="text-3xl font-extrabold tabular-nums text-emerald-600 tracking-tight mt-1">
                   {metricas?.totalInteressados.toLocaleString() || 0}
                 </p>
                 <p className="text-xs font-medium text-emerald-600 flex items-center gap-1 mt-1.5">
@@ -382,7 +435,7 @@ export function DashboardProspeccao() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">Campanhas Ativas</p>
-                <p className="text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
+                <p className="text-2xl font-extrabold tabular-nums text-slate-900 tracking-tight mt-1">
                   {metricas?.campanhasAtivas || 0} / {metricas?.totalCampanhas || 0}
                 </p>
               </div>
@@ -398,7 +451,7 @@ export function DashboardProspeccao() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">Aguardando</p>
-                <p className="text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
+                <p className="text-2xl font-extrabold tabular-nums text-slate-900 tracking-tight mt-1">
                   {campanhas.reduce((acc, c) => acc + (c.aguardando || 0), 0).toLocaleString()}
                 </p>
               </div>
@@ -414,7 +467,7 @@ export function DashboardProspeccao() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">Opt-out</p>
-                <p className="text-2xl font-extrabold text-amber-600 tracking-tight mt-1">
+                <p className="text-2xl font-extrabold tabular-nums text-amber-600 tracking-tight mt-1">
                   {metricas?.totalOptout || 0}
                 </p>
                 <p className="text-xs font-medium text-amber-600 flex items-center gap-1 mt-1">
@@ -434,7 +487,7 @@ export function DashboardProspeccao() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">Blacklist</p>
-                <p className="text-2xl font-extrabold text-red-600 tracking-tight mt-1">
+                <p className="text-2xl font-extrabold tabular-nums text-red-600 tracking-tight mt-1">
                   {blacklist?.total || 0}
                 </p>
               </div>
@@ -444,6 +497,7 @@ export function DashboardProspeccao() {
             </div>
           </CardContent>
         </Card>
+      </div>
       </div>
 
       {/* Funil de Prospecção Visual */}
@@ -460,7 +514,7 @@ export function DashboardProspeccao() {
               {/* Etapa 1: Aguardando */}
               <div className="flex-1 text-center group">
                 <div className="bg-slate-50 rounded-xl p-4 mb-3 border border-slate-200/50 transition-all duration-300 group-hover:shadow-md">
-                  <p className="text-2xl font-bold text-slate-700">{funil.aguardando}</p>
+                  <p className="text-2xl font-bold tabular-nums text-slate-700">{funil.aguardando}</p>
                   <p className="text-xs font-medium text-slate-500 uppercase tracking-widest mt-1">Aguardando</p>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full w-full overflow-hidden">
@@ -473,7 +527,7 @@ export function DashboardProspeccao() {
               {/* Etapa 2: Contatando */}
               <div className="flex-1 text-center group">
                 <div className="bg-indigo-50 rounded-xl p-4 mb-3 border border-indigo-100/50 transition-all duration-300 group-hover:shadow-md group-hover:border-indigo-200">
-                  <p className="text-2xl font-bold text-indigo-700">{funil.contatando}</p>
+                  <p className="text-2xl font-bold tabular-nums text-indigo-700">{funil.contatando}</p>
                   <p className="text-xs font-medium text-indigo-600 uppercase tracking-widest mt-1">Contatando</p>
                 </div>
                 <div className="h-2 bg-indigo-100 rounded-full w-full overflow-hidden">
@@ -489,7 +543,7 @@ export function DashboardProspeccao() {
               {/* Etapa 3: Respondeu */}
               <div className="flex-1 text-center group">
                 <div className="bg-violet-50 rounded-xl p-4 mb-3 border border-violet-100/50 transition-all duration-300 group-hover:shadow-md group-hover:border-violet-200">
-                  <p className="text-2xl font-bold text-violet-700">{funil.respondeu}</p>
+                  <p className="text-2xl font-bold tabular-nums text-violet-700">{funil.respondeu}</p>
                   <p className="text-xs font-medium text-violet-600 uppercase tracking-widest mt-1">Respondeu</p>
                 </div>
                 <div className="h-2 bg-violet-100 rounded-full w-full overflow-hidden">
@@ -505,7 +559,7 @@ export function DashboardProspeccao() {
               {/* Etapa 4: Interessado */}
               <div className="flex-1 text-center group">
                 <div className="bg-amber-50 rounded-xl p-4 mb-3 border border-amber-100/50 transition-all duration-300 group-hover:shadow-md group-hover:border-amber-200">
-                  <p className="text-2xl font-bold text-amber-700">{funil.interessado + funil.mornoFuturo}</p>
+                  <p className="text-2xl font-bold tabular-nums text-amber-700">{funil.interessado + funil.mornoFuturo}</p>
                   <p className="text-xs font-medium text-amber-600 uppercase tracking-widest mt-1">Interessados</p>
                 </div>
                 <div className="h-2 bg-amber-100 rounded-full w-full overflow-hidden">
@@ -521,7 +575,7 @@ export function DashboardProspeccao() {
               {/* Etapa 5: Lead Convertido */}
               <div className="flex-1 text-center group">
                 <div className="bg-emerald-50 rounded-xl p-4 mb-3 border border-emerald-100/50 transition-all duration-300 group-hover:shadow-md group-hover:border-emerald-200">
-                  <p className="text-2xl font-bold text-emerald-700">{funil.lead}</p>
+                  <p className="text-2xl font-bold tabular-nums text-emerald-700">{funil.lead}</p>
                   <p className="text-xs font-medium text-emerald-600 uppercase tracking-widest mt-1">Leads</p>
                 </div>
                 <div className="h-2 bg-emerald-100 rounded-full w-full overflow-hidden">
@@ -666,6 +720,31 @@ export function DashboardProspeccao() {
         </Card>
       </div>
 
+      {/* ZONA 3 — Ações rápidas */}
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Zona 3: Ações rápidas</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card interactive onClick={() => navigate("/dashboard/mineracao")}>
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold text-slate-900">Nova mineração</p>
+              <p className="text-sm text-slate-500 mt-1">Inicie uma nova captação de imóveis e contatos.</p>
+            </CardContent>
+          </Card>
+          <Card interactive onClick={() => navigate("/dashboard/campanhas")}>
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold text-slate-900">Nova campanha</p>
+              <p className="text-sm text-slate-500 mt-1">Crie e dispare uma campanha para listas prontas.</p>
+            </CardContent>
+          </Card>
+          <Card interactive onClick={() => navigate("/dashboard/leads")}>
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold text-slate-900">Ver leads quentes</p>
+              <p className="text-sm text-slate-500 mt-1">Acesse os leads mais urgentes para ação comercial.</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
       {/* Tabela de Campanhas */}
       <Card>
         <CardHeader>
@@ -756,7 +835,7 @@ export function DashboardProspeccao() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {Object.entries(blacklist.porMotivo).map(([motivo, count]) => (
                 <div key={motivo} className="bg-slate-50 p-4 rounded-lg text-center">
-                  <p className="text-2xl font-bold text-slate-900">{count}</p>
+                  <p className="text-2xl font-bold tabular-nums text-slate-900">{count}</p>
                   <p className="text-xs text-slate-500 mt-1">
                     {motivo === 'OPTOUT' ? 'Opt-out' :
                      motivo === 'INVALIDO' ? 'Inválido' :

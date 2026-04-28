@@ -25,7 +25,7 @@ export function NotificacoesDropdown() {
       case 'escalacao':
         return <AlertTriangle className="w-4 h-4 text-red-500" />;
       default:
-        return <Bell className="w-4 h-4 text-gray-500" />;
+        return <Bell className="w-4 h-4 text-slate-500" />;
     }
   };
   
@@ -58,10 +58,10 @@ export function NotificacoesDropdown() {
       {/* Botão do sino */}
       <button
         onClick={() => setAberto(!aberto)}
-        className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         title={conectado ? 'Notificações em tempo real' : 'Reconectando...'}
       >
-        <Bell className={`w-5 h-5 ${conectado ? 'text-gray-600 dark:text-gray-300' : 'text-gray-400'}`} />
+        <Bell className={`w-5 h-5 ${conectado ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400'}`} />
         
         {/* Badge contador */}
         {totalPendentes > 0 && (
@@ -73,7 +73,7 @@ export function NotificacoesDropdown() {
         {/* Indicador de conexão */}
         <span 
           className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${
-            conectado ? 'bg-success' : 'bg-gray-400'
+            conectado ? 'bg-success' : 'bg-slate-400'
           }`}
           title={conectado ? 'Conectado' : 'Desconectado'}
         />
@@ -89,10 +89,10 @@ export function NotificacoesDropdown() {
           />
           
           {/* Painel de notificações */}
-          <div className="absolute right-0 mt-2 w-96 max-h-[500px] overflow-hidden bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 z-50">
+          <div className="absolute right-0 mt-2 w-96 max-h-[500px] overflow-hidden bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 z-50">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-              <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+              <h3 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                 <Bell className="w-4 h-4" />
                 Notificações
                 {totalPendentes > 0 && (
@@ -102,9 +102,9 @@ export function NotificacoesDropdown() {
                 )}
               </h3>
               
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className={`flex items-center gap-1 ${conectado ? 'text-emerald-600' : 'text-gray-400'}`}>
-                  <span className={`w-2 h-2 rounded-full ${conectado ? 'bg-success' : 'bg-gray-400'}`} />
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className={`flex items-center gap-1 ${conectado ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  <span className={`w-2 h-2 rounded-full ${conectado ? 'bg-success' : 'bg-slate-400'}`} />
                   {conectado ? 'Ao vivo' : 'Offline'}
                 </span>
               </div>
@@ -113,22 +113,22 @@ export function NotificacoesDropdown() {
             {/* Lista de alertas */}
             <div className="max-h-[400px] overflow-y-auto">
               {carregando ? (
-                <div className="flex items-center justify-center py-8 text-gray-500">
+                <div className="flex items-center justify-center py-8 text-slate-500">
                   <Clock className="w-5 h-5 animate-spin mr-2" />
                   Carregando...
                 </div>
               ) : alertas.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                <div className="flex flex-col items-center justify-center py-12 text-slate-500">
                   <CheckCircle className="w-12 h-12 mb-3 text-emerald-500" />
                   <p className="font-medium">Tudo em dia!</p>
                   <p className="text-sm">Nenhum alerta pendente</p>
                 </div>
               ) : (
-                <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                   {alertas.map((alerta) => (
                     <li 
                       key={alerta.id}
-                      className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer ${
+                      className={`p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer ${
                         alerta.status === 'pendente' ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''
                       }`}
                       onClick={() => {
@@ -142,7 +142,7 @@ export function NotificacoesDropdown() {
                         <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
                           alerta.prioridade === 'alta' 
                             ? 'bg-red-100 dark:bg-red-900/30' 
-                            : 'bg-gray-100 dark:bg-gray-800'
+                            : 'bg-slate-100 dark:bg-slate-800'
                         }`}>
                           {getIcone(alerta.tipo)}
                         </div>
@@ -150,7 +150,7 @@ export function NotificacoesDropdown() {
                         {/* Conteúdo */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                            <p className="font-medium text-sm text-slate-900 dark:text-white truncate">
                               {alerta.titulo}
                             </p>
                             <span className={`flex-shrink-0 px-2 py-0.5 text-[10px] font-medium text-white rounded-full ${getBadgeCor(alerta.prioridade)}`}>
@@ -158,13 +158,13 @@ export function NotificacoesDropdown() {
                             </span>
                           </div>
                           
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+                          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
                             {alerta.descricao}
                           </p>
                           
                           {/* Info do lead */}
                           {alerta.leadNome && (
-                            <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                            <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
                               <span className="flex items-center gap-1">
                                 <User className="w-3 h-3" />
                                 {alerta.leadNome}
@@ -180,7 +180,7 @@ export function NotificacoesDropdown() {
                           
                           {/* Footer */}
                           <div className="flex items-center justify-between mt-3">
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-slate-400">
                               {formatarTempo(alerta.criadoEm)}
                             </span>
                             
@@ -189,13 +189,13 @@ export function NotificacoesDropdown() {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    // Navegar para o lead
-                                    window.location.href = `/dashboard/conversas?lead=${alerta.leadId}`;
+                                    // Rota de conversas está em construção; abrir detalhe do lead
+                                    window.location.href = `/dashboard/leads/${alerta.leadId}`;
                                   }}
                                   className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-brand hover:text-brand hover:bg-indigo-50 rounded transition-colors"
                                 >
                                   <ExternalLink className="w-3 h-3" />
-                                  Ver conversa
+                                  Ver lead
                                 </button>
                               )}
                               
@@ -221,7 +221,7 @@ export function NotificacoesDropdown() {
             
             {/* Footer */}
             {alertas.length > 0 && (
-              <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+              <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <a 
                   href="/dashboard/alertas"
                   className="block text-center text-sm font-medium text-brand hover:text-brand"

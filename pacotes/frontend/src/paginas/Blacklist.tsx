@@ -20,6 +20,17 @@ import {
   Upload
 } from 'lucide-react';
 import { Button } from '../componentes/ui/button';
+import { Input } from '../componentes/ui/input';
+import { Textarea } from '../componentes/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../componentes/ui/select';
+import { PageHeader } from '../componentes/ui/page-header';
+import { EmptyState } from '../componentes/ui/empty-state';
 import { api } from '../servicos/api';
 
 // Tipos
@@ -48,7 +59,7 @@ const MOTIVOS_DESCRICAO: Record<string, string> = {
 const MOTIVOS_COR: Record<string, string> = {
   'CONTATO_PESSOAL': 'bg-indigo-100 text-indigo-800',
   'OPTOUT': 'bg-amber-100 text-amber-800',
-  'INVALIDO': 'bg-gray-100 text-gray-800',
+  'INVALIDO': 'bg-slate-100 text-slate-800',
   'RECLAMACAO': 'bg-red-100 text-red-800',
   'BLOQUEADO_WHATSAPP': 'bg-emerald-100 text-emerald-800',
   'MANUAL': 'bg-indigo-100 text-indigo-800',
@@ -238,31 +249,26 @@ export function Blacklist() {
   
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">
-            Contatos Bloqueados
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Gerencie os telefones que o agente não deve responder
-          </p>
-        </div>
-        
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setModalLoteAberto(true)}
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Importar Lote
-          </Button>
-          <Button onClick={() => setModalAberto(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Adicionar
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Contatos Bloqueados"
+        description="Gerencie os telefones que o agente não deve responder"
+        icon={<Ban className="w-5 h-5" />}
+        actions={(
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setModalLoteAberto(true)}
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Importar Lote
+            </Button>
+            <Button onClick={() => setModalAberto(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Adicionar
+            </Button>
+          </div>
+        )}
+      />
       
       {/* Cards de Estatísticas */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -293,33 +299,33 @@ export function Blacklist() {
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
+          <Input
             placeholder="Buscar por telefone ou nome..."
             value={busca}
             onChange={(e) => {
               setBusca(e.target.value);
               setPagina(1);
             }}
-            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand"
+            className="pl-10"
           />
         </div>
-        
-        <select
-          value={filtroMotivo}
-          onChange={(e) => {
-            setFiltroMotivo(e.target.value);
+        <Select
+          value={filtroMotivo || "__all__"}
+          onValueChange={(value) => {
+            setFiltroMotivo(value === "__all__" ? "" : value);
             setPagina(1);
           }}
-          title="Filtrar por motivo"
-          aria-label="Filtrar por motivo"
-          className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand focus:border-brand"
         >
-          <option value="">Todos os motivos</option>
-          {Object.entries(MOTIVOS_DESCRICAO).map(([valor, desc]) => (
-            <option key={valor} value={valor}>{desc}</option>
-          ))}
-        </select>
+          <SelectTrigger className="w-full sm:w-[260px]">
+            <SelectValue placeholder="Todos os motivos" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todos os motivos</SelectItem>
+            {Object.entries(MOTIVOS_DESCRICAO).map(([valor, desc]) => (
+              <SelectItem key={valor} value={valor}>{desc}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         
         <Button variant="outline" onClick={buscarDados}>
           <RefreshCw className="w-4 h-4" />
@@ -333,10 +339,12 @@ export function Blacklist() {
             <RefreshCw className="w-8 h-8 animate-spin text-brand" />
           </div>
         ) : bloqueados.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-            <Ban className="w-12 h-12 mb-4 text-slate-300" />
-            <p className="text-lg font-medium">Nenhum contato bloqueado</p>
-            <p className="text-sm">Adicione telefones que o agente não deve responder</p>
+          <div className="py-8">
+            <EmptyState
+              tipo="generico"
+              titulo="Nenhum contato bloqueado"
+              descricao="Adicione telefones que o agente não deve responder."
+            />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -383,7 +391,7 @@ export function Blacklist() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`text-xs font-medium px-2 py-1 rounded ${MOTIVOS_COR[item.motivo] || 'bg-gray-100 text-gray-800'}`}>
+                      <span className={`text-xs font-medium px-2 py-1 rounded ${MOTIVOS_COR[item.motivo] || 'bg-slate-100 text-slate-800'}`}>
                         {item.motivo}
                       </span>
                     </td>
@@ -451,58 +459,55 @@ export function Blacklist() {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label htmlFor="blacklist-novo-telefone" className="block text-sm font-medium text-slate-700 mb-1">
                   Telefone *
                 </label>
-                <input
-                  type="tel"
+                <Input
+                  id="blacklist-novo-telefone"
                   value={novoTelefone}
                   onChange={(e) => setNovoTelefone(e.target.value)}
                   placeholder="(XX) XXXXX-XXXX"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label htmlFor="blacklist-novo-nome" className="block text-sm font-medium text-slate-700 mb-1">
                   Nome (opcional)
                 </label>
-                <input
-                  type="text"
+                <Input
+                  id="blacklist-novo-nome"
                   value={novoNome}
                   onChange={(e) => setNovoNome(e.target.value)}
                   placeholder="Nome do contato"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label htmlFor="blacklist-novo-motivo" className="block text-sm font-medium text-slate-700 mb-1">
                   Motivo *
                 </label>
-                <select
-                  value={novoMotivo}
-                  onChange={(e) => setNovoMotivo(e.target.value)}
-                  title="Selecionar motivo"
-                  aria-label="Selecionar motivo"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand"
-                >
-                  {Object.entries(MOTIVOS_DESCRICAO).map(([valor, desc]) => (
-                    <option key={valor} value={valor}>{desc}</option>
-                  ))}
-                </select>
+                <Select value={novoMotivo} onValueChange={setNovoMotivo}>
+                  <SelectTrigger id="blacklist-novo-motivo">
+                    <SelectValue placeholder="Selecionar motivo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(MOTIVOS_DESCRICAO).map(([valor, desc]) => (
+                      <SelectItem key={valor} value={valor}>{desc}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label htmlFor="blacklist-nova-observacao" className="block text-sm font-medium text-slate-700 mb-1">
                   Observações (opcional)
                 </label>
-                <textarea
+                <Textarea
+                  id="blacklist-nova-observacao"
                   value={novaObservacao}
                   onChange={(e) => setNovaObservacao(e.target.value)}
                   placeholder="Notas adicionais..."
                   rows={3}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand"
                 />
               </div>
             </div>
@@ -535,15 +540,16 @@ export function Blacklist() {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label htmlFor="blacklist-lote-telefones" className="block text-sm font-medium text-slate-700 mb-1">
                   Telefones (um por linha)
                 </label>
-                <textarea
+                <Textarea
+                  id="blacklist-lote-telefones"
                   value={telefonesLote}
                   onChange={(e) => setTelefonesLote(e.target.value)}
                   placeholder="(11) 99999-9999&#10;(21) 88888-8888&#10;(31) 77777-7777"
                   rows={10}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand font-mono text-sm"
+                  className="font-mono text-sm"
                 />
                 <p className="text-xs text-slate-500 mt-1">
                   {telefonesLote.split('\n').filter(t => t.trim().length >= 8).length} telefones válidos
@@ -551,20 +557,19 @@ export function Blacklist() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label htmlFor="blacklist-lote-motivo" className="block text-sm font-medium text-slate-700 mb-1">
                   Motivo para todos
                 </label>
-                <select
-                  value={motivoLote}
-                  onChange={(e) => setMotivoLote(e.target.value)}
-                  title="Selecionar motivo do lote"
-                  aria-label="Selecionar motivo do lote"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand"
-                >
-                  {Object.entries(MOTIVOS_DESCRICAO).map(([valor, desc]) => (
-                    <option key={valor} value={valor}>{desc}</option>
-                  ))}
-                </select>
+                <Select value={motivoLote} onValueChange={setMotivoLote}>
+                  <SelectTrigger id="blacklist-lote-motivo">
+                    <SelectValue placeholder="Selecionar motivo do lote" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(MOTIVOS_DESCRICAO).map(([valor, desc]) => (
+                      <SelectItem key={valor} value={valor}>{desc}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             

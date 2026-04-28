@@ -15,6 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageHeader } from "../componentes/ui/page-header";
 
 // ============================================
 // TIPOS
@@ -237,16 +238,11 @@ export function Creditos() {
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <Coins className="w-7 h-7 text-amber-500" />
-          Meus Créditos
-        </h1>
-        <p className="text-slate-500 mt-1">
-          Gerencie seus créditos e recarregue quando precisar
-        </p>
-      </div>
+      <PageHeader
+        title="Meus Créditos"
+        description="Gerencie seus créditos e recarregue quando precisar"
+        icon={<Coins className="w-5 h-5" />}
+      />
 
       {/* Saldo Atual */}
       <div className="bg-white rounded-xl border border-slate-200 p-6">
@@ -261,7 +257,7 @@ export function Creditos() {
           </button>
         </div>
 
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="bg-indigo-50 rounded-lg p-4 text-center">
             <p className="text-sm text-brand font-medium">Mensais</p>
             <p className="text-3xl font-bold text-indigo-700">
@@ -323,10 +319,11 @@ export function Creditos() {
         <div className="space-y-4">
           {/* Input de quantidade */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label htmlFor="creditos-quantidade" className="block text-sm font-medium text-slate-700 mb-2">
               Quantos créditos você precisa?
             </label>
             <Input
+              id="creditos-quantidade"
               type="number"
               min={10}
               max={10000}

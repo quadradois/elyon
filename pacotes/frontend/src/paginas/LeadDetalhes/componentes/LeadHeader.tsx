@@ -73,6 +73,7 @@ export function LeadHeader({
                 <Button
                     variant="ghost"
                     size="icon"
+                    aria-label="Voltar para lista de leads"
                     onClick={onVoltar}
                     className="hover:bg-slate-100 rounded-full"
                 >
@@ -158,7 +159,7 @@ export function LeadHeader({
 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="hover:bg-slate-100">
+                                <Button variant="ghost" size="icon" aria-label="Mais ações do lead" className="hover:bg-slate-100">
                                     <MoreVertical className="w-5 h-5" />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -177,7 +178,7 @@ export function LeadHeader({
                     </>
                 )}
 
-                <Button variant="ghost" size="icon" onClick={onAtualizar} title="Atualizar" className="hover:bg-slate-100 rounded-full">
+                <Button variant="ghost" size="icon" aria-label="Atualizar dados do lead" onClick={onAtualizar} title="Atualizar" className="hover:bg-slate-100 rounded-full">
                     <RefreshCw className={`w-4 h-4 ${carregando ? 'animate-spin' : ''}`} />
                 </Button>
             </div>

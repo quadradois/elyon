@@ -99,7 +99,7 @@ export function EtapaPrompt({ dados, setDados }: WizardEtapaProps) {
           <Code2 className="w-8 h-8 text-indigo-600" />
         </div>
         <h2 className="text-2xl font-bold">Prompt do Sistema</h2>
-        <p className="text-gray-500 dark:text-gray-400">
+        <p className="text-slate-500 dark:text-slate-400">
           Defina as instruções completas para o comportamento do seu agente
         </p>
       </div>

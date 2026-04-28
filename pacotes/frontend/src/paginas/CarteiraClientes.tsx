@@ -30,6 +30,7 @@ import {
     ExternalLink,
 } from "lucide-react";
 import { ChatModal } from "../componentes/ChatModal";
+import { PageHeader } from "../componentes/ui/page-header";
 import { api } from "../servicos/api";
 
 // Tipos
@@ -124,18 +125,11 @@ export function CarteiraClientes() {
 
     return (
         <div className="space-y-6 p-6">
-            {/* Header */}
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                        <Briefcase className="h-6 w-6 text-indigo-600" />
-                        Minha Carteira
-                    </h1>
-                    <p className="text-slate-500">
-                        Gestão dos seus clientes proprietários ativos e contratos vigentes.
-                    </p>
-                </div>
-                <div className="flex gap-2">
+            <PageHeader
+                title="Minha Carteira"
+                description="Gestão dos seus clientes proprietários ativos e contratos vigentes."
+                icon={<Briefcase className="h-5 w-5" />}
+                actions={<div className="flex gap-2">
                     <Button
                         variant="outline"
                         size="sm"
@@ -145,8 +139,8 @@ export function CarteiraClientes() {
                         <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                         Atualizar
                     </Button>
-                </div>
-            </div>
+                </div>}
+            />
 
             {/* Stats Resumo */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -167,7 +161,7 @@ export function CarteiraClientes() {
             <Card>
                 <CardContent className="p-4">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
                             placeholder="Buscar cliente por nome..."
                             value={termoBusca}
@@ -197,10 +191,10 @@ export function CarteiraClientes() {
                         <div className="bg-indigo-50 p-4 rounded-full mb-4">
                             <Briefcase className="h-8 w-8 text-indigo-400" />
                         </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        <h3 className="text-lg font-medium text-slate-900 mb-2">
                             Nenhum cliente na carteira
                         </h3>
-                        <p className="text-gray-500 mb-4 text-center max-w-sm">
+                        <p className="text-slate-500 mb-4 text-center max-w-sm">
                             Os leads que você marcar como "Captado" no funil de vendas aparecerão aqui automaticamente.
                         </p>
                         <Button variant="outline" onClick={() => navigate('/dashboard/proprietarios')}>
@@ -223,7 +217,7 @@ export function CarteiraClientes() {
                                 {clientesFiltrados.map((cliente) => (
                                     <TableRow
                                         key={cliente.id}
-                                        className="cursor-pointer hover:bg-gray-50"
+                                        className="cursor-pointer hover:bg-slate-50"
                                         onClick={() => navigate(`/dashboard/proprietarios/${cliente.origemLeadId || cliente.id}`)}
                                     >
                                         <TableCell>
@@ -235,20 +229,20 @@ export function CarteiraClientes() {
                                         <TableCell>
                                             <div className="space-y-1">
                                                 {cliente.telefone && (
-                                                    <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                                                    <div className="flex items-center gap-1.5 text-sm text-slate-600">
                                                         <Phone className="h-3 w-3" />
                                                         {cliente.telefone}
                                                     </div>
                                                 )}
                                                 {cliente.email && (
-                                                    <div className="text-xs text-gray-400 truncate max-w-[180px]">
+                                                    <div className="text-xs text-slate-400 truncate max-w-[180px]">
                                                         {cliente.email}
                                                     </div>
                                                 )}
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <span className="text-sm text-gray-600 font-medium">
+                                            <span className="text-sm text-slate-600 font-medium">
                                                 {formatarData(cliente.lead?.dataAssinatura || cliente.criadoEm)}
                                             </span>
                                         </TableCell>
@@ -293,8 +287,8 @@ export function CarteiraClientes() {
                         </Table>
 
                         {/* Footer da tabela */}
-                        <div className="px-4 py-3 border-t bg-gray-50 flex items-center justify-between">
-                            <p className="text-sm text-gray-500">
+                        <div className="px-4 py-3 border-t bg-slate-50 flex items-center justify-between">
+                            <p className="text-sm text-slate-500">
                                 Mostrando {clientesFiltrados.length} clientes ativos
                             </p>
                         </div>
