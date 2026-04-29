@@ -201,7 +201,6 @@ export function DashboardAgentes() {
   const [abPromocao, setAbPromocao] = useState<ABPromocaoPayload | null>(null);
   const [paolPolitica, setPaolPolitica] = useState<PaolPoliticaPayload | null>(null);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     carregarDados();
   }, [periodo]); // eslint-disable-line react-hooks/exhaustive-deps

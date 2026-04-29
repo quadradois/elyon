@@ -132,7 +132,6 @@ export function ModalProcessamento({
 
   const addLog = (msg: string) => setLogs((prev) => [...prev, msg]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isOpen && etapa === "AGUARDANDO") {
       setTempoInicio(Date.now());

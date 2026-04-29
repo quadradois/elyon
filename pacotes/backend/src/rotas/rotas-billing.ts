@@ -105,7 +105,7 @@ router.get('/pacotes', async (req: Request, res: Response) => {
  * GET /billing/transacoes
  * Lista histórico de transações do tenant
  */
-router.get('/transacoes', async (req: Request, res: Response) => {
+router.get('/transacoes', verificarAutenticacao, async (req: Request, res: Response) => {
   try {
     const tenantId = req.tenantId;
 
@@ -153,7 +153,7 @@ router.get('/transacoes', async (req: Request, res: Response) => {
  * POST /billing/recarga
  * Cria uma transação pendente e retorna link de pagamento Asaas
  */
-router.post('/recarga', async (req: Request, res: Response) => {
+router.post('/recarga', verificarAutenticacao, async (req: Request, res: Response) => {
   try {
     const tenantId = req.tenantId;
 
@@ -583,6 +583,13 @@ router.post('/admin/adicionar-creditos', verificarSuperAdmin, async (req: Reques
  */
 router.post('/admin/simular-pagamento', verificarSuperAdmin, async (req: Request, res: Response) => {
   try {
+    const simulacaoHabilitada =
+      process.env.NODE_ENV !== 'production' || process.env.BILLING_ALLOW_SIMULATION === 'true';
+
+    if (!simulacaoHabilitada) {
+      return responderErro(res, 403, 'Simulação de pagamento desabilitada neste ambiente');
+    }
+
     const { transacaoId } = req.body;
 
     if (!transacaoId) {
@@ -1301,4 +1308,3 @@ router.post('/upgrade', verificarAutenticacao, async (req: Request, res: Respons
 });
 
 export default router;
-

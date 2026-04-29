@@ -42,7 +42,6 @@ export const AdminAuditoria = () => {
     carregarAcoes();
   }, []);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     carregarLogs();
   }, [pagina, buscaDebounced, filtroAcao]); // eslint-disable-line react-hooks/exhaustive-deps

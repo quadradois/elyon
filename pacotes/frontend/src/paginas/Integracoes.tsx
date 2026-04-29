@@ -99,7 +99,6 @@ export function Integracoes() {
         }
     };
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         carregarIntegracoes();
     }, [token]); // eslint-disable-line react-hooks/exhaustive-deps

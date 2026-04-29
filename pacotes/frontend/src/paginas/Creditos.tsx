@@ -106,7 +106,6 @@ export function Creditos() {
     carregarSaldo();
   }, []);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     // Só calcular upgrade após carregar dados e se não for PRO
     if (!loading && planoAtual !== "PRO" && quantidade >= 10) {

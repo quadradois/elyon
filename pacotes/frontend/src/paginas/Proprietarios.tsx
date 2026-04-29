@@ -113,7 +113,6 @@ export function Proprietarios() {
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     (['Em Prospecção', 'Respondeu', 'Qualificado', 'Em Negociação', 'Captado'] as EstagioProprietario[]).forEach((col) => {
       carregarColuna(col, true);

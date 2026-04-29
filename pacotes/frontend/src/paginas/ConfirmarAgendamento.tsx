@@ -101,7 +101,6 @@ export default function ConfirmarAgendamento() {
   const [processando, setProcessando] = useState(false);
   const [mostrarCancelamento, setMostrarCancelamento] = useState(false);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (atividadeId && token) {
       validarToken();

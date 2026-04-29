@@ -184,22 +184,21 @@ export function Upgrade() {
         setProcessando(planoId);
 
         try {
-            // TODO: Implementar checkout de upgrade quando backend estiver pronto
-            // const response = await api.post("/assinatura/upgrade", { plano: planoId });
+            const response = await api.post("/billing/upgrade", { novoPlano: planoId });
+            const mensagemSucesso =
+                response?.data?.mensagem ||
+                `Upgrade para ${PLANOS.find(p => p.id === planoId)?.nome || planoId} concluído com sucesso.`;
 
-            // Por enquanto, simula o processo
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            toast.success(mensagemSucesso, { duration: 5000 });
+            setPlanoAtual(planoId);
 
-            toast.success(
-                "Solicitação de upgrade enviada! Nossa equipe entrará em contato.",
-                { duration: 5000 }
-            );
-
-            // Redireciona para WhatsApp do suporte
-            const mensagem = encodeURIComponent(
-                `Olá! Gostaria de fazer upgrade do meu plano para ${PLANOS.find(p => p.id === planoId)?.nome}. Minha imobiliária é: ${localStorage.getItem("elyon_tenant") ? JSON.parse(localStorage.getItem("elyon_tenant") || "{}").nome : ""}`
-            );
-            window.open(`https://wa.me/5511999999999?text=${mensagem}`, "_blank");
+            try {
+                const tenantLocal = JSON.parse(localStorage.getItem("elyon_tenant") || "{}");
+                tenantLocal.plano = planoId;
+                localStorage.setItem("elyon_tenant", JSON.stringify(tenantLocal));
+            } catch {
+                // Sem impacto funcional se localStorage estiver indisponível/inválido.
+            }
 
         } catch (error: any) {
             toast.error(error.response?.data?.erro || "Erro ao processar upgrade");

@@ -60,7 +60,6 @@ export function PainelExecutivoCockpit() {
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     carregar();
   }, [periodoDias]); // eslint-disable-line react-hooks/exhaustive-deps

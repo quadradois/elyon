@@ -225,7 +225,6 @@ export default function ContatoDetalhes() {
 
   const mensagensRef = useRef<HTMLDivElement>(null);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     carregarDados();
   }, [contatoId]); // eslint-disable-line react-hooks/exhaustive-deps

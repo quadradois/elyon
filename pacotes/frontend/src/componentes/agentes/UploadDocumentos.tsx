@@ -79,7 +79,6 @@ export function UploadDocumentos({
     return null;
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const adicionarArquivos = useCallback(async (arquivos: FileList | File[]) => {
     const novosDocumentos: DocumentoUpload[] = [];
 

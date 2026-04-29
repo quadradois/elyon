@@ -94,7 +94,6 @@ export function Agenda() {
     const [loadingExpediente, setLoadingExpediente] = useState(false);
     const [savingExpediente, setSavingExpediente] = useState(false);
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         fetchEvents();
         fetchBloqueios();

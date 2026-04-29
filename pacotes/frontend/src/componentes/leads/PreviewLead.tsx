@@ -140,7 +140,6 @@ export function PreviewLead({ lead, onFechar, onLeadAtualizado }: PreviewLeadPro
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     carregarOperacao();
   }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
