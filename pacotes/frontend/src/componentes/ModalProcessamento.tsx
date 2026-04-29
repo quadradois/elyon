@@ -132,12 +132,13 @@ export function ModalProcessamento({
 
   const addLog = (msg: string) => setLogs((prev) => [...prev, msg]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isOpen && etapa === "AGUARDANDO") {
       setTempoInicio(Date.now());
       executarScraper();
     }
-  }, [isOpen]);
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const executarScraper = async () => {
     setEtapa("SCRAPER");

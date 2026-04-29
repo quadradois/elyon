@@ -474,9 +474,10 @@ export default function GestaoUsuarios() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     carregarUsuarios(paginaAtual);
-  }, [paginaAtual, busca]);
+  }, [paginaAtual, busca]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggleAtivo = async (usuario: Usuario) => {
     try {

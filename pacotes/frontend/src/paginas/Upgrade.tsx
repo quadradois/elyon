@@ -131,7 +131,7 @@ export function Upgrade() {
             const tenant = response.data?.tenant;
 
             // Tenta ler de contaCreditos primeiro, depois diretamente do tenant
-            let planoFromApi = tenant?.contaCreditos?.planoTipo || tenant?.plano;
+            const planoFromApi = tenant?.contaCreditos?.planoTipo || tenant?.plano;
 
             if (planoFromApi) {
                 // Mapeia planos legados para os novos nomes

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -37,23 +37,7 @@ export function ChatModal({ lead, open, onOpenChange }: ChatProps) {
   const [enviando, setEnviando] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (open && lead) {
-      carregarMensagens();
-      // Polling para novas mensagens a cada 3 segundos
-      const interval = setInterval(carregarMensagens, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [open, lead]);
-
-  useEffect(() => {
-    // Scroll para o final quando mensagens mudarem
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [mensagens]);
-
-  const carregarMensagens = async () => {
+  const carregarMensagens = useCallback(async () => {
     if (!lead) return;
     try {
       const response = await api.get(`/leads/${lead.id}/chat`);
@@ -61,7 +45,23 @@ export function ChatModal({ lead, open, onOpenChange }: ChatProps) {
     } catch (error) {
       console.error("Erro ao carregar chat:", error);
     }
-  };
+  }, [lead]);
+
+  useEffect(() => {
+    if (open && lead) {
+      carregarMensagens();
+      // Polling para novas mensagens a cada 3 segundos
+      const interval = setInterval(carregarMensagens, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [carregarMensagens, open, lead]);
+
+  useEffect(() => {
+    // Scroll para o final quando mensagens mudarem
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [mensagens]);
 
   const enviarMensagem = async (e?: React.FormEvent) => {
     e?.preventDefault();

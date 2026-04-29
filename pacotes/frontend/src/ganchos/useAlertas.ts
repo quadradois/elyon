@@ -128,7 +128,9 @@ export function useAlertas(): UseAlertasReturn {
         const user = JSON.parse(userData);
         usuarioId = user.id;
       }
-    } catch {}
+    } catch {
+      // mantém fallback "unknown" quando localStorage estiver inválido
+    }
     
     websocketService.marcarAlertaAtendido(alertaId, usuarioId);
     setAlertas(prev => prev.filter(a => a.id !== alertaId));

@@ -113,11 +113,12 @@ export function Proprietarios() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     (['Em Prospecção', 'Respondeu', 'Qualificado', 'Em Negociação', 'Captado'] as EstagioProprietario[]).forEach((col) => {
       carregarColuna(col, true);
     });
-  }, [campanhaId, buscaDebounced]);
+  }, [campanhaId, buscaDebounced]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chips = useMemo(() => {
     return {

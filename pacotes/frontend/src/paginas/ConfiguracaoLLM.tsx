@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Card,
@@ -82,7 +82,7 @@ export function ConfiguracaoLLM() {
     const [modelosOpenRouter, setModelosOpenRouter] = useState<ModeloOpenRouter[]>([]);
     const [carregandoModelos, setCarregandoModelos] = useState(false);
 
-    const carregarConfig = async () => {
+    const carregarConfig = useCallback(async () => {
         try {
             setLoading(true);
             const res = await fetch('/api/configuracao/llm', {
@@ -106,13 +106,13 @@ export function ConfiguracaoLLM() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [token]);
 
     useEffect(() => {
         carregarConfig();
-    }, []);
+    }, [carregarConfig]);
 
-    const carregarModelosOpenRouter = async () => {
+    const carregarModelosOpenRouter = useCallback(async () => {
         try {
             setCarregandoModelos(true);
             const res = await fetch('/api/configuracao/llm/modelos-openrouter', {
@@ -127,13 +127,13 @@ export function ConfiguracaoLLM() {
         } finally {
             setCarregandoModelos(false);
         }
-    };
+    }, [token]);
 
     useEffect(() => {
         if (form.provedor === 'openrouter' && modelosOpenRouter.length === 0) {
             carregarModelosOpenRouter();
         }
-    }, [form.provedor]);
+    }, [form.provedor, carregarModelosOpenRouter, modelosOpenRouter.length]);
 
     // Auto-preenche baseUrl ao trocar provedor
     useEffect(() => {

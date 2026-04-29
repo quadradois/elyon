@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../servicos/api";
 import {
   Plus,
@@ -73,9 +73,24 @@ export function SessoesWhatsapp() {
     }, 500);
   };
 
+  const carregarSessoes = useCallback(async () => {
+    try {
+      // Não mostra loading se já tiver sessões (para não piscar no polling)
+      if (sessoes.length === 0) setLoading(true);
+
+      const response = await api.get("/sessoes-whatsapp");
+      setSessoes(response.data.sessoes);
+    } catch (error) {
+      console.error("Erro ao carregar sessões:", error);
+      toast.error("Erro ao carregar sessões WhatsApp");
+    } finally {
+      setLoading(false);
+    }
+  }, [sessoes.length]);
+
   useEffect(() => {
     carregarSessoes();
-  }, []);
+  }, [carregarSessoes]);
 
   // Polling para verificar status de sessões conectando
   useEffect(() => {
@@ -108,22 +123,7 @@ export function SessoesWhatsapp() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [sessoes]);
-
-  const carregarSessoes = async () => {
-    try {
-      // Não mostra loading se já tiver sessões (para não piscar no polling)
-      if (sessoes.length === 0) setLoading(true);
-
-      const response = await api.get("/sessoes-whatsapp");
-      setSessoes(response.data.sessoes);
-    } catch (error) {
-      console.error("Erro ao carregar sessões:", error);
-      toast.error("Erro ao carregar sessões WhatsApp");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [carregarSessoes, sessoes]);
 
   const criarSessao = async () => {
     if (!novoNome.trim()) return;

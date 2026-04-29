@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
@@ -63,17 +63,20 @@ export function ModalCreditosInsuficientes({
   const [valorUpgrade, setValorUpgrade] = useState<number>(0);
   const [diasRestantes, setDiasRestantes] = useState<number>(0);
 
-  // Carregar dados do usuário
-  useEffect(() => {
-    if (isOpen) {
-      console.log('[DEBUG] ModalCreditosInsuficientes ABERTO. Necessários:', creditosNecessarios);
-      carregarDados();
-      // Mínimo de 10 créditos (exigência da API)
-      setQuantidade(Math.max(10, creditosNecessarios));
+  const calcularUpgrade = useCallback(async () => {
+    try {
+      setCarregandoUpgrade(true);
+      const response = await api.get("/billing/calcular-upgrade?novoPlano=PRO");
+      setValorUpgrade(response.data?.calculo?.valorUpgradeProRata || 0);
+      setDiasRestantes(response.data?.calculo?.diasRestantes || 0);
+    } catch (e) {
+      console.error("Erro ao calcular upgrade:", e);
+    } finally {
+      setCarregandoUpgrade(false);
     }
-  }, [isOpen, creditosNecessarios]);
+  }, []);
 
-  const carregarDados = async () => {
+  const carregarDados = useCallback(async () => {
     try {
       const response = await api.get("/billing/saldo");
       setPlanoAtual(response.data?.plano || "STARTER");
@@ -86,20 +89,17 @@ export function ModalCreditosInsuficientes({
     } catch (e) {
       console.error("Erro ao carregar dados:", e);
     }
-  };
+  }, [calcularUpgrade]);
 
-  const calcularUpgrade = async () => {
-    try {
-      setCarregandoUpgrade(true);
-      const response = await api.get("/billing/calcular-upgrade?novoPlano=PRO");
-      setValorUpgrade(response.data?.calculo?.valorUpgradeProRata || 0);
-      setDiasRestantes(response.data?.calculo?.diasRestantes || 0);
-    } catch (e) {
-      console.error("Erro ao calcular upgrade:", e);
-    } finally {
-      setCarregandoUpgrade(false);
+  // Carregar dados do usuário
+  useEffect(() => {
+    if (isOpen) {
+      console.log('[DEBUG] ModalCreditosInsuficientes ABERTO. Necessários:', creditosNecessarios);
+      carregarDados();
+      // Mínimo de 10 créditos (exigência da API)
+      setQuantidade(Math.max(10, creditosNecessarios));
     }
-  };
+  }, [carregarDados, isOpen, creditosNecessarios]);
 
   const comprarCreditos = async () => {
     try {

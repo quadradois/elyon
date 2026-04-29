@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../servicos/api";
@@ -172,8 +172,7 @@ export function Captacao() {
     }, 2500);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [etapa, modoTurbo, nomeLista]);
+  }, [addLog, criarCampanha, etapa, modoTurbo, nomeCampanha, nomeLista, salvarLista]);
 
   // ============================================
   // FUNÇÕES: Etapa 1 - Local
@@ -223,7 +222,7 @@ export function Captacao() {
     }
   };
 
-  const carregarBairros = async () => {
+  const carregarBairros = useCallback(async () => {
     if (bairros.length > 0) return; // Já carregou
     try {
       setCarregandoBairros(true);
@@ -235,13 +234,13 @@ export function Captacao() {
     } finally {
       setCarregandoBairros(false);
     }
-  };
+  }, [bairros.length]);
 
   useEffect(() => {
     if (modoBusca === "bairro") {
       carregarBairros();
     }
-  }, [modoBusca]);
+  }, [modoBusca, carregarBairros]);
 
   const avancarBairro = () => {
     if (!bairroBusca) {
@@ -438,59 +437,69 @@ export function Captacao() {
   // ESTADOS GERAIS ADICIONAIS
   // ============================================
 
-  const [iptuInput] = useState("");
-  const ambienteMineracao = "SP_DEFAULT"; // TODO fix according to actual usage
-  const buscarIdCobrancaAtiva = () => "mock-cobranca";
-
   const buscarPorIptu = async () => {
-    if (!iptuInput.trim()) {
+    if (!iptuBusca.trim()) {
       toast.error("Por favor, digite um número de IPTU válido");
       return;
     }
 
-    
-
     try {
-      if (!ambienteMineracao) {
-        throw new Error("Ambiente de mineração não configurado");
-      }
-
-      const idCobrancaPendente = buscarIdCobrancaAtiva();
-      
+      setLoading(true);
       const response = await api.post('/mineracao/iptu-unitario', {
-        numero: iptuInput.trim(),
-        ambiente: ambienteMineracao,
-        idCobrancaPendente
+        iptu: iptuBusca.trim(),
       });
 
-      // Se a API retornar um aviso (ex: já minerado recentemente), podemos checar
-      if (response.data?.aviso) {
-      }
-
-      if (response.data && response.data.sucesso === false) {
-           if(response.data.erro === 'Saldo insuficiente' || response.data.erro === 'Limite de créditos atingido') {
-             toast.error("Saldo insuficiente ou limite de créditos atingido.");
-             return;
-           }
-           throw new Error(response.data.erro || 'Falha ao buscar IPTU');
-      }
-
-      // If we find an 'unidade' object natively from the scrape, we progress to Step 2
-      if (response.data?.unidade) {
-        toast.success("IPTU encontrado!");
-        setUnidades(prev => [...prev, response.data.unidade]);
-        
-        // Pass to the next phase as standard procedure
-        setEtapa(2);
-      } else {
+      if (!response.data?.encontrado) {
         toast.error("Nenhum dado encontrado para este IPTU");
+        return;
       }
+
+      const imovel = response.data?.imovel || {};
+      const proprietario = response.data?.proprietario || {};
+      const endereco = imovel.endereco || "";
+
+      const unidadeIptu: Unidade = {
+        nrinscr: iptuBusca.trim(),
+        nmedificio: imovel.edificio || "Busca unitária por IPTU",
+        incompl: [
+          imovel.apartamento ? `APTO ${imovel.apartamento}` : null,
+          imovel.bloco ? `BL.${imovel.bloco}` : null,
+        ]
+          .filter(Boolean)
+          .join(" ") || "Unidade via IPTU",
+        nmlogradou: endereco || "Endereço não informado",
+        nmbairro: localSelecionado?.bairro || "Bairro não informado",
+        tipo: "apartamento",
+      };
+
+      setLocalSelecionado({
+        codigo: Number(iptuBusca.replace(/\D/g, "").slice(0, 9) || Date.now()),
+        nome: imovel.edificio || `IPTU ${iptuBusca.trim()}`,
+        bairro: localSelecionado?.bairro || "Busca unitária",
+        tipo: "edificio",
+        icone: "🏢",
+      });
+      setNomeLista(`Mineração IPTU ${iptuBusca.trim()}`);
+      setUnidades([unidadeIptu]);
+      setSelecionados([unidadeIptu.nrinscr]);
+      setEtapa(2);
+
+      const qtdTelefones = Array.isArray(proprietario.telefones)
+        ? proprietario.telefones.length
+        : 0;
+      toast.success("IPTU encontrado!", {
+        description:
+          qtdTelefones > 0
+            ? `${qtdTelefones} telefone(s) retornado(s) na consulta unitária.`
+            : "Dados básicos do imóvel carregados para mineração.",
+      });
 
     } catch (error: any) {
       console.error('Erro na busca unitária:', error);
-      toast.error(error.message || "Falha ao buscar IPTU individual. Tente buscar múltiplos.");
+      const msgErro = error.response?.data?.erro || error.message || "Falha ao buscar IPTU individual.";
+      toast.error(msgErro);
     } finally {
-      
+      setLoading(false);
     }
   };
 
@@ -586,6 +595,7 @@ export function Captacao() {
     setEtapa(3);
     setProcessando(true);
     setProgresso(0);
+    canceladoRef.current = false;
     if(!retomar) setLogsProcesso([]);
     const tempoInicio = Date.now();
 
@@ -651,7 +661,7 @@ export function Captacao() {
         addLog(`🛑 Processamento cancelado pelo usuário.`);
         // Tentar cancelar no backend, se a rota existir
         try {
-          await api.post(`/mineracao/jobs/${jobId}/cancelar`);
+          await api.delete(`/mineracao/jobs/${jobId}`);
         } catch (e) {
           console.warn("Rota de cancelamento não implementada ou erro ao cancelar job", e);
         }
@@ -739,18 +749,18 @@ export function Captacao() {
     }
   };
 
-  const addLog = (msg: string) => {
+  const addLog = useCallback((msg: string) => {
     setLogsProcesso((prev) => [
       ...prev,
       `[${new Date().toLocaleTimeString()}] ${msg}`,
     ]);
-  };
+  }, []);
 
   // ============================================
   // FUNÇÕES: Etapa 4 - Salvar Lista
   // ============================================
 
-  const salvarLista = async () => {
+  const salvarLista = useCallback(async () => {
     if (!nomeLista.trim()) {
       toast.error("Digite um nome para a lista");
       return;
@@ -880,7 +890,7 @@ export function Captacao() {
     } finally {
       setSalvandoLista(false);
     }
-  };
+  }, [addLog, criarCampanha, leadsGerados, localSelecionado, nomeCampanha, nomeLista]);
 
   // ============================================
   // RENDER

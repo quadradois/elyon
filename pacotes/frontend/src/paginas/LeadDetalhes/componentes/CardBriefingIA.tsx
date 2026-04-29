@@ -14,6 +14,7 @@ interface CardBriefingIAProps {
 
 export function CardBriefingIA({ lead }: CardBriefingIAProps) {
     const [expandido, setExpandido] = useState(true);
+    const marcadoresSecao = ["🏠", "🔥", "💢", "🎯", "📋", "⚡", "💰", "🚨", "🤝", "👤"];
 
     if (!lead.briefingCloser) return null;
 
@@ -52,7 +53,10 @@ export function CardBriefingIA({ lead }: CardBriefingIAProps) {
                     <div className="bg-white/70 rounded-xl p-4 border border-violet-100 space-y-1">
                         {linhas.map((linha, i) => {
                             // Detectar cabeçalhos de seção (linhas que começam com emoji ou ##)
-                            const isHeader = /^[#🏠🔥💢🎯📋⚡💰🚨🤝👤]/.test(linha.trim());
+                            const linhaNormalizada = linha.trim();
+                            const isHeader =
+                                linhaNormalizada.startsWith("#") ||
+                                marcadoresSecao.some((marcador) => linhaNormalizada.startsWith(marcador));
                             return (
                                 <p
                                     key={i}

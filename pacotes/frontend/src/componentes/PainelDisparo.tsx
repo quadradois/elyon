@@ -371,7 +371,7 @@ export function PainelDisparo({ campanhaId, campanhaStatus = "ATIVA", onStatusCh
     if (escopoEnvio === "aguardando") return ["AGUARDANDO"];
     if (escopoEnvio === "contatando") return [STATUS_EM_CONTATO];
     return ["AGUARDANDO", STATUS_EM_CONTATO];
-  }, [escopoEnvio]);
+  }, [escopoEnvio, STATUS_EM_CONTATO]);
 
   const aplicarControleEnvio = async (acao: "pausar" | "reincluir-ia" | "assumir-humano") => {
     setProcessandoGestao(true);

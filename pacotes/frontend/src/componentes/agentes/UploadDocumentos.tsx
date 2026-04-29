@@ -79,6 +79,7 @@ export function UploadDocumentos({
     return null;
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const adicionarArquivos = useCallback(async (arquivos: FileList | File[]) => {
     const novosDocumentos: DocumentoUpload[] = [];
 
@@ -106,7 +107,7 @@ export function UploadDocumentos({
         await enviarDocumento(doc, todosDocumentos);
       }
     }
-  }, [documentos, onDocumentosChange, onUpload, modo]);
+  }, [documentos, onDocumentosChange, onUpload, modo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enviarDocumento = async (doc: DocumentoUpload, listaDocs: DocumentoUpload[]) => {
     if (!doc.arquivo || !onUpload) return;

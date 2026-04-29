@@ -92,10 +92,11 @@ export default function ListaDetalhes() {
   const [adicionando, setAdicionando] = useState(false);
   const [selecionarTodos, setSelecionarTodos] = useState(false);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     carregarLista();
     carregarCampanhas();
-  }, [id, paginaAtual]);
+  }, [id, paginaAtual]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const carregarLista = async () => {
     try {

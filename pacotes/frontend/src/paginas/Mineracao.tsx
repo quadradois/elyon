@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../servicos/api";
 import { Button } from "../componentes/ui/button";
@@ -216,9 +216,9 @@ export function Mineracao() {
   // Carregar bairros ao montar
   useEffect(() => {
     carregarBairros();
-  }, []);
+  }, [carregarBairros]);
 
-  const carregarBairros = async () => {
+  const carregarBairros = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get("/mineracao/bairros");
@@ -236,7 +236,7 @@ export function Mineracao() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const carregarEdificiosPorBairro = async (cdbairro: number) => {
     try {

@@ -1,5 +1,5 @@
 // @deprecated — substituído por Proprietarios.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../componentes/ui/button";
 import { Input } from "../componentes/ui/input";
@@ -160,19 +160,7 @@ export function Leads() {
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
 
   // Debounce da busca digitada
-  useEffect(() => {
-    setPaginaAtual(1);
-    const delay = setTimeout(() => {
-      carregarDados();
-    }, 500);
-    return () => clearTimeout(delay);
-  }, [termoBusca, filtroStatus, filtroTemperatura, viewMode]);
-
-  useEffect(() => {
-    carregarDados();
-  }, [paginaAtual]);
-
-  const carregarDados = async () => {
+  const carregarDados = useCallback(async () => {
     try {
       setLoading(true);
       setErro("");
@@ -211,7 +199,18 @@ export function Leads() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtroStatus, filtroTemperatura, paginaAtual, termoBusca, viewMode]);
+
+  useEffect(() => {
+    setPaginaAtual(1);
+  }, [termoBusca, filtroStatus, filtroTemperatura, viewMode]);
+
+  useEffect(() => {
+    const delay = setTimeout(() => {
+      carregarDados();
+    }, 500);
+    return () => clearTimeout(delay);
+  }, [carregarDados]);
 
   // Filtro no backend
   const leadsFiltrados = leads;

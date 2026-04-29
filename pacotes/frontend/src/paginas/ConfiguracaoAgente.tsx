@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../servicos/api";
 import { Button } from "../componentes/ui/button";
 import { Input } from "../componentes/ui/input";
@@ -173,31 +173,16 @@ export function ConfiguracaoAgente() {
     estaAtivo: true,
     sessaoWhatsappId: "none" as string,
   });
-  useEffect(() => {
-    carregarSessoes();
-    carregarConfiguracaoVozTenant();
-    if (id && id !== "novo") {
-      carregarAgente(id);
-    } else if (id === "novo") {
-      setAgenteExiste(false);
-      setMostrarWizard(true);
-      setLoading(false);
-    } else {
-      // Se não tem ID, tenta carregar o "padrão" ou redireciona para lista
-      carregarAgentePadrao();
-    }
-  }, [id]);
-
-  const carregarSessoes = async () => {
+  const carregarSessoes = useCallback(async () => {
     try {
       const response = await api.get("/sessoes-whatsapp");
       setSessoesWhatsapp(response.data.sessoes || []);
     } catch (error) {
       console.error("Erro ao carregar sessões:", error);
     }
-  };
+  }, []);
 
-  const carregarAgentePadrao = async () => {
+  const carregarAgentePadrao = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get("/agentes");
@@ -226,9 +211,9 @@ export function ConfiguracaoAgente() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
-  const carregarConfiguracaoVozTenant = async () => {
+  const carregarConfiguracaoVozTenant = useCallback(async () => {
     try {
       const response = await api.get("/tenant/perfil");
       const perfilTenant = response.data || {};
@@ -261,7 +246,7 @@ export function ConfiguracaoAgente() {
     } catch (error) {
       console.error("Erro ao carregar configuração de voz do tenant:", error);
     }
-  };
+  }, []);
 
   const salvarConfiguracaoVozTenant = async () => {
     let basePerfil = tenantPerfil;
@@ -350,7 +335,7 @@ export function ConfiguracaoAgente() {
     };
   }, []);
 
-  const carregarAgente = async (idAgente: string) => {
+  const carregarAgente = useCallback(async (idAgente: string) => {
     try {
       setLoading(true);
       const response = await api.get(`/agentes/${idAgente}`);
@@ -361,7 +346,22 @@ export function ConfiguracaoAgente() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    carregarSessoes();
+    carregarConfiguracaoVozTenant();
+    if (id && id !== "novo") {
+      carregarAgente(id);
+    } else if (id === "novo") {
+      setAgenteExiste(false);
+      setMostrarWizard(true);
+      setLoading(false);
+    } else {
+      // Se não tem ID, tenta carregar o "padrão" ou redireciona para lista
+      carregarAgentePadrao();
+    }
+  }, [carregarAgente, carregarAgentePadrao, carregarConfiguracaoVozTenant, carregarSessoes, id]);
 
   const configurarFormulario = (agente: ConfiguracaoAgenteData) => {
     setAgenteExiste(true);
@@ -530,7 +530,7 @@ export function ConfiguracaoAgente() {
   };
 
   // ===== FUNÇÕES DE DOCUMENTOS =====
-  const carregarDocumentos = async () => {
+  const carregarDocumentos = useCallback(async () => {
     if (!agenteId) return;
     try {
       setCarregandoDocs(true);
@@ -541,13 +541,13 @@ export function ConfiguracaoAgente() {
     } finally {
       setCarregandoDocs(false);
     }
-  };
+  }, [agenteId]);
 
   useEffect(() => {
     if (agenteId && agenteExiste) {
       carregarDocumentos();
     }
-  }, [agenteId, agenteExiste]);
+  }, [agenteId, agenteExiste, carregarDocumentos]);
 
   const criarAgenteViaWizard = async (dados: DadosAgente) => {
     try {

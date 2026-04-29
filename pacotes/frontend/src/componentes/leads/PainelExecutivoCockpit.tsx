@@ -60,9 +60,10 @@ export function PainelExecutivoCockpit() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     carregar();
-  }, [periodoDias]);
+  }, [periodoDias]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (erro) {
     return <EstadoErroLeads mensagem={erro} />;

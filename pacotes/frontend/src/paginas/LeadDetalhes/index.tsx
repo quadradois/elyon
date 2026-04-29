@@ -523,11 +523,17 @@ export default function LeadDetalhes() {
     })();
 
     const resumoExecutivo = (() => {
+        const marcadoresSecao = ["🏠", "🔥", "💢", "🎯", "📋", "⚡", "💰", "🚨", "🤝", "👤"];
         if (lead.briefingCloser) {
             const linhas = lead.briefingCloser
                 .split("\n")
                 .map((l) => l.trim())
-                .filter((l) => l.length > 0 && !/^[#🏠🔥💢🎯📋⚡💰🚨🤝👤]/.test(l));
+                .filter(
+                    (l) =>
+                        l.length > 0 &&
+                        !l.startsWith("#") &&
+                        !marcadoresSecao.some((marcador) => l.startsWith(marcador))
+                );
             return linhas.slice(0, 3).join(" ") || "Lead com briefing de IA disponível para handoff.";
         }
 

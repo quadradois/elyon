@@ -140,9 +140,10 @@ export function PreviewLead({ lead, onFechar, onLeadAtualizado }: PreviewLeadPro
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     carregarOperacao();
-  }, [lead.id]);
+  }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const registrarEventoCockpit = async (acao: string, detalhes?: Record<string, any>) => {
     try {

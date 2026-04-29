@@ -5,7 +5,7 @@
  * usando a API Manus (IA autônoma) ou preenchimento manual
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../../servicos/api";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -104,34 +104,6 @@ export function PesquisaManusModal({
     localizacao: "",
   });
 
-  // Auto-polling quando pesquisa está em andamento
-  useEffect(() => {
-    if (!pesquisa) return;
-    if (pesquisa.status === "CONCLUIDO" || pesquisa.status === "ERRO") return;
-
-    const interval = setInterval(() => {
-      verificarStatus();
-    }, 10000); // Verificar a cada 10 segundos
-
-    return () => clearInterval(interval);
-  }, [pesquisa?.id, pesquisa?.status]);
-
-  // Simular progresso durante pesquisa
-  useEffect(() => {
-    if (!pesquisa || pesquisa.status === "CONCLUIDO" || pesquisa.status === "ERRO") {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setProgresso(prev => {
-        if (prev >= 95) return prev;
-        return prev + Math.random() * 5;
-      });
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [pesquisa?.status]);
-
   // Resetar ao abrir
   useEffect(() => {
     if (aberto) {
@@ -203,7 +175,7 @@ export function PesquisaManusModal({
     }
   };
 
-  const verificarStatus = async () => {
+  const verificarStatus = useCallback(async () => {
     if (!pesquisa?.id) return;
 
     try {
@@ -234,7 +206,35 @@ export function PesquisaManusModal({
     } finally {
       setVerificando(false);
     }
-  };
+  }, [pesquisa?.id]);
+
+  // Auto-polling quando pesquisa está em andamento
+  useEffect(() => {
+    if (!pesquisa) return;
+    if (pesquisa.status === "CONCLUIDO" || pesquisa.status === "ERRO") return;
+
+    const interval = setInterval(() => {
+      verificarStatus();
+    }, 10000); // Verificar a cada 10 segundos
+
+    return () => clearInterval(interval);
+  }, [pesquisa, verificarStatus]);
+
+  // Simular progresso durante pesquisa
+  useEffect(() => {
+    if (!pesquisa || pesquisa.status === "CONCLUIDO" || pesquisa.status === "ERRO") {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setProgresso(prev => {
+        if (prev >= 95) return prev;
+        return prev + Math.random() * 5;
+      });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [pesquisa]);
 
   const aplicarResultado = async () => {
     if (!pesquisa?.id) return;
