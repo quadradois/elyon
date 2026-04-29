@@ -359,6 +359,8 @@ model Usuario {
   atualizadoEm  DateTime       @updatedAt
   ultimoLoginEm DateTime?
   LogAuditoria  LogAuditoria[]
+  campanhasResponsavel Campanha[] @relation("CampanhaResponsavel")
+  campanhasFallback    Campanha[] @relation("CampanhaFallback")
 
   @@unique([tenantId, email])
   @@index([email])
@@ -569,6 +571,12 @@ model Campanha {
   // Configurações de Disparo de Prospecção Ativa
   configDisparo Json? // { mensagensPorMinuto, atrasoEntreMensagens, maxTentativas, horarioInicio, horarioFim }
 
+  // Roteamento de especialista (handoff humano)
+  responsavelCorretorId String?
+  responsavelCorretor   Usuario? @relation("CampanhaResponsavel", fields: [responsavelCorretorId], references: [id], onDelete: SetNull)
+  fallbackCorretorId    String?
+  fallbackCorretor      Usuario? @relation("CampanhaFallback", fields: [fallbackCorretorId], references: [id], onDelete: SetNull)
+
   // Relacionamentos
   contatos       Contato[]
   leads          Lead[]          @relation("CampanhaOrigem")
@@ -579,6 +587,8 @@ model Campanha {
 
   @@index([tenantId, status])
   @@index([empreendimentoId])
+  @@index([responsavelCorretorId])
+  @@index([fallbackCorretorId])
   @@map("campanhas")
 }
 
@@ -1213,11 +1223,29 @@ model Atividade {
   canceladoEm          DateTime?
   motivoCancelamento   String?
 
+  // ====================================
+  // CONFIRMAÇÃO OPERACIONAL DO CORRETOR (handoff)
+  // ====================================
+  statusConfirmacaoCorretor       StatusConfirmacaoCorretor? @default(PENDENTE)
+  tokenConfirmacaoCorretor        String?                    @unique
+  confirmacaoCorretorSolicitadaEm DateTime?
+  lembreteCorretorEnviadoEm       DateTime?
+  confirmadoCorretorEm            DateTime?
+  expiradoCorretorEm              DateTime?
+  remanejadoCorretorEm            DateTime?
+  corretorOriginalId              String?
+  corretorAtualId                 String?
+
   @@index([leadId])
   @@index([tipo])
   @@index([agendadoPara])
   @@index([statusAgendamento])
   @@index([tokenConfirmacao])
+  @@index([statusConfirmacaoCorretor])
+  @@index([tokenConfirmacaoCorretor])
+  @@index([lembreteCorretorEnviadoEm])
+  @@index([corretorOriginalId])
+  @@index([corretorAtualId])
   @@map("atividades")
 }
 
@@ -1238,6 +1266,14 @@ enum StatusAgendamento {
   CANCELADO // Cancelado (por qualquer parte)
   REALIZADO // Avaliação concluída
   NAO_COMPARECEU // No-show
+}
+
+enum StatusConfirmacaoCorretor {
+  PENDENTE
+  CONFIRMADO
+  EXPIRADO
+  REMANEJADO
+  RECUSADO
 }
 
 // ====================================

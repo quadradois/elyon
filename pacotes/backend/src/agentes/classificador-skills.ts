@@ -108,6 +108,11 @@ const GATILHOS: GatilhoSkill[] = [
         agentes: ['sdr'],
         regex: /\b(sim\s+pode\s+avan[cç]ar|pode\s+avan[cç]ar|quero\s+avan[cç]ar|vamos\s+avan[cç]ar|vamos\s+agendar|pode\s+agendar|quero\s+agendar)\b/i,
     },
+    {
+        id: 'agendamento/handoff-especialista',
+        agentes: ['sdr'],
+        regex: /\b(falar com (humano|corretor|especialista)|quero (falar|tratar) com (humano|corretor|especialista)|me passa para (humano|corretor|especialista)|prefiro (humano|corretor))\b/i,
+    },
 ];
 
 // ─── Classificar ─────────────────────────────────────────────────────────────

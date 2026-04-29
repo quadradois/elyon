@@ -502,6 +502,16 @@ export default function GestaoUsuarios() {
   };
 
   const ativos = usuarios.filter((u) => u.estaAtivo).length;
+  const telefoneValidoWhatsapp = (telefone?: string) => {
+    if (!telefone) return false;
+    return telefone.replace(/\D/g, "").length >= 10;
+  };
+  const elegibilidadeCorretor = (usuario: Usuario) => {
+    if (usuario.papel !== "CORRETOR") return { status: "N/A", cor: "#475569", bg: "#e2e8f0" };
+    if (!usuario.estaAtivo) return { status: "Inativo", cor: "#b91c1c", bg: "#fee2e2" };
+    if (!telefoneValidoWhatsapp(usuario.telefone)) return { status: "Sem WhatsApp", cor: "#92400e", bg: "#fef3c7" };
+    return { status: "Elegível", cor: "#166534", bg: "#dcfce7" };
+  };
 
   return (
     <div style={{ padding: "24px 32px", maxWidth: 1100, margin: "0 auto" }}>
@@ -569,13 +579,14 @@ export default function GestaoUsuarios() {
                   <TableHead>Papel</TableHead>
                   <TableHead>Último Login</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Handoff</TableHead>
                   <TableHead style={{ width: 48 }}></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {usuarios.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} style={{ textAlign: "center", padding: 40, color: "#888" }}>
+                    <TableCell colSpan={7} style={{ textAlign: "center", padding: 40, color: "#888" }}>
                       Nenhum usuário encontrado
                     </TableCell>
                   </TableRow>
@@ -607,6 +618,15 @@ export default function GestaoUsuarios() {
                           color: usuario.estaAtivo ? "#15803d" : "#b91c1c",
                         }}>
                           {usuario.estaAtivo ? "Ativo" : "Inativo"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span style={{
+                          fontSize: 12, fontWeight: 600, padding: "2px 10px", borderRadius: 99,
+                          background: elegibilidadeCorretor(usuario).bg,
+                          color: elegibilidadeCorretor(usuario).cor,
+                        }}>
+                          {elegibilidadeCorretor(usuario).status}
                         </span>
                       </TableCell>
                       <TableCell>

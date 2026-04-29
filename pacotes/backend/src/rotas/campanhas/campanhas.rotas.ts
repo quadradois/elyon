@@ -122,7 +122,32 @@ const criarCampanhaSchema = z.object({
   localizacao: z.string().nullable().optional(),
   tipoImovel: z.string().nullable().optional().default('Apartamento'),
   perfilImovel: z.string().nullable().optional(),
+  responsavelCorretorId: z.string().uuid().nullable().optional(),
+  fallbackCorretorId: z.string().uuid().nullable().optional(),
 });
+
+async function validarCorretorDoTenant(params: {
+  tenantId: string;
+  corretorId?: string | null;
+  campo: 'responsavelCorretorId' | 'fallbackCorretorId';
+}): Promise<string | null> {
+  const corretorId = params.corretorId || null;
+  if (!corretorId) return null;
+
+  const corretor = await prisma.usuario.findFirst({
+    where: {
+      id: corretorId,
+      tenantId: params.tenantId,
+    },
+    select: { id: true }
+  });
+
+  if (!corretor) {
+    throw new Error(`${params.campo} inválido: usuário não pertence ao tenant`);
+  }
+
+  return corretor.id;
+}
 
 // ============================================
 // ENDPOINTS DE CEP
@@ -186,7 +211,18 @@ router.post('/', async (req, res) => {
       bairro: dados.bairro,
     });
 
-    const campanha = await prisma.campanha.create({
+    const responsavelCorretorId = await validarCorretorDoTenant({
+      tenantId: tenant.id,
+      corretorId: dados.responsavelCorretorId,
+      campo: 'responsavelCorretorId',
+    });
+    const fallbackCorretorId = await validarCorretorDoTenant({
+      tenantId: tenant.id,
+      corretorId: dados.fallbackCorretorId,
+      campo: 'fallbackCorretorId',
+    });
+
+    const campanha: any = await (prisma.campanha as any).create({
       data: {
         tenantId: tenant.id,
         nome: dados.nome,
@@ -203,6 +239,8 @@ router.post('/', async (req, res) => {
         localizacao: localizacaoCompleta,
         tipoImovel: dados.tipoImovel,
         perfilImovel: dados.perfilImovel,
+        responsavelCorretorId,
+        fallbackCorretorId,
         ...conhecimentoMapa,
       },
     });
@@ -227,6 +265,8 @@ router.post('/', async (req, res) => {
         nomeEmpreendimento: campanha.nomeEmpreendimento,
         empreendimentoId: campanha.empreendimentoId,
         status: campanha.status,
+        responsavelCorretorId: campanha.responsavelCorretorId,
+        fallbackCorretorId: campanha.fallbackCorretorId,
       },
       mensagem: campanha.empreendimentoId
         ? 'Campanha criada com dados estruturais da prefeitura/MAPA injetados no briefing.'
@@ -277,7 +317,18 @@ router.post('/criar-com-pesquisa', async (req, res) => {
       bairro: dados.bairro,
     });
 
-    const campanha = await prisma.campanha.create({
+    const responsavelCorretorId = await validarCorretorDoTenant({
+      tenantId: tenant.id,
+      corretorId: dados.responsavelCorretorId,
+      campo: 'responsavelCorretorId',
+    });
+    const fallbackCorretorId = await validarCorretorDoTenant({
+      tenantId: tenant.id,
+      corretorId: dados.fallbackCorretorId,
+      campo: 'fallbackCorretorId',
+    });
+
+    const campanha: any = await (prisma.campanha as any).create({
       data: {
         tenantId: tenant.id,
         nome: dados.nome,
@@ -294,6 +345,8 @@ router.post('/criar-com-pesquisa', async (req, res) => {
         localizacao: localizacaoCompleta,
         tipoImovel: dados.tipoImovel,
         perfilImovel: dados.perfilImovel,
+        responsavelCorretorId,
+        fallbackCorretorId,
         ...conhecimentoMapa,
       },
     });
@@ -324,11 +377,13 @@ router.get('/:id', async (req, res) => {
       return responderErro(res, 401, 'Tenant não identificado.');
     }
     
-    const campanha = await prisma.campanha.findUnique({
+    const campanha: any = await (prisma.campanha as any).findUnique({
       where: { id: req.params.id },
       include: {
         contatos: { take: 10, orderBy: { criadoEm: 'desc' } },
         _count: { select: { contatos: true, leads: true } },
+        responsavelCorretor: { select: { id: true, nome: true, email: true, telefone: true, estaAtivo: true } },
+        fallbackCorretor: { select: { id: true, nome: true, email: true, telefone: true, estaAtivo: true } },
       },
     });
 
@@ -375,6 +430,10 @@ router.get('/:id', async (req, res) => {
       totalContatos: campanha._count.contatos,
       totalLeads: campanha._count.leads,
       status: campanha.status,
+      responsavelCorretorId: campanha.responsavelCorretorId,
+      fallbackCorretorId: campanha.fallbackCorretorId,
+      responsavelCorretor: campanha.responsavelCorretor,
+      fallbackCorretor: campanha.fallbackCorretor,
       criadoEm: campanha.criadoEm,
       atualizadoEm: campanha.atualizadoEm,
     };
@@ -399,10 +458,14 @@ router.get('/', async (req, res) => {
       return responderErro(res, 401, 'Tenant não identificado. Envie o header X-Tenant-Id.');
     }
     
-    const campanhas = await prisma.campanha.findMany({
+    const campanhas: any[] = await (prisma.campanha as any).findMany({
       where: { tenantId }, // ✅ FILTRO DE SEGURANÇA
       orderBy: { criadoEm: 'desc' },
-      include: { _count: { select: { contatos: true, leads: true } } },
+      include: {
+        _count: { select: { contatos: true, leads: true } },
+        responsavelCorretor: { select: { id: true, nome: true, estaAtivo: true } },
+        fallbackCorretor: { select: { id: true, nome: true, estaAtivo: true } },
+      },
     });
 
     return res.json({
@@ -412,6 +475,10 @@ router.get('/', async (req, res) => {
         nome: c.nome,
         empreendimento: c.nomeEmpreendimento,
         status: c.status,
+        responsavelCorretorId: c.responsavelCorretorId,
+        fallbackCorretorId: c.fallbackCorretorId,
+        responsavelCorretor: c.responsavelCorretor,
+        fallbackCorretor: c.fallbackCorretor,
         totalContatos: c._count.contatos,
         totalLeads: c._count.leads,
         temBriefing: !!c.briefingCompleto,

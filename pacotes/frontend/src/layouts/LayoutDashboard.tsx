@@ -165,6 +165,11 @@ export function LayoutDashboard({ children }: LayoutDashboardProps) {
           label: "Agenda",
           path: "/dashboard/agenda",
         },
+        {
+          icon: Calendar,
+          label: "Confirmações",
+          path: "/dashboard/confirmacoes-corretores",
+        },
       ],
     },
     // === GESTÃO ===

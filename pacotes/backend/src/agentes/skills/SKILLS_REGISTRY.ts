@@ -64,6 +64,7 @@ export const SKILLS_REGISTRY: Record<string, string> = {
     // ===========================
     'agendamento/tratativa-sem-aceite':       'presenter/tratativa-sem-aceite-agendamento.md',
     'agendamento/escalation-trigger-matrix':  'presenter/escalation-trigger-matrix.md',
+    'agendamento/handoff-especialista':       'presenter/handoff-especialista.md',
 
     // ===========================
     // Aliases legados (compatibilidade)
@@ -84,6 +85,7 @@ export const SKILLS_REGISTRY: Record<string, string> = {
     'presenter/tratativa-contrato-condicoes': 'presenter/tratativa-contrato-condicoes.md',
     'presenter/tratativa-sem-aceite-agendamento': 'presenter/tratativa-sem-aceite-agendamento.md',
     'presenter/escalation-trigger-matrix':    'presenter/escalation-trigger-matrix.md',
+    'presenter/handoff-especialista':         'presenter/handoff-especialista.md',
 };
 
 /**

@@ -10,6 +10,7 @@
 
 import { tool } from '@openai/agents';
 import { z } from 'zod';
+import crypto from 'node:crypto';
 import { prisma } from '../lib/db';
 import ContratoService from '../contratos/contrato-service';
 import {
@@ -345,7 +346,8 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
 export const encaminharCorretorTool = tool({
     name: 'encaminhar_corretor',
     description: `USAR APENAS quando proprietário pedir EXPLICITAMENTE para falar com humano.
-NÃO use para perguntas sobre valor - responda você mesmo!`,
+NÃO use para perguntas sobre valor - responda você mesmo!
+Ao executar, faça passagem de bastão profissional: diga quem é o especialista e oriente salvar o contato.`,
 
     parameters: z.object({
         contatoId: z.string().describe('ID do contato'),
@@ -879,6 +881,12 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                         descricao: descricaoAtividade,
                         agendadoPara,
                         statusAgendamento: 'PENDENTE',
+                        statusConfirmacaoCorretor: 'PENDENTE',
+                        tokenConfirmacaoCorretor: crypto.randomUUID(),
+                        confirmacaoCorretorSolicitadaEm: null,
+                        confirmadoCorretorEm: null,
+                        expiradoCorretorEm: null,
+                        remanejadoCorretorEm: null,
                     }
                 });
             } else {
@@ -890,7 +898,9 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                         descricao: descricaoAtividade,
                         criadoPor: 'ai_agent',
                         agendadoPara,
-                        statusAgendamento: 'PENDENTE'
+                        statusAgendamento: 'PENDENTE',
+                        statusConfirmacaoCorretor: 'PENDENTE',
+                        tokenConfirmacaoCorretor: crypto.randomUUID(),
                     }
                 });
             }

@@ -10,6 +10,11 @@ import { processarRecontatos } from '../jobs/recontato-automatico';
 import { experienceReplayService } from '../servicos/experience-replay';
 import { executarReenviosCrmFalhos } from '../jobs/job-reenvio-crm';
 import { executarRetornoIa } from '../jobs/job-retomar-ia';
+import {
+  executarConvitesConfirmacaoCorretor,
+  executarLembretesConfirmacaoCorretor,
+  executarCutoffRemanejamentoCorretor
+} from '../jobs/job-confirmacao-corretor';
 
 const router = Router();
 
@@ -242,6 +247,48 @@ router.post('/retomar-ia', async (req: Request, res: Response) => {
     res.json({ success: true, resultado });
   } catch (error: any) {
     console.error('[Jobs] Erro no retorno IA:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/jobs/confirmacao-corretor/convites
+ * Dispara convites de confirmação T-120.
+ */
+router.post('/confirmacao-corretor/convites', async (_req: Request, res: Response) => {
+  try {
+    const resultado = await executarConvitesConfirmacaoCorretor();
+    res.json({ success: true, resultado });
+  } catch (error: any) {
+    console.error('[Jobs] Erro no job convites corretor:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/jobs/confirmacao-corretor/lembretes
+ * Dispara lembretes de confirmação T-90.
+ */
+router.post('/confirmacao-corretor/lembretes', async (_req: Request, res: Response) => {
+  try {
+    const resultado = await executarLembretesConfirmacaoCorretor();
+    res.json({ success: true, resultado });
+  } catch (error: any) {
+    console.error('[Jobs] Erro no job lembretes corretor:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/jobs/confirmacao-corretor/cutoff
+ * Executa cutoff T-60 e remanejamento automático.
+ */
+router.post('/confirmacao-corretor/cutoff', async (_req: Request, res: Response) => {
+  try {
+    const resultado = await executarCutoffRemanejamentoCorretor();
+    res.json({ success: true, resultado });
+  } catch (error: any) {
+    console.error('[Jobs] Erro no job cutoff corretor:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

@@ -266,6 +266,53 @@ export class WhatsAppService {
     }
   }
 
+  async enviarContatoPadrao(
+    numeroDestino: string,
+    contato: {
+      fullName: string;
+      phoneNumber: string;
+      organization?: string;
+      email?: string;
+    }
+  ): Promise<any> {
+    let numeroFormatado = numeroDestino.replace(/\D/g, '');
+    if (numeroFormatado.length === 10 || numeroFormatado.length === 11) {
+      numeroFormatado = `55${numeroFormatado}`;
+    }
+
+    const phoneDigits = (contato.phoneNumber || '').replace(/\D/g, '');
+    const phoneIntl = phoneDigits.startsWith('55') ? phoneDigits : `55${phoneDigits}`;
+
+    const payload = {
+      number: numeroFormatado,
+      contact: {
+        fullName: contato.fullName,
+        phoneNumber: phoneIntl,
+        organization: contato.organization || undefined,
+        email: contato.email || undefined,
+      },
+      delay: 1200,
+    };
+
+    const endpoints = [
+      `${this.apiUrl}/message/sendContact/${this.instanceName}`,
+      `${this.apiUrl}/message/sendContactVcard/${this.instanceName}`,
+    ];
+
+    let ultimoErro: any;
+    for (const endpoint of endpoints) {
+      try {
+        const response = await axios.post(endpoint, payload, { headers: this.getHeaders() });
+        return response.data;
+      } catch (error: any) {
+        ultimoErro = error;
+      }
+    }
+
+    console.error('[WhatsApp] Erro ao enviar contato padrão:', ultimoErro?.response?.data || ultimoErro?.message || ultimoErro);
+    throw ultimoErro;
+  }
+
   async buscarConfiguracao(): Promise<any> {
     try {
       const response = await axios.get(

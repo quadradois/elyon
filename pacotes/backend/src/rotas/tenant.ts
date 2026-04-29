@@ -61,6 +61,17 @@ function normalizarPerfilVenda(perfilVenda: any): any {
       ? base.modalidadePreferencial
       : (modalidadesResolvidas.includes('EXCLUSIVA') ? 'EXCLUSIVA' : 'NAO_EXCLUSIVA');
 
+  const especialistaHandoff = base.especialistaHandoff || {};
+  const especialistaHandoffNormalizado = {
+    ativo: !!especialistaHandoff.ativo,
+    nome: typeof especialistaHandoff.nome === 'string' ? especialistaHandoff.nome.trim() : '',
+    telefone: typeof especialistaHandoff.telefone === 'string' ? especialistaHandoff.telefone.trim() : '',
+    cargo: typeof especialistaHandoff.cargo === 'string' && especialistaHandoff.cargo.trim().length > 0
+      ? especialistaHandoff.cargo.trim()
+      : 'Especialista',
+    email: typeof especialistaHandoff.email === 'string' ? especialistaHandoff.email.trim() : '',
+  };
+
   return {
     ...base,
     modalidadesVenda: modalidadesResolvidas,
@@ -78,6 +89,7 @@ function normalizarPerfilVenda(perfilVenda: any): any {
       ? base.elevenLabsModelId.trim()
       : 'eleven_multilingual_v2',
     perfilVozTenant: base.perfilVozTenant || 'vendas_alta_energia',
+    especialistaHandoff: especialistaHandoffNormalizado,
     // Compatibilidade legado
     aceitaExclusividade: modalidadesResolvidas.includes('EXCLUSIVA'),
     tempoExclusividade: base.tempoExclusividade || base.politicaModalidades?.EXCLUSIVA?.prazoDias || 180,

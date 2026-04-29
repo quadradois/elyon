@@ -88,6 +88,13 @@ interface PerfilVenda {
   percentualParceria?: number;
   respostaEmAudioAtiva?: boolean;
   vozPadraoTenant?: string;
+  especialistaHandoff?: {
+    ativo?: boolean;
+    nome?: string;
+    telefone?: string;
+    cargo?: string;
+    email?: string;
+  };
 }
 
 interface TenantPerfil {
@@ -165,6 +172,13 @@ const VENDA_INICIAL: PerfilVenda = {
   percentualParceria: 50,
   respostaEmAudioAtiva: false,
   vozPadraoTenant: 'alloy',
+  especialistaHandoff: {
+    ativo: false,
+    nome: '',
+    telefone: '',
+    cargo: 'Especialista',
+    email: '',
+  },
 };
 
 const PERFIL_INICIAL: TenantPerfil = {
@@ -309,6 +323,13 @@ function normalizarPerfilVenda(venda?: Partial<PerfilVenda> | null): PerfilVenda
     vozPadraoTenant: typeof base.vozPadraoTenant === 'string' && base.vozPadraoTenant.trim().length > 0
       ? base.vozPadraoTenant.trim()
       : 'alloy',
+    especialistaHandoff: {
+      ativo: !!base.especialistaHandoff?.ativo,
+      nome: (base.especialistaHandoff?.nome || '').trim(),
+      telefone: (base.especialistaHandoff?.telefone || '').trim(),
+      cargo: (base.especialistaHandoff?.cargo || 'Especialista').trim(),
+      email: (base.especialistaHandoff?.email || '').trim(),
+    },
   };
 }
 
@@ -1032,6 +1053,86 @@ export function PerfilImobiliaria() {
                     ))}
                   </div>
                 </Campo>
+              </div>
+
+              <div className="p-4 rounded-xl border border-violet-200 bg-violet-50/40 space-y-4">
+                <div className="flex items-center gap-2 text-violet-700">
+                  <Users className="w-4 h-4" />
+                  <p className="text-sm font-semibold">Passagem de bastão para Especialista</p>
+                </div>
+
+                <SwitchField
+                  label="Ativar especialista padrão no handoff"
+                  description="Quando a IA transferir para humano, identifica o especialista e envia contato no WhatsApp."
+                  checked={perfil.perfilVenda?.especialistaHandoff?.ativo || false}
+                  onChange={(checked) =>
+                    atualizarVenda({
+                      especialistaHandoff: {
+                        ...(perfil.perfilVenda?.especialistaHandoff || {}),
+                        ativo: checked,
+                      },
+                    })
+                  }
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Campo label="Nome do especialista">
+                    <Input
+                      value={perfil.perfilVenda?.especialistaHandoff?.nome || ''}
+                      onChange={(e) =>
+                        atualizarVenda({
+                          especialistaHandoff: {
+                            ...(perfil.perfilVenda?.especialistaHandoff || {}),
+                            nome: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Ex: Rafael Menezes"
+                    />
+                  </Campo>
+                  <Campo label="Cargo / Função">
+                    <Input
+                      value={perfil.perfilVenda?.especialistaHandoff?.cargo || 'Especialista'}
+                      onChange={(e) =>
+                        atualizarVenda({
+                          especialistaHandoff: {
+                            ...(perfil.perfilVenda?.especialistaHandoff || {}),
+                            cargo: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Ex: Especialista de Captação"
+                    />
+                  </Campo>
+                  <Campo label="WhatsApp do especialista">
+                    <Input
+                      value={perfil.perfilVenda?.especialistaHandoff?.telefone || ''}
+                      onChange={(e) =>
+                        atualizarVenda({
+                          especialistaHandoff: {
+                            ...(perfil.perfilVenda?.especialistaHandoff || {}),
+                            telefone: aplicarMascaraTelefone(e.target.value),
+                          },
+                        })
+                      }
+                      placeholder="(62) 99999-9999"
+                    />
+                  </Campo>
+                  <Campo label="E-mail (opcional)">
+                    <Input
+                      value={perfil.perfilVenda?.especialistaHandoff?.email || ''}
+                      onChange={(e) =>
+                        atualizarVenda({
+                          especialistaHandoff: {
+                            ...(perfil.perfilVenda?.especialistaHandoff || {}),
+                            email: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="especialista@imobiliaria.com"
+                    />
+                  </Campo>
+                </div>
               </div>
 
               {perfil.perfilVenda?.modalidadesVenda?.includes('EXCLUSIVA') && (

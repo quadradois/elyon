@@ -1743,6 +1743,8 @@ router.post('/:id/atividades', async (req, res) => {
         agendadoPara: agendadoPara ? new Date(agendadoPara) : null,
         statusAgendamento: agendadoPara ? 'PENDENTE' : null,
         tokenConfirmacao,
+        statusConfirmacaoCorretor: (tipo === 'REUNIAO' && agendadoPara) ? 'PENDENTE' : null,
+        tokenConfirmacaoCorretor: (tipo === 'REUNIAO' && agendadoPara) ? crypto.randomUUID() : null,
         criadoPor: 'corretor'
       }
     });
@@ -1764,6 +1766,124 @@ router.post('/:id/atividades', async (req, res) => {
   } catch (error) {
     console.error('Erro ao criar atividade:', error);
     responderErro(res, 500, 'Erro interno ao criar atividade');
+  }
+});
+
+// ============================================
+// GET /api/leads/confirmacao-corretor/painel - Painel operacional
+// ============================================
+router.get('/confirmacao-corretor/painel', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Não autorizado - tenant não identificado');
+    }
+
+    const agora = new Date();
+    const inicioJanela = new Date(agora.getTime() - 24 * 60 * 60 * 1000);
+    const fimJanela = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const atividades = await (prisma.atividade as any).findMany({
+      where: {
+        tipo: 'REUNIAO',
+        agendadoPara: { gte: inicioJanela, lte: fimJanela },
+        lead: { tenantId },
+      },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            nome: true,
+            telefone: true,
+            campanhaOrigem: { select: { id: true, nome: true } }
+          }
+        }
+      },
+      orderBy: { agendadoPara: 'asc' },
+      take: 200,
+    });
+
+    const statusAlvo = ['PENDENTE', 'CONFIRMADO', 'EXPIRADO', 'REMANEJADO', 'RECUSADO'];
+    const totais = {
+      pendente: 0,
+      confirmado: 0,
+      expirado: 0,
+      remanejado: 0,
+      recusado: 0,
+      total: 0,
+    };
+
+    const temposConfirmacaoMin: number[] = [];
+    const itens = atividades.map((atividade: any) => {
+      const status = statusAlvo.includes(atividade.statusConfirmacaoCorretor)
+        ? atividade.statusConfirmacaoCorretor
+        : 'PENDENTE';
+      const cutoff = atividade.agendadoPara
+        ? new Date(new Date(atividade.agendadoPara).getTime() - 60 * 60 * 1000)
+        : null;
+
+      totais.total++;
+      if (status === 'PENDENTE') totais.pendente++;
+      if (status === 'CONFIRMADO') totais.confirmado++;
+      if (status === 'EXPIRADO') totais.expirado++;
+      if (status === 'REMANEJADO') totais.remanejado++;
+      if (status === 'RECUSADO') totais.recusado++;
+
+      if (atividade.confirmacaoCorretorSolicitadaEm && atividade.confirmadoCorretorEm) {
+        const minutos = Math.max(
+          0,
+          Math.round(
+            (new Date(atividade.confirmadoCorretorEm).getTime() -
+              new Date(atividade.confirmacaoCorretorSolicitadaEm).getTime()) /
+              60000
+          )
+        );
+        temposConfirmacaoMin.push(minutos);
+      }
+
+      return {
+        atividadeId: atividade.id,
+        leadId: atividade.lead?.id || null,
+        leadNome: atividade.lead?.nome || 'Lead sem nome',
+        leadTelefone: atividade.lead?.telefone || null,
+        campanhaId: atividade.lead?.campanhaOrigem?.id || null,
+        campanhaNome: atividade.lead?.campanhaOrigem?.nome || null,
+        agendadoPara: atividade.agendadoPara,
+        statusConfirmacaoCorretor: status,
+        confirmacaoCorretorSolicitadaEm: atividade.confirmacaoCorretorSolicitadaEm,
+        confirmadoCorretorEm: atividade.confirmadoCorretorEm,
+        expiradoCorretorEm: atividade.expiradoCorretorEm,
+        remanejadoCorretorEm: atividade.remanejadoCorretorEm,
+        corretorOriginalId: atividade.corretorOriginalId,
+        corretorAtualId: atividade.corretorAtualId,
+        cutoffEm: cutoff,
+      };
+    });
+
+    const taxaConfirmacaoNoPrazo = totais.total > 0 ? Number((totais.confirmado / totais.total).toFixed(4)) : 0;
+    const taxaRemanejamento = totais.total > 0 ? Number((totais.remanejado / totais.total).toFixed(4)) : 0;
+    const tempoMedioConfirmacaoMin =
+      temposConfirmacaoMin.length > 0
+        ? Math.round(temposConfirmacaoMin.reduce((acc, valor) => acc + valor, 0) / temposConfirmacaoMin.length)
+        : null;
+
+    return res.json({
+      sucesso: true,
+      periodo: {
+        inicio: inicioJanela.toISOString(),
+        fim: fimJanela.toISOString(),
+      },
+      kpis: {
+        taxaConfirmacaoNoPrazo,
+        taxaRemanejamento,
+        tempoMedioConfirmacaoMin,
+      },
+      totais,
+      itens,
+    });
+  } catch (error) {
+    console.error('Erro ao carregar painel de confirmação do corretor:', error);
+    return responderErro(res, 500, 'Erro interno ao carregar painel');
   }
 });
 
@@ -1885,6 +2005,181 @@ router.post('/confirmar/:atividadeId/:token', async (req, res) => {
     }
   } catch (error) {
     console.error('Erro ao processar confirmação:', error);
+    responderErro(res, 500, 'Erro interno');
+  }
+});
+
+// ============================================
+// GET /api/leads/confirmar-corretor/:atividadeId/:token - Validar token do corretor (PÚBLICO)
+// ============================================
+router.get('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
+  try {
+    const { atividadeId, token } = req.params;
+
+    const atividade = await prisma.atividade.findFirst({
+      where: {
+        id: atividadeId,
+        tokenConfirmacaoCorretor: token
+      },
+      include: {
+        lead: true
+      }
+    });
+
+    if (!atividade) {
+      return responderErro(res, 404, 'Link inválido ou expirado', { valido: false });
+    }
+
+    const prazoCutoff = atividade.agendadoPara
+      ? new Date(new Date(atividade.agendadoPara).getTime() - 60 * 60 * 1000)
+      : null;
+
+    res.json({
+      valido: true,
+      atividade: {
+        id: atividade.id,
+        tipo: atividade.tipo,
+        titulo: atividade.titulo,
+        agendadoPara: atividade.agendadoPara,
+        statusConfirmacaoCorretor: (atividade as any).statusConfirmacaoCorretor || 'PENDENTE',
+        prazoCutoff,
+        lead: {
+          nome: atividade.lead.nome,
+          telefone: atividade.lead.telefone,
+          enderecoImovel: atividade.lead.enderecoImovel
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao validar token do corretor:', error);
+    responderErro(res, 500, 'Erro interno');
+  }
+});
+
+// ============================================
+// POST /api/leads/confirmar-corretor/:atividadeId/:token - Confirmar ou recusar (PÚBLICO)
+// ============================================
+router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
+  try {
+    const { atividadeId, token } = req.params;
+    const { acao, motivoRecusa } = req.body || {};
+
+    if (!['confirmar', 'recusar', 'ausencia'].includes(acao)) {
+      return responderErro(res, 400, 'Ação inválida. Use "confirmar", "recusar" ou "ausencia".');
+    }
+
+    const atividade = await prisma.atividade.findFirst({
+      where: {
+        id: atividadeId,
+        tokenConfirmacaoCorretor: token
+      },
+      include: {
+        lead: { select: { tenantId: true } }
+      }
+    });
+
+    if (!atividade) {
+      return responderErro(res, 404, 'Link inválido ou expirado', { sucesso: false });
+    }
+
+    const statusAtual = (atividade as any).statusConfirmacaoCorretor || 'PENDENTE';
+    if (statusAtual === 'CONFIRMADO') {
+      return res.json({
+        sucesso: true,
+        mensagem: 'Presença já confirmada anteriormente.',
+        statusConfirmacaoCorretor: 'CONFIRMADO'
+      });
+    }
+    if (statusAtual === 'RECUSADO') {
+      return res.json({
+        sucesso: true,
+        mensagem: 'Você já registrou ausência/recusa anteriormente.',
+        statusConfirmacaoCorretor: 'RECUSADO'
+      });
+    }
+    if (statusAtual === 'REMANEJADO') {
+      return res.json({
+        sucesso: false,
+        mensagem: 'Esta reunião já foi remanejada para outro corretor.',
+        statusConfirmacaoCorretor: 'REMANEJADO'
+      });
+    }
+
+    const agora = new Date();
+    const cutoff = atividade.agendadoPara
+      ? new Date(new Date(atividade.agendadoPara).getTime() - 60 * 60 * 1000)
+      : null;
+
+    if (acao === 'confirmar') {
+      if (cutoff && agora > cutoff) {
+        await prisma.atividade.update({
+          where: { id: atividadeId },
+          data: {
+            expiradoCorretorEm: (atividade as any).expiradoCorretorEm || agora,
+          }
+        });
+        return res.json({
+          sucesso: false,
+          mensagem: 'Confirmação fora do prazo de corte (T-60). A reunião pode já ter sido remanejada.',
+          statusConfirmacaoCorretor: statusAtual
+        });
+      }
+
+      await prisma.atividade.update({
+        where: { id: atividadeId },
+        data: {
+          statusConfirmacaoCorretor: 'CONFIRMADO',
+          confirmadoCorretorEm: agora
+        } as any
+      });
+
+      ServicoAuditoria.registrar({
+        tenantId: atividade.lead.tenantId,
+        acao: 'CONFIRMACAO_CORRETOR',
+        entidade: 'Atividade',
+        entidadeId: atividadeId,
+        ip: req.socket.remoteAddress || '0.0.0.0',
+        detalhes: {
+          tipo: 'confirmar',
+          statusAnterior: statusAtual,
+        }
+      });
+
+      return res.json({
+        sucesso: true,
+        mensagem: 'Presença confirmada com sucesso.',
+        statusConfirmacaoCorretor: 'CONFIRMADO'
+      });
+    }
+
+    await prisma.atividade.update({
+      where: { id: atividadeId },
+      data: {
+        statusConfirmacaoCorretor: 'RECUSADO',
+        motivoCancelamento: motivoRecusa || (atividade as any).motivoCancelamento || 'Recusa/Ausência do corretor'
+      } as any
+    });
+
+    ServicoAuditoria.registrar({
+      tenantId: atividade.lead.tenantId,
+      acao: 'RECUSA_CORRETOR',
+      entidade: 'Atividade',
+      entidadeId: atividadeId,
+      ip: req.socket.remoteAddress || '0.0.0.0',
+      detalhes: {
+        tipo: acao,
+        statusAnterior: statusAtual,
+        motivo: motivoRecusa || 'não informado'
+      }
+    });
+
+    return res.json({
+      sucesso: true,
+      mensagem: 'Ausência/recusa registrada. O sistema poderá remanejar automaticamente.',
+      statusConfirmacaoCorretor: 'RECUSADO'
+    });
+  } catch (error) {
+    console.error('Erro ao processar confirmação do corretor:', error);
     responderErro(res, 500, 'Erro interno');
   }
 });

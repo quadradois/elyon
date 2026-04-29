@@ -36,6 +36,7 @@ import { api } from "../servicos/api";
 import { PageHeader } from "../componentes/ui/page-header";
 import { SkeletonTable } from "../componentes/ui/skeleton";
 import { EmptyState } from "../componentes/ui/empty-state";
+import { servicoUsuarios, Usuario } from "../servicos/servico-usuarios";
 
 interface Campanha {
   id: string;
@@ -47,6 +48,10 @@ interface Campanha {
   temBriefing: boolean;
   confiabilidade: number | null;
   criadoEm: string;
+  responsavelCorretorId?: string | null;
+  fallbackCorretorId?: string | null;
+  responsavelCorretor?: { id: string; nome: string; estaAtivo: boolean } | null;
+  fallbackCorretor?: { id: string; nome: string; estaAtivo: boolean } | null;
 }
 
 export function Campanhas() {
@@ -58,6 +63,8 @@ export function Campanhas() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [termoBusca, setTermoBusca] = useState("");
   const [buscandoCep, setBuscandoCep] = useState(false);
+  const [corretores, setCorretores] = useState<Usuario[]>([]);
+  const [carregandoCorretores, setCarregandoCorretores] = useState(false);
 
   // Form state com campos separados de endereço
   const [formData, setFormData] = useState({
@@ -72,11 +79,38 @@ export function Campanhas() {
     estado: "GO",
     tipoImovel: "Apartamento",
     perfilImovel: "Economico",
+    responsavelCorretorId: "",
+    fallbackCorretorId: "",
   });
 
   useEffect(() => {
     carregarCampanhas();
+    carregarCorretores();
   }, []);
+
+  const telefoneValidoWhatsapp = (telefone?: string) => {
+    if (!telefone) return false;
+    const digitos = telefone.replace(/\D/g, "");
+    return digitos.length >= 10;
+  };
+
+  const carregarCorretores = async () => {
+    try {
+      setCarregandoCorretores(true);
+      const response = await servicoUsuarios.listar({ pagina: 1 });
+      const equipe = response?.dados || [];
+      setCorretores(equipe.filter((u) => u.papel === "CORRETOR"));
+    } catch (error) {
+      console.error("Erro ao carregar corretores:", error);
+      setCorretores([]);
+    } finally {
+      setCarregandoCorretores(false);
+    }
+  };
+
+  const corretoresElegiveis = corretores.filter(
+    (u) => u.estaAtivo && telefoneValidoWhatsapp(u.telefone)
+  );
 
   const carregarCampanhas = async () => {
     try {
@@ -122,9 +156,11 @@ export function Campanhas() {
       !formData.nome ||
       !formData.nomeEmpreendimento ||
       !formData.bairro ||
-      !formData.cidade
+      !formData.cidade ||
+      !formData.responsavelCorretorId ||
+      !formData.fallbackCorretorId
     ) {
-      alert("Preencha todos os campos obrigatórios (Nome, Empreendimento, Bairro e Cidade)!");
+      alert("Preencha todos os campos obrigatórios, incluindo responsável e fallback.");
       return;
     }
 
@@ -148,6 +184,8 @@ export function Campanhas() {
         estado: "GO",
         tipoImovel: "Apartamento",
         perfilImovel: "Economico",
+        responsavelCorretorId: "",
+        fallbackCorretorId: "",
       });
       
       // Navegar para a campanha criada para preencher o briefing
@@ -414,6 +452,53 @@ export function Campanhas() {
                 </div>
               </div>
 
+              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+                <div className="text-sm font-medium text-slate-700">
+                  Responsável de Handoff *
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="responsavelCorretorId" className="text-xs font-medium text-slate-600">
+                      Corretor responsável
+                    </label>
+                    <select
+                      id="responsavelCorretorId"
+                      className="w-full border border-slate-200 rounded-md p-2 text-sm h-10"
+                      value={formData.responsavelCorretorId}
+                      onChange={(e) => setFormData({ ...formData, responsavelCorretorId: e.target.value })}
+                    >
+                      <option value="">{carregandoCorretores ? "Carregando..." : "Selecione"}</option>
+                      {corretoresElegiveis.map((corretor) => (
+                        <option key={corretor.id} value={corretor.id}>
+                          {corretor.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="fallbackCorretorId" className="text-xs font-medium text-slate-600">
+                      Corretor fallback
+                    </label>
+                    <select
+                      id="fallbackCorretorId"
+                      className="w-full border border-slate-200 rounded-md p-2 text-sm h-10"
+                      value={formData.fallbackCorretorId}
+                      onChange={(e) => setFormData({ ...formData, fallbackCorretorId: e.target.value })}
+                    >
+                      <option value="">{carregandoCorretores ? "Carregando..." : "Selecione"}</option>
+                      {corretoresElegiveis.map((corretor) => (
+                        <option key={corretor.id} value={corretor.id}>
+                          {corretor.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Apenas corretores ativos e com WhatsApp válido aparecem para evitar handoff inválido.
+                </p>
+              </div>
+
               <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
                 <div className="flex gap-2">
                   <FileEdit className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -533,13 +618,15 @@ export function Campanhas() {
                 <TableHead>Contatos</TableHead>
                 <TableHead>Leads</TableHead>
                 <TableHead>Precisão</TableHead>
+                <TableHead>Responsável</TableHead>
+                <TableHead>Fallback</TableHead>
                 <TableHead className="text-right">Criado em</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {campanhasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8">
+                  <TableCell colSpan={9} className="py-8">
                     <EmptyState
                       tipo="nenhuma-campanha"
                       titulo="Nenhuma campanha encontrada"
@@ -599,6 +686,12 @@ export function Campanhas() {
                           </span>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-slate-600">
+                      {campanha.responsavelCorretor?.nome || "-"}
+                    </TableCell>
+                    <TableCell className="text-sm text-slate-600">
+                      {campanha.fallbackCorretor?.nome || "-"}
                     </TableCell>
                     <TableCell className="text-right text-sm text-slate-500">
                       {new Date(campanha.criadoEm).toLocaleDateString("pt-BR")}

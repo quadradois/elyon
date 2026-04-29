@@ -7,6 +7,7 @@ import { DashboardAgentes } from "./paginas/DashboardAgentes";
 import { MissionControlLeads } from "./paginas/MissionControlLeads";
 import ProprietarioDetalhes from "./paginas/ProprietarioDetalhes";
 import ConfirmarAgendamento from "./paginas/ConfirmarAgendamento";
+import ConfirmarCorretor from "./paginas/ConfirmarCorretor";
 import { Mineracao } from "./paginas/Mineracao";
 import { Captacao } from "./paginas/Captacao";
 import { Campanhas } from "./paginas/Campanhas";
@@ -29,6 +30,7 @@ import { Agenda } from "./paginas/Agenda";
 import { Integracoes } from "./paginas/Integracoes";
 import { ConfiguracaoLLM } from "./paginas/ConfiguracaoLLM";
 import GestaoUsuarios from "./paginas/GestaoUsuarios";
+import { PainelConfirmacaoCorretor } from "./paginas/PainelConfirmacaoCorretor";
 
 // Páginas Admin
 import { AdminClientes, AdminTransacoes, AdminLeadsVip, AdminPacotes, AdminPlanos, AdminAuditoria } from "./paginas/admin";
@@ -93,6 +95,10 @@ function App() {
         <Route
           path="/confirmar/:atividadeId/:token"
           element={<ConfirmarAgendamento />}
+        />
+        <Route
+          path="/confirmar-corretor/:atividadeId/:token"
+          element={<ConfirmarCorretor />}
         />
 
         {/* Rota Pública - Aceite de Contrato Digital */}
@@ -443,6 +449,16 @@ function App() {
             <RotaPrivada>
               <LayoutDashboard>
                 <GestaoUsuarios />
+              </LayoutDashboard>
+            </RotaPrivada>
+          }
+        />
+        <Route
+          path="/dashboard/confirmacoes-corretores"
+          element={
+            <RotaPrivada>
+              <LayoutDashboard>
+                <PainelConfirmacaoCorretor />
               </LayoutDashboard>
             </RotaPrivada>
           }

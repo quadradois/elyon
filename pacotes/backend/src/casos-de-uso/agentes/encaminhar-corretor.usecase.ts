@@ -1,4 +1,6 @@
 import { prisma } from '../../lib/db';
+import { getWhatsAppService } from '../../servicos/whatsapp';
+import { resolverEspecialistaCampanha } from '../../servicos/resolucao-especialista-campanha';
 
 export interface EncaminharCorretorInput {
     contatoId: string;
@@ -11,7 +13,18 @@ export interface EncaminharCorretorOutput {
     success: boolean;
     leadId?: string;
     message?: string;
+    especialista?: {
+        nome: string;
+        telefone: string;
+        cargo?: string;
+    };
     error?: string;
+}
+
+function normalizarTelefoneParaWaMe(telefone?: string | null): string {
+    const digits = (telefone || '').replace(/\D/g, '');
+    if (!digits) return '';
+    return digits.startsWith('55') ? digits : `55${digits}`;
 }
 
 export class EncaminharCorretorUseCase {
@@ -78,12 +91,69 @@ export class EncaminharCorretorUseCase {
                 }
             });
 
+            const tenant = await prisma.tenant.findUnique({
+                where: { id: contato.campanha.tenantId },
+                select: {
+                    nome: true,
+                }
+            });
+
+            const especialista = await resolverEspecialistaCampanha({
+                tenantId: contato.campanha.tenantId,
+                campanhaId: contato.campanha.id,
+            });
+            const especialistaAtivo = !!especialista;
+
+            if (especialistaAtivo) {
+                const telefoneEspecialista = normalizarTelefoneParaWaMe(especialista!.telefone);
+                const telefoneDestino = normalizarTelefoneParaWaMe(contato.telefone || '');
+                const nomeEspecialista = String(especialista!.nome || '').trim();
+                const cargoEspecialista = String(especialista!.cargo || 'Especialista').trim();
+
+                if (telefoneDestino && telefoneEspecialista) {
+                    const sessao = await prisma.sessaoWhatsapp.findFirst({
+                        where: {
+                            tenantId: contato.campanha.tenantId,
+                            status: { in: ['CONECTADO'] }
+                        },
+                        select: { instanceName: true },
+                        orderBy: { atualizadoEm: 'desc' }
+                    });
+
+                    if (sessao?.instanceName) {
+                        const whatsapp = getWhatsAppService(sessao.instanceName);
+                        try {
+                            await whatsapp.enviarContatoPadrao(telefoneDestino, {
+                                fullName: nomeEspecialista,
+                                phoneNumber: telefoneEspecialista,
+                                organization: tenant?.nome || undefined,
+                                email: especialista?.email || undefined,
+                            });
+                        } catch (erroCard) {
+                            console.warn('[UseCase] encaminhar_corretor - Falha ao enviar card de contato, seguindo fallback texto:', erroCard);
+                            const linkWa = `https://wa.me/${telefoneEspecialista}`;
+                            await whatsapp.enviarMensagemTexto(
+                                telefoneDestino,
+                                `Antes do contato, salve este número do ${cargoEspecialista}: ${nomeEspecialista} (${telefoneEspecialista}). Link direto: ${linkWa}`
+                            );
+                        }
+                    }
+                }
+            }
+
             console.log(`[UseCase] encaminhar_corretor - modoAtendimento=HUMANO, tarefa criada para lead ${leadId}`);
 
             return {
                 success: true,
                 leadId: leadId || undefined,
-                message: `Corretor será notificado ${input.urgencia === 'ALTA' ? 'imediatamente' : 'em breve'}!`
+                message: especialistaAtivo
+                    ? `Perfeito. O atendimento foi transferido para humano. Seu especialista ${especialista!.nome} fará contato ${input.urgencia === 'ALTA' ? 'imediatamente' : 'em breve'}.`
+                    : `Corretor será notificado ${input.urgencia === 'ALTA' ? 'imediatamente' : 'em breve'}!`,
+                especialista: especialistaAtivo ? {
+                    nome: especialista!.nome,
+                    telefone: especialista!.telefone,
+                    cargo: especialista!.cargo || 'Especialista',
+                } : undefined
             };
         } catch (error: any) {
             console.error('[UseCase] encaminhar_corretor - Erro:', error);
