@@ -190,8 +190,8 @@ function buildCrmPayload(lead: Lead, tenantId: string): {
             tipo_negocio: lead.interesseEm || 'venda',
             logradouro: lead.enderecoImovel?.split(',')[0] || null,
             bairro: enderecoParseado.bairro || null,
-            cidade: enderecoParseado.cidade || 'Goiânia',
-            estado: enderecoParseado.estado || 'GO',
+            cidade: enderecoParseado.cidade || null,
+            estado: enderecoParseado.estado || null,
             quartos: lead.quartosImovel,
             suites: lead.imovelSuites,
             banheiros: lead.imovelBanheiros,
@@ -218,6 +218,34 @@ function buildCrmPayload(lead: Lead, tenantId: string): {
             campanha_id: lead.campanhaOrigemId,
         }
     };
+}
+
+async function aguardar(ms: number): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isRetryableStatus(status: number): boolean {
+    return status === 408 || status === 429 || status >= 500;
+}
+
+// Backoff exponencial: tentativa 1→2s, 2→8s, 3→30s
+const BACKOFF_MS = [2000, 8000, 30000];
+
+async function enviarComRetry(url: string, options: RequestInit, tentativasMax: number = 3): Promise<Response> {
+    let ultimaResposta: Response | null = null;
+    for (let tentativa = 1; tentativa <= tentativasMax; tentativa++) {
+        const resposta = await fetch(url, options);
+        ultimaResposta = resposta;
+        if (!isRetryableStatus(resposta.status) || tentativa === tentativasMax) {
+            return resposta;
+        }
+        const esperaMs = BACKOFF_MS[tentativa - 1] ?? 30000;
+        console.info(`[OBS] crm_sync_retry tentativa=${tentativa} status=${resposta.status} aguardando=${esperaMs}ms`);
+        await aguardar(esperaMs);
+    }
+
+    if (ultimaResposta) return ultimaResposta;
+    throw new Error('Falha ao enviar para CRM após retentativas');
 }
 
 /**
@@ -287,10 +315,13 @@ export async function enviarParaCrm(leadId: string): Promise<CrmResponse> {
 
     try {
         const payload = buildCrmPayload(lead, lead.tenantId);
+        if (!payload.imovel.cidade || !payload.imovel.estado) {
+            console.warn(`[CRM] crm_missing_location lead=${leadId} endereco="${lead.enderecoImovel || ''}"`);
+        }
 
         console.log(`[CRM] Enviando lead ${leadId} para ${config.apiUrl}...`);
 
-        const response = await fetch(`${config.apiUrl}/leads/from-elyon`, {
+        const response = await enviarComRetry(`${config.apiUrl}/leads/from-elyon`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -416,4 +447,11 @@ export default {
     enviarParaCrm,
     verificarStatusCrm,
     reenviarParaCrm
+};
+
+export const __testables = {
+    parseEndereco,
+    buildCrmPayload,
+    isRetryableStatus,
+    enviarComRetry,
 };

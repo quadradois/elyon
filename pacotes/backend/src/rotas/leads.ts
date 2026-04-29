@@ -835,7 +835,7 @@ router.get('/:id', async (req, res) => {
           a.agendadoPara && !a.completadoEm && a.statusAgendamento !== 'CANCELADO'
         );
         const scoreQualificacao = calcularQualificacao(l);
-        const { pontos: scoreUrgencia } = calcularUrgencia(
+        const { pontos: scoreUrgencia, motivos: motivosUrgencia, orientacaoAcao } = calcularUrgencia(
           {
             ...l,
             proximaAtividadeData: proximaAtiv?.agendadoPara || null,
@@ -848,6 +848,8 @@ router.get('/:id', async (req, res) => {
           scoreQualificacao,
           scoreUrgencia,
           scoreComposto: Math.round(scoreQualificacao * 0.4 + scoreUrgencia * 0.6),
+          motivosUrgencia,
+          orientacaoAcao,
         };
       })()
     };
@@ -1942,6 +1944,33 @@ router.post('/:id/controle-modo', async (req, res) => {
     });
 
     res.json({ sucesso: true, modo });
+  } catch {
+    responderErro(res, 500, 'Erro interno');
+  }
+});
+
+/**
+ * POST /api/leads/:id/retomar-ia
+ * Devolve o atendimento para a IA (modoAtendimento='IA') sem precisar chamar controle-modo.
+ */
+router.post('/:id/retomar-ia', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+
+    const contato = await prisma.contato.findFirst({
+      where: { leadId: req.params.id },
+      select: { id: true },
+    });
+
+    if (!contato) return responderErro(res, 404, 'Contato não encontrado para este lead');
+
+    await (prisma.contato as any).update({
+      where: { id: contato.id },
+      data: { modoAtendimento: 'IA' },
+    });
+
+    res.json({ sucesso: true, modo: 'IA' });
   } catch {
     responderErro(res, 500, 'Erro interno');
   }

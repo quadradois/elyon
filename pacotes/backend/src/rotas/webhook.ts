@@ -39,6 +39,12 @@ import {
 import { capturarDocumentoWhatsapp, detectarTipoMidia } from '../servicos/servico-captura-documentos';
 import { analisarMidiaParaContexto } from '../servicos/servico-analise-midia';
 import { sintetizarFalaTenant } from '../servicos/servico-voz';
+import {
+  extrairSinaisNegociacaoHumana,
+  deveAutoRetornarParaIA as avaliarAutoRetornoParaIA,
+  deveExecutarFallbackConversao,
+  deveExecutarFallbackAtualizacaoLead
+} from './webhook-resilience';
 
 const router = Router();
 const MODO_OUTBOUND_ONLY = process.env.MODO_OUTBOUND_ONLY !== 'false';
@@ -154,6 +160,52 @@ async function garantirConversaoAutomaticaSeElegivel(params: {
     erro: resultadoConversao.error || 'erro desconhecido',
     leadId: resultadoConversao.leadId
   });
+}
+
+async function houveExecucaoToolRecente(leadId: string, janelaSegundos: number = 120): Promise<boolean> {
+  try {
+    const limite = new Date(Date.now() - (janelaSegundos * 1000));
+    const atividade = await prisma.atividade.findFirst({
+      where: {
+        leadId,
+        titulo: { startsWith: 'TOOL_EXEC:' },
+        criadoEm: { gte: limite },
+      },
+      select: { id: true },
+      orderBy: { criadoEm: 'desc' }
+    });
+    return !!atividade;
+  } catch (error) {
+    console.warn('[Webhook] Erro ao verificar TOOL_EXEC recente:', error);
+    return false;
+  }
+}
+
+async function garantirAtualizacaoLeadBasicaSeElegivel(params: {
+  contatoId: string;
+  leadId: string;
+  textoConversa: string;
+}) {
+  const houveTool = await houveExecucaoToolRecente(params.leadId, 120);
+  const podeAtualizar = deveExecutarFallbackAtualizacaoLead({
+    leadId: params.leadId,
+    houveToolExecRecente: houveTool,
+    textoConversa: params.textoConversa,
+  });
+  if (!podeAtualizar) return;
+
+  const deteccao = detectarInteresseVendaLocacao(params.textoConversa);
+
+  const resultado = await qualificarLeadUseCase.execute({
+    contatoId: params.contatoId,
+    temperatura: deteccao?.temperatura || 'MORNO',
+    interesse: deteccao?.tipoInteresse || 'VENDA',
+    timeline: deteccao?.timeline || undefined,
+    situacaoAtual: params.textoConversa,
+    observacoes: 'Fallback técnico: atualização automática por ausência de TOOL_EXEC no turno'
+  });
+
+  console.info(`[OBS] lead_update_fallback_executed contatoId=${params.contatoId} leadId=${params.leadId} success=${resultado?.success ? 'true' : 'false'}`);
 }
 
 
@@ -628,8 +680,27 @@ async function deveProcessarMensagem(
 // 🔄 DEBOUNCE DE MENSAGENS
 // ====================================
 
-// Tempo de espera para consolidar mensagens (5 segundos)
-const DEBOUNCE_MS = lerEnvMs('WEBHOOK_DEBOUNCE_MS', 5000); // 5 segundos (default)
+// Tempo de espera para consolidar mensagens
+// Mensagens que parecem completas usam DEBOUNCE_RAPIDO_MS (2s); parciais usam DEBOUNCE_MS (5s).
+const DEBOUNCE_MS = lerEnvMs('WEBHOOK_DEBOUNCE_MS', 5000);
+const DEBOUNCE_RAPIDO_MS = lerEnvMs('WEBHOOK_DEBOUNCE_RAPIDO_MS', 2000);
+
+/**
+ * Heurística: a mensagem parece completa (não haverá continuação imediata)?
+ * Critérios: termina com pontuação final, tem >20 chars, é áudio/mídia, ou é uma única palavra curta.
+ */
+function mensagemPareceCompleta(texto: string): boolean {
+  const t = texto.trim();
+  if (!t) return true; // mídia sem texto
+  if (/[.?!]$/.test(t)) return true;       // termina com pontuação
+  if (t.length > 20) return true;           // mensagem longa — provavelmente completa
+  if (/^(sim|não|nao|ok|s|n|claro|pode)$/i.test(t)) return true; // resposta curta fechada
+  return false;
+}
+
+function calcularDebounce(texto: string): number {
+  return mensagemPareceCompleta(texto) ? DEBOUNCE_RAPIDO_MS : DEBOUNCE_MS;
+}
 
 // Tempo mínimo entre respostas para o mesmo contato (10 segundos)
 const COOLDOWN_RESPOSTA_MS = lerEnvMs('WEBHOOK_COOLDOWN_RESPOSTA_MS', 10000);
@@ -639,9 +710,11 @@ const DEBOUNCE_RETRY_WHEN_LOCKED_MS = lerEnvMs('WEBHOOK_DEBOUNCE_RETRY_WHEN_LOCK
 const MAX_TENTATIVAS_ENVIO_WHATSAPP = 3;
 const MARCADOR_AUDIO_PERMITIDO = '[PREFERENCIA_AUDIO=PERMITIDO]';
 const MARCADOR_AUDIO_NEGADO = '[PREFERENCIA_AUDIO=NEGADO]';
+const MARCADOR_AUDIO_PERGUNTADO = '[PREFERENCIA_AUDIO=PERGUNTADO]';
 const AUTORIZACAO_VENDA_DOC_URL = (process.env.AUTORIZACAO_VENDA_DOC_URL || '').trim();
 const AUTORIZACAO_VENDA_DOC_NOME = (process.env.AUTORIZACAO_VENDA_DOC_NOME || 'modelo_autorizacao_venda.pdf').trim();
 const AUTORIZACAO_VENDA_DOC_CAPTION = (process.env.AUTORIZACAO_VENDA_DOC_CAPTION || 'Segue o modelo de autorização de venda para você analisar com calma.').trim();
+const AUTO_RETORNO_HUMANO_PARA_IA = (process.env.AUTO_RETORNO_HUMANO_PARA_IA || 'true') === 'true';
 
 // Estrutura para armazenar mensagens pendentes por contato
 interface MensagemPendente {
@@ -660,6 +733,11 @@ interface FilaContato {
   contatoData: any; // Dados do contato para processamento
   telefone: string;
   reagendado?: boolean;
+}
+
+function deveAutoRetornarParaIA(contatoProspeccao: any): boolean {
+  const statusLead = contatoProspeccao?.lead?.status || contatoProspeccao?.lead_status || '';
+  return avaliarAutoRetornoParaIA(AUTO_RETORNO_HUMANO_PARA_IA, statusLead);
 }
 
 // Fila de mensagens pendentes por contatoId
@@ -1049,14 +1127,15 @@ function detectarPermissaoAudioNoTexto(texto: string): 'PERMITIDO' | 'NEGADO' | 
   return null;
 }
 
-function preferenciaAudioPorObservacoes(observacoes?: string | null): 'PERMITIDO' | 'NEGADO' | null {
+function preferenciaAudioPorObservacoes(observacoes?: string | null): 'PERMITIDO' | 'NEGADO' | 'PERGUNTADO' | null {
   const obs = observacoes || '';
   if (obs.includes(MARCADOR_AUDIO_NEGADO)) return 'NEGADO';
   if (obs.includes(MARCADOR_AUDIO_PERMITIDO)) return 'PERMITIDO';
+  if (obs.includes(MARCADOR_AUDIO_PERGUNTADO)) return 'PERGUNTADO';
   return null;
 }
 
-async function salvarPreferenciaAudioContato(contatoId: string, preferencia: 'PERMITIDO' | 'NEGADO'): Promise<void> {
+async function salvarPreferenciaAudioContato(contatoId: string, preferencia: 'PERMITIDO' | 'NEGADO' | 'PERGUNTADO'): Promise<void> {
   const contato = await prisma.contato.findUnique({
     where: { id: contatoId },
     select: { observacoes: true }
@@ -1065,9 +1144,14 @@ async function salvarPreferenciaAudioContato(contatoId: string, preferencia: 'PE
   const obsLimpa = obsAtual
     .replace(MARCADOR_AUDIO_PERMITIDO, '')
     .replace(MARCADOR_AUDIO_NEGADO, '')
+    .replace(MARCADOR_AUDIO_PERGUNTADO, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  const marcador = preferencia === 'PERMITIDO' ? MARCADOR_AUDIO_PERMITIDO : MARCADOR_AUDIO_NEGADO;
+  const marcador = preferencia === 'PERMITIDO'
+    ? MARCADOR_AUDIO_PERMITIDO
+    : preferencia === 'NEGADO'
+      ? MARCADOR_AUDIO_NEGADO
+      : MARCADOR_AUDIO_PERGUNTADO;
 
   await prisma.contato.update({
     where: { id: contatoId },
@@ -1098,7 +1182,7 @@ function contemLinkOuAgendamentoOperacional(texto: string): boolean {
 
 function deveResponderEmAudio(params: {
   respostaEmAudioAtiva: boolean;
-  preferenciaAudio: 'PERMITIDO' | 'NEGADO' | null;
+  preferenciaAudio: 'PERMITIDO' | 'NEGADO' | 'PERGUNTADO' | null;
   clienteEnviouAudio: boolean;
   resposta: string;
 }): boolean {
@@ -1113,13 +1197,13 @@ function deveResponderEmAudio(params: {
 
 function devePedirPermissaoAudio(params: {
   respostaEmAudioAtiva: boolean;
-  preferenciaAudio: 'PERMITIDO' | 'NEGADO' | null;
+  preferenciaAudio: 'PERMITIDO' | 'NEGADO' | 'PERGUNTADO' | null;
   clienteEnviouAudio: boolean;
   textoConsolidado: string;
   resposta: string;
 }): boolean {
   if (!params.respostaEmAudioAtiva) return false;
-  if (params.preferenciaAudio) return false;
+  if (params.preferenciaAudio) return false; // PERMITIDO, NEGADO ou PERGUNTADO → não pergunta de novo
   if (params.clienteEnviouAudio) return false;
   if (detectarPermissaoAudioNoTexto(params.textoConsolidado)) return false;
   if (params.resposta.length < 140) return false;
@@ -1336,12 +1420,12 @@ function adicionarAFilaDebounce(
   mensagem: MensagemPendente,
   contatoData: any,
   telefone: string,
-  processarCallback: () => Promise<boolean>
+  processarCallback: () => Promise<boolean>,
+  delayMs: number = DEBOUNCE_MS
 ): boolean {
   let fila = filasDebounce.get(contatoId);
 
   if (!fila) {
-    // Primeira mensagem - criar fila e agendar processamento
     fila = {
       mensagens: [mensagem],
       timer: null,
@@ -1351,26 +1435,20 @@ function adicionarAFilaDebounce(
     };
     filasDebounce.set(contatoId, fila);
 
-    console.log(`[Debounce] 📥 Nova fila para ${contatoId} - Aguardando ${DEBOUNCE_MS / 1000}s...`);
-
-    agendarProcessamentoFilaDebounce(contatoId, processarCallback, DEBOUNCE_MS);
-
-    return true; // Mensagem adicionada, será processada depois
+    console.log(`[Debounce] 📥 Nova fila para ${contatoId} - Aguardando ${delayMs / 1000}s...`);
+    agendarProcessamentoFilaDebounce(contatoId, processarCallback, delayMs);
+    return true;
   }
 
-  // Já existe fila - adicionar mensagem e resetar timer
+  // Já existe fila — adicionar e resetar timer (mantém delay original da 1ª mensagem)
   fila.mensagens.push(mensagem);
   fila.reagendado = false;
   console.log(`[Debounce] 📥 +1 mensagem na fila de ${contatoId} (total: ${fila.mensagens.length})`);
 
-  // Resetar timer
-  if (fila.timer) {
-    clearTimeout(fila.timer);
-  }
+  if (fila.timer) clearTimeout(fila.timer);
+  agendarProcessamentoFilaDebounce(contatoId, processarCallback, delayMs);
 
-  agendarProcessamentoFilaDebounce(contatoId, processarCallback, DEBOUNCE_MS);
-
-  return true; // Mensagem adicionada à fila existente
+  return true;
 }
 
 /**
@@ -1558,10 +1636,12 @@ router.post('/', async (req, res) => {
                 const modoAtendimento = (contatoProspeccao as any).modoAtendimento || 'IA';
                 if (modoAtendimento === 'HUMANO' || modoAtendimento === 'PAUSADO') {
                   registrarIgnorado(telefone, `modo ${modoAtendimento}`, contatoProspeccao.id);
+                  const conteudoHumano = conteudoEntrada || (isMedia ? resumoMidiaIA : '');
+                  const sinaisNegociacao = extrairSinaisNegociacaoHumana(conteudoHumano);
                   await salvarMensagemProspeccao({
                     contatoId: contatoProspeccao.id,
                     direcao: 'ENTRADA',
-                    conteudo: conteudoEntrada || (isMedia ? resumoMidiaIA : ''),
+                    conteudo: conteudoHumano,
                     tipo: tipoMensagemEntrada,
                     messageId: messageId,
                     telefone: telefone,
@@ -1569,7 +1649,39 @@ router.post('/', async (req, res) => {
                     mimeTypeMidia: isMedia ? metaMidia.mimeType : undefined,
                     nomeArquivoMidia: isMedia ? metaMidia.fileName : undefined,
                   });
-                  continue;
+
+                  const resumoNegociacao = [
+                    sinaisNegociacao.tipoAutorizacao ? `tipo=${sinaisNegociacao.tipoAutorizacao}` : '',
+                    sinaisNegociacao.comissaoAcordada ? `comissao=${sinaisNegociacao.comissaoAcordada}` : '',
+                    sinaisNegociacao.prazoTrabalho ? `prazo=${sinaisNegociacao.prazoTrabalho}d` : ''
+                  ].filter(Boolean).join(' | ');
+
+                  if (resumoNegociacao) {
+                    await prisma.contato.update({
+                      where: { id: contatoProspeccao.id },
+                      data: {
+                        observacoes: `${((contatoProspeccao as any).observacoes || '').trim()}\n[RESUMO_FASE_HUMANA] ${resumoNegociacao}`.trim()
+                      }
+                    });
+                  }
+
+                  if (!deveAutoRetornarParaIA(contatoProspeccao)) {
+                    continue;
+                  }
+
+                  await prisma.contato.update({
+                    where: { id: contatoProspeccao.id },
+                    data: {
+                      modoAtendimento: 'IA',
+                      observacoes: `${((contatoProspeccao as any).observacoes || '').trim()}\n[AUTO_RETORNO_IA] ${new Date().toISOString()}`.trim()
+                    }
+                  });
+                  console.info(`[OBS] ia_auto_return_triggered contatoId=${contatoProspeccao.id} statusLead=${contatoProspeccao?.lead?.status || 'N/A'}`);
+                  (contatoProspeccao as any).modoAtendimento = 'IA';
+                  if (resumoNegociacao) {
+                    (contatoProspeccao as any).observacoes = `${((contatoProspeccao as any).observacoes || '').trim()}\n[RESUMO_FASE_HUMANA] ${resumoNegociacao}`.trim();
+                  }
+                  console.log(`[Webhook] 🔄 Auto-retorno para IA aplicado ao contato ${contatoProspeccao.id}`);
                 }
 
                 // Atualizar status
@@ -1583,11 +1695,20 @@ router.post('/', async (req, res) => {
                 });
 
                 // ====================================
-                // ⏳ DEBOUNCE / BUFFER DE MENSAGENS (20s)
+                // ⏳ DEBOUNCE / BUFFER DE MENSAGENS
                 // ====================================
 
+                // Feedback imediato — dispara typing antes do debounce para o usuário
+                // saber que a mensagem foi recebida. Fire-and-forget (não bloqueia).
+                getWhatsAppService(instanceName)
+                  .enviarIndicadorDigitando(telefone, 30000)
+                  .catch(() => {/* silencioso */});
+
+                const conteudoDebounce = conteudoEntrada || (isMedia ? resumoMidiaIA : '');
+                const debounceMs = calcularDebounce(conteudoDebounce);
+
                 const mensagemPendente: MensagemPendente = {
-                  conteudo: conteudoEntrada || (isMedia ? resumoMidiaIA : ''),
+                  conteudo: conteudoDebounce,
                   tipo: tipoMensagemEntrada,
                   messageId: messageId,
                   timestamp: Date.now(),
@@ -1771,9 +1892,31 @@ router.post('/', async (req, res) => {
                       configOrq.briefingEmpreendimento = briefingEmpreendimento;
                     }
 
+                      const sinaisTurnoHumano = extrairSinaisNegociacaoHumana(textoConsolidado);
+                      const sinaisContextoHumano = extrairSinaisNegociacaoHumana((contatoProspeccao as any).observacoes || '');
+                      const tipoAutorizacaoContexto = contextoOrq?.tipoAutorizacao
+                        || sinaisTurnoHumano.tipoAutorizacao
+                        || sinaisContextoHumano.tipoAutorizacao;
+                      const comissaoAcordadaContexto = contextoOrq?.comissaoAcordada
+                        || sinaisTurnoHumano.comissaoAcordada
+                        || sinaisContextoHumano.comissaoAcordada;
+                      const prazoTrabalhoContexto = contextoOrq?.prazoTrabalho
+                        || sinaisTurnoHumano.prazoTrabalho
+                        || sinaisContextoHumano.prazoTrabalho;
+
+                      const resumoHumano = [
+                        tipoAutorizacaoContexto ? `tipo=${tipoAutorizacaoContexto}` : '',
+                        comissaoAcordadaContexto ? `comissao=${comissaoAcordadaContexto}` : '',
+                        prazoTrabalhoContexto ? `prazo=${prazoTrabalhoContexto} dias` : ''
+                      ].filter(Boolean).join(' | ');
+
                       const msgsOrq = historicoMensagens.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
                       const instrucaoExclusividade = construirInstrucaoExclusividadePorTenant(perfilVendaTenant, textoConsolidado);
-                      const instrucaoTurnoFinal = [instrucaoTurnoSequencial, instrucaoExclusividade]
+                      const instrucaoTurnoFinal = [
+                        instrucaoTurnoSequencial,
+                        instrucaoExclusividade,
+                        resumoHumano ? `Contexto estruturado da fase humana: ${resumoHumano}. Não repetir coleta desses pontos.` : ''
+                      ]
                         .filter(Boolean)
                         .join('\n\n')
                         .trim() || undefined;
@@ -1787,6 +1930,9 @@ router.post('/', async (req, res) => {
                           leadId: contatoProspeccao.leadId || undefined,
                           statusLead: contatoProspeccao.lead?.status || undefined,
                           empreendimento: empreendimentoContexto,
+                          tipoAutorizacao: tipoAutorizacaoContexto,
+                          comissaoAcordada: comissaoAcordadaContexto,
+                          prazoTrabalho: prazoTrabalhoContexto,
                           instrucaoTurno: instrucaoTurnoFinal
                         }
                       );
@@ -1800,8 +1946,31 @@ router.post('/', async (req, res) => {
                         select: { virouLead: true, leadId: true }
                       });
                       if (!contatoPosOrquestrador?.virouLead || !contatoPosOrquestrador?.leadId) {
-                        await garantirConversaoAutomaticaSeElegivel({
+                        const chaveFallbackConversao = `fallback-conversao:${contatoProspeccao.id}`;
+                        const lockFallbackConversao = await adquirirMutexContato(chaveFallbackConversao);
+                        const podeExecutarFallback = deveExecutarFallbackConversao({
+                          virouLead: contatoPosOrquestrador?.virouLead,
+                          leadId: contatoPosOrquestrador?.leadId,
+                          lockAdquirido: lockFallbackConversao
+                        });
+                        if (podeExecutarFallback) {
+                          try {
+                            await garantirConversaoAutomaticaSeElegivel({
+                              contatoId: contatoProspeccao.id,
+                              textoConversa: textoConsolidado
+                            });
+                          } finally {
+                            await liberarMutexContato(chaveFallbackConversao);
+                          }
+                        } else {
+                          console.info(`[OBS] conversion_race_prevented contatoId=${contatoProspeccao.id} lockAcquired=${lockFallbackConversao}`);
+                        }
+                      }
+                      const leadIdAtualizado = contatoPosOrquestrador?.leadId || contatoProspeccao.leadId || undefined;
+                      if (leadIdAtualizado) {
+                        await garantirAtualizacaoLeadBasicaSeElegivel({
                           contatoId: contatoProspeccao.id,
+                          leadId: leadIdAtualizado,
                           textoConversa: textoConsolidado
                         });
                       }
@@ -1862,6 +2031,10 @@ router.post('/', async (req, res) => {
 
                       if (pedirPermissaoAudioNesteTurno) {
                         resposta = anexarPedidoPermissaoAudio(resposta);
+                        // Marca que já perguntamos — impede repetição nos próximos turnos
+                        // independente de o lead responder ou não
+                        salvarPreferenciaAudioContato(contatoProspeccao.id, 'PERGUNTADO')
+                          .catch(() => {/* silencioso */});
                       }
 
                       // Enviar Resposta
@@ -1964,8 +2137,8 @@ router.post('/', async (req, res) => {
                   }
                 };
 
-                const adicionado = adicionarAFilaDebounce(contatoProspeccao.id, mensagemPendente, contatoProspeccao, telefone, processarAposDebounce);
-                if (adicionado) console.log(`[Webhook] ⏳ DEBOUNCE: Mensagem aguardando ${DEBOUNCE_MS/1000}s...`);
+                const adicionado = adicionarAFilaDebounce(contatoProspeccao.id, mensagemPendente, contatoProspeccao, telefone, processarAposDebounce, debounceMs);
+                if (adicionado) console.log(`[Webhook] ⏳ DEBOUNCE: Mensagem aguardando ${debounceMs/1000}s (completa=${mensagemPareceCompleta(conteudoDebounce)})...`);
 
                 // IMPORTANTÍSSIMO: Continue aqui impede que caia no fluxo de Lead Inbound
                 continue;

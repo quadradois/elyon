@@ -63,6 +63,9 @@ export async function buscarConfiguracaoTenant(tenantId: string): Promise<Config
         if (!tenant) return null;
 
         const agente = tenant.agentes[0];
+        const tenantVersion = ((tenant as any).atualizadoEm || (tenant as any).updatedAt || '').toString();
+        const agenteVersion = agente ? (((agente as any).atualizadoEm || (agente as any).updatedAt || '').toString()) : '';
+        const configVersionToken = `${tenantVersion}|${agenteVersion}|${tenant.llmModelo || ''}|${tenant.llmBaseUrl || ''}`;
         const diferenciais = resolverDiferenciais(tenant.diferenciais as string[] || []);
 
         const perfilVenda = (tenant.perfilVenda as Record<string, unknown>) || {};
@@ -101,6 +104,7 @@ export async function buscarConfiguracaoTenant(tenantId: string): Promise<Config
             llmModelo: tenant.llmModelo,
             llmApiKeyCriptografada: tenant.llmApiKeyCriptografada,
             llmBaseUrl: tenant.llmBaseUrl,
+            configVersionToken,
         };
 
     } catch (error) {
@@ -156,7 +160,10 @@ export async function buscarContextoConversa(
             leadId: lead?.id,
             statusLead: lead?.status,
             doresIdentificadas: lead?.doresIdentificadas || [],
-            empreendimento: lead?.campanhaOrigem?.nomeEmpreendimento || undefined
+            empreendimento: lead?.campanhaOrigem?.nomeEmpreendimento || undefined,
+            tipoAutorizacao: lead?.tipoAutorizacao || undefined,
+            comissaoAcordada: lead?.comissaoAcordada || undefined,
+            prazoTrabalho: lead?.prazoTrabalho || undefined
         };
 
     } catch (error) {

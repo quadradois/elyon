@@ -71,6 +71,7 @@ describe('buscarConfiguracaoTenant', () => {
         expect(result!.comissaoPadrao).toBe('6%');
         expect(result!.prazoContrato).toBe(180);
         expect(result!.diferenciais).toEqual(['Fotos Profissionais', 'Tour 360']);
+        expect(result!.configVersionToken).toBeDefined();
     });
 
     it('usa defaults quando agente não configurado', async () => {
@@ -143,6 +144,9 @@ describe('buscarContextoConversa', () => {
         expect(result.statusLead).toBe('QUALIFICADO');
         expect(result.doresIdentificadas).toEqual(['preço alto', 'demora']);
         expect(result.empreendimento).toBe('Ed. Solar');
+        expect(result.tipoAutorizacao).toBe('exclusiva');
+        expect(result.comissaoAcordada).toBe('6%');
+        expect(result.prazoTrabalho).toBe(90);
     });
 
     it('busca contato quando lead não encontrado', async () => {

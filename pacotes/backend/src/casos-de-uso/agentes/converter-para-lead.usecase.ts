@@ -75,10 +75,119 @@ export class ConverterParaLeadUseCase {
             }
 
             if (contato.virouLead || !!contato.leadId) {
+                const leadIdExistente = contato.leadId || undefined;
+                if (!leadIdExistente) {
+                    return {
+                        success: false,
+                        error: 'Contato já marcado como lead, porém sem leadId vinculado',
+                        reasonCode: 'ALREADY_LEAD'
+                    };
+                }
+
+                const leadAtual = await prisma.lead.findUnique({
+                    where: { id: leadIdExistente },
+                    select: {
+                        id: true,
+                        tipoImovel: true,
+                        areaImovel: true,
+                        quartosImovel: true,
+                        vagasImovel: true,
+                        valorPretendido: true,
+                        ocupacaoImovel: true,
+                        interesseEm: true,
+                        motivacaoVenda: true,
+                        situacaoAtual: true,
+                        prazoDesejado: true,
+                        urgencia: true,
+                        doresIdentificadas: true,
+                        schemaState: true,
+                    }
+                });
+
+                if (leadAtual) {
+                    const areaImovelInformada = temTexto(input.areaImovel) ? input.areaImovel!.trim() : undefined;
+                    const areaPareceValor = pareceValorMonetario(areaImovelInformada);
+                    const areaImovelNormalizada = areaPareceValor ? undefined : areaImovelInformada;
+                    const valorPretendidoNormalizado = temTexto(input.valorPretendido)
+                        ? input.valorPretendido!.trim()
+                        : areaPareceValor
+                            ? areaImovelInformada
+                            : undefined;
+                    const { prazoDesejadoNormalizado, urgencia } = normalizarPrazoEUrgencia({
+                        timeline: input.timeline,
+                        prazoDesejado: input.prazoDesejado
+                    });
+                    const interesseMap: Record<string, string> = {
+                        'VENDA': 'vender',
+                        'LOCACAO': 'alugar',
+                        'AMBOS': 'ambos'
+                    };
+                    const interesseEm = interesseMap[input.tipoInteresse] || input.tipoInteresse.toLowerCase();
+
+                    const updateData: any = {
+                        ultimaInteracao: new Date(),
+                    };
+                    if (input.tipoImovel && input.tipoImovel !== leadAtual.tipoImovel) updateData.tipoImovel = input.tipoImovel;
+                    if (areaImovelNormalizada && areaImovelNormalizada !== leadAtual.areaImovel) updateData.areaImovel = areaImovelNormalizada;
+                    if (input.quartosImovel && input.quartosImovel !== leadAtual.quartosImovel) updateData.quartosImovel = input.quartosImovel;
+                    if (input.vagasImovel !== undefined && input.vagasImovel !== null && input.vagasImovel !== leadAtual.vagasImovel) updateData.vagasImovel = input.vagasImovel;
+                    if (valorPretendidoNormalizado && valorPretendidoNormalizado !== leadAtual.valorPretendido) updateData.valorPretendido = valorPretendidoNormalizado;
+                    if (input.ocupacaoImovel && input.ocupacaoImovel !== leadAtual.ocupacaoImovel) updateData.ocupacaoImovel = input.ocupacaoImovel;
+                    if (interesseEm && interesseEm !== leadAtual.interesseEm) updateData.interesseEm = interesseEm;
+                    if (input.motivacaoVenda && input.motivacaoVenda !== leadAtual.motivacaoVenda) updateData.motivacaoVenda = input.motivacaoVenda;
+                    if (input.situacaoAtual && input.situacaoAtual !== leadAtual.situacaoAtual) updateData.situacaoAtual = input.situacaoAtual;
+                    if (prazoDesejadoNormalizado && prazoDesejadoNormalizado !== leadAtual.prazoDesejado) updateData.prazoDesejado = prazoDesejadoNormalizado;
+                    if (urgencia && urgencia !== leadAtual.urgencia) updateData.urgencia = urgencia;
+                    if (input.doresIdentificadas?.length) {
+                        const doresAtuais = Array.isArray(leadAtual.doresIdentificadas) ? leadAtual.doresIdentificadas : [];
+                        const doresMescladas = Array.from(new Set([...doresAtuais, ...input.doresIdentificadas]));
+                        if (doresMescladas.length > 0) updateData.doresIdentificadas = doresMescladas;
+                    }
+
+                    const schemaUpdatesTool: Record<string, unknown> = {
+                        interesseEm,
+                        temperatura: input.temperatura,
+                        tipoImovel: input.tipoImovel,
+                        areaImovel: areaImovelNormalizada,
+                        quartosImovel: input.quartosImovel,
+                        vagasImovel: input.vagasImovel,
+                        valorPretendido: valorPretendidoNormalizado,
+                        ocupacaoImovel: input.ocupacaoImovel,
+                        motivacaoVenda: input.motivacaoVenda,
+                        situacaoAtual: input.situacaoAtual,
+                        prazoDesejado: prazoDesejadoNormalizado,
+                        urgencia,
+                        doresIdentificadas: input.doresIdentificadas?.length ? input.doresIdentificadas : undefined,
+                    };
+                    const schemaStateAtual = (leadAtual.schemaState as any) || undefined;
+                    updateData.schemaState = mergeSchemaStateComSources(
+                        schemaStateAtual,
+                        schemaUpdatesTool,
+                        'tool_confirmada',
+                        'dados atualizados via converter_para_lead (lead já existente)'
+                    ) as any;
+
+                    await prisma.lead.update({
+                        where: { id: leadIdExistente },
+                        data: updateData
+                    });
+
+                    await prisma.atividade.create({
+                        data: {
+                            leadId: leadIdExistente,
+                            tipo: 'NOTA',
+                            titulo: '🔄 Lead atualizado (já existente)',
+                            descricao: 'Dados atualizados pela tool converter_para_lead após nova interação do lead.',
+                            criadoPor: 'sdr_ia',
+                            completadoEm: new Date()
+                        }
+                    });
+                }
+
                 return {
-                    success: false,
-                    error: 'Contato já é lead',
-                    leadId: contato.leadId || undefined,
+                    success: true,
+                    leadId: leadIdExistente,
+                    message: 'Contato já era lead. Dados atualizados no lead existente.',
                     reasonCode: 'ALREADY_LEAD'
                 };
             }

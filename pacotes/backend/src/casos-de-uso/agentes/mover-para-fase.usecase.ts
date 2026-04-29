@@ -19,7 +19,7 @@ export interface MoverParaFaseOutput {
     novoStatus?: string;
     motivo?: string;
     error?: string;
-    reasonCode?: 'INVALID_PHASE' | 'LEAD_NOT_FOUND' | 'SPIN_QUALIFICATION_REQUIRED' | 'PHASE_TRANSITION_BLOCKED' | 'INTERNAL_ERROR';
+    reasonCode?: 'INVALID_PHASE' | 'LEAD_NOT_FOUND' | 'SPIN_QUALIFICATION_REQUIRED' | 'PHASE_TRANSITION_BLOCKED' | 'CRM_SYNC_REQUIRED' | 'INTERNAL_ERROR';
     camposFaltantesQualificacao?: string[];
     gateDetalhes?: string;
 }
@@ -120,6 +120,7 @@ export class MoverParaFaseUseCase {
                 where: { id: input.leadId },
                 select: {
                     status: true,
+                    crmSyncStatus: true,
                     doresIdentificadas: true,
                     situacaoAtual: true,
                     motivacaoVenda: true,
@@ -171,6 +172,14 @@ export class MoverParaFaseUseCase {
                         camposFaltantesQualificacao: prontidao.faltantes
                     };
                 }
+            }
+
+            if (input.faseDestino === 'CAPTADO' && leadAtual.crmSyncStatus !== 'synced') {
+                return {
+                    success: false,
+                    error: 'Lead só pode ir para CAPTADO após sincronização com CRM',
+                    reasonCode: 'CRM_SYNC_REQUIRED'
+                };
             }
 
             const updateData: any = {

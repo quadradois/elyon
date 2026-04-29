@@ -928,11 +928,41 @@ export default function LeadDetalhes() {
         });
 
         eventosCockpit.slice(0, 10).forEach((evento) => {
+            const isAgentTurno = evento.acao === "COCKPIT_AGENT_TURNO";
+            const isAgentOutcome = evento.acao === "COCKPIT_AGENT_OUTCOME";
+            let titulo = evento.acao.replace("COCKPIT_", "").replace(/_/g, " ").toLowerCase();
+            let descricao = evento.detalhes?.acao || evento.detalhes?.tipo || "";
+
+            if (isAgentTurno) {
+                const agente = evento.detalhes?.agenteFinal || evento.detalhes?.agenteInicial || "IA";
+                const tools = evento.detalhes?.toolCalls || 0;
+                const durMs = evento.detalhes?.duracaoMs;
+                const durSeg = durMs ? `${(durMs / 1000).toFixed(1)}s` : "";
+                titulo = `Turno do agente ${agente}`;
+                descricao = [
+                    evento.detalhes?.faseFluxo,
+                    tools > 0 ? `${tools} ação(ões)` : null,
+                    durSeg,
+                    evento.detalhes?.sucesso === false ? "⚠️ falhou" : null,
+                ].filter(Boolean).join(" · ");
+            } else if (isAgentOutcome) {
+                const outcome = evento.detalhes?.outcome || "";
+                const mapaOutcome: Record<string, string> = {
+                    SUCESSO: "Conversa concluída com sucesso",
+                    OPTOUT: "Lead solicitou opt-out",
+                    HANDOFF_HUMANO: "Passagem para corretor humano",
+                    PERDA: "Lead marcado como perdido",
+                    ERRO: "Erro no processamento",
+                };
+                titulo = mapaOutcome[outcome] || `Desfecho: ${outcome}`;
+                descricao = evento.detalhes?.motivo || evento.detalhes?.faseFluxo || "";
+            }
+
             itens.push({
                 id: `cockpit-${evento.id}`,
-                tipo: "cockpit",
-                titulo: evento.acao.replace("COCKPIT_", ""),
-                descricao: evento.detalhes?.acao || evento.detalhes?.tipo || "",
+                tipo: isAgentTurno || isAgentOutcome ? "ia" : "cockpit",
+                titulo,
+                descricao,
                 quando: evento.criadoEm,
             });
         });
@@ -1036,6 +1066,22 @@ export default function LeadDetalhes() {
                                         ⚡ Urgência: <strong className="text-slate-600">{lead.scoreUrgencia ?? '—'}</strong>
                                     </span>
                                 </div>
+                                {lead.orientacaoAcao && (
+                                    <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                                        <p className="text-xs font-semibold text-amber-800">⚡ Orientação</p>
+                                        <p className="text-xs text-amber-700 mt-0.5 leading-snug">{lead.orientacaoAcao}</p>
+                                    </div>
+                                )}
+                                {lead.motivosUrgencia && lead.motivosUrgencia.length > 0 && (
+                                    <ul className="mt-2 space-y-1">
+                                        {lead.motivosUrgencia.slice(0, 3).map((motivo, i) => (
+                                            <li key={i} className="text-[10px] text-slate-500 flex items-start gap-1">
+                                                <span className="text-amber-500 mt-px">•</span>
+                                                <span>{motivo}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
                             </CardContent>
                         </Card>
                         <Card className="card-premium">

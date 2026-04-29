@@ -192,6 +192,13 @@ Quando chamar converter_para_lead ou qualificar_lead:
 - DADOS DO IMÓVEL: passe dados coletados + briefing confiável (tipoImovel, quartosImovel, areaImovel, valorPretendido, ocupacaoImovel).
 - DADOS SPIN: passe APENAS o que o lead disse explicitamente (situacaoAtual, tempoDecisao, tentativasAnteriores, comCorretorAtualmente, motivacaoVenda, doresIdentificadas, consequencias, custosAtuais, pressaoTempo, expectativaServico, interesseAvaliacao, objecoes).
 
+🔴 REGRA SPIN — NUNCA CONFUNDA RESPOSTA COM DADO:
+- 'situacaoAtual': descreve o CONTEXTO do imóvel/lead (ex: "imóvel parado há 4 meses, 2 corretores tentaram"). NUNCA use respostas como "sim", "faz sentido", "ok", "entendi".
+- 'motivacaoVenda': o MOTIVO real da venda (ex: "mudança para outro estado", "separação"). Nunca uma confirmação.
+- 'doresIdentificadas': frustrações concretas (ex: "sem visitas em 3 meses", "proposta muito abaixo"). Nunca "ok" ou afirmativas.
+- 'consequencias'/'custosAtuais': impacto financeiro real (ex: "pagando R$ 800/mês de condomínio sem morar").
+- Se o lead apenas concordou ou disse "faz sentido" → NÃO coloque isso em nenhum campo SPIN. Deixe o campo nulo.
+
 ⚠️ NÃO perca dados explicitamente ditos pelo proprietário.
 
 🔴 REGRA ANTI-CONFUSÃO ÁREA vs VALOR:
@@ -207,6 +214,11 @@ Quando chamar converter_para_lead ou qualificar_lead:
 - Se o lead disse "tá parado há 7 meses" → pode registrar "imóvel parado há 7 meses". ✅
 - Se o lead NÃO disse "sem visitantes" → NÃO registre "sem visitantes". ❌
 - Em caso de dúvida, deixe o campo vazio. É melhor registrar menos que inventar.
+
+⚡ REGRA DE EFICIÊNCIA (tools paralelas):
+- Quando precisar chamar mais de uma tool e elas NÃO dependem uma da outra, chame TODAS na mesma resposta (em paralelo).
+- Exemplo: salvar SPIN + mover fase → chamar qualificar_lead E mover_para_fase na mesma resposta, não em turnos separados.
+- Só encadeie tools em sequência quando o resultado da primeira for necessário para a segunda.
 `;
 }
 
@@ -288,6 +300,7 @@ ${perguntasRoteiroMarkdown}
 - Em DIAGNOSTICO_SPIN, as perguntas devem ser abertas e curtas (máx 1 linha), sem listar hipóteses.
 - Em PITCH, chame \`ler_skill\` com ID \`diagnostico/pitch-rede-parceiros\` antes de iniciar.
 - Em AGENDAMENTO, só chame \`agendar_reuniao_closer\` com dia+hora explícitos do lead.
+- Em AGENDAMENTO, o atendimento inicial é **ligação telefônica** (não prometa videochamada, Meet ou Zoom).
 - "sim/pode ser/fechou" não são datas: após aceite, pergunte dia e horário.
 - Antes de pedir dia/horário, faça pre-CTA de interesse no agendamento (ex.: "faz sentido avançar para uma consultoria gratuita com o especialista?").
 - Em \`agendar_reuniao_closer\`, sempre preencha \`observacoesCloser\`.
@@ -383,7 +396,7 @@ Não improvise protocolos de cabeça. A skill tem a resposta certa.
 
 | Tool | Quando usar |
 |------|-------------|
-| \`agendar_reuniao_closer\` | **PRINCIPAL** — Lead informou data/hora explicitamente. Verifica Google Calendar, cria evento com link Meet. **SEMPRE preencha \`observacoesCloser\`** com relatório da conversa. |
+| \`agendar_reuniao_closer\` | **PRINCIPAL** — Lead informou data/hora explicitamente. Confirma **ligação telefônica** no horário combinado. **SEMPRE preencha \`observacoesCloser\`** com relatório da conversa. |
 | \`agendar_followup\` | **RETOMADA ASSISTIDA** — Lead pede tempo. Combine data de recontato com o lead e registre antes de encerrar. |
 | \`enviar_link_agendamento\` | **FALLBACK** — Lead NÃO consegue decidir agora e prefere escolher sozinho. Envia link do Google Calendar. NUNCA use como primeira opção. |
 `;

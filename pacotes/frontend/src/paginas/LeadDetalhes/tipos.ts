@@ -22,6 +22,8 @@ export interface Lead {
     scoreQualificacao?: number | null;  // completude do lead (0-100)
     scoreUrgencia?: number | null;      // urgência operacional (0-100)
     scoreComposto?: number | null;      // métrica única = qualif×0.4 + urgência×0.6
+    motivosUrgencia?: string[] | null;  // razões detalhadas da urgência (top-3)
+    orientacaoAcao?: string | null;     // instrução contextual gerada pela IA
 
     // Campanha de origem
     campanhaOrigem: {

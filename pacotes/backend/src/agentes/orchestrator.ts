@@ -96,6 +96,7 @@ export interface ConfiguracaoOrquestrador {
     llmModelo?: string | null;
     llmApiKeyCriptografada?: string | null;
     llmBaseUrl?: string | null;
+    configVersionToken?: string;
 }
 
 export interface ContextoConversa {
@@ -122,6 +123,36 @@ export interface ResultadoProcessamento {
     erro?: string;
 }
 
+async function construirInstrucaoReidratacaoTools(leadId?: string): Promise<string | undefined> {
+    if (!leadId) return undefined;
+    try {
+        const atividades = await prisma.atividade.findMany({
+            where: {
+                leadId,
+                titulo: { startsWith: 'TOOL_EXEC:' }
+            },
+            orderBy: { criadoEm: 'desc' },
+            take: 8,
+            select: { titulo: true, descricao: true }
+        });
+        if (!atividades.length) return undefined;
+
+        const linhas = atividades
+            .map((a) => {
+                const tool = (a.titulo || '').replace('TOOL_EXEC:', '');
+                const status = (a.descricao || '').split('|')[0].trim();
+                return `${tool}:${status}`;
+            })
+            .filter(Boolean);
+
+        if (!linhas.length) return undefined;
+        return `CONTEXTO DE RECUPERAÇÃO (cache Redis indisponível/expirado): ferramentas já registradas recentemente para este lead -> ${linhas.join(', ')}. Evite repetir tool já concluída sem novo fato do usuário.`;
+    } catch (err) {
+        logger.warn({ err, leadId }, '[ORCHESTRATOR] Falha ao reidratar trilha mínima de tools');
+        return undefined;
+    }
+}
+
 // ====================================
 // PROCESSAR MENSAGEM
 // ====================================
@@ -132,6 +163,8 @@ export async function processarMensagemOrquestrada(
     contexto: ContextoConversa,
 ): Promise<ResultadoProcessamento> {
     const inicioTurno = Date.now();
+    // Timestamps de cada fase para diagnóstico de latência
+    const tFases: Record<string, number> = { inicio: inicioTurno };
     let sentimentoDetectado: string | null = null;
     let paolModoForError: PaolModoExecucao = 'CONTROL';
     let paolCalcularNoTurnoForError = false;
@@ -263,10 +296,10 @@ export async function processarMensagemOrquestrada(
             };
         }
 
+        tFases.guardrail = Date.now() - inicioTurno;
+
         if (contexto.statusLead && STATUS_FASE_HUMANA.has(contexto.statusLead)) {
             logger.debug(`[ORCHESTRATOR] 🤝 Lead em fase humana (${contexto.statusLead}). Roteando para ADMIN agent.`);
-            // Não mais retorna resposta fixa — deixa o Admin agent responder
-            // de forma contextual (pode ser dúvida, urgência, desistência, etc.)
         }
 
         const agentePersistido = await resolverAgentePersistido({
@@ -336,6 +369,13 @@ export async function processarMensagemOrquestrada(
             }
         }
 
+        // Se o schemaState em cache sumiu, tenta reidratar do estado persistido no lead.
+        if (!schemaAnterior && leadRecord?.schemaState && contexto.contatoId) {
+            const schemaPersistido = leadRecord.schemaState as unknown as SchemaState;
+            await setSchemaState(contexto.contatoId, schemaPersistido);
+            logger.debug('[ORCHESTRATOR] ♻️ schemaState reidratado do banco após ausência no Redis.');
+        }
+
         // pass leadRecord along with contexto so input builder can summarize it
         const contextoParaInput = { ...contexto, leadRecord };
 
@@ -356,6 +396,14 @@ export async function processarMensagemOrquestrada(
         if (contexto.instrucaoTurno && contexto.instrucaoTurno.trim().length > 0) {
             inputSDK = [{ role: 'system' as const, content: contexto.instrucaoTurno }, ...inputSDK];
             logger.debug('[ORCHESTRATOR] 🧩 Instrução de turno (mensagens sequenciais) injetada.');
+        }
+
+        // Quando o cache SDK expira, reidrata trilha mínima de tools a partir das atividades persistidas.
+        if ((!cachedHistory || cachedHistory.length === 0) && contexto.leadId) {
+            const instrucaoTools = await construirInstrucaoReidratacaoTools(contexto.leadId);
+            if (instrucaoTools) {
+                inputSDK = [{ role: 'system' as const, content: instrucaoTools }, ...inputSDK];
+            }
         }
 
         if (inputBuilderResult.origem === 'cache') {
@@ -503,6 +551,8 @@ Use isso como desempate estratégico na próxima ação.`;
             leadRecord,
         });
 
+        tFases.preContexto = Date.now() - inicioTurno;
+
         // 6. EXECUTAR AGENTE (SDK gerencia handoffs automaticamente)
         let nomesToolsTurno: string[] = [];
         let result: ElyonRunResult;
@@ -541,6 +591,8 @@ Use isso como desempate estratégico na próxima ação.`;
             limparHistoricoContato: clearHistory,
             criarAgenteFallback: criarAgenteFallbackFn,
         });
+
+        tFases.llm = Date.now() - inicioTurno;
 
         result = runResult.result;
         inputSDK = runResult.inputSDKFinal;
@@ -651,6 +703,9 @@ Use isso como desempate estratégico na próxima ação.`;
             tokens: undefined,
         });
 
+        tFases.total = Date.now() - inicioTurno;
+        logger.debug(`[ORCHESTRATOR] ⏱ tFases guardrail=${tFases.guardrail}ms preContexto=${tFases.preContexto}ms llm=${tFases.llm}ms total=${tFases.total}ms`);
+
         registrarTelemetriaTurno({
             tenantId: config.tenantId,
             telefone: contexto.telefone,
@@ -675,6 +730,7 @@ Use isso como desempate estratégico na próxima ação.`;
             paolDivergencia: paolDecision?.divergencia || false,
             paolGanhoPotencial: paolDecision?.ganhoPotencial,
             paolCustoPotencialExtraUSD: paolDecision?.custoPotencialExtraUsd,
+            tFases,
         });
 
         const outcomePrincipal = (contexto.statusLead === 'PERDIDO' || contexto.statusLead === 'ARQUIVADO')
@@ -789,6 +845,7 @@ Use isso como desempate estratégico na próxima ação.`;
             erro: errorMessage
         });
 
+        tFases.total = Date.now() - inicioTurno;
         registrarTelemetriaTurno({
             tenantId: config.tenantId,
             telefone: contexto.telefone,
@@ -806,6 +863,7 @@ Use isso como desempate estratégico na próxima ação.`;
             tokenAlertLevel: payloadMetrica.tokenAlertLevel,
             paolModo: paolModoForError,
             paolAplicado: false,
+            tFases,
         });
         registrarOutcomeConversa({
             tenantId: config.tenantId,

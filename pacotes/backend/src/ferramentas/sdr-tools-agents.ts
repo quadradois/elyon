@@ -51,6 +51,25 @@ async function registrarExecucaoTool(params: {
 
 // Sanitização importada de ./tool-sanitize (módulo unificado)
 
+// Valores que o lead diz em resposta afirmativa — não representam dados reais do imóvel
+const RESPOSTAS_AFIRMATIVAS = new Set([
+    'sim', 'não', 'nao', 'ok', 'ok!', 'pode ser', 'entendi', 'claro', 'certo',
+    'faz sentido', 'faz sentido sim', 'tá', 'ta', 'tudo bem', 'tudo certo',
+    'combinado', 'fechado', 'beleza', 'legal', 'ótimo', 'otimo', 'perfeito',
+    'pode ser', 'com certeza', 'exato', 'isso', 'isso mesmo', 'correto',
+    'verdade', 'exatamente', 'com certeza', 'concordo', 'affirm', 'yes', 'no',
+]);
+
+function filtrarCampoSpin(valor: string | null | undefined): string | null {
+    if (!valor) return null;
+    const t = valor.trim().toLowerCase();
+    if (t.length < 5) return null;
+    if (RESPOSTAS_AFIRMATIVAS.has(t)) return null;
+    // Respostas muito curtas que são claramente afirmativas/negativas
+    if (/^(sim|não|nao|ok|ta|s|n)\s*[!.]*$/.test(t)) return null;
+    return valor.trim();
+}
+
 function coletarCamposQualificacaoPresentes(input: any): string[] {
     const campos: string[] = [];
 
@@ -144,7 +163,7 @@ IMPORTANTE: Passe TODOS os dados que o lead mencionou na conversa (dores, motiva
         input.pressaoTempo = sanitizeBool(input.pressaoTempo);
         input.interesseAvaliacao = sanitizeBool(input.interesseAvaliacao);
         input.temDividas = sanitizeBool(input.temDividas);
-        // Sanitizar campos string
+        // Sanitizar campos string (estruturais do imóvel)
         input.enderecoImovel = sanitizeStr(input.enderecoImovel);
         input.tipoImovel = sanitizeStr(input.tipoImovel);
         input.areaImovel = sanitizeStr(input.areaImovel);
@@ -152,15 +171,17 @@ IMPORTANTE: Passe TODOS os dados que o lead mencionou na conversa (dores, motiva
         input.ocupacaoImovel = sanitizeStr(input.ocupacaoImovel);
         input.observacoes = sanitizeStr(input.observacoes);
         input.timeline = sanitizeStr(input.timeline);
-        input.situacaoAtual = sanitizeStr(input.situacaoAtual);
-        input.tempoDecisao = sanitizeStr(input.tempoDecisao);
-        input.tentativasAnteriores = sanitizeStr(input.tentativasAnteriores);
+        // Campos SPIN: filtrar respostas afirmativas que o agente confunde com dados reais
+        input.situacaoAtual = filtrarCampoSpin(input.situacaoAtual);
+        input.tempoDecisao = filtrarCampoSpin(input.tempoDecisao);
+        input.tentativasAnteriores = filtrarCampoSpin(input.tentativasAnteriores);
+        input.motivacaoVenda = filtrarCampoSpin(input.motivacaoVenda);
+        input.consequencias = filtrarCampoSpin(input.consequencias);
+        input.custosAtuais = filtrarCampoSpin(input.custosAtuais);
+        input.expectativaServico = filtrarCampoSpin(input.expectativaServico);
+        // Evidências: sanitização simples (pode conter afirmativas como prova literal)
         input.comCorretorAtualmenteEvidencia = sanitizeStr(input.comCorretorAtualmenteEvidencia);
-        input.motivacaoVenda = sanitizeStr(input.motivacaoVenda);
-        input.consequencias = sanitizeStr(input.consequencias);
-        input.custosAtuais = sanitizeStr(input.custosAtuais);
         input.pressaoTempoEvidencia = sanitizeStr(input.pressaoTempoEvidencia);
-        input.expectativaServico = sanitizeStr(input.expectativaServico);
         input.interesseAvaliacaoEvidencia = sanitizeStr(input.interesseAvaliacaoEvidencia);
         input.temDividasEvidencia = sanitizeStr(input.temDividasEvidencia);
         // Sanitizar campos enum
@@ -272,9 +293,10 @@ IMPORTANTE: Passe TODOS os dados coletados na conversa! Tipo de imóvel, quartos
         input.valorPretendido = sanitizeStr(input.valorPretendido);
         input.ocupacaoImovel = sanitizeStr(input.ocupacaoImovel);
         input.timeline = sanitizeStr(input.timeline);
-        input.motivacaoVenda = sanitizeStr(input.motivacaoVenda);
-        input.situacaoAtual = sanitizeStr(input.situacaoAtual);
         input.prazoDesejado = sanitizeStr(input.prazoDesejado);
+        // Campos SPIN: filtrar respostas afirmativas
+        input.motivacaoVenda = filtrarCampoSpin(input.motivacaoVenda);
+        input.situacaoAtual = filtrarCampoSpin(input.situacaoAtual);
 
         const result = await useCase.execute(input);
         const conversaoIdempotente = result?.reasonCode === 'ALREADY_LEAD';
@@ -565,13 +587,6 @@ O CRM criará o Proprietário + Property para publicação nos portais.`,
             });
         }
 
-        if (lead.status !== 'CAPTADO') {
-            return JSON.stringify({
-                success: false,
-                error: `Lead ainda não está CAPTADO (status atual: ${lead.status}). Finalize o onboarding primeiro.`
-            });
-        }
-
         if (!lead.tipoImovel && !lead.quartosImovel) {
             return JSON.stringify({
                 success: false,
@@ -579,15 +594,40 @@ O CRM criará o Proprietário + Property para publicação nos portais.`,
             });
         }
 
+        if (!lead.tipoAutorizacao && !lead.comissaoAcordada) {
+            return JSON.stringify({
+                success: false,
+                error: 'Dados de contrato/negociação ainda incompletos. Confirme autorização e comissão antes de enviar ao CRM.'
+            });
+        }
+
         const resultado = await enviarParaCrm(args.leadId);
 
         if (resultado.success) {
             console.log(`[TOOL] enviar_para_crm - Sucesso! PropertyCode: ${resultado.property_code}`);
+
+            // CRM sincronizado: move automaticamente para CAPTADO
+            const useCase = new MoverParaFaseUseCase();
+            const moveResult = await useCase.execute({
+                leadId: args.leadId,
+                faseDestino: 'CAPTADO',
+                motivo: `CRM sincronizado — código ${resultado.property_code}`,
+                dadosAdicionais: null,
+            });
+
+            if (!moveResult.success) {
+                console.warn(`[TOOL] enviar_para_crm - CRM ok mas CAPTADO bloqueado: ${moveResult.error}`);
+            }
+
             return JSON.stringify({
                 success: true,
                 crmPropertyId: resultado.property_id,
                 crmPropertyCode: resultado.property_code,
-                message: `✅ Enviado para CRM! Código: ${resultado.property_code}`
+                statusAtualizado: moveResult.success ? 'CAPTADO' : null,
+                avisoStatus: moveResult.success ? null : moveResult.error,
+                message: moveResult.success
+                    ? `✅ Enviado para CRM e lead marcado como CAPTADO! Código: ${resultado.property_code}`
+                    : `✅ Enviado para CRM! Código: ${resultado.property_code}. Atenção: ${moveResult.error}`,
             });
         } else {
             return JSON.stringify({
@@ -677,7 +717,7 @@ OBRIGATÓRIO coletar: nome e telefone do indicado.`,
 
 export const agendarReuniaoCloserTool = tool({
     name: 'agendar_reuniao_closer',
-    description: `🚨 CHAME ESTA TOOL SOMENTE quando o lead EXPLICITAMENTE informar uma data E um horário para agendamento (avaliação, reunião, visita — não importa o tipo).
+    description: `🚨 CHAME ESTA TOOL SOMENTE quando o lead EXPLICITAMENTE informar uma data E um horário para agendamento de ligação com o corretor.
 
 🔴 REGRA ABSOLUTA: O lead DEVE ter dito dia+hora na mensagem dele. Exemplos válidos: "pode ser dia X às YH", "amanhã às 14h", "03/04 às 17h". 
 ❌ "Sim", "pode ser", "fechou", "bora", "ok" NÃO são datas — são aceites. Se o lead só aceitou, PERGUNTE a data antes de chamar esta tool.
@@ -807,35 +847,62 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
             // e o atendimento deve ocorrer por WhatsApp ou canal alinhado com o cliente.
 
             // 5. Registrar como atividade no lead (sempre — banco local)
-            await prisma.atividade.create({
-                data: {
+            // Se já existir um agendamento pendente futuro, REAGENDA a mesma atividade
+            // para evitar "confirmar no WhatsApp e não refletir no sistema".
+            const agora = new Date();
+            const atividadeAberta = await prisma.atividade.findFirst({
+                where: {
                     leadId,
                     tipo: 'REUNIAO',
-                    titulo: `Atendimento agendado — ${args.dataHora}`,
-                    descricao: [
-                        `Data/Hora: ${args.dataHora}`,
-                        `Modalidade: ${args.modalidade}`,
-                        linkReuniao ? `Link: ${linkReuniao}` : 'Link: sem link automático (Google Calendar indisponível)',
-                        eventoGoogleId ? `Google Event ID: ${eventoGoogleId}` : '',
-                        usouGoogleCalendar ? '✅ Sincronizado com Google Calendar' : '⚠️ Apenas registro local (Google Calendar não configurado)',
-                        args.observacoesCloser ? `Contexto: ${args.observacoesCloser}` : ''
-                    ].filter(Boolean).join(' | '),
-                    criadoPor: 'ai_agent',
-                    agendadoPara,
-                    statusAgendamento: 'PENDENTE'
-                }
+                    completadoEm: null,
+                    statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
+                    agendadoPara: { gte: agora }
+                },
+                orderBy: { agendadoPara: 'asc' },
+                select: { id: true, agendadoPara: true, titulo: true }
             });
+
+            const descricaoAtividade = [
+                `Data/Hora: ${args.dataHora}`,
+                `Modalidade: ${args.modalidade}`,
+                linkReuniao ? `Link: ${linkReuniao}` : 'Link: sem link automático (Google Calendar indisponível)',
+                eventoGoogleId ? `Google Event ID: ${eventoGoogleId}` : '',
+                usouGoogleCalendar ? '✅ Sincronizado com Google Calendar' : '⚠️ Apenas registro local (Google Calendar não configurado)',
+                args.observacoesCloser ? `Contexto: ${args.observacoesCloser}` : ''
+            ].filter(Boolean).join(' | ');
+
+            if (atividadeAberta) {
+                await prisma.atividade.update({
+                    where: { id: atividadeAberta.id },
+                    data: {
+                        titulo: `Atendimento reagendado — ${args.dataHora}`,
+                        descricao: descricaoAtividade,
+                        agendadoPara,
+                        statusAgendamento: 'PENDENTE',
+                    }
+                });
+            } else {
+                await prisma.atividade.create({
+                    data: {
+                        leadId,
+                        tipo: 'REUNIAO',
+                        titulo: `Atendimento agendado — ${args.dataHora}`,
+                        descricao: descricaoAtividade,
+                        criadoPor: 'ai_agent',
+                        agendadoPara,
+                        statusAgendamento: 'PENDENTE'
+                    }
+                });
+            }
 
             await registrarExecucaoTool({
                 leadId,
                 toolName: 'agendar_reuniao_closer',
                 sucesso: true,
-                detalhes: `Agendado para ${args.dataHora} via ${args.modalidade}${usouGoogleCalendar ? ' (Google Calendar)' : ' (local)'}`
+                detalhes: `${atividadeAberta ? 'Reagendado' : 'Agendado'} para ${args.dataHora} via ${args.modalidade}${usouGoogleCalendar ? ' (Google Calendar)' : ' (local)'}`
             });
 
-            const mensagem = (usouGoogleCalendar && linkReuniao)
-                ? `✅ Agendamento confirmado! Envie ao lead: "Ótimo! Está marcado para ${args.dataHora}. Aqui está o link oficial da reunião: ${linkReuniao} 😊"`
-                : `✅ Agendamento confirmado no CRM para ${args.dataHora}. Não envie link de reunião. Oriente o lead que o corretor fará o atendimento no horário combinado e, se necessário, enviará o convite oficial depois.`;
+            const mensagem = `✅ Agendamento confirmado! Envie ao lead: "Perfeito — está confirmado para ${args.dataHora}. O corretor vai te ligar nesse horário combinado."`;
 
             return JSON.stringify({
                 success: true,

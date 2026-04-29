@@ -116,6 +116,23 @@ export class WhatsAppService {
     }
   }
 
+  // Envia presença "digitando..." imediatamente — fire-and-forget, nunca lança exceção
+  async enviarIndicadorDigitando(numero: string, duracaoMs: number = 25000): Promise<void> {
+    let numeroFormatado = numero.replace(/\D/g, '');
+    if (numeroFormatado.length === 10 || numeroFormatado.length === 11) {
+      numeroFormatado = `55${numeroFormatado}`;
+    }
+    try {
+      await axios.post(
+        `${this.apiUrl}/chat/sendPresence/${this.instanceName}`,
+        { number: numeroFormatado, options: { presence: 'composing', delay: duracaoMs } },
+        { headers: this.getHeaders(), timeout: 3000 }
+      );
+    } catch {
+      // silencioso — presença não é crítica
+    }
+  }
+
   async enviarMensagemTexto(numero: string, texto: string): Promise<any> {
     // Formata número para 55DDXXXXXXXXX (apenas dígitos)
     let numeroFormatado = numero.replace(/\D/g, '');

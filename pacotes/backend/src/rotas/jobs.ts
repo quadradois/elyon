@@ -8,6 +8,8 @@
 import { Router, Request, Response } from 'express';
 import { processarRecontatos } from '../jobs/recontato-automatico';
 import { experienceReplayService } from '../servicos/experience-replay';
+import { executarReenviosCrmFalhos } from '../jobs/job-reenvio-crm';
+import { executarRetornoIa } from '../jobs/job-retomar-ia';
 
 const router = Router();
 
@@ -206,6 +208,41 @@ router.get('/status', async (req: Request, res: Response) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+/**
+ * POST /api/jobs/reenvio-crm
+ *
+ * Retenta envio ao CRM para leads com crmSyncStatus='failed'.
+ * Processa até 20 leads por execução.
+ */
+router.post('/reenvio-crm', async (req: Request, res: Response) => {
+  try {
+    console.log('[Jobs] Executando job de reenvio CRM...');
+    const resultado = await executarReenviosCrmFalhos();
+    res.json({ success: true, resultado });
+  } catch (error: any) {
+    console.error('[Jobs] Erro no reenvio CRM:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/jobs/retomar-ia
+ *
+ * Devolve à IA todos os contatos em modo HUMANO que ultrapassaram o SLA.
+ * Parâmetro opcional: { slaHoras: number } (padrão: 4h).
+ */
+router.post('/retomar-ia', async (req: Request, res: Response) => {
+  try {
+    const slaHoras = typeof req.body?.slaHoras === 'number' ? req.body.slaHoras : 4;
+    console.log(`[Jobs] Executando retorno automático HUMANO→IA (SLA=${slaHoras}h)...`);
+    const resultado = await executarRetornoIa(slaHoras);
+    res.json({ success: true, resultado });
+  } catch (error: any) {
+    console.error('[Jobs] Erro no retorno IA:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

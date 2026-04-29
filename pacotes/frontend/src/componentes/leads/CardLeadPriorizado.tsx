@@ -11,6 +11,7 @@ import {
   Snowflake,
   Bot,
   Megaphone,
+  AlertCircle,
 } from 'lucide-react';
 import type { LeadPriorizado, CategoriaUrgencia } from '../../ganchos/useLeadsPriorizados';
 import { getStatusLeadUI, getTemperaturaLeadUI } from './lead-ui';
@@ -177,6 +178,15 @@ export function CardLeadPriorizado({
             {lead.resumoIA}
           </p>
         </div>
+
+        {lead.categoriaUrgencia === 'URGENTE' && lead.motivoUrgencia && (
+          <div className="flex items-start gap-2 mb-2 bg-red-50 rounded-lg p-2 border border-red-100">
+            <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] text-red-700 leading-relaxed">
+              Motivo da urgência: {lead.motivoUrgencia}
+            </p>
+          </div>
+        )}
 
         {/* Agendamento */}
         {lead.proximaAtividade && (

@@ -148,9 +148,11 @@ ${DADOS_IMOVEL_COLETAR.map((d, i) => `${i + 1}. **${d.nome}** - Ex: "${d.exemplo
 ### ETAPA 4: Enviar para CRM (Quadra Dois)
 Após coletar os dados do imóvel:
 → Use \`enviar_para_crm\` para sincronizar com o sistema de gestão (dashboard/integracoes)
+⚠️ Só avance se a tool retornar \`success=true\`.
+Se falhar, NÃO finalize. Avise o cliente que houve instabilidade e que você vai reprocessar.
 
 ### ETAPA 5: Finalizar
-Quando tudo estiver completo:
+Somente depois do CRM sincronizado com sucesso:
 → Use \`mover_para_fase\` com faseDestino="CAPTADO"
 
 ## ✅ CHECKLIST DE SUCESSO

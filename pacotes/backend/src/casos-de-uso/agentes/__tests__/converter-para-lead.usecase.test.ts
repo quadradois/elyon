@@ -5,6 +5,8 @@ const mockPrisma = {
   },
   lead: {
     create: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
   },
   atividade: {
     create: jest.fn(),
@@ -58,6 +60,24 @@ describe('ConverterParaLeadUseCase', () => {
       leadId: 'lead-existente',
       campanha: { tenantId: 'tenant-1' },
     });
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      id: 'lead-existente',
+      tipoImovel: null,
+      areaImovel: null,
+      quartosImovel: null,
+      vagasImovel: null,
+      valorPretendido: null,
+      ocupacaoImovel: null,
+      interesseEm: null,
+      motivacaoVenda: null,
+      situacaoAtual: null,
+      prazoDesejado: null,
+      urgencia: null,
+      doresIdentificadas: [],
+      schemaState: null,
+    });
+    mockPrisma.lead.update.mockResolvedValue({});
+    mockPrisma.atividade.create.mockResolvedValue({});
 
     const result = await useCase.execute({
       contatoId: 'contato-1',
@@ -66,8 +86,7 @@ describe('ConverterParaLeadUseCase', () => {
       timeline: 'breve',
     });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('Contato já é lead');
+    expect(result.success).toBe(true);
     expect(result.leadId).toBe('lead-existente');
     expect(result.reasonCode).toBe('ALREADY_LEAD');
   });
@@ -79,6 +98,24 @@ describe('ConverterParaLeadUseCase', () => {
       leadId: 'lead-ja-vinculado',
       campanha: { tenantId: 'tenant-1' },
     });
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      id: 'lead-ja-vinculado',
+      tipoImovel: null,
+      areaImovel: null,
+      quartosImovel: null,
+      vagasImovel: null,
+      valorPretendido: null,
+      ocupacaoImovel: null,
+      interesseEm: null,
+      motivacaoVenda: null,
+      situacaoAtual: null,
+      prazoDesejado: null,
+      urgencia: null,
+      doresIdentificadas: [],
+      schemaState: null,
+    });
+    mockPrisma.lead.update.mockResolvedValue({});
+    mockPrisma.atividade.create.mockResolvedValue({});
 
     const result = await useCase.execute({
       contatoId: 'contato-1b',
@@ -87,8 +124,7 @@ describe('ConverterParaLeadUseCase', () => {
       timeline: 'breve',
     });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('Contato já é lead');
+    expect(result.success).toBe(true);
     expect(result.leadId).toBe('lead-ja-vinculado');
     expect(result.reasonCode).toBe('ALREADY_LEAD');
   });

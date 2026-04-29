@@ -203,8 +203,12 @@ function hashCurto(str: string): string {
 export function obterCadeiaAgentes(config: ConfiguracaoOrquestrador): Record<TipoAgente, ElyonAgent> {
     const cacheKey = [
         config.tenantId,
+        config.configVersionToken || '',
+        config.nomeAgente || '',
+        config.nomeImobiliaria || '',
         config.llmModelo || 'default',
         config.llmApiKey ? 'custom' : 'default',
+        config.ragPerfilTexto ? hashCurto(config.ragPerfilTexto) : '',
         config.comissaoPadrao || '',
         config.prazoContrato ?? '',
         config.cidade || '',

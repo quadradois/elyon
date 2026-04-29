@@ -65,6 +65,7 @@ describe('MoverParaFaseUseCase', () => {
   it('ao mover para CAPTADO cria cliente quando não existe', async () => {
     mockPrisma.lead.findUnique.mockResolvedValueOnce({
       status: 'ONBOARDING',
+      crmSyncStatus: 'synced',
       doresIdentificadas: ['poucas visitas', 'sem retorno de corretores'],
       situacaoAtual: 'anunciado no OLX há 3 meses',
       motivacaoVenda: 'mudança de cidade',
@@ -110,6 +111,7 @@ describe('MoverParaFaseUseCase', () => {
   it('ao mover para CAPTADO não cria cliente se já existir', async () => {
     mockPrisma.lead.findUnique.mockResolvedValueOnce({
       status: 'ONBOARDING',
+      crmSyncStatus: 'synced',
       doresIdentificadas: ['poucas visitas', 'sem retorno de corretores'],
       situacaoAtual: 'anunciado no OLX há 3 meses',
       motivacaoVenda: 'mudança de cidade',
@@ -221,5 +223,27 @@ describe('MoverParaFaseUseCase', () => {
         autorizouAnuncio: true,
       }),
     });
+  });
+  it('bloqueia CAPTADO quando crmSyncStatus nao e synced', async () => {
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      status: 'ONBOARDING',
+      crmSyncStatus: 'error',
+      doresIdentificadas: ['poucas visitas', 'sem retorno de corretores'],
+      situacaoAtual: 'anunciado no OLX há 3 meses',
+      motivacaoVenda: 'mudança de cidade',
+      consequencias: 'perda de oportunidades',
+      custosAtuais: null,
+    });
+
+    const result = await useCase.execute({
+      leadId: 'lead-crm-nao-synced',
+      faseDestino: 'CAPTADO',
+      motivo: 'tentando finalizar',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.reasonCode).toBe('CRM_SYNC_REQUIRED');
+    expect(result.error).toBe('Lead só pode ir para CAPTADO após sincronização com CRM');
+    expect(mockPrisma.lead.update).not.toHaveBeenCalled();
   });
 });

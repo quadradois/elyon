@@ -61,6 +61,12 @@ export class EncaminharCorretorUseCase {
                 });
             }
 
+            // Pausar a IA — sem isso o agente continua respondendo após o handoff
+            await prisma.contato.update({
+                where: { id: input.contatoId },
+                data: { modoAtendimento: 'HUMANO' }
+            });
+
             // Criar tarefa
             await prisma.atividade.create({
                 data: {
@@ -72,7 +78,7 @@ export class EncaminharCorretorUseCase {
                 }
             });
 
-            console.log(`[UseCase] encaminhar_corretor - Tarefa criada para lead ${leadId}`);
+            console.log(`[UseCase] encaminhar_corretor - modoAtendimento=HUMANO, tarefa criada para lead ${leadId}`);
 
             return {
                 success: true,

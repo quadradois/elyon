@@ -38,6 +38,8 @@ interface RegistrarTurnoParams extends BaseTelemetriaParams {
   paolDivergencia?: boolean;
   paolGanhoPotencial?: number;
   paolCustoPotencialExtraUSD?: number;
+  // Breakdown de latência por fase (ms desde início do turno)
+  tFases?: Record<string, number>;
 }
 
 interface RegistrarOutcomeParams extends BaseTelemetriaParams {
@@ -77,67 +79,98 @@ export function calcularGrupoExperimento(params: BaseTelemetriaParams): GrupoExp
 export function registrarTelemetriaTurno(params: RegistrarTurnoParams): void {
   if (!isAgentCockpitEnabled()) return;
 
+  const detalhes = {
+    aaGroup: calcularGrupoAA(params),
+    experimentGroup: calcularGrupoExperimento(params),
+    telefone: params.telefone || null,
+    contatoId: params.contatoId || null,
+    leadId: params.leadId || null,
+    statusLead: params.statusLead || null,
+    faseFluxo: params.faseFluxo || null,
+    agenteInicial: params.agenteInicial || null,
+    agenteFinal: params.agenteFinal || null,
+    duracaoMs: params.duracaoMs,
+    sucesso: params.sucesso,
+    erro: params.erro || null,
+    fallback: params.fallback || 'NONE',
+    guardrail: params.guardrail || null,
+    toolCalls: params.toolCalls ?? 0,
+    handoffs: params.handoffs ?? 0,
+    repeticaoDetectada: !!params.repeticaoDetectada,
+    custoEstimadoUSD: params.custoEstimadoUSD ?? null,
+    tokenAlertLevel: params.tokenAlertLevel ?? null,
+    paolModo: params.paolModo ?? null,
+    paolAplicado: params.paolAplicado ?? false,
+    paolAcao: params.paolAcao ?? null,
+    paolDivergencia: params.paolDivergencia ?? false,
+    paolGanhoPotencial: params.paolGanhoPotencial ?? null,
+    paolCustoPotencialExtraUSD: params.paolCustoPotencialExtraUSD ?? null,
+    tFases: params.tFases ?? null,
+    ts: new Date().toISOString(),
+  };
+
+  // Registro primário: agrupado por Conversa (para métricas de IA)
   ServicoAuditoria.registrar({
     tenantId: params.tenantId,
     acao: 'AGENT_TURNO',
     entidade: 'Conversa',
     entidadeId: params.leadId || params.contatoId,
     ip: '127.0.0.1',
-    detalhes: {
-      aaGroup: calcularGrupoAA(params),
-      experimentGroup: calcularGrupoExperimento(params),
-      telefone: params.telefone || null,
-      contatoId: params.contatoId || null,
-      leadId: params.leadId || null,
-      statusLead: params.statusLead || null,
-      faseFluxo: params.faseFluxo || null,
-      agenteInicial: params.agenteInicial || null,
-      agenteFinal: params.agenteFinal || null,
-      duracaoMs: params.duracaoMs,
-      sucesso: params.sucesso,
-      erro: params.erro || null,
-      fallback: params.fallback || 'NONE',
-      guardrail: params.guardrail || null,
-      toolCalls: params.toolCalls ?? 0,
-      handoffs: params.handoffs ?? 0,
-      repeticaoDetectada: !!params.repeticaoDetectada,
-      custoEstimadoUSD: params.custoEstimadoUSD ?? null,
-      tokenAlertLevel: params.tokenAlertLevel ?? null,
-      paolModo: params.paolModo ?? null,
-      paolAplicado: params.paolAplicado ?? false,
-      paolAcao: params.paolAcao ?? null,
-      paolDivergencia: params.paolDivergencia ?? false,
-      paolGanhoPotencial: params.paolGanhoPotencial ?? null,
-      paolCustoPotencialExtraUSD: params.paolCustoPotencialExtraUSD ?? null,
-      ts: new Date().toISOString(),
-    },
+    detalhes,
   });
+
+  // Registro secundário: vinculado ao Lead (para cockpit-eventos no painel do corretor)
+  if (params.leadId) {
+    ServicoAuditoria.registrar({
+      tenantId: params.tenantId,
+      acao: 'COCKPIT_AGENT_TURNO',
+      entidade: 'Lead',
+      entidadeId: params.leadId,
+      ip: '127.0.0.1',
+      detalhes,
+    });
+  }
 }
 
 export function registrarOutcomeConversa(params: RegistrarOutcomeParams): void {
   if (!isAgentCockpitEnabled()) return;
 
+  const detalhes = {
+    aaGroup: calcularGrupoAA(params),
+    experimentGroup: calcularGrupoExperimento(params),
+    telefone: params.telefone || null,
+    contatoId: params.contatoId || null,
+    leadId: params.leadId || null,
+    statusLead: params.statusLead || null,
+    faseFluxo: params.faseFluxo || null,
+    outcome: params.outcome,
+    origem: params.origem,
+    motivo: params.motivo || null,
+    paolModo: params.paolModo ?? null,
+    paolAplicado: params.paolAplicado ?? false,
+    paolAcao: params.paolAcao ?? null,
+    ts: new Date().toISOString(),
+  };
+
+  // Registro primário: agrupado por Conversa (para métricas de IA)
   ServicoAuditoria.registrar({
     tenantId: params.tenantId,
     acao: 'AGENT_OUTCOME',
     entidade: 'Conversa',
     entidadeId: params.leadId || params.contatoId,
     ip: '127.0.0.1',
-    detalhes: {
-      aaGroup: calcularGrupoAA(params),
-      experimentGroup: calcularGrupoExperimento(params),
-      telefone: params.telefone || null,
-      contatoId: params.contatoId || null,
-      leadId: params.leadId || null,
-      statusLead: params.statusLead || null,
-      faseFluxo: params.faseFluxo || null,
-      outcome: params.outcome,
-      origem: params.origem,
-      motivo: params.motivo || null,
-      paolModo: params.paolModo ?? null,
-      paolAplicado: params.paolAplicado ?? false,
-      paolAcao: params.paolAcao ?? null,
-      ts: new Date().toISOString(),
-    },
+    detalhes,
   });
+
+  // Registro secundário: vinculado ao Lead (para cockpit-eventos no painel do corretor)
+  if (params.leadId) {
+    ServicoAuditoria.registrar({
+      tenantId: params.tenantId,
+      acao: 'COCKPIT_AGENT_OUTCOME',
+      entidade: 'Lead',
+      entidadeId: params.leadId,
+      ip: '127.0.0.1',
+      detalhes,
+    });
+  }
 }

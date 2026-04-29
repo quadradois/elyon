@@ -139,6 +139,8 @@ export interface LeadPriorizado {
   scoreComposto: number;
   categoriaUrgencia: CategoriaUrgencia;
   motivoUrgencia: string;
+  motivosUrgencia: string[];
+  orientacaoAcao: string;
   resumoIA: string;
 
   // ── Atividades ──
@@ -281,10 +283,41 @@ export function calcularQualificacao(lead: any): number {
 // CÁLCULO DE URGÊNCIA
 // ============================================
 
+function gerarOrientacaoAcao(categoria: CategoriaUrgencia, motivos: string[], lead: any): string {
+  if (categoria === 'IA_ATIVA') return 'Aguarde — a IA está processando agora.';
+
+  const temAgendamento = motivos.some(m => m.includes('Agendamento'));
+  const temPressao = motivos.some(m => m.includes('pressão'));
+  const semResposta = motivos.some(m => m.includes('Sem resposta'));
+
+  if (lead.temperatura === 'QUENTE' && temAgendamento) {
+    return 'Confirme o agendamento agora — lead quente com horário marcado.';
+  }
+  if (lead.temperatura === 'QUENTE' && semResposta) {
+    return 'Ligue agora — lead quente sem resposta há mais de 2h.';
+  }
+  if (temAgendamento) {
+    return 'Entre em contato para confirmar presença no agendamento.';
+  }
+  if (temPressao) {
+    return 'Priorize contato — lead com pressão de tempo declarada.';
+  }
+  if (semResposta) {
+    return 'Retome o contato — mensagem sem resposta em aberto.';
+  }
+  if (categoria === 'URGENTE') {
+    return 'Ação imediata recomendada — verifique os motivos acima.';
+  }
+  if (categoria === 'ATENCAO') {
+    return 'Agende um follow-up para manter o lead aquecido.';
+  }
+  return 'Monitore — sem ação crítica no momento.';
+}
+
 export function calcularUrgencia(
   lead: any,
   agora: number
-): { pontos: number; categoria: CategoriaUrgencia; motivo: string } {
+): { pontos: number; categoria: CategoriaUrgencia; motivo: string; motivos: string[]; orientacaoAcao: string } {
   let pontos = 0;
   const motivos: string[] = [];
 
@@ -404,10 +437,15 @@ export function calcularUrgencia(
     categoria = 'SEM_ACAO';
   }
 
+  const motivoFinal = motivos.length > 0 ? motivos[0] : 'Em acompanhamento';
+  const orientacao = gerarOrientacaoAcao(categoria, motivos, lead);
+
   return {
     pontos,
     categoria,
-    motivo: motivos.length > 0 ? motivos[0] : 'Em acompanhamento',
+    motivo: motivoFinal,
+    motivos,
+    orientacaoAcao: orientacao,
   };
 }
 
@@ -417,6 +455,19 @@ export function calcularUrgencia(
 
 function gerarResumoIA(lead: any): string {
   const partes: string[] = [];
+  const textoPoucoInformativo = (valor: string | null | undefined): boolean => {
+    const t = (valor || '').trim().toLowerCase();
+    if (!t) return true;
+    return [
+      'sim',
+      'faz sentido',
+      'faz sentido sim',
+      'ok',
+      'ok!',
+      'pode ser',
+      'entendi',
+    ].includes(t);
+  };
 
   // Interesse + tipo + endereço
   if (lead.interesseEm) {
@@ -440,7 +491,7 @@ function gerarResumoIA(lead: any): string {
   }
 
   // Situação atual (SPIN - Situação)
-  if (lead.situacaoAtual && partes.length < 3) {
+  if (lead.situacaoAtual && !textoPoucoInformativo(lead.situacaoAtual) && partes.length < 3) {
     partes.push(`Situação: ${lead.situacaoAtual}`);
   }
 
@@ -481,6 +532,10 @@ function gerarResumoIA(lead: any): string {
 
   if (partes.length === 0) {
     return 'Lead em qualificação. Aguardando mais informações da conversa.';
+  }
+
+  if (partes.length < 2 && lead.ultimaAcaoIA) {
+    partes.push(`Última ação: ${lead.ultimaAcaoIA}`);
   }
 
   return partes.join('. ').slice(0, 250);
@@ -712,7 +767,7 @@ export async function priorizarLeads(
     }
 
     // ── Score de urgência ──
-    const { pontos, categoria, motivo } = calcularUrgencia(
+    const { pontos, categoria, motivo, motivos: motivosUrgencia, orientacaoAcao } = calcularUrgencia(
       {
         ...lead,
         proximaAtividadeData,
@@ -850,6 +905,8 @@ export async function priorizarLeads(
       scoreComposto,
       categoriaUrgencia: categoria,
       motivoUrgencia: motivo,
+      motivosUrgencia,
+      orientacaoAcao,
       resumoIA: gerarResumoIA(lead),
 
       // Atividades (até 5)
