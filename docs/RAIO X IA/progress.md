@@ -49,3 +49,11 @@ Documentação consolidada criada. Próxima etapa recomendada: revisar P0 e tran
 - Criado `10-onda1-kickoff-p0-01.md` com plano pratico para abrir a primeira PR tecnica do P0.
 - Definidos escopo maximo, checklist de readiness, sequencia tecnica e criterios de aceite da Onda 1.
 - Mantida a orientacao de escopo estrito para nao misturar mitigacao critica com refatoracao ampla.
+
+## 2026-05-02 - Execucao P0-04 (Tenant Ownership)
+
+- Implementado enforcement de ownership por tenant nas tools sensiveis de agentes em `sdr-tools-agents.ts`.
+- `wrapToolExecute` evoluido para encaminhar `runContext`, permitindo validar `tenantId` de contexto antes de side effects.
+- Aplicado bloqueio cross-tenant com `reasonCode: TENANT_OWNERSHIP_DENIED` em tools com efeitos colaterais (fase, CRM, contrato, opt-out, handoff humano, atualizacao de dados, agenda e indicacao).
+- Criada suite `sdr-tools-ownership.test.ts` cobrindo bloqueio em tool de fase, tool externa e tool de compliance.
+- Validacao executada: `tsc --noEmit`, suite de ownership e regressao `gov-05` passando.

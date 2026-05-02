@@ -372,9 +372,9 @@ const RESULT_ENRICHERS: ToolResultEnricher[] = [
  */
 export function wrapToolExecute<TArgs = any>(
     toolName: string,
-    originalExecute: (args: TArgs) => Promise<string>
-): (args: TArgs) => Promise<string> {
-    return async (args: TArgs): Promise<string> => {
+    originalExecute: (args: TArgs, runContext?: any) => Promise<string>
+): (args: TArgs, runContext?: any) => Promise<string> {
+    return async (args: TArgs, runContext?: any): Promise<string> => {
         const inicio = Date.now();
         const argsLog = redactSensitiveFields(args as any);
 
@@ -404,7 +404,7 @@ export function wrapToolExecute<TArgs = any>(
         // ── 2. EXECUÇÃO ORIGINAL ──
         let resultStr: string;
         try {
-            resultStr = await originalExecute(args);
+            resultStr = await originalExecute(args, runContext);
         } catch (e: any) {
             const duracao = Date.now() - inicio;
             logger.error({

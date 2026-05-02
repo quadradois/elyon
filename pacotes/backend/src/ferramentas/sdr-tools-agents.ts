@@ -12,6 +12,7 @@ import { tool } from '@openai/agents';
 import { z } from 'zod';
 import crypto from 'node:crypto';
 import { prisma } from '../lib/db';
+import { logger } from '../lib/logger';
 import ContratoService from '../contratos/contrato-service';
 import {
     ConverterParaLeadUseCase,
@@ -48,6 +49,43 @@ async function registrarExecucaoTool(params: {
     } catch (error) {
         console.warn(`[TOOL_EXEC] Falha ao registrar ${params.toolName}:`, error);
     }
+}
+
+function resolverTenantIdDoContexto(runContext?: any): string | undefined {
+    const tenantId = runContext?.context?.tenantId;
+    return typeof tenantId === 'string' && tenantId.trim().length > 0 ? tenantId : undefined;
+}
+
+async function validarOwnershipLeadPorTenant(params: {
+    leadId: string;
+    tenantId?: string;
+    toolName: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (!params.tenantId) {
+        logger.error({ tool: params.toolName, leadId: params.leadId }, '[SECURITY][TOOLS] tenantId ausente no contexto da tool');
+        return { ok: false, error: 'Contexto de segurança inválido para executar esta ação.' };
+    }
+
+    const lead = await prisma.lead.findUnique({
+        where: { id: params.leadId },
+        select: { id: true, tenantId: true }
+    });
+
+    if (!lead) {
+        return { ok: false, error: 'Lead não encontrado' };
+    }
+
+    if (lead.tenantId !== params.tenantId) {
+        logger.warn({
+            tool: params.toolName,
+            leadId: params.leadId,
+            tenantIdContexto: params.tenantId,
+            tenantIdLead: lead.tenantId,
+        }, '[SECURITY][TOOLS] Tentativa cross-tenant bloqueada');
+        return { ok: false, error: 'Acesso negado ao lead informado.' };
+    }
+
+    return { ok: true };
 }
 
 // Sanitização importada de ./tool-sanitize (módulo unificado)
@@ -148,13 +186,21 @@ IMPORTANTE: Passe TODOS os dados que o lead mencionou na conversa (dores, motiva
         temDividasEvidencia: z.string().nullable().describe('Trecho literal da fala que confirma se tem/não tem dívidas'),
     }),
 
-    execute: wrapToolExecute('qualificar_lead', async (args: any) => {
+    execute: wrapToolExecute('qualificar_lead', async (args: any, runContext?: any) => {
         const useCase = new QualificarLeadUseCase();
         const input: any = { ...args };
         const leadIdResolvido = typeof args.leadId === 'string' && args.leadId.trim().length > 0
             ? args.leadId
             : args.contatoId;
         input.leadId = leadIdResolvido;
+        if (input.leadId) {
+            const ownership = await validarOwnershipLeadPorTenant({
+                leadId: input.leadId,
+                tenantId: resolverTenantIdDoContexto(runContext),
+                toolName: 'qualificar_lead'
+            });
+            if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+        }
         if (typeof args.doresIdentificadas === 'string') {
             input.doresIdentificadas = args.doresIdentificadas.split(',').map((d: string) => d.trim()).filter((d: string) => d);
         }
@@ -244,7 +290,14 @@ Gatilhos: "para", "não me ligue", "spam", "não quero"`,
         ]).describe('Motivo do opt-out')
     }),
 
-    execute: wrapToolExecute('registrar_optout', async (args) => {
+    execute: wrapToolExecute('registrar_optout', async (args, runContext?: any) => {
+        const ownership = await validarOwnershipLeadPorTenant({
+            leadId: args.contatoId,
+            tenantId: resolverTenantIdDoContexto(runContext),
+            toolName: 'registrar_optout'
+        });
+        if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+
         const useCase = new RegistrarOptoutUseCase();
         const result = await useCase.execute({
             leadId: args.contatoId,
@@ -286,13 +339,21 @@ IMPORTANTE: Passe TODOS os dados coletados na conversa! Tipo de imóvel, quartos
         doresIdentificadas: z.string().nullable().describe('Dores (separadas por vírgula)'),
     }),
 
-    execute: wrapToolExecute('converter_para_lead', async (args: any) => {
+    execute: wrapToolExecute('converter_para_lead', async (args: any, runContext?: any) => {
         const useCase = new ConverterParaLeadUseCase();
         const input: any = { ...args };
         const leadIdResolvido = typeof args.leadId === 'string' && args.leadId.trim().length > 0
             ? args.leadId
             : args.contatoId;
         input.leadId = leadIdResolvido;
+        if (input.leadId) {
+            const ownership = await validarOwnershipLeadPorTenant({
+                leadId: input.leadId,
+                tenantId: resolverTenantIdDoContexto(runContext),
+                toolName: 'converter_para_lead'
+            });
+            if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+        }
         if (typeof args.doresIdentificadas === 'string') {
             input.doresIdentificadas = args.doresIdentificadas.split(',').map((d: string) => d.trim()).filter((d: string) => d);
         }
@@ -338,7 +399,14 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
         motivo: z.string().describe('Por que não quer agora')
     }),
 
-    execute: wrapToolExecute('agendar_followup', async (args) => {
+    execute: wrapToolExecute('agendar_followup', async (args, runContext?: any) => {
+        const ownership = await validarOwnershipLeadPorTenant({
+            leadId: args.contatoId,
+            tenantId: resolverTenantIdDoContexto(runContext),
+            toolName: 'agendar_followup'
+        });
+        if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+
         const useCase = new AgendarFollowupUseCase();
         const result = await useCase.execute({
             leadId: args.contatoId,
@@ -366,7 +434,14 @@ Ao executar, faça passagem de bastão profissional: diga quem é o especialista
         urgencia: z.enum(['NORMAL', 'ALTA']).describe('ALTA se interesse/urgência')
     }),
 
-    execute: wrapToolExecute('encaminhar_corretor', async (args) => {
+    execute: wrapToolExecute('encaminhar_corretor', async (args, runContext?: any) => {
+        const ownership = await validarOwnershipLeadPorTenant({
+            leadId: args.contatoId,
+            tenantId: resolverTenantIdDoContexto(runContext),
+            toolName: 'encaminhar_corretor'
+        });
+        if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+
         const useCase = new EncaminharCorretorUseCase();
         const result = await useCase.execute({
             leadId: args.contatoId,
@@ -404,7 +479,14 @@ Use quando:
         }).nullable().describe('Dados do acordo (obrigatório passar objeto ou null)')
     }),
 
-    execute: wrapToolExecute('mover_para_fase', async (args: any) => {
+    execute: wrapToolExecute('mover_para_fase', async (args: any, runContext?: any) => {
+        const ownership = await validarOwnershipLeadPorTenant({
+            leadId: args.leadId,
+            tenantId: resolverTenantIdDoContexto(runContext),
+            toolName: 'mover_para_fase'
+        });
+        if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+
         // Sanitizar dadosAdicionais
         const dadosSanitizados = args.dadosAdicionais ? {
             tipoAutorizacao: sanitizeEnum(args.dadosAdicionais.tipoAutorizacao, ['exclusiva', 'simples']),
@@ -439,8 +521,15 @@ export const gerarLinkContratoTool = tool({
         leadId: z.string().describe('ID do lead'),
         tipoContrato: z.enum(['CAPTACAO']).default('CAPTACAO').describe('Tipo do contrato')
     }),
-    execute: wrapToolExecute('gerar_link_contrato', async (args) => {
+    execute: wrapToolExecute('gerar_link_contrato', async (args, runContext?: any) => {
         console.log(`[TOOL] gerar_link_contrato - Lead ${args.leadId}`);
+        const tenantIdContexto = resolverTenantIdDoContexto(runContext);
+        const ownership = await validarOwnershipLeadPorTenant({
+            leadId: args.leadId,
+            tenantId: tenantIdContexto,
+            toolName: 'gerar_link_contrato'
+        });
+        if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
 
         const lead = await prisma.lead.findUnique({
             where: { id: args.leadId },
@@ -482,7 +571,14 @@ export const atualizarDadosLeadTool = tool({
         endereco: z.string().nullable().describe('Endereço completo do imóvel'),
         nome: z.string().nullable().describe('Nome completo do cliente')
     }),
-    execute: wrapToolExecute('atualizar_dados_lead', async (args: any) => {
+    execute: wrapToolExecute('atualizar_dados_lead', async (args: any, runContext?: any) => {
+        const ownership = await validarOwnershipLeadPorTenant({
+            leadId: args.leadId,
+            tenantId: resolverTenantIdDoContexto(runContext),
+            toolName: 'atualizar_dados_lead'
+        });
+        if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+
         const useCase = new AtualizarDadosLeadUseCase();
         const result = await useCase.execute({
             leadId: args.leadId,
@@ -532,7 +628,14 @@ CRITICAL: Use esta tool para cada grupo de dados recebido.`,
         fotos: z.array(z.string()).nullable().describe('URLs das fotos enviadas')
     }),
 
-    execute: wrapToolExecute('salvar_dados_imovel', async (args: any) => {
+    execute: wrapToolExecute('salvar_dados_imovel', async (args: any, runContext?: any) => {
+        const ownership = await validarOwnershipLeadPorTenant({
+            leadId: args.leadId,
+            tenantId: resolverTenantIdDoContexto(runContext),
+            toolName: 'salvar_dados_imovel'
+        });
+        if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+
         const inputSanitizado = {
             leadId: args.leadId,
             tipo: sanitizeStr(args.tipo),
@@ -585,8 +688,15 @@ O CRM criará o Proprietário + Property para publicação nos portais.`,
         leadId: z.string().describe('ID do lead a enviar')
     }),
 
-    execute: wrapToolExecute('enviar_para_crm', async (args) => {
+    execute: wrapToolExecute('enviar_para_crm', async (args, runContext?: any) => {
         console.log(`[TOOL] enviar_para_crm - Lead ${args.leadId}`);
+        const tenantIdContexto = resolverTenantIdDoContexto(runContext);
+        const ownership = await validarOwnershipLeadPorTenant({
+            leadId: args.leadId,
+            tenantId: tenantIdContexto,
+            toolName: 'enviar_para_crm'
+        });
+        if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
 
         const lead = await prisma.lead.findUnique({
             where: { id: args.leadId }
@@ -669,13 +779,29 @@ OBRIGATÓRIO coletar: nome e telefone do indicado.`,
         observacoes: z.string().default('').describe('Detalhes extras: tipo de imóvel, urgência, etc.')
     }),
 
-    execute: wrapToolExecute('registrar_indicacao', async (args) => {
+    execute: wrapToolExecute('registrar_indicacao', async (args, runContext?: any) => {
         console.log(`[TOOL] registrar_indicacao - Origem: ${args.contatoOrigemId} → Indicado: ${args.nomeIndicado} (${args.telefoneIndicado})`);
+        const tenantIdContexto = resolverTenantIdDoContexto(runContext);
+        if (!tenantIdContexto) {
+            return JSON.stringify({ success: false, error: 'Contexto de segurança inválido para executar esta ação.', reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+        }
 
         const contatoOrigem = await prisma.lead.findUnique({
             where: { id: args.contatoOrigemId },
             select: { nome: true, campanhaOrigemId: true, tenantId: true }
         });
+        if (!contatoOrigem) {
+            return JSON.stringify({ success: false, error: 'Contato de origem não encontrado' });
+        }
+        if (contatoOrigem.tenantId !== tenantIdContexto) {
+            logger.warn({
+                tool: 'registrar_indicacao',
+                contatoOrigemId: args.contatoOrigemId,
+                tenantIdContexto,
+                tenantIdOrigem: contatoOrigem.tenantId,
+            }, '[SECURITY][TOOLS] Tentativa cross-tenant bloqueada em registrar_indicacao');
+            return JSON.stringify({ success: false, error: 'Acesso negado ao contato de origem.', reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+        }
 
         const campanhaOrigemId = args.campanhaId || contatoOrigem?.campanhaOrigemId;
         if (!campanhaOrigemId || !contatoOrigem?.tenantId) {
@@ -753,8 +879,14 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
         observacoesCloser: z.string().nullable().describe('RELATÓRIO DA CONVERSA para o Corretor Humano: dores SPIN identificadas, nível de interesse, objeções levantadas, PVAM inferido, contexto da negociação')
     }),
 
-    execute: wrapToolExecute('agendar_reuniao_closer', async (args) => {
+    execute: wrapToolExecute('agendar_reuniao_closer', async (args, runContext?: any) => {
             console.log(`[TOOL] agendar_reuniao_closer - Contato ${args.contatoId} - ${args.dataHora}`);
+            const ownership = await validarOwnershipLeadPorTenant({
+                leadId: args.contatoId,
+                tenantId: resolverTenantIdDoContexto(runContext),
+                toolName: 'agendar_reuniao_closer'
+            });
+            if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
 
             // 1. Resolver leadId a partir do contatoId
             const contato = await prisma.lead.findUnique({
@@ -959,8 +1091,14 @@ Esta tool gera um link nativo do Google Calendar para o lead escolher o melhor h
         observacoesCloser: z.string().nullable().describe('Contexto da conversa para o Closer')
     }),
 
-    execute: wrapToolExecute('enviar_link_agendamento', async (args) => {
+    execute: wrapToolExecute('enviar_link_agendamento', async (args, runContext?: any) => {
             console.log(`[TOOL] enviar_link_agendamento - Contato ${args.contatoId}`);
+            const ownership = await validarOwnershipLeadPorTenant({
+                leadId: args.contatoId,
+                tenantId: resolverTenantIdDoContexto(runContext),
+                toolName: 'enviar_link_agendamento'
+            });
+            if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
 
             const contato = await prisma.lead.findUnique({
                 where: { id: args.contatoId },
