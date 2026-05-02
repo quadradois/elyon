@@ -60,7 +60,7 @@ Escopo: módulo de agentes e tools relacionadas.
 
 | Risco | Status Atual | Observação |
 |---|---|---|
-| R-CRIT-01 | Mitigado parcialmente | Runtime corrigido; suite `converter-para-lead.usecase.test.ts` precisa atualização para novo contrato canônico. |
+| R-CRIT-01 | Mitigado | Runtime e suite `converter-para-lead.usecase.test.ts` alinhados ao contrato canônico atual. |
 | R-CRIT-02 | Mitigado | `qualificar_lead` com resolução canônica e cobertura de teste focada. |
 | R-CRIT-03 | Mitigado | Opt-out persistido deterministicamente no bloqueio de guardrail. |
 | R-CRIT-04 | Mitigado | Ownership cross-tenant aplicado em tools sensíveis com bloqueio pré-side effect. |

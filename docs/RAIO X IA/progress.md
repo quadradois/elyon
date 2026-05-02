@@ -72,3 +72,15 @@ Documentação consolidada criada. Próxima etapa recomendada: revisar P0 e tran
 - Resultado: Go condicional para piloto controlado; No-Go para autonomia plena mantido.
 - Falha relevante encontrada em suite legada `converter-para-lead.usecase.test.ts` (assertions desalinhadas ao contrato canonico atual).
 - Criado `11-go-no-go-pos-p0.md` com evidencias, riscos residuais e condicoes obrigatorias de piloto.
+
+## 2026-05-02 - Estabilizacao Suite `converter_para_lead`
+
+- Suite `converter-para-lead.usecase.test.ts` reescrita para refletir o contrato canonico atual (entidade `lead`), removendo expectativas legadas de fluxo `contato -> lead.create`.
+- Revalidacao sequencial da bateria critica pos-P0 concluida com sucesso:
+  - `converter-para-lead.usecase.test.ts` PASS (6/6)
+  - `qualificar-lead.usecase.test.ts` PASS (10/10)
+  - `sdr-tools-ownership.test.ts` PASS (3/3)
+  - `sdr-tools-sensitive-policy.test.ts` PASS (4/4)
+  - `orchestrator-integration` (teste opt-out guardrail) PASS
+  - `gov-05-ivonet-regression.e2e.test.ts` PASS (6/6)
+- Falhas por `SIGKILL` observadas em execucao paralela foram classificadas como instabilidade de worker/infra, nao regressao funcional.

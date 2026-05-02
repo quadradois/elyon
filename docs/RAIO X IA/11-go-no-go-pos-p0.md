@@ -24,22 +24,18 @@ Status recomendado: **Go condicional para piloto controlado**.
 - `src/ferramentas/__tests__/sdr-tools-sensitive-policy.test.ts` -> **PASS (4/4)**
 - `src/agentes/__tests__/gov-05-ivonet-regression.e2e.test.ts` -> **PASS (6/6)**
 
-## Teste Com Divergencia Encontrada
+## Revalidacao Pos-Estabilizacao
 
-- `src/casos-de-uso/agentes/__tests__/converter-para-lead.usecase.test.ts` -> **FAIL (7 falhas)**
+- `src/casos-de-uso/agentes/__tests__/converter-para-lead.usecase.test.ts` -> **PASS (6/6)**
 
 Leitura tecnica:
 
-- As falhas estao alinhadas a expectativas legadas do teste (fluxo antigo contato->lead), enquanto o comportamento implementado no P0-01 passou a operar no contrato canonico de `leadId`.
-- Nao houve indicio de regressao de compilacao nem nos testes de regressao/ownership/policy.
-
-Conclusao operacional:
-
-- Existe **gap de suite de teste** a corrigir (realinhar assertions do `converter-para-lead.usecase.test.ts` ao contrato atual).
+- A suite foi realinhada ao contrato canônico atual (entidade `lead`).
+- Reexecução sequencial confirmou estabilidade funcional nos testes críticos pós-P0.
 
 ## Reavaliacao Dos Riscos Criticos P0
 
-- R-CRIT-01 (`contatoId` vs `leadId` em conversao): **Mitigado no runtime, pendente consolidacao de teste legado**.
+- R-CRIT-01 (`contatoId` vs `leadId` em conversao): **Mitigado**.
 - R-CRIT-02 (`qualificar_lead` com entidade errada): **Mitigado**.
 - R-CRIT-03 (opt-out sem persistencia no guardrail): **Mitigado**.
 - R-CRIT-04 (cross-tenant em tools sensiveis): **Mitigado**.
@@ -49,7 +45,7 @@ Conclusao operacional:
 
 1. Manter `AGENT_REQUIRE_MANUAL_APPROVAL_*` habilitado para CRM/contrato/CAPTADO.
 2. Manter `AGENT_AUTO_CAPTADO_AFTER_CRM=false` ate estabilidade operacional comprovada.
-3. Corrigir e estabilizar a suite `converter-para-lead.usecase.test.ts` antes de expandir autonomia.
+3. Manter monitoramento de estabilidade de testes em execucao sequencial no CI quando houver suites longas.
 4. Monitorar taxa de bloqueio por `TENANT_OWNERSHIP_DENIED` e `MANUAL_APPROVAL_REQUIRED` por tenant/campanha.
 
 ## Decisao
@@ -59,8 +55,8 @@ Conclusao operacional:
 
 ## Proximo Passo Recomendado
 
-Abrir uma onda curta de estabilizacao de testes (P0.5), focada em:
+Executar piloto controlado de 7 dias com monitoramento reforçado, focando em:
 
-- atualizar `converter-para-lead.usecase.test.ts` para o contrato canonico atual;
-- executar suite ampliada multi-turno/adversarial;
-- emitir novo checkpoint de risco com baseline de 7 dias de piloto.
+- taxa de bloqueio por policy (`MANUAL_APPROVAL_REQUIRED`) e ownership (`TENANT_OWNERSHIP_DENIED`);
+- taxa de fallback e handoff por fase do funil;
+- revisão diária de eventos de bloqueio de ações irreversíveis.

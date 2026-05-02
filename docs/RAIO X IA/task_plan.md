@@ -26,7 +26,7 @@ Arquivos analisados principalmente:
 | 8. Code review `Contato -> Lead` | Completo | Refatoração revisada; relatório criado em `08-code-review-refatoracao-contato-lead.md`. |
 | 9. Implementação P0 | Completo | P0-01..P0-05 implementados, validados e publicados. |
 | 10. Reavaliação Go/No-Go pós-P0 | Completo | Checkpoint criado em `11-go-no-go-pos-p0.md`. |
-| 11. Estabilização de suíte legada | Pendente | Alinhar `converter-para-lead.usecase.test.ts` ao contrato canônico atual. |
+| 11. Estabilização de suíte legada | Completo | `converter-para-lead.usecase.test.ts` alinhado ao contrato canônico e validado em execução sequencial. |
 
 ## Decisões Tomadas
 
