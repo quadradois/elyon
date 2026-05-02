@@ -43,3 +43,9 @@ Documentação consolidada criada. Próxima etapa recomendada: revisar P0 e tran
 - Criado `09-plano-execucao-p0.md` com sequencia de implementacao segura por risco.
 - Definidos gates de inicio (`Definition of Ready`) e conclusao (`Definition of Done`) para cada ticket P0.
 - Mantida a diretriz: Go para execucao faseada de P0, mas No-Go para autonomia plena ate fechar P0-01..P0-04.
+
+## 2026-05-02 - Kickoff Onda 1 (P0-01)
+
+- Criado `10-onda1-kickoff-p0-01.md` com plano pratico para abrir a primeira PR tecnica do P0.
+- Definidos escopo maximo, checklist de readiness, sequencia tecnica e criterios de aceite da Onda 1.
+- Mantida a orientacao de escopo estrito para nao misturar mitigacao critica com refatoracao ampla.

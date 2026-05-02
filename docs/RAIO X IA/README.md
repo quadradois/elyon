@@ -21,6 +21,7 @@ Centralizar a avaliação de comportamento, arquitetura, prompts, tools, autonom
 | `07-revisao-estado-git.md` | Fotografia do worktree atual e recomendação de isolamento/estabilização. |
 | `08-code-review-refatoracao-contato-lead.md` | Code review da refatoração atual `Contato -> Lead` e decisão recomendada. |
 | `09-plano-execucao-p0.md` | Plano de execução segura dos P0 com gates de início/conclusão e ordem recomendada. |
+| `10-onda1-kickoff-p0-01.md` | Checklist e estratégia de kickoff da Onda 1 para implementação do P0-01. |
 | `task_plan.md` | Plano operacional da auditoria e próximos passos. |
 | `findings.md` | Achados separados entre fatos e hipóteses. |
 | `progress.md` | Log de progresso da análise. |
