@@ -37,3 +37,9 @@ Documentação consolidada criada. Próxima etapa recomendada: revisar P0 e tran
 - Rodado `npm --workspace @elyon/backend exec prisma -- validate --schema prisma/schema.prisma`: passou.
 - Veredito registrado: No-Go para merge/deploy da refatoração atual; recomendação de isolar P0 em worktree limpo.
 
+
+## 2026-05-02 - Plano de Execucao P0
+
+- Criado `09-plano-execucao-p0.md` com sequencia de implementacao segura por risco.
+- Definidos gates de inicio (`Definition of Ready`) e conclusao (`Definition of Done`) para cada ticket P0.
+- Mantida a diretriz: Go para execucao faseada de P0, mas No-Go para autonomia plena ate fechar P0-01..P0-04.
