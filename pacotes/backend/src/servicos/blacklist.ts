@@ -168,10 +168,10 @@ export class BlacklistService {
       observacoes: 'Opt-out solicitado pelo contato'
     });
 
-    // Atualizar contatos com esse telefone para status OPTOUT
+    // Atualizar leads com esse telefone para status OPTOUT
     const telefoneNormalizado = normalizarTelefone(telefone);
 
-    await prisma.contato.updateMany({
+    await prisma.lead.updateMany({
       where: {
         OR: [
           { telefone: { contains: telefoneNormalizado } },

@@ -244,7 +244,7 @@ export function Integracoes() {
                                     <div>
                                         <CardTitle className="text-lg">CRM Quadradois</CardTitle>
                                         <CardDescription>
-                                            Envia leads captados automaticamente para o CRM de gestão
+                                            Integração para envio de leads ao CRM durante o atendimento humano
                                         </CardDescription>
                                     </div>
                                 </div>
@@ -408,9 +408,9 @@ export function Integracoes() {
                                 <div>
                                     <h4 className="font-medium text-slate-900">Como funciona?</h4>
                                     <p className="text-sm text-slate-600 mt-1">
-                                        Após configurar a integração, os leads captados pelo agente IA serão
-                                        automaticamente enviados para o CRM quando marcados como "CAPTADO".
-                                        O CRM criará o Proprietário e o Imóvel no sistema de gestão.
+                                        Após configurar a integração, o corretor pode acionar o envio do lead para o CRM
+                                        durante o atendimento humano, quando os dados estiverem completos e validados.
+                                        O CRM criará ou atualizará o Proprietário e registrará o Imóvel no fluxo de gestão.
                                     </p>
                                 </div>
                             </div>

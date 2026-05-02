@@ -28,7 +28,7 @@ describe('RegistrarOptoutUseCase', () => {
     mockPrisma.conversa.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await useCase.execute({
-      contatoId: 'contato-1',
+      leadId: 'contato-1',
       motivo: 'NAO_INCOMODAR',
     });
 
@@ -59,7 +59,7 @@ describe('RegistrarOptoutUseCase', () => {
     mockPrisma.conversa.updateMany.mockResolvedValue({ count: 0 });
 
     const result = await useCase.execute({
-      contatoId: 'lead-1',
+      leadId: 'lead-1',
       motivo: 'IMOVEL_VENDIDO',
     });
 
@@ -77,7 +77,7 @@ describe('RegistrarOptoutUseCase', () => {
     mockPrisma.lead.update.mockRejectedValue(new Error('Falha lead'));
 
     const result = await useCase.execute({
-      contatoId: 'id-invalido',
+      leadId: 'id-invalido',
       motivo: 'OUTRO',
     });
 
@@ -91,7 +91,7 @@ describe('RegistrarOptoutUseCase', () => {
     mockPrisma.conversa.updateMany.mockRejectedValue(new Error('Falha conversa'));
 
     const result = await useCase.execute({
-      contatoId: 'contato-2',
+      leadId: 'contato-2',
       motivo: 'SEM_INTERESSE_AGORA',
     });
 

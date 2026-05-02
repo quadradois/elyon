@@ -141,17 +141,18 @@ export async function buscarContextoConversa(
             }
         });
 
-        // Buscar contato se não tem lead
+        // Buscar lead de prospecção se não tem lead CRM
         let contatoId: string | undefined;
         if (!lead) {
-            const contato = await prisma.contato.findFirst({
+            const leadProspeccao = await prisma.lead.findFirst({
                 where: {
                     telefone: { contains: telefone.replace(/\D/g, '').slice(-11) },
-                    campanha: { tenantId }
+                    tenantId,
+                    statusProspeccao: { not: null }
                 },
                 select: { id: true }
             });
-            contatoId = contato?.id;
+            contatoId = leadProspeccao?.id;
         }
 
         return {

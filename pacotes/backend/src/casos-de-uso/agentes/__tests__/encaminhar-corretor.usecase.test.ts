@@ -28,7 +28,7 @@ describe('EncaminharCorretorUseCase', () => {
     mockPrisma.contato.findUnique.mockResolvedValue(null);
 
     const result = await useCase.execute({
-      contatoId: 'nao-existe',
+      leadId: 'nao-existe',
       motivo: 'Quer falar com humano',
       contextoConversa: 'Cliente pediu contato imediato',
       urgencia: 'NORMAL',
@@ -48,7 +48,7 @@ describe('EncaminharCorretorUseCase', () => {
     mockPrisma.atividade.create.mockResolvedValue({});
 
     const result = await useCase.execute({
-      contatoId: 'contato-1',
+      leadId: 'contato-1',
       motivo: 'Solicitou reunião',
       contextoConversa: 'Falou que tem interesse',
       urgencia: 'NORMAL',
@@ -91,7 +91,7 @@ describe('EncaminharCorretorUseCase', () => {
     mockPrisma.atividade.create.mockResolvedValue({});
 
     const result = await useCase.execute({
-      contatoId: 'contato-2',
+      leadId: 'contato-2',
       motivo: 'Pediu proposta',
       contextoConversa: 'Mostrou forte interesse',
       urgencia: 'ALTA',
@@ -143,7 +143,7 @@ describe('EncaminharCorretorUseCase', () => {
     mockPrisma.atividade.create.mockRejectedValue(new Error('Erro criando tarefa'));
 
     const result = await useCase.execute({
-      contatoId: 'contato-3',
+      leadId: 'contato-3',
       motivo: 'Quer proposta hoje',
       contextoConversa: 'Insistiu no contato',
       urgencia: 'ALTA',

@@ -463,7 +463,7 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
     try {
       // 1. Buscar mensagens da conversa de prospecção
       const mensagens = await prisma.mensagemProspeccao.findMany({
-        where: { contatoId },
+        where: { leadId: contatoId },
         orderBy: { dataHora: 'asc' }
       });
 
@@ -473,10 +473,10 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
       }
 
       // 2. Buscar dados do contato
-      const contato = await prisma.contato.findUnique({
+      const contato = await prisma.lead.findUnique({
         where: { id: contatoId },
         include: {
-          campanha: {
+          campanhaOrigem: {
             include: { empreendimento: true }
           }
         }
@@ -491,7 +491,7 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
       const chunks = await this.extrairChunksProspeccao(
         historicoTexto,
         tipoConversao,
-        empreendimento || (contato?.campanha?.empreendimento as any)?.nome || 'Empreendimento'
+        empreendimento || (contato?.campanhaOrigem?.empreendimento as any)?.nome || 'Empreendimento'
       );
 
       console.log(`[RAG-Prospecção] 📝 Extraídos ${chunks.length} chunks da conversão`);

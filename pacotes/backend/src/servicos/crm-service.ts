@@ -62,6 +62,7 @@ interface ImovelData {
     valor_condominio?: number | null;
     valor_iptu?: number | null;
     caracteristicas?: string[];
+    caracteristicas_texto?: string | null;
     descricao?: string | null;
     fotos?: string[];
 }
@@ -85,6 +86,34 @@ interface IntegracaoConfig {
     tenantIdDestino: number | null;
 }
 
+function normalizarApiUrl(apiUrl: string): string {
+    return String(apiUrl || '').trim().replace(/\/+$/, '');
+}
+
+function montarEndpointCrm(apiUrlBase: string, pathComApi: string): string {
+    const base = normalizarApiUrl(apiUrlBase);
+    const path = pathComApi.startsWith('/') ? pathComApi : `/${pathComApi}`;
+    if (base.endsWith('/api') && path.startsWith('/api/')) {
+        return `${base}${path.replace(/^\/api/, '')}`;
+    }
+    return `${base}${path}`;
+}
+
+function validarApiUrlProducao(apiUrl: string): void {
+    let url: URL;
+    try {
+        url = new URL(apiUrl);
+    } catch {
+        throw new Error('apiUrl inválida. Informe uma URL completa, ex: https://crm.exemplo.com');
+    }
+
+    const host = url.hostname.toLowerCase();
+    const ehLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+    if (process.env.NODE_ENV === 'production' && ehLocalhost) {
+        throw new Error('apiUrl inválida para produção: localhost/127.0.0.1 não funciona entre VPS diferentes');
+    }
+}
+
 /**
  * Busca configuração de integração CRM do tenant
  */
@@ -104,8 +133,10 @@ async function getConfigCrm(tenantId: string): Promise<IntegracaoConfig | null> 
 
     try {
         const apiKey = descriptografar(config.apiKeyCriptografada);
+        const apiUrl = normalizarApiUrl(config.apiUrl);
+        validarApiUrlProducao(apiUrl);
         return {
-            apiUrl: config.apiUrl,
+            apiUrl,
             apiKey,
             tenantIdDestino: config.tenantIdDestino
         };
@@ -124,14 +155,33 @@ function mapTipoImovel(tipo: string | null): string {
         'casa': 'casa',
         'comercial': 'comercial',
         'terreno': 'terreno',
+        'lote': 'terreno',
+        'fazenda': 'fazenda',
+        'sitio': 'sitio',
+        'sítio': 'sitio',
+        'chacara': 'chacara',
+        'chácara': 'chacara',
         'flat': 'flat',
         'studio': 'studio',
         'kitnet': 'studio',
-        'sala': 'comercial',
-        'galpao': 'comercial',
-        'loja': 'comercial',
+        'loft': 'loft',
+        'sala': 'sala_comercial',
+        'sala comercial': 'sala_comercial',
+        'sala_comercial': 'sala_comercial',
+        'galpao': 'galpao',
+        'galpão': 'galpao',
+        'loja': 'loja',
     };
     return mapping[(tipo || '').toLowerCase()] || 'apartamento';
+}
+
+function mapTipoNegocio(interesseEm: string | null): string {
+    const v = (interesseEm || '').toLowerCase().trim();
+    if (!v) return 'venda';
+    if (v.includes('amb')) return 'ambos';
+    if (v.includes('loc') || v.includes('alugu')) return 'locacao';
+    if (v.includes('vend')) return 'venda';
+    return 'venda';
 }
 
 /**
@@ -148,6 +198,39 @@ function parseEndereco(endereco: string | null): { cidade?: string; estado?: str
         };
     }
     return {};
+}
+
+function parseEnderecoDetalhado(endereco: string | null): {
+    logradouro?: string | null;
+    numero?: string | null;
+    complemento?: string | null;
+    bairro?: string | null;
+    cidade?: string;
+    estado?: string;
+    cep?: string | null;
+} {
+    if (!endereco) return {};
+    const partes = endereco.split(',').map(p => p.trim()).filter(Boolean);
+    const primeira = partes[0] || null;
+    const segunda = partes[1] || null;
+    const terceira = partes[2] || null;
+
+    const numeroMatch = segunda?.match(/^(\d+[A-Za-z0-9\-\/]*)/);
+    const numero = numeroMatch ? numeroMatch[1] : null;
+    const complemento = segunda && numero ? segunda.replace(numero, '').trim() || null : null;
+
+    const cidadeEstado = parseEndereco(endereco);
+    const cepMatch = endereco.match(/\b(\d{5}-?\d{3})\b/);
+
+    return {
+        logradouro: primeira,
+        numero,
+        complemento,
+        bairro: terceira || cidadeEstado.bairro || null,
+        cidade: cidadeEstado.cidade,
+        estado: cidadeEstado.estado,
+        cep: cepMatch ? cepMatch[1] : null,
+    };
 }
 
 /**
@@ -169,41 +252,108 @@ function parseValor(valor: string | null): number | null {
 /**
  * Monta o payload para enviar ao CRM
  */
+function toNumberOrNull(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+}
+
+/**
+ * Extrai o número WhatsApp do lead.
+ * Prioridade: primeiro número com flag whatsapp=true em telefonesJson → telefone principal.
+ */
+function extrairWhatsapp(lead: Lead): string | null {
+    if (lead.telefonesJson && Array.isArray(lead.telefonesJson)) {
+        const comWpp = (lead.telefonesJson as Array<{ numero?: string; whatsapp?: boolean }>)
+            .find(t => t.whatsapp === true);
+        if (comWpp?.numero) return String(comWpp.numero);
+    }
+    return lead.telefone || null;
+}
+
 function buildCrmPayload(lead: Lead, tenantId: string): {
     proprietario: ProprietarioData;
     imovel: ImovelData;
     contrato: ContratoData;
     origem: OrigemData;
 } {
-    const enderecoParseado = parseEndereco(lead.enderecoImovel);
+    // Endereço do imóvel: parsing da string + bairro dedicado
+    const enderecoImovel = parseEnderecoDetalhado(lead.enderecoImovel);
+
+    // Endereço do proprietário: tenta enderecoPrincipal e enderecoPessoal (Assertiva);
+    // usa campos estruturados da Assertiva (cidade/estado/cep) como fallback confiável
+    const enderecoProprietario = parseEnderecoDetalhado(lead.enderecoPrincipal || lead.enderecoPessoal);
+
+    const caracteristicasBase = (lead.imovelCaracteristicas && lead.imovelCaracteristicas.length > 0)
+        ? lead.imovelCaracteristicas.join(', ')
+        : null;
+    const detalhesMineracao = [
+        lead.quadra ? `Quadra ${lead.quadra}` : null,
+        lead.lote ? `Lote ${lead.lote}` : null,
+        lead.unidade ? `Unidade ${lead.unidade}` : null,
+        lead.bloco ? `Bloco ${lead.bloco}` : null,
+        lead.box ? `Box ${lead.box}` : null,
+    ].filter(Boolean).join(', ');
+    const caracteristicasTexto = [caracteristicasBase, detalhesMineracao].filter(Boolean).join(', ') || null;
+
+    // Áreas: areaConstruida → área útil; imovelAreaTotal → área total registrada
+    const areaUtil = toNumberOrNull(lead.areaConstruida)
+        || lead.imovelAreaTotal
+        || (lead.areaImovel ? parseFloat(lead.areaImovel.replace(/[^\d.]/g, '')) : null);
+    const areaTotal = lead.imovelAreaTotal
+        || toNumberOrNull(lead.areaConstruida)
+        || toNumberOrNull(lead.areaTerreno)
+        || (lead.areaImovel ? parseFloat(lead.areaImovel.replace(/[^\d.]/g, '')) : null);
+
+    const valorVenalContato = toNumberOrNull(lead.valorVenal);
 
     return {
         proprietario: {
             nome: lead.nome,
             cpf: lead.cpf,
+            rg: lead.rg,
             telefone: lead.telefone,
+            telefone2: lead.telefone2,
             email: lead.email,
-            whatsapp: lead.telefone,
+            // Extrai número WhatsApp real de telefonesJson; fallback: telefone principal
+            whatsapp: extrairWhatsapp(lead),
+            // Parsing do endereço livre; campos Assertiva (cidade/estado/cep) como fallback
+            cep: enderecoProprietario.cep || lead.cep || null,
+            logradouro: enderecoProprietario.logradouro || null,
+            numero: enderecoProprietario.numero || null,
+            complemento: enderecoProprietario.complemento || null,
+            bairro: enderecoProprietario.bairro || null,
+            cidade: enderecoProprietario.cidade || lead.cidade || null,
+            estado: enderecoProprietario.estado || lead.estado || null,
         },
         imovel: {
             tipo: mapTipoImovel(lead.tipoImovel),
-            tipo_negocio: lead.interesseEm || 'venda',
-            logradouro: lead.enderecoImovel?.split(',')[0] || null,
-            bairro: enderecoParseado.bairro || null,
-            cidade: enderecoParseado.cidade || null,
-            estado: enderecoParseado.estado || null,
+            tipo_negocio: mapTipoNegocio(lead.interesseEm),
+            logradouro: enderecoImovel.logradouro || null,
+            numero: enderecoImovel.numero || null,
+            complemento: enderecoImovel.complemento || null,
+            bairro: lead.bairroImovel || enderecoImovel.bairro || null,
+            cidade: enderecoImovel.cidade || null,
+            estado: enderecoImovel.estado || null,
+            cep: enderecoImovel.cep || null,
             quartos: lead.quartosImovel,
             suites: lead.imovelSuites,
             banheiros: lead.imovelBanheiros,
             vagas: lead.vagasImovel,
-            area_util: lead.imovelAreaTotal || (lead.areaImovel ? parseFloat(lead.areaImovel.replace(/[^\d.]/g, '')) : null),
+            area_util: areaUtil,   // área construída/útil
+            area_total: areaTotal, // área total cadastrada
             andar: lead.imovelAndar,
             valor_venda: lead.interesseEm?.includes('vend') ? parseValor(lead.valorPretendido) : null,
             valor_locacao: lead.imovelValorLocacao,
             valor_condominio: lead.imovelValorCondominio,
-            valor_iptu: lead.imovelValorIPTU,
+            valor_iptu: lead.imovelValorIPTU || valorVenalContato,
             caracteristicas: lead.imovelCaracteristicas || [],
-            descricao: lead.imovelDescricao,
+            caracteristicas_texto: caracteristicasTexto,
+            descricao: [
+                lead.imovelDescricao,
+                lead.nomeEdificio ? `Edifício: ${lead.nomeEdificio}` : null,
+                lead.inscricaoIptu ? `IPTU: ${lead.inscricaoIptu}` : null,
+            ].filter(Boolean).join('\n') || null,
             fotos: lead.imovelFotos || [],
         },
         contrato: {
@@ -228,24 +378,39 @@ function isRetryableStatus(status: number): boolean {
     return status === 408 || status === 429 || status >= 500;
 }
 
-// Backoff exponencial: tentativa 1→2s, 2→8s, 3→30s
-const BACKOFF_MS = [2000, 8000, 30000];
+// Backoff exponencial recomendado pelo SOP Quadra Dois: 5s, 15s, 30s
+const BACKOFF_MS = [5000, 15000, 30000];
 
 async function enviarComRetry(url: string, options: RequestInit, tentativasMax: number = 3): Promise<Response> {
     let ultimaResposta: Response | null = null;
+    let ultimoErro: Error | null = null;
     for (let tentativa = 1; tentativa <= tentativasMax; tentativa++) {
-        const resposta = await fetch(url, options);
-        ultimaResposta = resposta;
-        if (!isRetryableStatus(resposta.status) || tentativa === tentativasMax) {
-            return resposta;
+        const timeoutMs = Number(process.env.CRM_REQUEST_TIMEOUT_MS || 30000);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const resposta = await fetch(url, { ...options, signal: controller.signal });
+            ultimaResposta = resposta;
+            if (!isRetryableStatus(resposta.status) || tentativa === tentativasMax) {
+                return resposta;
+            }
+            const esperaMs = BACKOFF_MS[tentativa - 1] ?? 30000;
+            console.info(`[OBS] crm_sync_retry tentativa=${tentativa} status=${resposta.status} aguardando=${esperaMs}ms`);
+            await aguardar(esperaMs);
+        } catch (error: any) {
+            ultimoErro = error instanceof Error ? error : new Error(String(error));
+            if (tentativa === tentativasMax) break;
+            const esperaMs = BACKOFF_MS[tentativa - 1] ?? 30000;
+            console.info(`[OBS] crm_sync_retry tentativa=${tentativa} erro_rede=\"${ultimoErro.message}\" aguardando=${esperaMs}ms`);
+            await aguardar(esperaMs);
+        } finally {
+            clearTimeout(timer);
         }
-        const esperaMs = BACKOFF_MS[tentativa - 1] ?? 30000;
-        console.info(`[OBS] crm_sync_retry tentativa=${tentativa} status=${resposta.status} aguardando=${esperaMs}ms`);
-        await aguardar(esperaMs);
     }
 
     if (ultimaResposta) return ultimaResposta;
-    throw new Error('Falha ao enviar para CRM após retentativas');
+    throw ultimoErro || new Error('Falha ao enviar para CRM após retentativas');
 }
 
 /**
@@ -321,7 +486,7 @@ export async function enviarParaCrm(leadId: string): Promise<CrmResponse> {
 
         console.log(`[CRM] Enviando lead ${leadId} para ${config.apiUrl}...`);
 
-        const response = await enviarComRetry(`${config.apiUrl}/leads/from-elyon`, {
+        const response = await enviarComRetry(montarEndpointCrm(config.apiUrl, '/api/leads/from-elyon'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -409,7 +574,7 @@ export async function verificarStatusCrm(leadId: string): Promise<CrmResponse> {
     }
 
     try {
-        const response = await fetch(`${config.apiUrl}/leads/from-elyon/${leadId}`, {
+        const response = await fetch(montarEndpointCrm(config.apiUrl, `/api/leads/from-elyon/${leadId}`), {
             headers: {
                 'Authorization': `Bearer ${config.apiKey}`,
             }

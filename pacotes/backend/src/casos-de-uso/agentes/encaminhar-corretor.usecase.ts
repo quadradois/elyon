@@ -3,7 +3,7 @@ import { getWhatsAppService } from '../../servicos/whatsapp';
 import { resolverEspecialistaCampanha } from '../../servicos/resolucao-especialista-campanha';
 
 export interface EncaminharCorretorInput {
-    contatoId: string;
+    leadId: string;
     motivo: string;
     contextoConversa: string;
     urgencia: 'NORMAL' | 'ALTA';
@@ -30,60 +30,30 @@ function normalizarTelefoneParaWaMe(telefone?: string | null): string {
 export class EncaminharCorretorUseCase {
     async execute(input: EncaminharCorretorInput): Promise<EncaminharCorretorOutput> {
         try {
-            console.log(`[UseCase] encaminhar_corretor - Contato ${input.contatoId}`);
+            console.log(`[UseCase] encaminhar_corretor - Lead ${input.leadId}`);
 
-            const contato = await prisma.contato.findUnique({
-                where: { id: input.contatoId },
-                include: { campanha: true }
+            const lead = await prisma.lead.findUnique({
+                where: { id: input.leadId },
+                include: { campanhaOrigem: true }
             });
 
-            if (!contato) {
-                return { success: false, error: 'Contato não encontrado' };
+            if (!lead) {
+                return { success: false, error: 'Lead não encontrado' };
             }
-            if (!contato.campanha) {
-                return { success: false, error: 'Contato sem campanha de origem' };
-            }
-
-            let leadId = contato.leadId;
-
-            // Converter se necessário
-            if (!contato.virouLead) {
-                const novoLead = await prisma.lead.create({
-                    data: {
-                        tenantId: contato.campanha.tenantId,
-                        nome: contato.nome,
-                        telefone: contato.telefone,
-                        email: contato.email,
-                        cpf: contato.cpf,
-                        enderecoPrincipal: contato.endereco,
-                        origem: 'prospeccao_ativa',
-                        campanhaOrigemId: contato.campanhaId,
-                        status: 'NOVO',
-                        temperatura: input.urgencia === 'ALTA' ? 'QUENTE' : 'MORNO',
-                        estagio: 'encaminhado_corretor',
-                        primeiroContato: contato.criadoEm,
-                        ultimaInteracao: new Date()
-                    }
-                });
-
-                leadId = novoLead.id;
-
-                await prisma.contato.update({
-                    where: { id: input.contatoId },
-                    data: { virouLead: true, leadId: novoLead.id, virouLeadEm: new Date(), statusProspeccao: 'LEAD' }
-                });
+            if (!lead.campanhaOrigem) {
+                return { success: false, error: 'Lead sem campanha de origem' };
             }
 
             // Pausar a IA — sem isso o agente continua respondendo após o handoff
-            await prisma.contato.update({
-                where: { id: input.contatoId },
+            await prisma.lead.update({
+                where: { id: input.leadId },
                 data: { modoAtendimento: 'HUMANO' }
             });
 
             // Criar tarefa
             await prisma.atividade.create({
                 data: {
-                    leadId: leadId!,
+                    leadId: input.leadId,
                     tipo: 'TAREFA',
                     titulo: `${input.urgencia === 'ALTA' ? '🔥 URGENTE: ' : '📞 '}Proprietário solicitou contato`,
                     descricao: `Motivo: ${input.motivo}\n\nContexto:\n${input.contextoConversa}`,
@@ -92,28 +62,28 @@ export class EncaminharCorretorUseCase {
             });
 
             const tenant = await prisma.tenant.findUnique({
-                where: { id: contato.campanha.tenantId },
+                where: { id: lead.campanhaOrigem.tenantId },
                 select: {
                     nome: true,
                 }
             });
 
             const especialista = await resolverEspecialistaCampanha({
-                tenantId: contato.campanha.tenantId,
-                campanhaId: contato.campanha.id,
+                tenantId: lead.campanhaOrigem.tenantId,
+                campanhaId: lead.campanhaOrigem.id,
             });
             const especialistaAtivo = !!especialista;
 
             if (especialistaAtivo) {
                 const telefoneEspecialista = normalizarTelefoneParaWaMe(especialista!.telefone);
-                const telefoneDestino = normalizarTelefoneParaWaMe(contato.telefone || '');
+                const telefoneDestino = normalizarTelefoneParaWaMe(lead.telefone || '');
                 const nomeEspecialista = String(especialista!.nome || '').trim();
                 const cargoEspecialista = String(especialista!.cargo || 'Especialista').trim();
 
                 if (telefoneDestino && telefoneEspecialista) {
                     const sessao = await prisma.sessaoWhatsapp.findFirst({
                         where: {
-                            tenantId: contato.campanha.tenantId,
+                            tenantId: lead.campanhaOrigem.tenantId,
                             status: { in: ['CONECTADO'] }
                         },
                         select: { instanceName: true },
@@ -141,11 +111,11 @@ export class EncaminharCorretorUseCase {
                 }
             }
 
-            console.log(`[UseCase] encaminhar_corretor - modoAtendimento=HUMANO, tarefa criada para lead ${leadId}`);
+            console.log(`[UseCase] encaminhar_corretor - modoAtendimento=HUMANO, tarefa criada para lead ${input.leadId}`);
 
             return {
                 success: true,
-                leadId: leadId || undefined,
+                leadId: input.leadId,
                 message: especialistaAtivo
                     ? `Perfeito. O atendimento foi transferido para humano. Seu especialista ${especialista!.nome} fará contato ${input.urgencia === 'ALTA' ? 'imediatamente' : 'em breve'}.`
                     : `Corretor será notificado ${input.urgencia === 'ALTA' ? 'imediatamente' : 'em breve'}!`,

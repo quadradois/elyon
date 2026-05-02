@@ -91,9 +91,9 @@ async function criarContatoTeste(campanhaId: string): Promise<string> {
   console.log('\n👤 2. Criando contato de teste...');
   
   // Verificar se já existe
-  let contato = await prisma.contato.findFirst({
+  let contato = await prisma.lead.findFirst({
     where: {
-      campanhaId,
+      campanhaOrigemId: campanhaId,
       telefone: { contains: CONFIG_TESTE.TELEFONE_TESTE.slice(-8) }
     }
   });
@@ -102,7 +102,7 @@ async function criarContatoTeste(campanhaId: string): Promise<string> {
     console.log(`   ✅ Usando contato existente: ${contato.id}`);
     
     // Resetar status para teste
-    await prisma.contato.update({
+    await prisma.lead.update({
       where: { id: contato.id },
       data: {
         statusProspeccao: 'AGUARDANDO',
@@ -116,9 +116,9 @@ async function criarContatoTeste(campanhaId: string): Promise<string> {
   }
   
   // Criar novo contato
-  contato = await prisma.contato.create({
+  contato = await (prisma.lead as any).create({
     data: {
-      campanhaId,
+      campanhaOrigemId: campanhaId,
       nome: CONFIG_TESTE.NOME_CONTATO,
       telefone: CONFIG_TESTE.TELEFONE_TESTE,
       statusProspeccao: 'AGUARDANDO',
@@ -126,10 +126,10 @@ async function criarContatoTeste(campanhaId: string): Promise<string> {
     }
   });
   
-  console.log(`   ✅ Contato criado: ${contato.id}`);
+  console.log(`   ✅ Contato criado: ${contato!.id}`);
   console.log(`   📱 Telefone: ${CONFIG_TESTE.TELEFONE_TESTE}`);
-  
-  return contato.id;
+
+  return contato!.id;
 }
 
 async function testarBlacklist(): Promise<void> {
@@ -166,8 +166,8 @@ async function testarDisparo(campanhaId: string): Promise<void> {
     console.log('   💡 Para enviar mensagem real, defina MODO_REAL=true');
     
     // Simular atualização do contato
-    await prisma.contato.updateMany({
-      where: { campanhaId },
+    await prisma.lead.updateMany({
+      where: { campanhaOrigemId: campanhaId },
       data: {
         statusProspeccao: 'CONTATANDO',
         tentativasContato: 1,
@@ -213,9 +213,9 @@ async function simularResposta(campanhaId: string): Promise<void> {
   console.log('\n💬 6. Simulando Resposta do Contato...');
   
   // Buscar contato em CONTATANDO
-  const contato = await prisma.contato.findFirst({
+  const contato = await prisma.lead.findFirst({
     where: {
-      campanhaId,
+      campanhaOrigemId: campanhaId,
       statusProspeccao: 'CONTATANDO'
     }
   });
@@ -226,7 +226,7 @@ async function simularResposta(campanhaId: string): Promise<void> {
   }
   
   // Simular atualização como se tivesse respondido
-  await prisma.contato.update({
+  await prisma.lead.update({
     where: { id: contato.id },
     data: {
       respondeu: true,
@@ -245,9 +245,9 @@ async function testarOptout(campanhaId: string): Promise<void> {
   // Criar contato de teste para opt-out
   const telefoneOptout = '5562777777777';
   
-  const contatoOptout = await prisma.contato.create({
+  const contatoOptout = await (prisma.lead as any).create({
     data: {
-      campanhaId,
+      campanhaOrigemId: campanhaId,
       nome: 'Teste Opt-out',
       telefone: telefoneOptout,
       statusProspeccao: 'CONTATANDO',
@@ -263,14 +263,14 @@ async function testarOptout(campanhaId: string): Promise<void> {
   console.log('   ✅ Opt-out registrado');
   
   // Verificar se contato foi atualizado
-  const contatoAtualizado = await prisma.contato.findUnique({
+  const contatoAtualizado = await prisma.lead.findUnique({
     where: { id: contatoOptout.id }
   });
   
   console.log(`   📊 Status do contato: ${contatoAtualizado?.statusProspeccao}`);
   
   // Limpar
-  await prisma.contato.delete({ where: { id: contatoOptout.id } });
+  await prisma.lead.delete({ where: { id: contatoOptout.id } });
   await blacklistService.remover(telefoneOptout);
   
   console.log('   🧹 Limpeza concluída');

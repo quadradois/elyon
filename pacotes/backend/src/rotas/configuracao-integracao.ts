@@ -15,6 +15,33 @@ import { verificarAutenticacao } from '../middleware/middleware-auth';
 
 const router = Router();
 
+function normalizarApiUrl(apiUrl: string): string {
+    return String(apiUrl || '').trim().replace(/\/+$/, '');
+}
+
+function montarEndpointCrm(apiUrlBase: string, pathComApi: string): string {
+    const base = normalizarApiUrl(apiUrlBase);
+    const path = pathComApi.startsWith('/') ? pathComApi : `/${pathComApi}`;
+    if (base.endsWith('/api') && path.startsWith('/api/')) {
+        return `${base}${path.replace(/^\/api/, '')}`;
+    }
+    return `${base}${path}`;
+}
+
+function validarApiUrl(apiUrl: string): string | null {
+    try {
+        const url = new URL(apiUrl);
+        const host = url.hostname.toLowerCase();
+        const ehLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+        if (process.env.NODE_ENV === 'production' && ehLocalhost) {
+            return 'apiUrl inválida para produção: localhost/127.0.0.1 não funciona entre VPS diferentes';
+        }
+        return null;
+    } catch {
+        return 'apiUrl inválida. Informe uma URL completa, ex: https://crm.exemplo.com';
+    }
+}
+
 /**
  * GET /api/configuracao/integracao
  * Lista todas as integrações do tenant
@@ -131,6 +158,12 @@ router.post('/', verificarAutenticacao, async (req: Request, res: Response) => {
             });
         }
 
+        const apiUrlNormalizada = normalizarApiUrl(apiUrl);
+        const erroApiUrl = validarApiUrl(apiUrlNormalizada);
+        if (erroApiUrl) {
+            return res.status(400).json({ success: false, error: erroApiUrl });
+        }
+
         // Criptografar API Key se fornecida
         const apiKeyCriptografada = apiKey ? criptografar(apiKey) : undefined;
 
@@ -146,13 +179,13 @@ router.post('/', verificarAutenticacao, async (req: Request, res: Response) => {
                 tenantId,
                 tipo: tipo as TipoIntegracao,
                 nome: nome || 'CRM Principal',
-                apiUrl,
+                apiUrl: apiUrlNormalizada,
                 apiKeyCriptografada: apiKeyCriptografada || '',
                 tenantIdDestino: tenantIdDestino ? parseInt(tenantIdDestino) : null
             },
             update: {
                 nome: nome || undefined,
-                apiUrl,
+                apiUrl: apiUrlNormalizada,
                 ...(apiKeyCriptografada && { apiKeyCriptografada }),
                 tenantIdDestino: tenantIdDestino ? parseInt(tenantIdDestino) : undefined
             }
@@ -218,23 +251,42 @@ router.post('/:tipo/testar', verificarAutenticacao, async (req: Request, res: Re
 
         // Testar conexão
         try {
-            const testUrl = `${integracao.apiUrl}/leads/from-elyon/test`;
-            const response = await fetch(testUrl, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'X-Tenant-Id': integracao.tenantIdDestino?.toString() || '1'
-                }
-            });
+            const testUrl = montarEndpointCrm(integracao.apiUrl, '/api/leads/from-elyon/test');
+            const timeoutMs = Number(process.env.CRM_REQUEST_TIMEOUT_MS || 30000);
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            let response: globalThis.Response;
+            try {
+                response = await fetch(testUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'X-Tenant-Id': integracao.tenantIdDestino?.toString() || '1'
+                    },
+                    signal: controller.signal,
+                });
+            } finally {
+                clearTimeout(timer);
+            }
 
-            const isOk = response.status === 200 || response.status === 404; // 404 é esperado para test
+            let isOk = false;
+            let ultimoErro = `HTTP ${response.status}`;
+            try {
+                const body: any = await response.json();
+                isOk = response.status === 200 && body?.success === true;
+                if (!isOk && body?.error) {
+                    ultimoErro = String(body.error);
+                }
+            } catch {
+                isOk = false;
+            }
 
             await prisma.configuracaoIntegracao.update({
                 where: { id: integracao.id },
                 data: {
                     ultimoTesteEm: new Date(),
                     ultimoTesteOk: isOk,
-                    ultimoErro: isOk ? null : `HTTP ${response.status}`
+                    ultimoErro: isOk ? null : ultimoErro
                 }
             });
 

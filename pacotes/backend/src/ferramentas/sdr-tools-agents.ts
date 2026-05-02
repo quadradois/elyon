@@ -242,7 +242,7 @@ Gatilhos: "para", "não me ligue", "spam", "não quero"`,
     execute: wrapToolExecute('registrar_optout', async (args) => {
         const useCase = new RegistrarOptoutUseCase();
         const result = await useCase.execute({
-            contatoId: args.contatoId,
+            leadId: args.contatoId,
             motivo: args.motivo
         });
         return JSON.stringify(result);
@@ -331,7 +331,7 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
     execute: wrapToolExecute('agendar_followup', async (args) => {
         const useCase = new AgendarFollowupUseCase();
         const result = await useCase.execute({
-            contatoId: args.contatoId,
+            leadId: args.contatoId,
             dataRecontato: args.dataRecontato,
             motivo: args.motivo
         });
@@ -359,7 +359,7 @@ Ao executar, faça passagem de bastão profissional: diga quem é o especialista
     execute: wrapToolExecute('encaminhar_corretor', async (args) => {
         const useCase = new EncaminharCorretorUseCase();
         const result = await useCase.execute({
-            contatoId: args.contatoId,
+            leadId: args.contatoId,
             motivo: args.motivo,
             contextoConversa: args.contextoConversa,
             urgencia: args.urgencia
@@ -662,20 +662,20 @@ OBRIGATÓRIO coletar: nome e telefone do indicado.`,
     execute: wrapToolExecute('registrar_indicacao', async (args) => {
         console.log(`[TOOL] registrar_indicacao - Origem: ${args.contatoOrigemId} → Indicado: ${args.nomeIndicado} (${args.telefoneIndicado})`);
 
-        const contatoOrigem = await prisma.contato.findUnique({
+        const contatoOrigem = await prisma.lead.findUnique({
             where: { id: args.contatoOrigemId },
-            select: { nome: true, campanhaId: true }
+            select: { nome: true, campanhaOrigemId: true, tenantId: true }
         });
 
-        const campanhaId = args.campanhaId || contatoOrigem?.campanhaId;
-        if (!campanhaId) {
+        const campanhaOrigemId = args.campanhaId || contatoOrigem?.campanhaOrigemId;
+        if (!campanhaOrigemId || !contatoOrigem?.tenantId) {
             return JSON.stringify({ success: false, error: 'Campanha não encontrada' });
         }
 
         const telefone = args.telefoneIndicado.replace(/\D/g, '');
 
-        const existente = await prisma.contato.findFirst({
-            where: { campanhaId, telefone: { contains: telefone.slice(-8) } }
+        const existente = await prisma.lead.findFirst({
+            where: { campanhaOrigemId, telefone: { contains: telefone.slice(-8) } }
         });
 
         if (existente) {
@@ -687,9 +687,10 @@ OBRIGATÓRIO coletar: nome e telefone do indicado.`,
             });
         }
 
-        const novoContato = await prisma.contato.create({
+        const novoContato = await prisma.lead.create({
             data: {
-                campanhaId,
+                tenantId: contatoOrigem.tenantId,
+                campanhaOrigemId,
                 nome: args.nomeIndicado,
                 telefone: telefone,
                 temWhatsapp: true,
@@ -746,20 +747,16 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
             console.log(`[TOOL] agendar_reuniao_closer - Contato ${args.contatoId} - ${args.dataHora}`);
 
             // 1. Resolver leadId a partir do contatoId
-            const contato = await prisma.contato.findUnique({
+            const contato = await prisma.lead.findUnique({
                 where: { id: args.contatoId },
-                select: { id: true, leadId: true, nome: true, lead: { select: { email: true } } }
+                select: { id: true, nome: true, email: true }
             });
 
             if (!contato) {
                 return JSON.stringify({ success: false, error: 'Contato não encontrado' });
             }
 
-            if (!contato.leadId) {
-                return JSON.stringify({ success: false, error: 'Contato ainda não convertido em lead. Use converter_para_lead antes de agendar.' });
-            }
-
-            const leadId = contato.leadId;
+            const leadId = contato.id;
             console.log(`[TOOL] agendar_reuniao_closer - LeadId resolvido: ${leadId}`);
 
             // 2. Parse data "DD/MM/YYYY HH:mm"
@@ -820,7 +817,7 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
 
                     // 3b. Criar evento real com Google Meet
                     const participantes: string[] = [];
-                    if (contato.lead?.email) participantes.push(contato.lead.email);
+                    if (contato.email) participantes.push(contato.email);
 
                     const evento = await googleCalendarService.criarEventoComMeet({
                     titulo: `Atendimento ${contato.nome || 'Lead'} — Elyon`,
@@ -829,7 +826,6 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                         participantes,
                         observacoesCloser: args.observacoesCloser,
                         leadNome: contato.nome || undefined,
-                        contatoId: args.contatoId,
                         leadId,
                     });
 
@@ -918,7 +914,6 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                 success: true,
                 disponivel: true,
                 leadId,
-                contatoId: args.contatoId,
                 dataHora: args.dataHora,
                 modalidade: args.modalidade,
                 linkReuniao,
@@ -957,17 +952,13 @@ Esta tool gera um link nativo do Google Calendar para o lead escolher o melhor h
     execute: wrapToolExecute('enviar_link_agendamento', async (args) => {
             console.log(`[TOOL] enviar_link_agendamento - Contato ${args.contatoId}`);
 
-            const contato = await prisma.contato.findUnique({
+            const contato = await prisma.lead.findUnique({
                 where: { id: args.contatoId },
-                select: { id: true, leadId: true, nome: true }
+                select: { id: true, nome: true }
             });
 
             if (!contato) {
                 return JSON.stringify({ success: false, error: 'Contato não encontrado' });
-            }
-
-            if (!contato.leadId) {
-                return JSON.stringify({ success: false, error: 'Contato ainda não convertido em lead.' });
             }
 
             // Gerar link de agendamento nativo Google Calendar
@@ -986,7 +977,7 @@ Esta tool gera um link nativo do Google Calendar para o lead escolher o melhor h
             // Registrar atividade de follow-up
             await prisma.atividade.create({
                 data: {
-                    leadId: contato.leadId,
+                    leadId: contato.id,
                     tipo: 'TAREFA',
                     titulo: `📅 Link de agendamento enviado ao lead`,
                     descricao: [
@@ -1000,7 +991,7 @@ Esta tool gera um link nativo do Google Calendar para o lead escolher o melhor h
             });
 
             await registrarExecucaoTool({
-                leadId: contato.leadId,
+                leadId: contato.id,
                 toolName: 'enviar_link_agendamento',
                 sucesso: true,
                 detalhes: 'Link de agendamento gerado e enviado'

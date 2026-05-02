@@ -58,7 +58,7 @@ router.get('/recontato/preview', async (req: Request, res: Response) => {
     const hoje = new Date();
     hoje.setHours(23, 59, 59, 999);
     
-    const contatos = await prisma.contato.findMany({
+    const contatos = await prisma.lead.findMany({
       where: {
         statusProspeccao: 'MORNO_FUTURO',
         dataRecontato: {
@@ -72,7 +72,7 @@ router.get('/recontato/preview', async (req: Request, res: Response) => {
         dataRecontato: true,
         motivoRecontato: true,
         nomeEdificio: true,
-        campanha: {
+        campanhaOrigem: {
           select: {
             nome: true,
             status: true
@@ -95,8 +95,8 @@ router.get('/recontato/preview', async (req: Request, res: Response) => {
         dataRecontato: c.dataRecontato,
         motivo: c.motivoRecontato,
         empreendimento: c.nomeEdificio,
-        campanha: c.campanha?.nome,
-        campanhaAtiva: c.campanha?.status === 'ATIVA'
+        campanha: c.campanhaOrigem?.nome,
+        campanhaAtiva: c.campanhaOrigem?.status === 'ATIVA'
       }))
     });
     
@@ -159,16 +159,16 @@ router.get('/status', async (req: Request, res: Response) => {
       pendentesSemana,
       ultimoReplay
     ] = await Promise.all([
-      prisma.contato.count({
+      prisma.lead.count({
         where: { statusProspeccao: 'MORNO_FUTURO' }
       }),
-      prisma.contato.count({
+      prisma.lead.count({
         where: {
           statusProspeccao: 'MORNO_FUTURO',
           dataRecontato: { lte: hoje }
         }
       }),
-      prisma.contato.count({
+      prisma.lead.count({
         where: {
           statusProspeccao: 'MORNO_FUTURO',
           dataRecontato: {

@@ -578,7 +578,6 @@ model Campanha {
   fallbackCorretor      Usuario? @relation("CampanhaFallback", fields: [fallbackCorretorId], references: [id], onDelete: SetNull)
 
   // Relacionamentos
-  contatos       Contato[]
   leads          Lead[]          @relation("CampanhaOrigem")
   pesquisasManus PesquisaManus[]
 
@@ -593,166 +592,31 @@ model Campanha {
 }
 
 // ====================================
-// CONTATOS
-// ====================================
-
-model Contato {
-  id         String   @id @default(uuid())
-  campanhaId String?
-  campanha   Campanha? @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
-
-  // Dados básicos
-  nome String
-  cpf  String?
-
-  // Telefones (da Assertiva) - até 5 telefones
-  telefone           String? // Telefone principal (celular com WhatsApp preferido)
-  telefone2          String? // Telefone secundário
-  telefone3          String? // Telefone terciário
-  telefone4          String? // Telefone 4
-  telefone5          String? // Telefone 5
-  telefonesJson      Json? // Array completo de telefones [{numero, tipo, whatsapp}]
-  temWhatsapp        Boolean @default(false)
-  quantidadeWhatsapp Int     @default(0) // Quantos telefones têm WhatsApp
-
-  // Emails (da Assertiva) - até 5 emails
-  email      String? // Email principal
-  email2     String? // Email secundário
-  email3     String? // Email terciário
-  email4     String? // Email 4
-  email5     String? // Email 5
-  emailsJson Json? // Array completo de emails
-
-  // Dados do Imóvel (da Mineração/IPTU)
-  inscricaoIptu   String?
-  enderecoImovel  String? // Endereço do imóvel minerado
-  bairroImovel    String?
-  nomeEdificio    String? // Nome do edifício/condomínio
-  apartamento     String? // Número do apartamento (ex: 806)
-  bloco           String? // Bloco do apartamento (ex: B)
-  unidade         String? // Unidade completa (ex: APTO806BL.B)
-  box             String? // Número do box/garagem (ex: 108)
-  quadra          String? // Quadra do imóvel
-  lote            String? // Lote do imóvel
-  areaTerreno     Decimal? // m² do terreno
-  areaConstruida  Decimal? // m² construído
-  tipoImovel      String? // Casa, Apartamento, Lote, etc.
-  valorVenal      Decimal? // Valor venal do IPTU
-  anoConstituicao Int? // Ano do imóvel
-
-  // Dados pessoais adicionais (da Assertiva)
-  dataNascimento    DateTime?
-  idade             Int?
-  sexo              String? // Masculino, Feminino
-  estadoCivil       String?
-  cpfMae            String?
-  escolaridade      String?
-  profissao         String? // cboDescricao
-  rendaEstimada     Decimal? // Valor numérico da renda
-  faixaSalarial     String? // "De 3 a 5 Salários Mínimos"
-  setor             String? // Setor de atuação
-  empresaAtual      String? // Nome da empresa onde trabalha
-  cnpjEmpresa       String? // CNPJ da empresa
-  nomeMae           String? // Nome da mãe (validação)
-  situacaoCadastral String? // REGULAR, etc
-  obitoProvavel     Boolean   @default(false)
-  ppe               Boolean   @default(false) // Pessoa Politicamente Exposta
-  signo             String?
-
-  // Participações em empresas (JSON)
-  participacoesEmpresas Json? // [{cnpj, razaoSocial, participacao}]
-
-  // Redes sociais (JSON)
-  redesSociais Json? // [{rede, url}]
-
-  // Score e qualificação
-  scoreAssertiva    Int? // Score de 0-100 da Assertiva
-  scoreQualificacao Int? // Score interno de qualificação
-  perfilInvestidor  Boolean @default(false) // Se possui múltiplos imóveis
-
-  // Endereço de correspondência
-  endereco String? // Endereço pessoal (diferente do imóvel)
-  tipoLogradouro String?
-  cidade   String?
-  estado   String?
-  cep      String?
-
-  // Status de prospecção
-  statusProspeccao    String    @default("AGUARDANDO") // AGUARDANDO, CONTATANDO, RESPONDEU, SEM_INTERESSE, INTERESSADO, LEAD
-  tentativasContato   Int       @default(0)
-  ultimaTentativa     DateTime?
-  respondeu           Boolean   @default(false)
-  primeiraResposta    DateTime?
-  manifestouInteresse Boolean   @default(false)
-  motivoDesinteresse  String? // Se não tem interesse, por quê?
-  observacoes         String? // Notas do corretor
-
-  // Controle de atendimento (IA vs Humano)
-  modoAtendimento String    @default("IA") // IA, HUMANO, PAUSADO
-  atendidoPor     String? // Nome/ID do atendente humano
-  pausadoEm       DateTime? // Quando foi pausado/assumido por humano
-  motivoPausa     String? // Motivo da pausa
-
-  // Conversão
-  virouLead   Boolean   @default(false)
-  leadId      String?   @unique
-  lead        Lead?     @relation("ContatoOrigem", fields: [leadId], references: [id])
-  virouLeadEm DateTime?
-
-  // Follow-up e Recontato
-  dataRecontato   DateTime? // Data agendada para follow-up
-  motivoRecontato String? // Por que foi agendado
-
-  // Histórico de mensagens
-  mensagens MensagemProspeccao[]
-
-  // Origem dos dados
-  fonteEnriquecimento String? // "ASSERTIVA", "CACHE", "MANUAL"
-  enriquecidoEm       DateTime?
-
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-
-  @@index([campanhaId])
-  @@index([campanhaId, telefone])
-  @@index([campanhaId, cpf])
-  @@index([virouLead])
-  @@index([statusProspeccao])
-  @@index([dataRecontato])
-  @@map("contatos")
-}
-
-// ====================================
 // MENSAGENS DE PROSPECÇÃO
 // ====================================
 
-// Histórico completo de conversa com o proprietário
+// Histórico de conversa de prospecção ativa (SDR ↔ proprietário)
 model MensagemProspeccao {
   id String @id @default(uuid())
 
-  // Vínculo com contato
-  contatoId String
-  contato   Contato @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  // Dados da mensagem
   direcao  String // 'ENTRADA' (proprietário) ou 'SAIDA' (SDR/Sistema)
   conteudo String @db.Text
   tipo     String @default("TEXTO") // TEXTO, AUDIO, IMAGEM, DOCUMENTO
 
-  // Metadados
-  telefone  String? // Telefone usado na conversa
-  messageId String? // ID da mensagem no WhatsApp (para referência)
+  telefone  String?
+  messageId String?
 
-  // Processamento IA
   processadaPorIA Boolean @default(false)
-  respostaGerada  String? @db.Text // Resposta que a IA gerou (se ENTRADA)
-  toolsChamadas   Json? // Ferramentas que a IA usou
+  respostaGerada  String? @db.Text
+  toolsChamadas   Json?
 
-  // Timestamps
   dataHora DateTime @default(now())
 
-  @@index([contatoId])
-  @@index([contatoId, dataHora])
+  @@index([leadId])
+  @@index([leadId, dataHora])
   @@index([direcao])
   @@map("mensagens_prospeccao")
 }
@@ -766,6 +630,7 @@ model Lead {
   tenantId           String
   tenant             Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cpf                String?
+  rg                 String?
   nome               String
   email              String?
   telefone           String?
@@ -775,7 +640,6 @@ model Lead {
   origem             String      @default("manual")
   campanhaOrigemId   String?
   campanhaOrigem     Campanha?   @relation("CampanhaOrigem", fields: [campanhaOrigemId], references: [id])
-  contatoOrigem      Contato?    @relation("ContatoOrigem")
   primeiroContato    DateTime    @default(now())
   ultimaInteracao    DateTime?
   status             StatusLead  @default(NOVO)
@@ -787,6 +651,7 @@ model Lead {
   contratos          Contrato[]
   documentos         DocumentoLead[]
   cliente            Cliente?
+  mensagens          MensagemProspeccao[]
   criadoEm           DateTime    @default(now())
   atualizadoEm       DateTime    @updatedAt
   deletadoEm         DateTime?
@@ -803,29 +668,96 @@ model Lead {
   ocupacaoImovel  String? // "ocupado", "vazio"
   interesseEm     String? // "vender", "alugar", "ambos"
 
-  // Imóvel Assertiva (migrado do Contato na promoção)
-  bairroImovel  String? // Bairro do imóvel
-  nomeEdificio  String? // Nome do empreendimento/condomínio
-  inscricaoIptu String? // Inscrição IPTU
-  valorVenal    String? // Valor venal (IPTU)
+  // ====================================
+  // DADOS ASSERTIVA / IPTU (absorvidos do antigo Contato)
+  // ====================================
 
-  // Dados Pessoais Assertiva (migrado do Contato na promoção)
-  idade          Int? // Idade do proprietário
-  sexo           String? // Masculino, Feminino
-  rendaEstimada  String? // Renda estimada em string
-  faixaSalarial  String? // Faixa salarial descritiva
-  scoreAssertiva Int? // Score Assertiva 0-100
+  // Imóvel — campos IPTU
+  bairroImovel    String?
+  nomeEdificio    String?
+  inscricaoIptu   String?
+  valorVenal      String?
+  apartamento     String?
+  bloco           String?
+  unidade         String?
+  box             String?
+  quadra          String?
+  lote            String?
+  areaTerreno     Decimal?
+  areaConstruida  Decimal?
+  anoConstituicao Int?
 
-  // Dados Profissionais (migrado do Contato na promoção)
+  // Dados pessoais Assertiva
+  idade             Int?
+  sexo              String?
+  estadoCivil       String?
+  cpfMae            String?
+  nomeMae           String?
+  escolaridade      String?
+  situacaoCadastral String?
+  obitoProvavel     Boolean   @default(false)
+  ppe               Boolean   @default(false)
+  signo             String?
+  rendaEstimada     String?
+  faixaSalarial     String?
+  scoreAssertiva    Int?
+  scoreQualificacao Int?
+  perfilInvestidor  Boolean   @default(false)
+
+  // Dados profissionais Assertiva
   empresaAtual String?
   cnpjEmpresa  String?
   profissao    String?
   setor        String?
 
-  // Múctiplos Contatos (migrado do Contato na promoção)
-  telefone2 String?
-  telefone3 String?
-  email2    String?
+  // Endereço pessoal (do proprietário, diferente do imóvel)
+  enderecoPessoal String?
+  tipoLogradouro  String?
+  cidade          String?
+  estado          String?
+  cep             String?
+
+  // Participações e redes
+  participacoesEmpresas Json?
+  redesSociais          Json?
+
+  // Dados societários / enriquecimento
+  fonteEnriquecimento String?
+  enriquecidoEm       DateTime?
+
+  // Múltiplos telefones e e-mails (até 5)
+  telefone2          String?
+  telefone3          String?
+  telefone4          String?
+  telefone5          String?
+  telefonesJson      Json?
+  temWhatsapp        Boolean @default(false)
+  quantidadeWhatsapp Int     @default(0)
+  email2             String?
+  email3             String?
+  email4             String?
+  email5             String?
+  emailsJson         Json?
+
+  // ====================================
+  // PROSPECÇÃO ATIVA (controle do SDR)
+  // ====================================
+  // statusProspeccao = null → lead CRM puro (entrada manual, sem prospecção)
+  // statusProspeccao = AGUARDANDO|CONTATANDO|... → lead em prospecção ativa
+  statusProspeccao    String?   // AGUARDANDO|CONTATANDO|RESPONDEU|SEM_INTERESSE|INTERESSADO|LEAD|OPTOUT|FALHA
+  tentativasContato   Int       @default(0)
+  ultimaTentativa     DateTime?
+  respondeu           Boolean   @default(false)
+  primeiraResposta    DateTime?
+  manifestouInteresse Boolean   @default(false)
+  motivoDesinteresse  String?
+  modoAtendimento     String    @default("IA") // IA | HUMANO | PAUSADO
+  atendidoPor         String?
+  pausadoEm           DateTime?
+  motivoPausa         String?
+  dataRecontato       DateTime?
+  motivoRecontato     String?
+  observacoes         String?
 
   // Briefing IA (gerado no handoff Presenter → Closer)
   briefingCloser String? @db.Text
@@ -924,13 +856,18 @@ model Lead {
   // ====================================
   motivoPerda String? // "Expectativa Irreal", "Concorrência", etc.
 
-  @@unique([tenantId, cpf])
   @@index([tenantId])
+  @@index([tenantId, cpf])
   @@index([cpf])
   @@index([status])
   @@index([tenantId, status, atualizadoEm])
   @@index([telefone])
   @@index([urgencia])
+  @@index([campanhaOrigemId, statusProspeccao])
+  @@index([statusProspeccao])
+  @@index([modoAtendimento])
+  @@index([dataRecontato])
+  @@index([tentativasContato])
   @@map("leads")
 }
 

@@ -10,7 +10,6 @@ jest.mock('../../lib/db', () => ({
     atividade: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     cliente: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     imovel: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
-    contato: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     lead: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
   },
 }));
@@ -63,16 +62,6 @@ describe('cascadeDeleteLeads', () => {
     expect(mockPrisma.imovel.updateMany).toHaveBeenCalledWith({
       where: { leadId: { in: ids } },
       data: { leadId: null },
-    });
-
-    expect(mockPrisma.contato.updateMany).toHaveBeenCalledWith({
-      where: { leadId: { in: ids } },
-      data: {
-        leadId: null,
-        virouLead: false,
-        virouLeadEm: null,
-        statusProspeccao: 'INTERESSADO',
-      },
     });
 
     expect(mockPrisma.lead.deleteMany).toHaveBeenCalledWith({
@@ -129,10 +118,6 @@ describe('cascadeDeleteLeads', () => {
       callOrder.push('imovel');
       return { count: 0 };
     });
-    (mockPrisma.contato.updateMany as jest.Mock).mockImplementation(async () => {
-      callOrder.push('contato');
-      return { count: 0 };
-    });
     (mockPrisma.lead.deleteMany as jest.Mock).mockImplementation(async () => {
       callOrder.push('lead');
       return { count: 0 };
@@ -147,7 +132,6 @@ describe('cascadeDeleteLeads', () => {
       'atividade',
       'cliente',
       'imovel',
-      'contato',
       'lead',
     ]);
   });

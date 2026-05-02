@@ -1,7 +1,7 @@
 import { prisma } from '../../lib/db';
 
 export interface RegistrarOptoutInput {
-    contatoId: string;
+    leadId: string;
     motivo: 'NAO_INCOMODAR' | 'JA_TEM_IMOBILIARIA' | 'SEM_INTERESSE_AGORA' | 'IMOVEL_VENDIDO' | 'NAO_E_PROPRIETARIO' | 'OUTRO';
 }
 
@@ -14,33 +14,20 @@ export interface RegistrarOptoutOutput {
 export class RegistrarOptoutUseCase {
     async execute(input: RegistrarOptoutInput): Promise<RegistrarOptoutOutput> {
         try {
-            console.log(`[UseCase] registrar_optout - Contato ${input.contatoId}`);
+            console.log(`[UseCase] registrar_optout - Lead ${input.leadId}`);
 
-            // Tentar como Contato
-            try {
-                await prisma.contato.update({
-                    where: { id: input.contatoId },
-                    data: {
-                        statusProspeccao: 'OPTOUT',
-                        motivoDesinteresse: input.motivo,
-                        observacoes: `Opt-out: ${input.motivo}`,
-                        atualizadoEm: new Date()
-                    }
-                });
-            } catch {
-                // Tentar como Lead
-                await prisma.lead.update({
-                    where: { id: input.contatoId },
-                    data: {
-                        status: 'PERDIDO',
-                        ultimaInteracao: new Date()
-                    }
-                });
-            }
+            await prisma.lead.update({
+                where: { id: input.leadId },
+                data: {
+                    statusProspeccao: 'OPTOUT',
+                    motivoDesinteresse: input.motivo,
+                    ultimaInteracao: new Date()
+                }
+            });
 
             // Encerrar conversa ativa
             await prisma.conversa.updateMany({
-                where: { leadId: input.contatoId, estadoConversa: 'ativa' },
+                where: { leadId: input.leadId, estadoConversa: 'ativa' },
                 data: { estadoConversa: 'concluida', finalizadaEm: new Date() }
             });
 

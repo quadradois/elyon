@@ -1,7 +1,7 @@
 import { prisma } from '../../lib/db';
 
 export interface AgendarFollowupInput {
-    contatoId: string;
+    leadId: string;
     dataRecontato: string;
     motivo: string;
 }
@@ -16,7 +16,7 @@ export interface AgendarFollowupOutput {
 export class AgendarFollowupUseCase {
     async execute(input: AgendarFollowupInput): Promise<AgendarFollowupOutput> {
         try {
-            console.log(`[UseCase] agendar_followup - Contato ${input.contatoId}`);
+            console.log(`[UseCase] agendar_followup - Lead ${input.leadId}`);
 
             const [dia, mes, ano] = input.dataRecontato.split('/').map(Number);
             const dataAgendamento = new Date(ano, mes - 1, dia, 9, 0);
@@ -25,8 +25,8 @@ export class AgendarFollowupUseCase {
                 return { success: false, error: 'Data inválida. Use DD/MM/YYYY' };
             }
 
-            await prisma.contato.update({
-                where: { id: input.contatoId },
+            await prisma.lead.update({
+                where: { id: input.leadId },
                 data: {
                     statusProspeccao: 'MORNO_FUTURO',
                     dataRecontato: dataAgendamento,

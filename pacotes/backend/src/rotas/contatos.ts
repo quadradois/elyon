@@ -23,9 +23,10 @@ router.get('/', async (req, res) => {
         const tenantId = await getTenantId(req);
         const { busca, page = '1', limit = '20' } = req.query;
 
-        // Filtro de Tenant (via campanha)
+        // Filtro de Tenant (leads de prospecção ativa)
         const where: any = {
-            campanha: { tenantId }
+            tenantId,
+            statusProspeccao: { not: null }
         };
 
         // Filtro de Busca
@@ -34,7 +35,7 @@ router.get('/', async (req, res) => {
                 { nome: { contains: busca, mode: 'insensitive' } },
                 { email: { contains: busca, mode: 'insensitive' } },
                 { telefone: { contains: busca } },
-                { cpf: { contains: busca.replace(/\D/g, '') } }, // Busca só números
+                { cpf: { contains: busca.replace(/\D/g, '') } },
             ];
         }
 
@@ -42,18 +43,18 @@ router.get('/', async (req, res) => {
         const itemsPorPagina = Number(limit) || 20;
 
         const [contatos, total] = await Promise.all([
-            prisma.contato.findMany({
+            prisma.lead.findMany({
                 where,
                 take: itemsPorPagina,
                 skip: (pagina - 1) * itemsPorPagina,
                 orderBy: { criadoEm: 'desc' },
                 include: {
-                    campanha: {
+                    campanhaOrigem: {
                         select: { id: true, nome: true }
                     }
                 }
             }),
-            prisma.contato.count({ where })
+            prisma.lead.count({ where })
         ]);
 
         // Formatar resposta
@@ -64,10 +65,10 @@ router.get('/', async (req, res) => {
             email: c.email,
             cpf: c.cpf,
             status: c.statusProspeccao,
-            campanha: c.campanha?.nome ?? 'Sem campanha',
-            campanhaId: c.campanhaId,
-            virouLead: c.virouLead,
-            leadId: c.leadId,
+            campanha: c.campanhaOrigem?.nome ?? 'Sem campanha',
+            campanhaId: c.campanhaOrigemId,
+            virouLead: c.statusProspeccao === null,
+            leadId: c.id,
             criadoEm: c.criadoEm
         }));
 

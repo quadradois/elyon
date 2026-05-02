@@ -34,6 +34,7 @@
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "src/agentes_bak_pre_sdr_20260411_155803"
   ]
 }

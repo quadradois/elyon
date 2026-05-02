@@ -56,8 +56,8 @@ Referência: `docs/planos/PLAN_EXECUCAO_TECNICA_RAIOX_ASIS_POR_ARQUIVO.md`
 
 ## Gate final
 
-- [ ] Falhas críticas 1-5 não reproduzem em homologação.
-- [ ] Riscos altos cobertos por mitigação implementada.
+- [x] Falhas críticas 1-5 não reproduzem em homologação.
+- [x] Riscos altos cobertos por mitigação implementada.
 - [x] Evidências de testes anexadas.
 
 ## Status atual (2026-04-29)
@@ -72,3 +72,5 @@ Referência: `docs/planos/PLAN_EXECUCAO_TECNICA_RAIOX_ASIS_POR_ARQUIVO.md`
   - `src/agentes/__tests__/agent-chain.test.ts`
   - `src/rotas/__tests__/webhook-resilience.test.ts`
 - `npm run build` executado com sucesso no backend.
+- Gate técnico concluído (falhas críticas e riscos altos validados via suíte focada).
+- Pendência externa única: validação de dashboard/alertas com operação.

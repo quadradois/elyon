@@ -747,20 +747,28 @@ router.get('/:id', async (req, res) => {
       // Briefing IA (Dossiê do Closer gerado no handoff)
       briefingCloser: l.briefingCloser,
 
-      // Dados avançados do imóvel (onboarding/admin)
-      imovelDetalhes: {
-        suites: l.imovelSuites,
-        banheiros: l.imovelBanheiros,
-        areaTotal: l.imovelAreaTotal,
-        andar: l.imovelAndar,
-        caracteristicas: l.imovelCaracteristicas || [],
-        descricao: l.imovelDescricao,
-        fotos: l.imovelFotos || [],
-        valorLocacao: l.imovelValorLocacao,
-        valorCondominio: l.imovelValorCondominio,
-        valorIPTU: l.imovelValorIPTU,
-        coletadosEm: l.dadosImovelColetadosEm,
-      },
+      // Dados avançados do imóvel (onboarding/admin) — flat, alinhado com LeadPriorizado
+      imovelSuites: l.imovelSuites,
+      imovelBanheiros: l.imovelBanheiros,
+      imovelAreaTotal: l.imovelAreaTotal,
+      imovelAndar: l.imovelAndar,
+      imovelCaracteristicas: l.imovelCaracteristicas || [],
+      imovelDescricao: l.imovelDescricao,
+      imovelFotos: l.imovelFotos || [],
+      imovelValorLocacao: l.imovelValorLocacao,
+      imovelValorCondominio: l.imovelValorCondominio,
+      imovelValorIPTU: l.imovelValorIPTU,
+      dadosImovelColetadosEm: l.dadosImovelColetadosEm,
+
+      // Áreas físicas do imóvel (Assertiva/mineração)
+      areaConstruida: l.areaConstruida,
+      areaTerreno: l.areaTerreno,
+
+      // Dados do proprietário para CRM
+      rg: l.rg,
+      cidade: l.cidade,
+      estado: l.estado,
+      cep: l.cep,
 
       // Status de integração CRM (Quadra Dois)
       crm: {
@@ -2197,14 +2205,14 @@ router.get('/:id/modo', async (req, res) => {
     const tenantId = getTenantId(req);
     if (!tenantId) return responderErro(res, 401, 'Não autorizado');
 
-    const contato = await prisma.contato.findFirst({
-      where: { leadId: req.params.id },
+    const lead = await prisma.lead.findFirst({
+      where: { id: req.params.id, tenantId },
       select: { modoAtendimento: true, id: true },
     });
 
     res.json({
-      modo: (contato as any)?.modoAtendimento || 'IA',
-      contatoId: contato?.id || null,
+      modo: (lead as any)?.modoAtendimento || 'IA',
+      contatoId: lead?.id || null,
     });
   } catch {
     responderErro(res, 500, 'Erro interno');
@@ -2226,15 +2234,15 @@ router.post('/:id/controle-modo', async (req, res) => {
       return responderErro(res, 400, 'modo deve ser IA, HUMANO ou PAUSADO');
     }
 
-    const contato = await prisma.contato.findFirst({
-      where: { leadId: req.params.id },
+    const lead = await prisma.lead.findFirst({
+      where: { id: req.params.id, tenantId },
       select: { id: true },
     });
 
-    if (!contato) return responderErro(res, 404, 'Contato não encontrado para este lead');
+    if (!lead) return responderErro(res, 404, 'Lead não encontrado');
 
-    await (prisma.contato as any).update({
-      where: { id: contato.id },
+    await (prisma.lead as any).update({
+      where: { id: lead.id },
       data: { modoAtendimento: modo },
     });
 
@@ -2253,15 +2261,15 @@ router.post('/:id/retomar-ia', async (req, res) => {
     const tenantId = getTenantId(req);
     if (!tenantId) return responderErro(res, 401, 'Não autorizado');
 
-    const contato = await prisma.contato.findFirst({
-      where: { leadId: req.params.id },
+    const lead = await prisma.lead.findFirst({
+      where: { id: req.params.id, tenantId },
       select: { id: true },
     });
 
-    if (!contato) return responderErro(res, 404, 'Contato não encontrado para este lead');
+    if (!lead) return responderErro(res, 404, 'Lead não encontrado');
 
-    await (prisma.contato as any).update({
-      where: { id: contato.id },
+    await (prisma.lead as any).update({
+      where: { id: lead.id },
       data: { modoAtendimento: 'IA' },
     });
 
@@ -2292,16 +2300,16 @@ router.post('/:id/followup', async (req, res) => {
       return responderErro(res, 400, 'dataEnvio inválida. Use formato ISO (YYYY-MM-DDTHH:mm)');
     }
 
-    const contato = await prisma.contato.findFirst({
-      where: { leadId: req.params.id },
+    const lead = await prisma.lead.findFirst({
+      where: { id: req.params.id, tenantId },
       select: { id: true },
     });
 
-    if (!contato) return responderErro(res, 404, 'Contato não encontrado para este lead');
+    if (!lead) return responderErro(res, 404, 'Lead não encontrado');
 
     // Prefixo [MSG] distingue mensagem customizada de keyword automática no job
-    await (prisma.contato as any).update({
-      where: { id: contato.id },
+    await (prisma.lead as any).update({
+      where: { id: lead.id },
       data: {
         statusProspeccao: 'MORNO_FUTURO',
         dataRecontato,

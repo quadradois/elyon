@@ -1,7 +1,7 @@
 /**
  * JOB DE REENVIO DE LEADS COM FALHA NO CRM
  *
- * Varre leads com crmSyncStatus='failed' e tenta reenviar com backoff.
+ * Varre leads com crmSyncStatus='error' e tenta reenviar com backoff.
  * Deve ser executado a cada 30 min via cron ou agendador.
  *
  * Limita a 20 reenvios por execução para evitar flood no CRM externo.
@@ -23,7 +23,7 @@ export async function executarReenviosCrmFalhos(): Promise<{
 
     const leads = await prisma.lead.findMany({
         where: {
-            crmSyncStatus: 'failed',
+            crmSyncStatus: 'error',
             enviadoParaCrmEm: { lt: limiteData },
         },
         select: { id: true, tenantId: true, nome: true, crmSyncError: true },

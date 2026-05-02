@@ -39,7 +39,7 @@ describe('ConverterParaLeadUseCase', () => {
     mockPrisma.contato.findUnique.mockResolvedValue(null);
 
     const result = await useCase.execute({
-      contatoId: 'nao-existe',
+      leadId: 'nao-existe',
       temperatura: 'MORNO',
       tipoInteresse: 'VENDA',
       timeline: '3 meses',
@@ -80,7 +80,7 @@ describe('ConverterParaLeadUseCase', () => {
     mockPrisma.atividade.create.mockResolvedValue({});
 
     const result = await useCase.execute({
-      contatoId: 'contato-1',
+      leadId: 'contato-1',
       temperatura: 'MORNO',
       tipoInteresse: 'VENDA',
       timeline: 'breve',
@@ -118,7 +118,7 @@ describe('ConverterParaLeadUseCase', () => {
     mockPrisma.atividade.create.mockResolvedValue({});
 
     const result = await useCase.execute({
-      contatoId: 'contato-1b',
+      leadId: 'contato-1b',
       temperatura: 'MORNO',
       tipoInteresse: 'VENDA',
       timeline: 'breve',
@@ -138,7 +138,7 @@ describe('ConverterParaLeadUseCase', () => {
     });
 
     const result = await useCase.execute({
-      contatoId: 'contato-sem-tenant',
+      leadId: 'contato-sem-tenant',
       temperatura: 'MORNO',
       tipoInteresse: 'VENDA',
       timeline: 'breve',
@@ -169,7 +169,7 @@ describe('ConverterParaLeadUseCase', () => {
     mockPrisma.atividade.create.mockResolvedValue({});
 
     const result = await useCase.execute({
-      contatoId: 'contato-2',
+      leadId: 'contato-2',
       temperatura: 'MORNO',
       tipoInteresse: 'AMBOS',
       timeline: '3 meses',
@@ -191,7 +191,7 @@ describe('ConverterParaLeadUseCase', () => {
 
     expect(mockPrisma.atividade.create).toHaveBeenCalledTimes(1);
     expect(mockRagConversasService.processarConversaoProspeccao).toHaveBeenCalledWith({
-      contatoId: 'contato-2',
+      leadId: 'contato-2',
       tenantId: 'tenant-1',
       tipoConversao: 'LEAD',
       empreendimento: 'Ed. Sol',
@@ -217,7 +217,7 @@ describe('ConverterParaLeadUseCase', () => {
     mockPrisma.atividade.create.mockResolvedValue({});
 
     const result = await useCase.execute({
-      contatoId: 'contato-3',
+      leadId: 'contato-3',
       temperatura: 'QUENTE',
       tipoInteresse: 'VENDA',
       timeline: 'urgente',
@@ -255,7 +255,7 @@ describe('ConverterParaLeadUseCase', () => {
     mockPrisma.atividade.create.mockResolvedValue({});
 
     const result = await useCase.execute({
-      contatoId: 'contato-3b',
+      leadId: 'contato-3b',
       temperatura: 'MORNO',
       tipoInteresse: 'VENDA',
       timeline: 'sem prazo definido',
@@ -277,7 +277,7 @@ describe('ConverterParaLeadUseCase', () => {
     mockPrisma.lead.create.mockRejectedValue(new Error('Falha no banco'));
 
     const result = await useCase.execute({
-      contatoId: 'contato-4',
+      leadId: 'contato-4',
       temperatura: 'MORNO',
       tipoInteresse: 'VENDA',
       timeline: '2 meses',

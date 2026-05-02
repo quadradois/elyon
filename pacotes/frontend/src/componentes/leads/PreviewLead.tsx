@@ -87,6 +87,16 @@ function Campo({ label, valor, icone }: { label: string; valor: string | number 
   );
 }
 
+function Divisor({ titulo }: { titulo: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-px flex-1 bg-slate-100" />
+      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{titulo}</span>
+      <div className="h-px flex-1 bg-slate-100" />
+    </div>
+  );
+}
+
 function SecaoCard({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-slate-200 overflow-hidden">
@@ -694,129 +704,223 @@ function AbaResumo({
 }
 
 // ══════════════════════════════════════════════════
-// ABA IMÓVEL — Completa com todos os campos
+// ABA IMÓVEL — Todos os campos + indicador de completude
 // ══════════════════════════════════════════════════
-function AbaImovel({ lead }: { lead: LeadPriorizado }) {
-  // Dados do agente (pré-contrato) — coletados na conversa
-  const temDadosAgente = lead.enderecoImovel || lead.tipoImovel || lead.valorPretendido ||
-    lead.interesseEm || lead.areaImovel || lead.bairroImovel || lead.nomeEdificio;
+function CampoImovel({
+  icone: Icone,
+  label,
+  valor,
+  mono = false,
+}: {
+  icone?: React.ElementType;
+  label: string;
+  valor: string | number | boolean | null | undefined;
+  mono?: boolean;
+}) {
+  const preenchido = valor !== null && valor !== undefined && valor !== '';
+  const texto = preenchido
+    ? (typeof valor === 'boolean' ? (valor ? 'Sim' : 'Não') : String(valor))
+    : null;
 
-  // Dados do wizard (pós-contrato) — coletados pelo Admin agente
-  const temDadosWizard = lead.imovelAreaTotal || lead.imovelSuites != null ||
-    lead.imovelBanheiros != null || lead.imovelAndar != null ||
-    lead.imovelDescricao || lead.imovelCaracteristicas?.length > 0 ||
-    lead.imovelFotos?.length > 0 || lead.imovelValorLocacao ||
-    lead.imovelValorCondominio || lead.imovelValorIPTU;
-
-  if (!temDadosAgente && !temDadosWizard) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 px-6">
-        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
-          <Home className="w-7 h-7 text-slate-400" />
-        </div>
-        <p className="text-sm font-semibold text-slate-600">Sem dados do imóvel</p>
-        <p className="text-xs text-slate-400 mt-1 text-center">
-          O agente ainda não coletou informações sobre o imóvel.
+  return (
+    <div className={`rounded-xl p-3 border flex items-start gap-2 ${
+      preenchido
+        ? 'bg-white border-slate-200'
+        : 'bg-slate-50 border-dashed border-slate-200'
+    }`}>
+      {Icone && (
+        <Icone className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${preenchido ? 'text-slate-400' : 'text-slate-300'}`} />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className={`text-[10px] font-bold uppercase tracking-wide leading-none mb-0.5 ${preenchido ? 'text-slate-400' : 'text-slate-300'}`}>
+          {label}
         </p>
+        {preenchido
+          ? <p className={`text-sm font-semibold text-slate-800 break-words leading-snug ${mono ? 'font-mono' : ''}`}>{texto}</p>
+          : <p className="text-xs text-slate-300 italic">Em aberto</p>
+        }
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+function AbaImovel({ lead }: { lead: LeadPriorizado }) {
+  // Campos principais para cálculo de completude (alinhado com CRM payload)
+  const camposChave = [
+    lead.valorPretendido,
+    lead.enderecoImovel || lead.bairroImovel,
+    lead.tipoImovel,
+    lead.areaImovel || lead.imovelAreaTotal || lead.areaConstruida,
+    lead.quartosImovel,
+    lead.vagasImovel,
+    lead.imovelSuites,
+    lead.imovelBanheiros,
+    lead.ocupacaoImovel,
+    lead.estadoConservacao,
+    lead.situacaoFinanceira,
+    lead.inscricaoIptu,
+    lead.tipoAutorizacao,
+    lead.comissaoAcordada,
+    lead.vigenciaInicio,
+  ];
+  const preenchidos = camposChave.filter(Boolean).length;
+  const pct = Math.round((preenchidos / camposChave.length) * 100);
+  const corBarra = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400';
 
   return (
     <div className="p-3 space-y-4">
 
-      {/* ══ BLOCO 1: DADOS DO AGENTE (pré-contrato) ══ */}
-      {temDadosAgente && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="h-px flex-1 bg-slate-100" />
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dados coletados pelo Agente</span>
-            <div className="h-px flex-1 bg-slate-100" />
-          </div>
+      {/* ══ Barra de completude ══ */}
+      <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Completude do imóvel</p>
+          <span className={`text-xs font-bold ${pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500'}`}>
+            {pct}% · {preenchidos}/{camposChave.length} campos
+          </span>
+        </div>
+        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${corBarra}`} style={{ width: `${pct}%` }} />
+        </div>
+      </div>
 
-          {/* Valor — destaque */}
-          {lead.valorPretendido && (
-            <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-4 text-white">
-              <p className="text-xs font-medium text-emerald-200 mb-0.5">Valor pretendido</p>
-              <p className="text-2xl font-bold">{lead.valorPretendido}</p>
-              {lead.interesseEm && (
-                <span className="mt-2 inline-block text-[11px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full capitalize">
-                  {lead.interesseEm}
-                </span>
+      {/* ══ Valor e interesse ══ */}
+      <div className="space-y-2">
+        <Divisor titulo="Dados coletados pelo Agente" />
+
+        {lead.valorPretendido ? (
+          <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-4 text-white">
+            <p className="text-xs font-medium text-emerald-200 mb-0.5">Valor pretendido</p>
+            <p className="text-2xl font-bold">{lead.valorPretendido}</p>
+            {lead.interesseEm && (
+              <span className="mt-2 inline-block text-[11px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full capitalize">
+                {lead.interesseEm}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 text-center">
+            <p className="text-xs text-slate-400 font-medium">Valor pretendido ainda não informado</p>
+          </div>
+        )}
+
+        {/* Endereço */}
+        {(lead.enderecoImovel || lead.bairroImovel || lead.nomeEdificio) ? (
+          <div className="flex items-start gap-3 bg-slate-50 rounded-xl p-3 border border-slate-200">
+            <MapPin className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+            <div>
+              {lead.enderecoImovel && <p className="text-sm font-semibold text-slate-800">{lead.enderecoImovel}</p>}
+              {lead.bairroImovel   && <p className="text-xs text-slate-500 mt-0.5">{lead.bairroImovel}</p>}
+              {lead.nomeEdificio   && <p className="text-xs text-indigo-600 font-medium mt-0.5">{lead.nomeEdificio}</p>}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-3">
+            <MapPin className="w-4 h-4 text-slate-300 flex-shrink-0" />
+            <p className="text-xs text-slate-300 italic">Endereço do imóvel em aberto</p>
+          </div>
+        )}
+
+        {/* Características básicas — sempre exibe todos */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
+            <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Características</p>
+          </div>
+          <div className="p-3 grid grid-cols-2 gap-2">
+            <CampoImovel icone={Home}       label="Tipo"        valor={lead.tipoImovel ? lead.tipoImovel.charAt(0).toUpperCase() + lead.tipoImovel.slice(1) : null} />
+            <CampoImovel icone={Layers}     label="Ocupação"    valor={lead.ocupacaoImovel} />
+            <CampoImovel icone={DoorOpen}   label="Quartos"     valor={lead.quartosImovel} />
+            <CampoImovel icone={Car}        label="Vagas"       valor={lead.vagasImovel} />
+            <CampoImovel icone={BadgeCheck} label="Conservação" valor={lead.estadoConservacao} />
+            <CampoImovel icone={Maximize2}  label="Área (agente)"  valor={lead.areaImovel} />
+            <CampoImovel icone={Maximize2}  label="Área total"     valor={lead.imovelAreaTotal ? `${lead.imovelAreaTotal} m²` : lead.areaConstruida ? `${lead.areaConstruida} m²` : null} />
+            <CampoImovel icone={Maximize2}  label="Área terreno"   valor={lead.areaTerreno ? `${lead.areaTerreno} m²` : null} />
+            <CampoImovel                    label="Suítes"         valor={lead.imovelSuites} />
+            <CampoImovel                    label="Banheiros"      valor={lead.imovelBanheiros} />
+            <CampoImovel                    label="Andar"          valor={lead.imovelAndar} />
+          </div>
+        </div>
+
+        {/* Situação financeira — sempre exibe */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
+            <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Situação financeira</p>
+          </div>
+          <div className="p-3 grid grid-cols-2 gap-2">
+            <CampoImovel label="Situação"           valor={lead.situacaoFinanceira} />
+            <CampoImovel label="Tem dívidas"        valor={lead.temDividas} />
+            <CampoImovel label="Valor venal (IPTU)" valor={lead.valorVenal} />
+            <CampoImovel label="Inscrição IPTU"     valor={lead.inscricaoIptu} mono />
+            <CampoImovel label="Valor locação"      valor={lead.imovelValorLocacao ? `R$ ${lead.imovelValorLocacao.toLocaleString('pt-BR')}` : null} />
+            <CampoImovel label="Condomínio"         valor={lead.imovelValorCondominio ? `R$ ${lead.imovelValorCondominio.toLocaleString('pt-BR')}` : null} />
+            <CampoImovel label="IPTU (wizard)"      valor={lead.imovelValorIPTU ? `R$ ${lead.imovelValorIPTU.toLocaleString('pt-BR')}` : null} />
+          </div>
+        </div>
+
+        {/* Contrato */}
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
+            <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Contrato</p>
+          </div>
+          <div className="p-3 grid grid-cols-2 gap-2">
+            <CampoImovel label="Tipo autorização" valor={lead.tipoAutorizacao} />
+            <CampoImovel label="Comissão"         valor={lead.comissaoAcordada} />
+            <CampoImovel label="Prazo contrato"   valor={lead.prazoTrabalho ? `${lead.prazoTrabalho} dias` : null} />
+            <CampoImovel label="Autorizou anúncio" valor={lead.autorizouAnuncio} />
+            <CampoImovel label="Vigência início"  valor={lead.vigenciaInicio ? new Date(lead.vigenciaInicio).toLocaleDateString('pt-BR') : null} />
+            <CampoImovel label="Vigência fim"     valor={lead.vigenciaFim    ? new Date(lead.vigenciaFim).toLocaleDateString('pt-BR')    : null} />
+          </div>
+        </div>
+
+        {/* Descrição e características (texto) */}
+        {(lead.imovelDescricao || (lead.imovelCaracteristicas?.length ?? 0) > 0) && (
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
+              <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Descrição</p>
+            </div>
+            <div className="p-3 space-y-2">
+              {(lead.imovelCaracteristicas?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {lead.imovelCaracteristicas.map((c) => (
+                    <span key={c} className="text-[11px] bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded-full">{c}</span>
+                  ))}
+                </div>
+              )}
+              {lead.imovelDescricao && (
+                <p className="text-xs text-slate-600 leading-relaxed">{lead.imovelDescricao}</p>
               )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Endereço */}
-          {(lead.enderecoImovel || lead.bairroImovel || lead.nomeEdificio) && (
-            <div className="flex items-start gap-3 bg-slate-50 rounded-xl p-3 border border-slate-200">
-              <MapPin className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-              <div>
-                {lead.enderecoImovel && <p className="text-sm font-semibold text-slate-800">{lead.enderecoImovel}</p>}
-                {lead.bairroImovel && <p className="text-xs text-slate-500 mt-0.5">{lead.bairroImovel}</p>}
-                {lead.nomeEdificio && <p className="text-xs text-indigo-600 font-medium mt-0.5">{lead.nomeEdificio}</p>}
-              </div>
-            </div>
-          )}
-
-          {/* Grid de características do agente */}
+        {/* Fotos */}
+        {(lead.imovelFotos?.length ?? 0) > 0 && (
           <div className="grid grid-cols-2 gap-2">
-            {[
-              { icone: <Home className="w-3.5 h-3.5" />, label: 'Tipo', valor: lead.tipoImovel ? lead.tipoImovel.charAt(0).toUpperCase() + lead.tipoImovel.slice(1) : null },
-              { icone: <Maximize2 className="w-3.5 h-3.5" />, label: 'Área', valor: lead.areaImovel },
-              { icone: <DoorOpen className="w-3.5 h-3.5" />, label: 'Quartos', valor: lead.quartosImovel },
-              { icone: <Car className="w-3.5 h-3.5" />, label: 'Vagas', valor: lead.vagasImovel },
-              { icone: <Layers className="w-3.5 h-3.5" />, label: 'Ocupação', valor: lead.ocupacaoImovel },
-              { icone: <BadgeCheck className="w-3.5 h-3.5" />, label: 'Conservação', valor: lead.estadoConservacao },
-            ].filter((i) => i.valor !== null && i.valor !== undefined).map((item) => (
-              <div key={item.label} className="bg-white rounded-xl p-3 border border-slate-200 flex items-center gap-2">
-                <span className="text-slate-400">{item.icone}</span>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">{item.label}</p>
-                  <p className="text-sm font-semibold text-slate-800">{String(item.valor)}</p>
-                </div>
-              </div>
+            {lead.imovelFotos.slice(0, 4).map((url, i) => (
+              <img key={i} src={url} alt={`Foto ${i + 1}`} className="rounded-xl object-cover aspect-video w-full border border-slate-200" />
             ))}
+            {lead.imovelFotos.length > 4 && (
+              <div className="rounded-xl bg-slate-100 aspect-video flex items-center justify-center">
+                <span className="text-sm font-bold text-slate-400">+{lead.imovelFotos.length - 4} fotos</span>
+              </div>
+            )}
           </div>
+        )}
+      </div>
 
-          {/* Situação financeira */}
-          {(lead.situacaoFinanceira || lead.temDividas !== null || lead.valorVenal || lead.inscricaoIptu) && (
-            <div className="rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-3 py-2 bg-slate-50 border-b border-slate-200">
-                <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Situação financeira</p>
-              </div>
-              <div className="p-3 grid grid-cols-2 gap-3">
-                <Campo label="Situação" valor={lead.situacaoFinanceira} />
-                <Campo label="Tem dívidas" valor={lead.temDividas} />
-                <Campo label="Valor venal (IPTU)" valor={lead.valorVenal} />
-                <Campo label="Inscrição IPTU" valor={lead.inscricaoIptu} />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ══ BLOCO 2: IMÓVEIS IDENTIFICADOS (tabela Imovel — wizard de captação) ══ */}
+      {/* ══ IMÓVEIS IDENTIFICADOS (wizard de captação) ══ */}
       {lead.imoveisCaptacao?.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="h-px flex-1 bg-indigo-100" />
-            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">
-              📋 Imóveis Identificados ({lead.imoveisCaptacao.length})
-            </span>
-            <div className="h-px flex-1 bg-indigo-100" />
-          </div>
+        <div className="space-y-3">
+          <Divisor titulo={`Imóveis identificados (${lead.imoveisCaptacao.length})`} />
 
           {lead.imoveisCaptacao.map((im, idx) => (
             <div key={im.id} className="rounded-xl border border-indigo-100 overflow-hidden">
-              {/* Header do card */}
               <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
                 <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">
                   Imóvel {idx + 1}{im.tipoImovel ? ` — ${im.tipoImovel}` : ''}
                 </p>
                 {im.statusCaptacao && (
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    im.statusCaptacao === 'CAPTADO' ? 'bg-emerald-100 text-emerald-700' :
+                    im.statusCaptacao === 'CAPTADO'      ? 'bg-emerald-100 text-emerald-700' :
                     im.statusCaptacao === 'DOCUMENTACAO' ? 'bg-amber-100 text-amber-700' :
                     'bg-indigo-100 text-indigo-600'
                   }`}>
@@ -824,9 +928,7 @@ function AbaImovel({ lead }: { lead: LeadPriorizado }) {
                   </span>
                 )}
               </div>
-
               <div className="p-3 space-y-3">
-                {/* Endereço */}
                 {(im.logradouro || im.bairro) && (
                   <div className="flex items-start gap-2">
                     <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
@@ -842,32 +944,18 @@ function AbaImovel({ lead }: { lead: LeadPriorizado }) {
                           Apto {im.apartamento}{im.bloco ? ` · Bloco ${im.bloco}` : ''}
                         </p>
                       )}
-                      {im.bairro && <p className="text-xs text-slate-500">{im.bairro}</p>}
+                      {im.bairro      && <p className="text-xs text-slate-500">{im.bairro}</p>}
                       {im.nomeEdificio && <p className="text-xs text-indigo-600 font-medium">{im.nomeEdificio}</p>}
                     </div>
                   </div>
                 )}
-
-                {/* Grid de métricas */}
                 <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { icone: <Maximize2 className="w-3 h-3" />, label: 'Área terreno', valor: im.areaTerreno ? `${im.areaTerreno} m²` : null },
-                    { icone: <Maximize2 className="w-3 h-3" />, label: 'Área edificada', valor: im.areaEdificada ? `${im.areaEdificada} m²` : null },
-                    { icone: <Layers className="w-3 h-3" />, label: 'Pavimentos', valor: im.numeroPavimentos },
-                    { icone: <Car className="w-3 h-3" />, label: 'Vagas cobertas', valor: im.vagasCobertas },
-                    { icone: <Car className="w-3 h-3" />, label: 'Vagas desc.', valor: im.vagasDescobertas },
-                  ].filter(i => i.valor !== null && i.valor !== undefined).map(item => (
-                    <div key={item.label} className="bg-slate-50 rounded-lg p-2 flex items-center gap-1.5">
-                      <span className="text-slate-400">{item.icone}</span>
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">{item.label}</p>
-                        <p className="text-xs font-semibold text-slate-800">{String(item.valor)}</p>
-                      </div>
-                    </div>
-                  ))}
+                  <CampoImovel icone={Maximize2} label="Área terreno"   valor={im.areaTerreno   ? `${im.areaTerreno} m²`   : null} />
+                  <CampoImovel icone={Maximize2} label="Área edificada"  valor={im.areaEdificada ? `${im.areaEdificada} m²` : null} />
+                  <CampoImovel icone={Layers}    label="Pavimentos"      valor={im.numeroPavimentos} />
+                  <CampoImovel icone={Car}       label="Vagas cobertas"  valor={im.vagasCobertas} />
+                  <CampoImovel icone={Car}       label="Vagas desc."     valor={im.vagasDescobertas} />
                 </div>
-
-                {/* Inscrição IPTU */}
                 {im.inscricaoIptu && (
                   <p className="text-[10px] text-slate-400">
                     IPTU: <span className="font-mono text-slate-600">{im.inscricaoIptu}</span>

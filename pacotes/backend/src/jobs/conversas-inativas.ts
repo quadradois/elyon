@@ -139,7 +139,7 @@ class JobConversasInativas {
       limiteData.setHours(limiteData.getHours() - 48); // 48h sem resposta
       
       // Buscar contatos de prospecção sem resposta há mais de 48h
-      const contatosSemResposta = await prisma.contato.findMany({
+      const contatosSemResposta = await prisma.lead.findMany({
         where: {
           statusProspeccao: 'CONTATANDO',
           respondeu: false,
@@ -147,7 +147,7 @@ class JobConversasInativas {
           tentativasContato: { gte: 2 } // Pelo menos 2 tentativas
         },
         include: {
-          campanha: {
+          campanhaOrigem: {
             select: {
               tenantId: true,
               nome: true
@@ -161,22 +161,22 @@ class JobConversasInativas {
       
       for (const contato of contatosSemResposta) {
         try {
-          if (!contato.campanha) {
+          if (!contato.campanhaOrigem) {
             continue;
           }
 
           const alerta = await (prisma as any).alertaCorretor.create({
             data: {
-              tenantId: contato.campanha.tenantId,
+              tenantId: contato.campanhaOrigem.tenantId,
               tipo: 'LEAD_QUENTE',
               prioridade: 'BAIXA',
               titulo: `Contato ${contato.nome} não respondeu`,
-              descricao: `O contato ${contato.nome} da campanha "${contato.campanha.nome}" não respondeu após ${contato.tentativasContato} tentativas.\n` +
+              descricao: `O contato ${contato.nome} da campanha "${contato.campanhaOrigem.nome}" não respondeu após ${contato.tentativasContato} tentativas.\n` +
                         `Última tentativa: ${contato.ultimaTentativa?.toLocaleString('pt-BR')}\n` +
                         `Considere: ligar ou remover da campanha.`,
               contexto: {
                 contatoId: contato.id,
-                campanhaId: contato.campanhaId,
+                campanhaId: contato.campanhaOrigemId,
                 telefone: contato.telefone,
                 tentativas: contato.tentativasContato
               },
@@ -185,7 +185,7 @@ class JobConversasInativas {
           });
           
           // Notificar via WebSocket
-          websocketService.emitirAlerta(contato.campanha.tenantId, alerta);
+          websocketService.emitirAlerta(contato.campanhaOrigem.tenantId, alerta);
           alertasCriados++;
         } catch (alertaError) {
           console.error(`[JOB] Erro ao criar alerta para contato ${contato.id}:`, alertaError);

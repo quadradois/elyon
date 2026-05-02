@@ -155,6 +155,141 @@ export function Captacao() {
   const [creditosNecessarios, setCreditosNecessarios] = useState(0);
 
   // ============================================
+  // FUNÇÕES: Log e Salvar Lista (declaradas antes do useEffect que as usa)
+  // ============================================
+
+  const addLog = useCallback((msg: string) => {
+    setLogsProcesso((prev) => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] ${msg}`,
+    ]);
+  }, []);
+
+  const salvarLista = useCallback(async () => {
+    if (!nomeLista.trim()) {
+      toast.error("Digite um nome para a lista");
+      return;
+    }
+
+    try {
+      setSalvandoLista(true);
+
+      // Preparar contatos para salvar na lista
+      const contatosParaSalvar = leadsGerados.map((lead) => {
+        let nome =
+          lead.nome ||
+          lead.nmproprietario ||
+          lead.proprietario ||
+          "Proprietário";
+        if (!nome || nome.trim() === "") {
+          nome = "Proprietário";
+        }
+
+        const extrairTelefone = (tel: any): string | null => {
+          if (!tel) return null;
+          if (typeof tel === "string") return tel;
+          if (typeof tel === "object" && tel.numero) return tel.numero;
+          return null;
+        };
+
+        const telefones = lead.telefones || [];
+        const tel1 =
+          extrairTelefone(lead.telefone) || extrairTelefone(telefones[0]);
+        const tel2 = extrairTelefone(telefones[1]);
+        const tel3 = extrairTelefone(telefones[2]);
+        const tel4 = extrairTelefone(telefones[3]);
+        const tel5 = extrairTelefone(telefones[4]);
+
+        const qtdWhatsapp = telefones.filter(
+          (t: any) => t?.whatsapp === true
+        ).length;
+
+        return {
+          nome: nome.trim(),
+          cpf: lead.cpf || lead.nrcpf || null,
+          inscricaoIptu: lead.inscricaoIptu || lead.nrinscr || null,
+          unidade: lead.unidade || lead.incompl || null,
+          box: lead.box || null,
+          enderecoImovel: lead.enderecoImovel || lead.endereco || null,
+          bairroImovel:
+            lead.bairroImovel ||
+            lead.bairro ||
+            localSelecionado?.bairro ||
+            null,
+          telefone: tel1,
+          telefone2: tel2,
+          telefone3: tel3,
+          telefone4: tel4,
+          telefone5: tel5,
+          telefonesJson:
+            telefones.length > 0 ? JSON.stringify(telefones) : null,
+          email: lead.email || lead.emails?.[0] || null,
+          email2: lead.emails?.[1] || null,
+          email3: lead.emails?.[2] || null,
+          email4: lead.emails?.[3] || null,
+          email5: lead.emails?.[4] || null,
+          emailsJson: lead.emails ? JSON.stringify(lead.emails) : null,
+          temWhatsapp: qtdWhatsapp > 0 || lead.temWhatsapp || false,
+          quantidadeWhatsapp: qtdWhatsapp || lead.quantidadeWhatsapp || 0,
+        };
+      });
+
+      console.log(
+        "[Wizard] Salvando lista com",
+        contatosParaSalvar.length,
+        "contatos"
+      );
+      console.log("[Wizard] Primeiro contato exemplo:", contatosParaSalvar[0]);
+
+      const response = await api.post("/listas", {
+        nome: nomeLista,
+        nomeEdificio: localSelecionado?.nome || nomeLista,
+        localizacao: localSelecionado?.bairro || "Goiânia, GO",
+        contatos: contatosParaSalvar,
+      });
+
+      const { lista } = response.data;
+      setListaId(lista.id);
+
+      if (criarCampanha && nomeCampanha) {
+        addLog(`Criando campanha "${nomeCampanha}"...`);
+        const campResponse = await api.post("/campanhas", {
+          nome: nomeCampanha,
+          bairro: localSelecionado?.bairro || "Goiânia",
+          cidade: "Goiânia",
+          estado: "GO",
+        });
+
+        const campanhaId = campResponse.data.id || campResponse.data.campanha?.id;
+
+        if (campanhaId) {
+          setCampanhaIdCriado(campanhaId);
+          addLog("Vinculando lista à campanha...");
+          await api.post(`/listas/${lista.id}/adicionar-campanha`, {
+            campanhaId
+          });
+
+          toast.success("Lista e Campanha criadas com sucesso!", {
+            description: `${lista.totalContatos || contatosParaSalvar.length} contatos vinculados.`,
+          });
+        }
+      } else {
+        toast.success("Lista salva com sucesso!", {
+          description: `${lista.totalContatos || contatosParaSalvar.length} contatos salvos`,
+        });
+      }
+
+      setEtapa(5);
+    } catch (error: any) {
+      console.error("Erro ao salvar lista:", error);
+      console.error("Resposta do servidor:", error.response?.data);
+      toast.error("Erro ao salvar lista");
+    } finally {
+      setSalvandoLista(false);
+    }
+  }, [addLog, criarCampanha, leadsGerados, localSelecionado, nomeCampanha, nomeLista]);
+
+  // ============================================
   // MODO TURBO: Auto-save na Etapa 4
   // ============================================
 
@@ -748,149 +883,6 @@ export function Captacao() {
       }
     }
   };
-
-  const addLog = useCallback((msg: string) => {
-    setLogsProcesso((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] ${msg}`,
-    ]);
-  }, []);
-
-  // ============================================
-  // FUNÇÕES: Etapa 4 - Salvar Lista
-  // ============================================
-
-  const salvarLista = useCallback(async () => {
-    if (!nomeLista.trim()) {
-      toast.error("Digite um nome para a lista");
-      return;
-    }
-
-    try {
-      setSalvandoLista(true);
-
-      // Preparar contatos para salvar na lista
-      const contatosParaSalvar = leadsGerados.map((lead) => {
-        // Garantir que nome nunca é vazio
-        let nome =
-          lead.nome ||
-          lead.nmproprietario ||
-          lead.proprietario ||
-          "Proprietário";
-        if (!nome || nome.trim() === "") {
-          nome = "Proprietário";
-        }
-
-        // Extrair números de telefone (podem vir como objetos ou strings)
-        const extrairTelefone = (tel: any): string | null => {
-          if (!tel) return null;
-          if (typeof tel === "string") return tel;
-          if (typeof tel === "object" && tel.numero) return tel.numero;
-          return null;
-        };
-
-        // Telefones podem estar em lead.telefones (array) ou lead.telefone (string/objeto)
-        const telefones = lead.telefones || [];
-        const tel1 =
-          extrairTelefone(lead.telefone) || extrairTelefone(telefones[0]);
-        const tel2 = extrairTelefone(telefones[1]);
-        const tel3 = extrairTelefone(telefones[2]);
-        const tel4 = extrairTelefone(telefones[3]);
-        const tel5 = extrairTelefone(telefones[4]);
-
-        // Contar quantos têm WhatsApp
-        const qtdWhatsapp = telefones.filter(
-          (t: any) => t?.whatsapp === true
-        ).length;
-
-        return {
-          nome: nome.trim(),
-          cpf: lead.cpf || lead.nrcpf || null,
-          inscricaoIptu: lead.inscricaoIptu || lead.nrinscr || null,
-          unidade: lead.unidade || lead.incompl || null,
-          box: lead.box || null,
-          enderecoImovel: lead.enderecoImovel || lead.endereco || null,
-          bairroImovel:
-            lead.bairroImovel ||
-            lead.bairro ||
-            localSelecionado?.bairro ||
-            null,
-          telefone: tel1,
-          telefone2: tel2,
-          telefone3: tel3,
-          telefone4: tel4,
-          telefone5: tel5,
-          telefonesJson:
-            telefones.length > 0 ? JSON.stringify(telefones) : null,
-          email: lead.email || lead.emails?.[0] || null,
-          email2: lead.emails?.[1] || null,
-          email3: lead.emails?.[2] || null,
-          email4: lead.emails?.[3] || null,
-          email5: lead.emails?.[4] || null,
-          emailsJson: lead.emails ? JSON.stringify(lead.emails) : null,
-          temWhatsapp: qtdWhatsapp > 0 || lead.temWhatsapp || false,
-          quantidadeWhatsapp: qtdWhatsapp || lead.quantidadeWhatsapp || 0,
-        };
-      });
-
-      console.log(
-        "[Wizard] Salvando lista com",
-        contatosParaSalvar.length,
-        "contatos"
-      );
-      console.log("[Wizard] Primeiro contato exemplo:", contatosParaSalvar[0]);
-
-      // Criar lista com contatos
-      const response = await api.post("/listas", {
-        nome: nomeLista,
-        nomeEdificio: localSelecionado?.nome || nomeLista,
-        localizacao: localSelecionado?.bairro || "Goiânia, GO",
-        contatos: contatosParaSalvar,
-      });
-
-      const { lista } = response.data;
-      setListaId(lista.id);
-
-      if (criarCampanha && nomeCampanha) {
-        addLog(`Criando campanha "${nomeCampanha}"...`);
-        // Criar campanha
-        const campResponse = await api.post("/campanhas", {
-          nome: nomeCampanha,
-          bairro: localSelecionado?.bairro || "Goiânia",
-          cidade: "Goiânia",
-          estado: "GO",
-        });
-
-        const campanhaId = campResponse.data.id || campResponse.data.campanha?.id;
-        
-        if (campanhaId) {
-          setCampanhaIdCriado(campanhaId); // Salva o ID para usar no BotaoPesquisaManus (etapa 5)
-          addLog("Vinculando lista à campanha...");
-          // No backend, a vinculação é feita a partir da lista
-          await api.post(`/listas/${lista.id}/adicionar-campanha`, {
-            campanhaId
-          });
-          
-          toast.success("Lista e Campanha criadas com sucesso!", {
-            description: `${lista.totalContatos || contatosParaSalvar.length} contatos vinculados.`,
-          });
-        }
-      } else {
-        toast.success("Lista salva com sucesso!", {
-          description: `${lista.totalContatos || contatosParaSalvar.length} contatos salvos`,
-        });
-      }
-
-      // Avançar para conclusão
-      setEtapa(5);
-    } catch (error: any) {
-      console.error("Erro ao salvar lista:", error);
-      console.error("Resposta do servidor:", error.response?.data);
-      toast.error("Erro ao salvar lista");
-    } finally {
-      setSalvandoLista(false);
-    }
-  }, [addLog, criarCampanha, leadsGerados, localSelecionado, nomeCampanha, nomeLista]);
 
   // ============================================
   // RENDER

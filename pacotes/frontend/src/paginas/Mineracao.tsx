@@ -213,11 +213,6 @@ export function Mineracao() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modoTurbo, setModoTurbo] = useState(false);
 
-  // Carregar bairros ao montar
-  useEffect(() => {
-    carregarBairros();
-  }, [carregarBairros]);
-
   const carregarBairros = useCallback(async () => {
     try {
       setLoading(true);
@@ -237,6 +232,11 @@ export function Mineracao() {
       setLoading(false);
     }
   }, []);
+
+  // Carregar bairros ao montar
+  useEffect(() => {
+    carregarBairros();
+  }, [carregarBairros]);
 
   const carregarEdificiosPorBairro = async (cdbairro: number) => {
     try {

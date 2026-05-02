@@ -75,19 +75,19 @@ async function garantirConversaoAutomaticaSeElegivel(params: {
     return;
   }
 
-  const contatoAtual = await prisma.contato.findUnique({
+  const contatoAtual = await prisma.lead.findUnique({
     where: { id: params.contatoId },
-    select: { id: true, virouLead: true, leadId: true }
+    select: { id: true, statusProspeccao: true }
   });
 
-  if (!contatoAtual || contatoAtual.virouLead || contatoAtual.leadId) {
+  if (!contatoAtual) {
     registrarTelemetriaConversao({
       status: 'ja_convertido',
       contatoId: params.contatoId,
       textoConversa: params.textoConversa,
       deteccao,
-      reasonCode: !contatoAtual ? 'CONTACT_NOT_FOUND' : 'ALREADY_LEAD',
-      leadId: contatoAtual?.leadId || undefined
+      reasonCode: 'CONTACT_NOT_FOUND',
+      leadId: undefined
     });
     return;
   }
@@ -103,7 +103,7 @@ async function garantirConversaoAutomaticaSeElegivel(params: {
   });
 
   const resultadoConversao = await converterParaLeadUseCase.execute({
-    contatoId: params.contatoId,
+    leadId: params.contatoId,
     tipoInteresse: deteccao.tipoInteresse,
     temperatura: deteccao.temperatura,
     timeline: deteccao.timeline,
@@ -111,19 +111,19 @@ async function garantirConversaoAutomaticaSeElegivel(params: {
   });
 
   if (resultadoConversao.success || resultadoQualificacao.success) {
-    const contatoPosConversao = await prisma.contato.findUnique({
+    const contatoPosConversao = await prisma.lead.findUnique({
       where: { id: params.contatoId },
-      select: { virouLead: true, leadId: true }
+      select: { id: true, statusProspeccao: true }
     });
 
-    if (!contatoPosConversao?.virouLead || !contatoPosConversao?.leadId) {
+    if (!contatoPosConversao) {
       registrarTelemetriaConversao({
         status: 'inconsistente_pos_conversao',
         contatoId: params.contatoId,
         textoConversa: params.textoConversa,
         deteccao,
         reasonCode: 'POST_CONVERSION_LINK_MISSING',
-        erro: 'Conversão reportou sucesso, mas contato não ficou vinculado a lead'
+        erro: 'Conversão reportou sucesso, mas lead não encontrado após operação'
       });
       return;
     }
@@ -134,7 +134,7 @@ async function garantirConversaoAutomaticaSeElegivel(params: {
         textoConversa: params.textoConversa,
         deteccao,
         reasonCode: resultadoConversao.reasonCode || (resultadoQualificacao.success ? 'QUALIFIED_AND_LINKED' : undefined),
-        leadId: contatoPosConversao.leadId
+        leadId: contatoPosConversao.id
       });
       return;
   }
@@ -239,7 +239,7 @@ async function salvarMensagemProspeccao(params: {
 
     const mensagemCriada = await prisma.mensagemProspeccao.create({
       data: {
-        contatoId: params.contatoId,
+        leadId: params.contatoId,
         direcao: params.direcao,
         conteudo: params.conteudo,
         tipo: params.tipo || 'TEXTO',
@@ -248,15 +248,13 @@ async function salvarMensagemProspeccao(params: {
       }
     });
 
-    const contatoComLead = await prisma.contato.findUnique({
-      where: { id: params.contatoId },
-      select: { leadId: true }
-    });
+    // params.contatoId IS the lead's id in the unified Lead model
+    const leadIdParaConversa = params.contatoId;
 
-    if (contatoComLead?.leadId) {
+    if (leadIdParaConversa) {
       let conversa = await prisma.conversa.findFirst({
         where: {
-          leadId: contatoComLead.leadId,
+          leadId: leadIdParaConversa,
           canal: 'WHATSAPP',
           estadoConversa: 'ativa'
         }
@@ -265,7 +263,7 @@ async function salvarMensagemProspeccao(params: {
       if (!conversa) {
         conversa = await prisma.conversa.create({
           data: {
-            leadId: contatoComLead.leadId,
+            leadId: leadIdParaConversa,
             canal: 'WHATSAPP',
             numeroOrigem: params.telefone || '',
             estadoConversa: 'ativa',
@@ -313,7 +311,7 @@ async function carregarHistoricoMensagens(
   try {
     const mensagens = await prisma.mensagemProspeccao.findMany({
       where: {
-        contatoId: contatoId
+        leadId: contatoId
       },
       orderBy: {
         dataHora: 'desc'
@@ -544,7 +542,7 @@ async function buscarContatoProspeccao(telefone: string) {
 
     // Fallback para busca simples se SQL raw falhar
     console.log('[Webhook] Tentando fallback com busca simples...');
-    const contato = await prisma.contato.findFirst({
+    const contato = await prisma.lead.findFirst({
       where: {
         OR: [
           { telefone: { contains: ultimosDigitos } },
@@ -555,7 +553,7 @@ async function buscarContatoProspeccao(telefone: string) {
         }
       },
       include: {
-        campanha: {
+        campanhaOrigem: {
           include: {
             tenant: true,
             empreendimento: true
@@ -593,7 +591,7 @@ async function jaRespondemosMensagem(contatoId: string, timestampMensagem: Date)
     // Buscar se existe alguma mensagem de SAÍDA (nossa resposta) após o timestamp da mensagem
     const respostaPosterior = await prisma.mensagemProspeccao.findFirst({
       where: {
-        contatoId: contatoId,
+        leadId: contatoId,
         direcao: 'SAIDA',
         dataHora: {
           gt: timestampMensagem
@@ -626,7 +624,7 @@ async function deveProcessarMensagem(
     try {
       const existente = await prisma.mensagemProspeccao.findFirst({
         where: {
-          contatoId,
+          leadId: contatoId,
           messageId
         },
         select: { id: true }
@@ -1136,7 +1134,7 @@ function preferenciaAudioPorObservacoes(observacoes?: string | null): 'PERMITIDO
 }
 
 async function salvarPreferenciaAudioContato(contatoId: string, preferencia: 'PERMITIDO' | 'NEGADO' | 'PERGUNTADO'): Promise<void> {
-  const contato = await prisma.contato.findUnique({
+  const contato = await prisma.lead.findUnique({
     where: { id: contatoId },
     select: { observacoes: true }
   });
@@ -1153,7 +1151,7 @@ async function salvarPreferenciaAudioContato(contatoId: string, preferencia: 'PE
       ? MARCADOR_AUDIO_NEGADO
       : MARCADOR_AUDIO_PERGUNTADO;
 
-  await prisma.contato.update({
+  await prisma.lead.update({
     where: { id: contatoId },
     data: {
       observacoes: [obsLimpa, marcador].filter(Boolean).join('\n')
@@ -1593,7 +1591,7 @@ router.post('/', async (req, res) => {
               if (contatoProspeccao) {
                 console.log(`[Webhook] 🎯 Prospecção Ativa: ${contatoProspeccao.nome}`);
 
-                if (!contatoProspeccao.campanhaId) {
+                if (!contatoProspeccao.campanhaOrigemId) {
                   console.log(`[Webhook] ⚠️ Contato ${contatoProspeccao.id} sem campanha vinculada - ignorando inbound`);
                   registrarIgnorado(telefone, 'sem_campanha_vinculada', contatoProspeccao.id);
                   continue;
@@ -1601,7 +1599,7 @@ router.post('/', async (req, res) => {
 
                 // Verificar Blacklist
                 const telefoneNormalizado = telefone.replace(/\D/g, '').slice(-8);
-                const tenantIdContato = contatoProspeccao.campanha?.tenantId;
+                const tenantIdContato = contatoProspeccao.campanhaOrigem?.tenantId;
                 const estaBloqueado = await prisma.telefoneBlacklist.findFirst({
                   where: {
                     telefone: { contains: telefoneNormalizado },
@@ -1657,7 +1655,7 @@ router.post('/', async (req, res) => {
                   ].filter(Boolean).join(' | ');
 
                   if (resumoNegociacao) {
-                    await prisma.contato.update({
+                    await prisma.lead.update({
                       where: { id: contatoProspeccao.id },
                       data: {
                         observacoes: `${((contatoProspeccao as any).observacoes || '').trim()}\n[RESUMO_FASE_HUMANA] ${resumoNegociacao}`.trim()
@@ -1669,7 +1667,7 @@ router.post('/', async (req, res) => {
                     continue;
                   }
 
-                  await prisma.contato.update({
+                  await prisma.lead.update({
                     where: { id: contatoProspeccao.id },
                     data: {
                       modoAtendimento: 'IA',
@@ -1685,7 +1683,7 @@ router.post('/', async (req, res) => {
                 }
 
                 // Atualizar status
-                await prisma.contato.update({
+                await prisma.lead.update({
                   where: { id: contatoProspeccao.id },
                   data: {
                     respondeu: true,
@@ -1780,7 +1778,7 @@ router.post('/', async (req, res) => {
                       // Fire-and-forget: não bloqueia o fluxo principal
                       const deveCapturarNoAcervo = isImage || isDocument || isVideo || (isAudio && CAPTURA_DOCS_INCLUIR_AUDIO);
                       if (deveCapturarNoAcervo && contatoProspeccao.leadId) {
-                        const tenantIdCaptura = contatoProspeccao.campanha?.tenantId || '';
+                        const tenantIdCaptura = contatoProspeccao.campanhaOrigem?.tenantId || '';
                         capturarDocumentoWhatsapp({
                           message,
                           messageType,
@@ -1799,7 +1797,7 @@ router.post('/', async (req, res) => {
                       const historicoMensagens = await carregarHistoricoMensagens(contatoProspeccao.id, 50);
 
                       // Configuração do Agente e Processamento
-                      const tenantId = contatoProspeccao.campanha?.tenantId;
+                      const tenantId = contatoProspeccao.campanhaOrigem?.tenantId;
                       const agenteConfig = await buscarConfiguracaoAgentePorInstancia(instanceName, tenantId);
                       if (!agenteConfig || !agenteConfig.estaAtivo || agenteConfig.status !== 'ATIVO') {
                         registrarIgnorado(telefone, 'agente_pausado', contatoProspeccao.id);
@@ -1828,8 +1826,8 @@ router.post('/', async (req, res) => {
                         : undefined;
 
                       const empreendimentoContexto =
-                        contatoProspeccao.campanha?.empreendimento?.nome
-                        || contatoProspeccao.campanha?.nomeEmpreendimento
+                        contatoProspeccao.campanhaOrigem?.empreendimento?.nome
+                        || contatoProspeccao.campanhaOrigem?.nomeEmpreendimento
                         || contatoProspeccao.nomeEdificio
                         || '';
 
@@ -1837,11 +1835,11 @@ router.post('/', async (req, res) => {
                     const partesRAG: string[] = [];
                     if (agenteConfig?.ragPerfilTexto) partesRAG.push(`### PERFIL DA IMOBILIÁRIA ###\n${agenteConfig.ragPerfilTexto}`);
 
-                    const empreendimentoData = contatoProspeccao.campanha?.empreendimento as any;
+                    const empreendimentoData = contatoProspeccao.campanhaOrigem?.empreendimento as any;
                     if (empreendimentoData?.briefingCompleto) {
                       partesRAG.push(`### CONHECIMENTO DO EMPREENDIMENTO: ${empreendimentoData.nome} ###\n${empreendimentoData.briefingCompleto}`);
-                    } else if (contatoProspeccao.campanha?.briefingCompleto) {
-                      partesRAG.push(`### CONHECIMENTO DO EMPREENDIMENTO ###\n${contatoProspeccao.campanha.briefingCompleto}`);
+                    } else if (contatoProspeccao.campanhaOrigem?.briefingCompleto) {
+                      partesRAG.push(`### CONHECIMENTO DO EMPREENDIMENTO ###\n${contatoProspeccao.campanhaOrigem.briefingCompleto}`);
                     }
 
                     // 🧠 RAG DE CONVERSAS (Memória de longo prazo)
@@ -1884,9 +1882,9 @@ router.post('/', async (req, res) => {
                       return true;
                     }
 
-                    const empreendimentoBriefing = contatoProspeccao.campanha?.empreendimento as any;
+                    const empreendimentoBriefing = contatoProspeccao.campanhaOrigem?.empreendimento as any;
                     const briefingEmpreendimento = empreendimentoBriefing?.briefingCompleto
-                      || contatoProspeccao.campanha?.briefingCompleto
+                      || contatoProspeccao.campanhaOrigem?.briefingCompleto
                       || undefined;
                     if (briefingEmpreendimento) {
                       configOrq.briefingEmpreendimento = briefingEmpreendimento;
@@ -1939,18 +1937,20 @@ router.post('/', async (req, res) => {
                       console.log('[DEBUG_ORQUESTRADOR] Resposta bruta do processarMensagemOrquestrada:', JSON.stringify(resultado, null, 2));
 
                       // Fallback técnico:
-                      // tenta auto-conversão somente se o fluxo principal (orquestrador/tools) ainda
-                      // não tiver vinculado o contato a um lead.
-                      const contatoPosOrquestrador = await prisma.contato.findUnique({
+                      // No modelo unificado, contatoProspeccao já é um Lead (statusProspeccao != null).
+                      // A auto-conversão não se aplica; apenas qualificação/atualização pode ocorrer.
+                      const leadPosOrquestrador = await prisma.lead.findUnique({
                         where: { id: contatoProspeccao.id },
-                        select: { virouLead: true, leadId: true }
+                        select: { id: true, statusProspeccao: true }
                       });
-                      if (!contatoPosOrquestrador?.virouLead || !contatoPosOrquestrador?.leadId) {
+                      // Como o registro já é um Lead, virouLead=true e leadId=seu próprio id,
+                      // portanto deveExecutarFallbackConversao retornará false (sem ação necessária).
+                      if (!leadPosOrquestrador) {
                         const chaveFallbackConversao = `fallback-conversao:${contatoProspeccao.id}`;
                         const lockFallbackConversao = await adquirirMutexContato(chaveFallbackConversao);
                         const podeExecutarFallback = deveExecutarFallbackConversao({
-                          virouLead: contatoPosOrquestrador?.virouLead,
-                          leadId: contatoPosOrquestrador?.leadId,
+                          virouLead: false,
+                          leadId: null,
                           lockAdquirido: lockFallbackConversao
                         });
                         if (podeExecutarFallback) {
@@ -1966,7 +1966,7 @@ router.post('/', async (req, res) => {
                           console.info(`[OBS] conversion_race_prevented contatoId=${contatoProspeccao.id} lockAcquired=${lockFallbackConversao}`);
                         }
                       }
-                      const leadIdAtualizado = contatoPosOrquestrador?.leadId || contatoProspeccao.leadId || undefined;
+                      const leadIdAtualizado = leadPosOrquestrador?.id || contatoProspeccao.id || undefined;
                       if (leadIdAtualizado) {
                         await garantirAtualizacaoLeadBasicaSeElegivel({
                           contatoId: contatoProspeccao.id,

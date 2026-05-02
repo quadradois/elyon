@@ -119,6 +119,20 @@ export interface LeadPriorizado {
   imovelValorIPTU: number | null;
   dadosImovelColetadosEm: string | null;
 
+  // ── Áreas físicas (Assertiva / mineração) ──
+  areaConstruida: number | null;
+  areaTerreno: number | null;
+
+  // ── Identificação adicional para CRM ──
+  rg: string | null;
+  cidade: string | null;
+  estado: string | null;
+  cep: string | null;
+
+  // ── Contrato ──
+  vigenciaInicio: string | null;
+  vigenciaFim: string | null;
+
   // ── Imóveis minerados (tabela Imovel — wizard de captação) ──
   imoveisCaptacao: ImovelCaptacao[];
 

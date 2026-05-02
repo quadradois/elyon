@@ -268,10 +268,10 @@ router.put('/:id/config-disparo', async (req, res) => {
  */
 router.get('/funil-prospeccao', async (req, res) => {
   try {
-    const estatisticas = await prisma.contato.groupBy({
+    const estatisticas = await prisma.lead.groupBy({
       by: ['statusProspeccao'],
       _count: true,
-      where: { campanha: { status: 'ATIVA' } }
+      where: { campanhaOrigem: { status: 'ATIVA' } }
     });
 
     const statusCount: Record<string, number> = {};
@@ -343,9 +343,6 @@ router.get('/leads-quentes', async (req, res) => {
           where: { tipo: 'REUNIAO', completadoEm: null },
           orderBy: { agendadoPara: 'asc' },
           take: 1,
-        },
-        contatoOrigem: {
-          select: { id: true, nome: true, telefone: true, enderecoImovel: true, bairroImovel: true }
         }
       },
       orderBy: { criadoEm: 'desc' },
@@ -364,9 +361,9 @@ router.get('/leads-quentes', async (req, res) => {
         nome: lead.campanhaOrigem.nome,
         empreendimento: lead.campanhaOrigem.nomeEmpreendimento,
       } : null,
-      imovel: lead.contatoOrigem ? {
-        endereco: lead.contatoOrigem.enderecoImovel,
-        bairro: lead.contatoOrigem.bairroImovel,
+      imovel: (lead.enderecoImovel || lead.bairroImovel) ? {
+        endereco: lead.enderecoImovel,
+        bairro: lead.bairroImovel,
       } : null,
       reuniaoAgendada: lead.atividades[0] ? {
         id: lead.atividades[0].id,
@@ -416,7 +413,8 @@ router.get('/avaliacoes-agendadas', async (req, res) => {
             telefone: true,
             temperatura: true,
             campanhaOrigem: { select: { nome: true, nomeEmpreendimento: true } },
-            contatoOrigem: { select: { enderecoImovel: true, bairroImovel: true } }
+            enderecoImovel: true,
+            bairroImovel: true
           }
         }
       },
@@ -439,9 +437,9 @@ router.get('/avaliacoes-agendadas', async (req, res) => {
         nome: av.lead.campanhaOrigem.nome,
         empreendimento: av.lead.campanhaOrigem.nomeEmpreendimento,
       } : null,
-      imovel: av.lead.contatoOrigem ? {
-        endereco: av.lead.contatoOrigem.enderecoImovel,
-        bairro: av.lead.contatoOrigem.bairroImovel,
+      imovel: (av.lead.enderecoImovel || av.lead.bairroImovel) ? {
+        endereco: av.lead.enderecoImovel,
+        bairro: av.lead.bairroImovel,
       } : null,
       criadoEm: av.criadoEm,
     }));

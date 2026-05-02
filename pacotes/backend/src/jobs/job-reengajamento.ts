@@ -37,8 +37,8 @@ interface ResultadoReengajamento {
  */
 function gerarMensagemReengajamento(contato: any): string {
   const nome = contato.nome?.split(' ')[0] || 'Olá';
-  const edificio = contato.nomeEdificio || contato.campanha?.nomeEmpreendimento || '';
-  const bairro = contato.campanha?.empreendimento?.localizacao || '';
+  const edificio = contato.nomeEdificio || contato.campanhaOrigem?.nomeEmpreendimento || '';
+  const bairro = contato.campanhaOrigem?.empreendimento?.localizacao || '';
 
   const templates = [
     // Template 1: Informação de mercado
@@ -92,9 +92,9 @@ export async function processarReengajamento(): Promise<ResultadoReengajamento> 
 
     for (const campanha of campanhasAtivas) {
       // Buscar contatos frios desta campanha
-      const contatosFrios = await prisma.contato.findMany({
+      const contatosFrios = await prisma.lead.findMany({
         where: {
-          campanhaId: campanha.id,
+          campanhaOrigemId: campanha.id,
           OR: [
             { statusProspeccao: 'FRIO' },
             { statusProspeccao: 'NAO_RESPONDEU' }
@@ -104,7 +104,7 @@ export async function processarReengajamento(): Promise<ResultadoReengajamento> 
           NOT: { statusProspeccao: 'OPTOUT' }
         },
         include: {
-          campanha: { include: { empreendimento: true } }
+          campanhaOrigem: { include: { empreendimento: true } }
         },
         take: LIMITE_POR_CAMPANHA,
         orderBy: { atualizadoEm: 'asc' } // Mais antigos primeiro
@@ -145,7 +145,7 @@ export async function processarReengajamento(): Promise<ResultadoReengajamento> 
           // Registrar mensagem no histórico
           await prisma.mensagemProspeccao.create({
             data: {
-              contatoId: contato.id,
+              leadId: contato.id,
               direcao: 'SAIDA',
               conteudo: mensagem,
               tipo: 'TEXTO',
@@ -155,7 +155,7 @@ export async function processarReengajamento(): Promise<ResultadoReengajamento> 
           });
 
           // Atualizar status
-          await prisma.contato.update({
+          await prisma.lead.update({
             where: { id: contato.id },
             data: {
               statusProspeccao: 'CONTATANDO',

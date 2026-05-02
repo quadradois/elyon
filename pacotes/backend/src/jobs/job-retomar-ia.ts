@@ -25,7 +25,7 @@ export async function executarRetornoIa(slaHoras: number = SLA_HORAS_PADRAO): Pr
 }> {
     const limiteData = new Date(Date.now() - slaHoras * 60 * 60 * 1000);
 
-    const contatos = await (prisma.contato as any).findMany({
+    const contatos = await (prisma.lead as any).findMany({
         where: {
             modoAtendimento: 'HUMANO',
             ultimaInteracao: { lt: limiteData },
@@ -39,7 +39,7 @@ export async function executarRetornoIa(slaHoras: number = SLA_HORAS_PADRAO): Pr
 
     for (const contato of contatos) {
         try {
-            await (prisma.contato as any).update({
+            await (prisma.lead as any).update({
                 where: { id: contato.id },
                 data: { modoAtendimento: 'IA' },
             });

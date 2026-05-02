@@ -378,10 +378,9 @@ router.post('/:id/adicionar-campanha', async (req: Request, res: Response) => {
       where: whereContatos
     });
 
-    // Buscar CPFs já existentes na campanha
     // Buscar dados para verificação de duplicidade (CPF, IPTU, Telefone)
-    const contatosExistentes = await prisma.contato.findMany({
-      where: { campanhaId },
+    const contatosExistentes = await prisma.lead.findMany({
+      where: { campanhaOrigemId: campanhaId },
       select: {
         cpf: true,
         inscricaoIptu: true,
@@ -421,11 +420,12 @@ router.post('/:id/adicionar-campanha', async (req: Request, res: Response) => {
 
     let adicionados = 0;
 
-    // Criar contatos na campanha
+    // Criar leads na campanha a partir da lista
     for (const contato of contatosNovos) {
-      await prisma.contato.create({
+      await prisma.lead.create({
         data: {
-          campanhaId,
+          tenantId: campanha.tenantId,
+          campanhaOrigemId: campanhaId,
           nome: contato.nome,
           cpf: contato.cpf,
           inscricaoIptu: contato.inscricaoIptu,
@@ -448,6 +448,7 @@ router.post('/:id/adicionar-campanha', async (req: Request, res: Response) => {
           temWhatsapp: contato.temWhatsapp,
           quantidadeWhatsapp: contato.quantidadeWhatsapp,
           statusProspeccao: 'AGUARDANDO',
+          origem: 'lista',
         }
       });
 

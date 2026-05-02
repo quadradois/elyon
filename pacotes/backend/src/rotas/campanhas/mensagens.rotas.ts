@@ -28,10 +28,10 @@ router.get('/contatos/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const contato = await prisma.contato.findUnique({
+    const contato = await prisma.lead.findUnique({
       where: { id },
       include: {
-        campanha: {
+        campanhaOrigem: {
           select: {
             id: true,
             nome: true,
@@ -49,7 +49,7 @@ router.get('/contatos/:id', async (req, res) => {
     // ✅ TASK-02: Isolamento multi-tenant (IDOR fix)
     // Verificar se o contato pertence ao tenant autenticado via header
     const tenantId = req.headers['x-tenant-id'] as string;
-    if (tenantId && contato.campanha?.tenantId && contato.campanha.tenantId !== tenantId) {
+    if (tenantId && contato.campanhaOrigem?.tenantId && contato.campanhaOrigem.tenantId !== tenantId) {
       return responderErro(res, 403, 'Acesso negado');
     }
 
@@ -107,9 +107,9 @@ router.get('/contatos/:id', async (req, res) => {
         }
 
         // Se o contato não tem endereços e o cache tem, mapear também
-        if (!contato.endereco && dados.endereco) {
+        if (!contato.enderecoPessoal && dados.endereco) {
           const end = dados.endereco;
-          contato.endereco = [end.tipoLogradouro, end.logradouro, end.numero, end.complemento]
+          contato.enderecoPessoal = [end.tipoLogradouro, end.logradouro, end.numero, end.complemento]
             .filter(Boolean).join(' ').trim() || null;
           contato.cidade = end.cidade || null;
           contato.estado = end.uf || null;
@@ -238,7 +238,7 @@ router.get('/contatos/:id', async (req, res) => {
     // Assim, todas as futuras visualizações farão apenas 1 query rápida, eliminando o problema do N+1.
     if (precisaEnriquecimentoProfissional || precisaSmartBox) {
        try {
-         await prisma.contato.update({
+         await prisma.lead.update({
            where: { id: contato.id },
            data: {
              profissao: contato.profissao,
@@ -252,7 +252,7 @@ router.get('/contatos/:id', async (req, res) => {
              unidade: String(contato.unidade) || undefined
            }
          });
-         logger.info(`[Campanhas] 💾 Enriquecimento persistido no banco de dados para o longo prazo (Contato ${contato.id})`);
+         logger.info(`[Campanhas] 💾 Enriquecimento persistido no banco de dados para o longo prazo (Lead ${contato.id})`);
        } catch (errDb) {
          logger.error('Erro registrado');
        }
@@ -278,9 +278,9 @@ router.get('/contatos/:id/mensagens', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const contato = await prisma.contato.findUnique({
+    const contato = await prisma.lead.findUnique({
       where: { id },
-      include: { campanha: { select: { nome: true, tenantId: true } } }
+      include: { campanhaOrigem: { select: { nome: true, tenantId: true } } }
     });
 
     if (!contato) {
@@ -288,7 +288,7 @@ router.get('/contatos/:id/mensagens', async (req, res) => {
     }
 
     const mensagens = await prisma.mensagemProspeccao.findMany({
-      where: { contatoId: id },
+      where: { leadId: id },
       orderBy: { dataHora: 'asc' },
       select: {
         id: true,
@@ -344,9 +344,9 @@ router.post('/contatos/:id/mensagens', async (req, res) => {
       return responderErro(res, 400, 'Conteúdo da mensagem é obrigatório');
     }
 
-    const contato = await prisma.contato.findUnique({
+    const contato = await prisma.lead.findUnique({
       where: { id },
-      include: { campanha: true }
+      include: { campanhaOrigem: true }
     });
 
     if (!contato) {
@@ -358,10 +358,10 @@ router.post('/contatos/:id/mensagens', async (req, res) => {
     }
 
     // Descobrir o tenant correspondente à campanha do contato
-    if (!contato.campanha) {
+    if (!contato.campanhaOrigem) {
       return responderErro(res, 400, 'Contato sem campanha de origem');
     }
-    const tenantId = contato.campanha.tenantId;
+    const tenantId = contato.campanhaOrigem.tenantId;
 
     // Buscar a sessão WhatsApp ativa que pertence ao tenant da campanha
     const sessao = await prisma.sessaoWhatsapp.findFirst({
@@ -398,7 +398,7 @@ router.post('/contatos/:id/mensagens', async (req, res) => {
 
     const mensagemSalva = await prisma.mensagemProspeccao.create({
       data: {
-        contatoId: id,
+        leadId: id,
         direcao: 'SAIDA',
         tipo: 'TEXTO',
         conteudo: conteudo.trim(),
@@ -408,7 +408,7 @@ router.post('/contatos/:id/mensagens', async (req, res) => {
       }
     });
 
-    await prisma.contato.update({
+    await prisma.lead.update({
       where: { id },
       data: { ultimaTentativa: new Date() }
     });
@@ -442,7 +442,7 @@ router.get('/contatos/:id/historico', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const contato = await prisma.contato.findUnique({ where: { id } });
+    const contato = await prisma.lead.findUnique({ where: { id } });
 
     if (!contato) {
       return responderErro(res, 404, 'Contato não encontrado');
@@ -471,7 +471,7 @@ router.get('/contatos/:id/historico', async (req, res) => {
 
     // Primeira mensagem
     const primeiraMensagem = await prisma.mensagemProspeccao.findFirst({
-      where: { contatoId: id },
+      where: { leadId: id },
       orderBy: { dataHora: 'asc' }
     });
 
@@ -500,18 +500,7 @@ router.get('/contatos/:id/historico', async (req, res) => {
       });
     }
 
-    // Quando virou lead
-    if (contato.virouLead && contato.virouLeadEm) {
-      historico.push({
-        id: `lead-${contato.id}`,
-        tipo: 'CONVERSAO',
-        titulo: 'Convertido para Lead',
-        descricao: 'Proprietário convertido para lead qualificado',
-        data: contato.virouLeadEm.toISOString(),
-        status: 'CONCLUIDA',
-        resultado: 'LEAD',
-      });
-    }
+    // virouLead removed — lead is always a lead
 
     // Recontato agendado
     if (contato.dataRecontato) {

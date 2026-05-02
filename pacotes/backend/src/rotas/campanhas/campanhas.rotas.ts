@@ -380,8 +380,8 @@ router.get('/:id', async (req, res) => {
     const campanha: any = await (prisma.campanha as any).findUnique({
       where: { id: req.params.id },
       include: {
-        contatos: { take: 10, orderBy: { criadoEm: 'desc' } },
-        _count: { select: { contatos: true, leads: true } },
+        leads: { take: 10, orderBy: { criadoEm: 'desc' } },
+        _count: { select: { leads: true } },
         responsavelCorretor: { select: { id: true, nome: true, email: true, telefone: true, estaAtivo: true } },
         fallbackCorretor: { select: { id: true, nome: true, email: true, telefone: true, estaAtivo: true } },
       },
@@ -427,7 +427,7 @@ router.get('/:id', async (req, res) => {
       editadoPor: campanha.editadoPor,
       editadoEm: campanha.editadoEm,
       // Métricas
-      totalContatos: campanha._count.contatos,
+      totalContatos: campanha._count.leads,
       totalLeads: campanha._count.leads,
       status: campanha.status,
       responsavelCorretorId: campanha.responsavelCorretorId,
@@ -462,7 +462,7 @@ router.get('/', async (req, res) => {
       where: { tenantId }, // ✅ FILTRO DE SEGURANÇA
       orderBy: { criadoEm: 'desc' },
       include: {
-        _count: { select: { contatos: true, leads: true } },
+        _count: { select: { leads: true } },
         responsavelCorretor: { select: { id: true, nome: true, estaAtivo: true } },
         fallbackCorretor: { select: { id: true, nome: true, estaAtivo: true } },
       },
@@ -479,7 +479,7 @@ router.get('/', async (req, res) => {
         fallbackCorretorId: c.fallbackCorretorId,
         responsavelCorretor: c.responsavelCorretor,
         fallbackCorretor: c.fallbackCorretor,
-        totalContatos: c._count.contatos,
+        totalContatos: c._count.leads,
         totalLeads: c._count.leads,
         temBriefing: !!c.briefingCompleto,
         confiabilidade: c.briefingConfiabilidade 
@@ -628,20 +628,20 @@ router.delete('/:id', async (req, res) => {
     
     const campanha = await prisma.campanha.findUnique({
       where: { id },
-      include: { _count: { select: { contatos: true } } }
+      include: { _count: { select: { leads: true } } }
     });
 
     if (!campanha) {
       return responderErro(res, 404, 'Campanha não encontrada');
     }
-    
+
     // ✅ Verificar ownership
     const tenantId = getTenantIdFromHeader(req);
     if (!tenantId || campanha.tenantId !== tenantId) {
       return responderErro(res, 403, 'Acesso negado');
     }
 
-    console.log(`[Campanhas] Excluindo campanha "${campanha.nome}" com ${campanha._count.contatos} contatos...`);
+    console.log(`[Campanhas] Excluindo campanha "${campanha.nome}" com ${campanha._count.leads} leads...`);
 
     await prisma.campanha.delete({ where: { id } });
 
@@ -650,7 +650,7 @@ router.delete('/:id', async (req, res) => {
     return res.json({ 
       sucesso: true, 
       mensagem: `Campanha "${campanha.nome}" excluída com sucesso`,
-      contatosExcluidos: campanha._count.contatos
+      contatosExcluidos: campanha._count.leads
     });
 
   } catch (error: any) {

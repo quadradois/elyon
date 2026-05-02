@@ -43,7 +43,7 @@ function gerarMensagemRecontato(contato: any): string {
 
   const nome = contato.nome?.split(' ')[0] || 'Olá';
   const motivo = motivoOriginal.toLowerCase();
-  const empreendimento = contato.nomeEdificio || contato.campanha?.nomeEmpreendimento || 'seu imóvel';
+  const empreendimento = contato.nomeEdificio || contato.campanhaOrigem?.nomeEmpreendimento || 'seu imóvel';
   
   if (motivo.includes('inquilino') || motivo.includes('ocupado')) {
     return `Oi ${nome}! 😊 Passando pra saber como está a situação do inquilino. Ainda está morando aí ou já desocupou? Lembra que conversamos sobre a venda do ${empreendimento}?`;
@@ -74,7 +74,7 @@ async function buscarContatosParaRecontato(): Promise<any[]> {
   const hoje = new Date();
   hoje.setHours(23, 59, 59, 999); // Fim do dia
   
-  const contatos = await prisma.contato.findMany({
+  const contatos = await prisma.lead.findMany({
     where: {
       statusProspeccao: 'MORNO_FUTURO',
       dataRecontato: {
@@ -82,7 +82,7 @@ async function buscarContatosParaRecontato(): Promise<any[]> {
       }
     },
     include: {
-      campanha: true
+      campanhaOrigem: true
     },
     orderBy: {
       dataRecontato: 'asc'
@@ -129,7 +129,7 @@ export async function processarRecontatos(): Promise<ResultadoRecontato> {
       
       try {
         // Verificar se campanha ainda está ativa
-        if (!contato.campanha || contato.campanha.status !== 'ATIVA') {
+        if (!contato.campanhaOrigem || contato.campanhaOrigem.status !== 'ATIVA') {
           console.log(`   ⚠️ Campanha não está ativa, pulando...`);
           resultado.detalhes.push({
             contatoId: contato.id,
@@ -161,13 +161,13 @@ export async function processarRecontatos(): Promise<ResultadoRecontato> {
         // Buscar sessão ativa do tenant da campanha
         const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
           where: { 
-            tenantId: contato.campanha.tenantId, 
+            tenantId: contato.campanhaOrigem.tenantId, 
             status: 'CONECTADO' 
           }
         });
 
         if (!sessaoWhatsapp || !sessaoWhatsapp.instanceName) {
-          console.log(`   ⚠️ Nenhuma sessão WhatsApp ativa encontrada para o tenant ${contato.campanha.tenantId}, pulando...`);
+          console.log(`   ⚠️ Nenhuma sessão WhatsApp ativa encontrada para o tenant ${contato.campanhaOrigem.tenantId}, pulando...`);
           resultado.detalhes.push({
             contatoId: contato.id,
             nome: contato.nome,
@@ -188,7 +188,7 @@ export async function processarRecontatos(): Promise<ResultadoRecontato> {
         // Salvar mensagem no histórico
         await prisma.mensagemProspeccao.create({
           data: {
-            contatoId: contato.id,
+            leadId: contato.id,
             direcao: 'SAIDA',
             conteudo: mensagemFollowUp,
             tipo: 'TEXTO',
@@ -196,9 +196,9 @@ export async function processarRecontatos(): Promise<ResultadoRecontato> {
             processadaPorIA: false
           }
         });
-        
+
         // Atualizar status do contato
-        await prisma.contato.update({
+        await prisma.lead.update({
           where: { id: contato.id },
           data: {
             statusProspeccao: 'CONTATANDO', // Volta para contatando

@@ -192,10 +192,10 @@ Critérios operacionais derivados:
   - [x] Regras de cutoff
   - [x] Transição de estados
 
-- [ ] **7.2 Testes de integração**
+- [x] **7.2 Testes de integração**
   - [x] Fluxo completo: handoff -> convite -> confirmação/remanejamento
 
-- [ ] **7.3 Teste de robustez dos jobs**
+- [x] **7.3 Teste de robustez dos jobs**
   - [x] Validar idempotência e ausência de duplicidade
   - Critério de aceite: suíte crítica verde com evidência
 

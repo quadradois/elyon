@@ -10,7 +10,7 @@
  * - Blacklist de telefones
  */
 
-import { Contato, Campanha } from '@prisma/client';
+import { Lead, Campanha } from '@prisma/client';
 import { prisma } from '../lib/db';
 import { getWhatsAppService } from './whatsapp';
 import { blacklistService } from './blacklist';
@@ -240,7 +240,7 @@ function calcularTempoAteProximaJanela(config: ConfigDisparo): number {
 /**
  * Verifica se pode enviar follow-up (passou tempo mínimo)
  */
-function podeEnviarFollowUp(contato: Contato, maxTentativas: number = CONFIG_PADRAO.MAX_TENTATIVAS): boolean {
+function podeEnviarFollowUp(contato: Lead, maxTentativas: number = CONFIG_PADRAO.MAX_TENTATIVAS): boolean {
   if (!contato.ultimaTentativa) return true;
   if (contato.tentativasContato >= maxTentativas) return false;
 
@@ -276,7 +276,7 @@ export function obterAtrasoMinimoFollowupHoras(tentativasContato: number): numbe
 /**
  * Busca o telefone válido do contato (tenta em ordem)
  */
-function obterTelefoneValido(contato: Contato): string | null {
+function obterTelefoneValido(contato: Lead): string | null {
   const telefones = [
     contato.telefone,
     contato.telefone2,
@@ -311,9 +311,9 @@ export class DisparoCampanhaService {
    * Busca status atual da campanha
    */
   async obterStatusCampanha(campanhaId: string): Promise<StatusCampanha> {
-    const contagens = await prisma.contato.groupBy({
+    const contagens = await prisma.lead.groupBy({
       by: ['statusProspeccao'],
-      where: { campanhaId },
+      where: { campanhaOrigemId: campanhaId, statusProspeccao: { not: null } },
       _count: true
     });
 
@@ -354,11 +354,11 @@ export class DisparoCampanhaService {
     limite: number = CONFIG_PADRAO.TAMANHO_LOTE,
     maxTentativas: number = CONFIG_PADRAO.MAX_TENTATIVAS,
     configFollowup?: Pick<ConfigDisparo, 'horasEntrePrimeiroFollowup' | 'horasEntreSegundoFollowup' | 'diasEntreTentativas'>
-  ): Promise<Contato[]> {
-    // Contatos AGUARDANDO (nunca contatados)
-    const aguardando = await prisma.contato.findMany({
+  ): Promise<Lead[]> {
+    // Leads AGUARDANDO (nunca contatados)
+    const aguardando = await prisma.lead.findMany({
       where: {
-        campanhaId,
+        campanhaOrigemId: campanhaId,
         statusProspeccao: 'AGUARDANDO',
         telefone: { not: null },
         modoAtendimento: 'IA'
@@ -390,9 +390,9 @@ export class DisparoCampanhaService {
       dataLimiteDemaisFollowups.getDate() - diasDemaisFollowups
     );
 
-    const paraFollowUp = await prisma.contato.findMany({
+    const paraFollowUp = await prisma.lead.findMany({
       where: {
-        campanhaId,
+        campanhaOrigemId: campanhaId,
         statusProspeccao: 'CONTATANDO',
         respondeu: false,
         tentativasContato: { lt: maxTentativas },
@@ -423,7 +423,7 @@ export class DisparoCampanhaService {
    * Envia mensagem para um contato específico
    */
   async enviarMensagem(
-    contato: Contato,
+    contato: Lead,
     campanha: Campanha
   ): Promise<ResultadoDisparo> {
     const telefone = obterTelefoneValido(contato);
@@ -451,8 +451,8 @@ export class DisparoCampanhaService {
     if (await blacklistService.estaBlacklist(telefone, tenantId)) {
       console.log(`[Disparo] ⛔ Telefone ${telefone} está na blacklist, pulando...`);
 
-      // Marcar contato como OPTOUT
-      await prisma.contato.update({
+      // Marcar lead como OPTOUT
+      await prisma.lead.update({
         where: { id: contato.id },
         data: { statusProspeccao: 'OPTOUT' }
       });
@@ -565,8 +565,8 @@ export class DisparoCampanhaService {
         mensagem
       );
 
-      // Atualizar contato
-      await prisma.contato.update({
+      // Atualizar lead
+      await prisma.lead.update({
         where: { id: contato.id },
         data: {
           statusProspeccao: 'CONTATANDO',
@@ -579,7 +579,7 @@ export class DisparoCampanhaService {
       try {
         await prisma.mensagemProspeccao.create({
           data: {
-            contatoId: contato.id,
+            leadId: contato.id,
             direcao: 'SAIDA',
             conteudo: mensagem,
             tipo: 'TEXTO',
@@ -605,7 +605,7 @@ export class DisparoCampanhaService {
 
       // Marcar como falha após várias tentativas de envio
       if (contato.tentativasContato >= CONFIG_PADRAO.MAX_TENTATIVAS - 1) {
-        await prisma.contato.update({
+        await prisma.lead.update({
           where: { id: contato.id },
           data: {
             statusProspeccao: 'FALHA',

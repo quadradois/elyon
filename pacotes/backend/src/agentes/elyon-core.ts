@@ -117,28 +117,27 @@ export class ElyonCore {
       const basePlatformClient = process.env.OPENAI_API_KEY ? new OpenAI() : null;
       const openaiClients = new Map<string, OpenAI | null>();
 
-      // Buscar contatos de prospecção que responderam mas não viraram lead
-      // Filtro: últimas 24h, statusProspeccao = RESPONDEU, virouLead = false
+      // Buscar leads de prospecção que responderam mas ainda não foram promovidos para CRM
+      // Filtro: últimas 24h, statusProspeccao = RESPONDEU
       const limiteData = new Date();
       limiteData.setHours(limiteData.getHours() - 24);
 
-      const contatosPendentes = await prisma.contato.findMany({
+      const contatosPendentes = await prisma.lead.findMany({
         where: {
           statusProspeccao: 'RESPONDEU',
-          virouLead: false,
           atualizadoEm: { gte: limiteData }
         },
         include: {
-          campanha: {
+          campanhaOrigem: {
             include: { empreendimento: true }
           }
         },
         take: 100
       });
 
-      logger.debug(`[ELYON] 📋 Encontrados ${contatosPendentes.length} contatos pendentes de análise`);
+      logger.debug(`[ELYON] 📋 Encontrados ${contatosPendentes.length} leads pendentes de análise`);
 
-      // ── FIX N+1 #1: Batch de conversas (antes: 1 findFirst por contato → agora: 1 findMany) ──
+      // ── FIX N+1 #1: Batch de conversas (antes: 1 findFirst por lead → agora: 1 findMany) ──
       const contatoIds = contatosPendentes.map(c => c.id);
       const telefones = contatosPendentes.map(c => c.telefone).filter(Boolean) as string[];
 
@@ -168,7 +167,7 @@ export class ElyonCore {
 
       // ── FIX N+1 #2: Batch de configs de tenant (antes: 1 findUnique por tenant → agora: 1 batch) ──
       const tenantIdsUnicos = [...new Set(
-        contatosPendentes.map(c => c.campanha?.tenantId).filter(Boolean)
+        contatosPendentes.map(c => c.campanhaOrigem?.tenantId).filter(Boolean)
       )] as string[];
 
       // Pré-carregar todos os clients BYOK de uma vez
@@ -207,7 +206,7 @@ export class ElyonCore {
           let leadAceitou = false;
           const fallbackRegex = /\b(?:aceit[oe]|concordo|fechado|anuncie)\b/i;
 
-          const tenantId = contato.campanha?.tenantId;
+          const tenantId = contato.campanhaOrigem?.tenantId;
           let activeClient = basePlatformClient;
 
           if (tenantId) {
@@ -238,7 +237,7 @@ export class ElyonCore {
           }
 
           if (leadAceitou) {
-            logger.debug(`[ELYON] ✅ Contato ${contato.nome} (${contato.telefone}) ACEITOU mas não foi convertido!`);
+            logger.debug(`[ELYON] ✅ Lead ${contato.nome} (${contato.telefone}) ACEITOU mas não foi promovido!`);
 
             // Extrair dados básicos da conversa
             const regexQuartos = /(\d+)\s*quartos?/i;
@@ -247,11 +246,11 @@ export class ElyonCore {
             const matchQuartos = mensagensLead.match(regexQuartos);
             const matchTimeline = mensagensLead.match(regexTimeline);
 
-            // Converter para Lead
+            // Promover lead para CRM
             try {
               const converterUseCase = new ConverterParaLeadUseCase();
               const resultadoConversao = await converterUseCase.execute({
-                contatoId: contato.id,
+                leadId: contato.id,
                 tipoInteresse: 'VENDA',
                 temperatura: 'QUENTE',
                 timeline: matchTimeline?.[1] || 'não informado',
@@ -266,7 +265,7 @@ export class ElyonCore {
               await metricasSDRService.registrarMetrica({
                 conversaId: conversa.id,
                 leadId: contato.id,
-                tenantId: contato.campanha?.tenantId || 'unknown',
+                tenantId: contato.campanhaOrigem?.tenantId || 'unknown',
                 mensagemUsuario: '[FISCALIZAÇÃO]',
                 respostaGerada: '[CONVERSÃO AUTOMÁTICA]',
                 workerUsado: 'SDR',

@@ -251,8 +251,8 @@ async function processarJobEmBackground(jobId: string, tenantId: string): Promis
 
         for (const imovel of batch) {
             try {
-                // 1. Tentar Cache Global (Tabela Contatos)
-                const contatoCache = await prisma.contato.findFirst({
+                // 1. Tentar Cache Global (Tabela Leads)
+                const contatoCache = await prisma.lead.findFirst({
                     where: {
                         inscricaoIptu: imovel.nrinscr,
                         nome: { not: '' }

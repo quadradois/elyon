@@ -21,7 +21,7 @@ describe('AgendarFollowupUseCase', () => {
     mockPrisma.contato.update.mockResolvedValue({});
 
     const result = await useCase.execute({
-      contatoId: 'contato-1',
+      leadId: 'contato-1',
       dataRecontato: '20/03/2026',
       motivo: 'Cliente pediu retorno no fim do mês',
     });
@@ -47,7 +47,7 @@ describe('AgendarFollowupUseCase', () => {
 
   it('retorna erro para data inválida', async () => {
     const result = await useCase.execute({
-      contatoId: 'contato-2',
+      leadId: 'contato-2',
       dataRecontato: 'data-invalida',
       motivo: 'Teste',
     });
@@ -63,7 +63,7 @@ describe('AgendarFollowupUseCase', () => {
     mockPrisma.contato.update.mockRejectedValue(new Error('Falha de banco'));
 
     const result = await useCase.execute({
-      contatoId: 'contato-3',
+      leadId: 'contato-3',
       dataRecontato: '10/04/2026',
       motivo: 'Aguardar decisão familiar',
     });
@@ -76,7 +76,7 @@ describe('AgendarFollowupUseCase', () => {
     mockPrisma.contato.update.mockResolvedValue({});
 
     await useCase.execute({
-      contatoId: 'contato-4',
+      leadId: 'contato-4',
       dataRecontato: '01/05/2026',
       motivo: 'Retorno após viagem',
     });
