@@ -136,9 +136,10 @@ const validarConversao: ToolPreValidator = {
     toolName: 'converter_para_lead',
     validate: (args) => {
         const temTexto = (v: unknown): boolean => typeof v === 'string' && v.trim().length > 0;
+        const idResolvido = args.leadId ?? args.contatoId;
 
-        if (!args.contatoId || typeof args.contatoId !== 'string' || args.contatoId.length < 10) {
-            return 'BLOQUEADO: contatoId inválido ou ausente.';
+        if (!idResolvido || typeof idResolvido !== 'string' || idResolvido.length < 10) {
+            return 'BLOQUEADO: leadId inválido ou ausente.';
         }
         if (!args.tipoInteresse) {
             return 'BLOQUEADO: tipoInteresse obrigatório (VENDA/LOCACAO/AMBOS).';

@@ -261,7 +261,8 @@ Deve ter coletado: tipo de interesse, timeline, dados básicos.
 IMPORTANTE: Passe TODOS os dados coletados na conversa! Tipo de imóvel, quartos, metragem, valor, motivação, situação atual. Tudo será salvo automaticamente no lead do kanban.`,
 
     parameters: z.object({
-        contatoId: z.string().describe('ID do contato que será convertido'),
+        leadId: z.string().optional().describe('ID canônico do lead que será convertido'),
+        contatoId: z.string().optional().describe('Alias legado para compatibilidade temporária'),
         temperatura: z.enum(['MORNO', 'QUENTE']).describe('QUENTE: urgência, MORNO: interesse sem pressa'),
         tipoInteresse: z.enum(['VENDA', 'LOCACAO', 'AMBOS']).describe('O que quer fazer'),
         timeline: z.string().nullable().optional().describe('Quando: "1 mês", "urgente", "sem pressa"'),
@@ -283,6 +284,10 @@ IMPORTANTE: Passe TODOS os dados coletados na conversa! Tipo de imóvel, quartos
     execute: wrapToolExecute('converter_para_lead', async (args: any) => {
         const useCase = new ConverterParaLeadUseCase();
         const input: any = { ...args };
+        const leadIdResolvido = typeof args.leadId === 'string' && args.leadId.trim().length > 0
+            ? args.leadId
+            : args.contatoId;
+        input.leadId = leadIdResolvido;
         if (typeof args.doresIdentificadas === 'string') {
             input.doresIdentificadas = args.doresIdentificadas.split(',').map((d: string) => d.trim()).filter((d: string) => d);
         }

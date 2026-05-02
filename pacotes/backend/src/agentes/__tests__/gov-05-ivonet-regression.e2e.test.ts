@@ -183,4 +183,24 @@ Qual valor você espera pelo seu apartamento?
     expect(parsedFuturo.success).toBe(true);
     expect(parsedFuturo.argsRecebidos.dataRecontato).toBe(dataFutura);
   });
+
+  it('aceita leadId canônico em converter_para_lead (compatível com alias legado)', async () => {
+    const wrapped = wrapToolExecute('converter_para_lead', async (args: any) => {
+      return JSON.stringify({ success: true, argsRecebidos: args });
+    });
+
+    const raw = await wrapped({
+      leadId: 'lead-ivonet-001',
+      temperatura: 'MORNO',
+      tipoInteresse: 'VENDA',
+      valorPretendido: '700 mil',
+      ocupacaoImovel: 'ocupado',
+      areaImovel: '120 m2',
+      situacaoAtual: 'anunciando por conta',
+    });
+
+    const parsed = JSON.parse(raw);
+    expect(parsed.success).toBe(true);
+    expect(parsed.argsRecebidos.leadId).toBe('lead-ivonet-001');
+  });
 });
