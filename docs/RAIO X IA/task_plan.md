@@ -24,7 +24,9 @@ Arquivos analisados principalmente:
 | 6. Detalhamento P0 | Completo | Tickets técnicos P0 criados com escopo, evidências e critérios de aceite. |
 | 7. Revisão do Git | Completo | Worktree revisado antes de implementação; relatório criado em `07-revisao-estado-git.md`. |
 | 8. Code review `Contato -> Lead` | Completo | Refatoração revisada; relatório criado em `08-code-review-refatoracao-contato-lead.md`. |
-| 9. Implementação P0 | Pendente | Criar worktree limpo ou estabilizar refatoração antes de alterar backend. |
+| 9. Implementação P0 | Completo | P0-01..P0-05 implementados, validados e publicados. |
+| 10. Reavaliação Go/No-Go pós-P0 | Completo | Checkpoint criado em `11-go-no-go-pos-p0.md`. |
+| 11. Estabilização de suíte legada | Pendente | Alinhar `converter-para-lead.usecase.test.ts` ao contrato canônico atual. |
 
 ## Decisões Tomadas
 
@@ -39,6 +41,6 @@ Arquivos analisados principalmente:
 1. Revisar `02-matriz-riscos.md` com foco nos riscos críticos.
 2. Transformar cada P0 de `03-backlog-priorizado.md` em ticket técnico pequeno. **Concluído em `06-tickets-p0.md`.**
 3. Decidir se as mudanças atuais `Contato -> Lead` serão estabilizadas ou isoladas. **Recomendação atual: isolar P0 em worktree limpo e tratar a unificação como épico separado.**
-4. Implementar P0 com testes antes/depois, após decisão explícita sobre branch/worktree.
-5. Rodar plano de testes de `05-testes-recomendados.md`.
-6. Reavaliar Go/No-Go para piloto controlado.
+4. Rodar onda de estabilização de testes legados (`converter-para-lead.usecase.test.ts`).
+5. Reexecutar bateria completa de `05-testes-recomendados.md`.
+6. Confirmar Go final de piloto com baseline operacional de 7 dias.

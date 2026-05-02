@@ -65,3 +65,10 @@ Documentação consolidada criada. Próxima etapa recomendada: revisar P0 e tran
 - `enviar_para_crm` passou a nao mover automaticamente para `CAPTADO` por padrao (controlado por flag `AGENT_AUTO_CAPTADO_AFTER_CRM`).
 - Criada suite `sdr-tools-sensitive-policy.test.ts` cobrindo bloqueio sem aprovacao, bloqueio sem side effect externo e comportamento de CAPTADO via policy.
 - Validacao executada: `tsc --noEmit`, suites de policy/ownership e regressao `gov-05` passando.
+
+## 2026-05-02 - Reavaliacao Go/No-Go Pos-P0
+
+- Executada bateria pos-P0 com foco em compilacao, ownership, policy, opt-out guardrail e regressao conversacional.
+- Resultado: Go condicional para piloto controlado; No-Go para autonomia plena mantido.
+- Falha relevante encontrada em suite legada `converter-para-lead.usecase.test.ts` (assertions desalinhadas ao contrato canonico atual).
+- Criado `11-go-no-go-pos-p0.md` com evidencias, riscos residuais e condicoes obrigatorias de piloto.

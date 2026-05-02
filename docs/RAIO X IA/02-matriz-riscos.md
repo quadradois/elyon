@@ -55,3 +55,13 @@ Escopo: módulo de agentes e tools relacionadas.
 3. R-CRIT-03.
 4. R-CRIT-04.
 5. R-CRIT-05.
+
+## Status Pos-P0 (2026-05-02)
+
+| Risco | Status Atual | Observação |
+|---|---|---|
+| R-CRIT-01 | Mitigado parcialmente | Runtime corrigido; suite `converter-para-lead.usecase.test.ts` precisa atualização para novo contrato canônico. |
+| R-CRIT-02 | Mitigado | `qualificar_lead` com resolução canônica e cobertura de teste focada. |
+| R-CRIT-03 | Mitigado | Opt-out persistido deterministicamente no bloqueio de guardrail. |
+| R-CRIT-04 | Mitigado | Ownership cross-tenant aplicado em tools sensíveis com bloqueio pré-side effect. |
+| R-CRIT-05 | Mitigado | Policy determinística + aprovação humana para CRM/contrato/CAPTADO. |

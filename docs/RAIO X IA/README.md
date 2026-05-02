@@ -22,6 +22,7 @@ Centralizar a avaliação de comportamento, arquitetura, prompts, tools, autonom
 | `08-code-review-refatoracao-contato-lead.md` | Code review da refatoração atual `Contato -> Lead` e decisão recomendada. |
 | `09-plano-execucao-p0.md` | Plano de execução segura dos P0 com gates de início/conclusão e ordem recomendada. |
 | `10-onda1-kickoff-p0-01.md` | Checklist e estratégia de kickoff da Onda 1 para implementação do P0-01. |
+| `11-go-no-go-pos-p0.md` | Reavaliação pós-P0 com evidências de testes, decisão Go/No-Go e condições de piloto. |
 | `task_plan.md` | Plano operacional da auditoria e próximos passos. |
 | `findings.md` | Achados separados entre fatos e hipóteses. |
 | `progress.md` | Log de progresso da análise. |
