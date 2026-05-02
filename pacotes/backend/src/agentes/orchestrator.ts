@@ -63,6 +63,7 @@ import {
 import { bancoDeAprendizadosService, calcularRecompensaTurno } from '../servicos/banco-aprendizados';
 import { isLearningBankEnabled, isPaolAbEnabled, isPaolShadowEnabled } from './feature-flags';
 import { gerarInstrucaoPaol, paolPolicyService, type PaolDecision, type PaolModoExecucao } from './paol-policy';
+import { RegistrarOptoutUseCase } from '../casos-de-uso/agentes/registrar-optout.usecase';
 
 // Re-exports para consumidores existentes (webhook.ts, sdr-tools-agents.ts)
 export { buscarConfiguracaoTenant, buscarContextoConversa } from './orchestrator-queries';
@@ -212,6 +213,41 @@ export async function processarMensagemOrquestrada(
         if (guardrailEntrada.bloqueado && guardrailEntrada.guardrailResult) {
             const guardrailResult = guardrailEntrada.guardrailResult;
             logger.debug(`[ORCHESTRATOR] Guardrail acionado: ${guardrailResult.tipo} telefone=${contexto.telefone} acao=${guardrailResult.acao || 'N/A'}`);
+
+            if (guardrailResult.acao === 'REGISTRAR_OPTOUT') {
+                const leadIdParaOptout = contexto.leadId || contexto.contatoId;
+                if (leadIdParaOptout) {
+                    try {
+                        const optoutUseCase = new RegistrarOptoutUseCase();
+                        const optoutResult = await optoutUseCase.execute({
+                            leadId: leadIdParaOptout,
+                            motivo: 'NAO_INCOMODAR',
+                        });
+                        if (!optoutResult.success) {
+                            logger.error({
+                                telefone: contexto.telefone,
+                                contatoId: contexto.contatoId,
+                                leadId: contexto.leadId,
+                                erro: optoutResult.error,
+                            }, '[ORCHESTRATOR] Falha ao persistir opt-out em guardrail');
+                        }
+                    } catch (err) {
+                        logger.error({
+                            telefone: contexto.telefone,
+                            contatoId: contexto.contatoId,
+                            leadId: contexto.leadId,
+                            erro: err instanceof Error ? err.message : err,
+                        }, '[ORCHESTRATOR] Exceção ao persistir opt-out em guardrail');
+                    }
+                } else {
+                    logger.error({
+                        telefone: contexto.telefone,
+                        contatoId: contexto.contatoId,
+                        leadId: contexto.leadId,
+                    }, '[ORCHESTRATOR] Guardrail de opt-out sem ID para persistência');
+                }
+            }
+
             const payloadMetrica = logMetricaOrchestrator({
                 tenantId: config.tenantId,
                 telefone: contexto.telefone,

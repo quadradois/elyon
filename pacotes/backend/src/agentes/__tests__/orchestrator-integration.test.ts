@@ -63,6 +63,9 @@ jest.mock('../../lib/db', () => ({
             findUnique: jest.fn().mockResolvedValue(null),
             update: jest.fn().mockResolvedValue(null),
         },
+        conversa: {
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
         logAuditoria: {
             create: jest.fn().mockResolvedValue(null),
         },
@@ -359,6 +362,39 @@ describe('Cenário 3: Guardrails de entrada', () => {
 
         expect(result.sucesso).toBe(true);
         expect(result.guardrailAcionado?.tipo).toBe('SPAM');
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('persiste opt-out quando guardrail retorna REGISTRAR_OPTOUT', async () => {
+        mockExecutarGuardrails.mockResolvedValueOnce({
+            permitido: false,
+            tipo: 'OPTOUT',
+            acao: 'REGISTRAR_OPTOUT',
+            mensagemFallback: 'Entendido! Removemos seu número da nossa lista.',
+        });
+
+        const result = await processarMensagemOrquestrada(
+            [{ role: 'user', content: 'não me ligue mais' }],
+            CONFIG_BASE,
+            CONTEXTO_NOVO,
+        );
+
+        expect(result.sucesso).toBe(true);
+        expect(result.guardrailAcionado?.tipo).toBe('OPTOUT');
+        expect(prisma.lead.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: CONTEXTO_NOVO.leadId },
+                data: expect.objectContaining({
+                    statusProspeccao: 'OPTOUT',
+                    motivoDesinteresse: 'NAO_INCOMODAR',
+                }),
+            })
+        );
+        expect((prisma as any).conversa.updateMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { leadId: CONTEXTO_NOVO.leadId, estadoConversa: 'ativa' },
+            })
+        );
         expect(run).not.toHaveBeenCalled();
     });
 });
