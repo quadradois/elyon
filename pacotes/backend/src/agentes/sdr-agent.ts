@@ -521,7 +521,7 @@ ID_DO_CONTATO: ${contatoIdStr}
 
 ⚠️ INSTRUÇÃO OBRIGATÓRIA DE IDs (NÃO CONFUNDIR):
 - Para agendar_reuniao_closer → use contatoId='${contatoIdStr}'
-- Para qualificar_lead → use contatoId='${contatoIdStr}'
+- Para qualificar_lead → use leadId='${ctx.leadId}' (contatoId apenas legado/compatibilidade)
 - Para mover_para_fase → use leadId='${ctx.leadId}'
 - Para atualizar_dados_lead → use leadId='${ctx.leadId}'
 ❌ NUNCA coloque o leadId no campo contatoId — são IDs diferentes!`;

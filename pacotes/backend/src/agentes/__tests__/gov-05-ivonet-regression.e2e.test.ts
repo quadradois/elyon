@@ -93,6 +93,26 @@ Qual valor você espera pelo seu apartamento?
     expect(parsed.argsRecebidos.areaImovel).toBe('');
   });
 
+  it('aceita leadId canônico em qualificar_lead no wrapper', async () => {
+    const wrapped = wrapToolExecute('qualificar_lead', async (args: any) => {
+      return JSON.stringify({ success: true, argsRecebidos: args });
+    });
+
+    const raw = await wrapped({
+      leadId: 'lead-ivonet-001',
+      temperatura: 'MORNO',
+      interesse: 'Vender',
+      areaImovel: '85m2',
+      valorPretendido: '700mil',
+      ocupacaoImovel: 'ocupado',
+      situacaoAtual: 'anunciando por conta',
+    });
+
+    const parsed = JSON.parse(raw);
+    expect(parsed.success).toBe(true);
+    expect(parsed.argsRecebidos.leadId).toBe('lead-ivonet-001');
+  });
+
   it('não persiste campos fantasmas na qualificação do caso Ivonet', async () => {
     mockPrisma.contato.findUnique.mockResolvedValue({
       id: 'contato-ivonet-001',

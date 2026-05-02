@@ -8,7 +8,8 @@ import {
 } from './governanca-campos';
 
 export interface QualificarLeadInput {
-    contatoId: string;
+    contatoId?: string;
+    leadId?: string;
     temperatura: 'FRIO' | 'MORNO' | 'QUENTE';
     interesse: string;
     timeline?: string;
@@ -117,15 +118,24 @@ export class QualificarLeadUseCase {
 
             let leadId: string | undefined = undefined;
             let leadCriado = false;
+            const idEntradaResolvido = input.leadId || input.contatoId;
 
-            // Buscar contato
-            const contato = await db.contato.findUnique({
-                where: { id: input.contatoId },
-                include: { campanha: true }
-            });
+            // Buscar contato quando houver contatoId explícito
+            const contato = input.contatoId
+                ? await db.contato.findUnique({
+                    where: { id: input.contatoId },
+                    include: { campanha: true }
+                })
+                : null;
 
-            if (!contato) {
-                return { success: false, error: 'Contato não encontrado' };
+            if (!contato && idEntradaResolvido) {
+                const leadExistente = await db.lead.findUnique({
+                    where: { id: idEntradaResolvido },
+                    select: { id: true }
+                });
+                if (leadExistente) {
+                    leadId = leadExistente.id;
+                }
             }
 
             const areaImovelInformada = temTexto(input.areaImovel) ? input.areaImovel!.trim() : undefined;
@@ -136,8 +146,8 @@ export class QualificarLeadUseCase {
                 : areaPareceValor
                     ? areaImovelInformada
                     : undefined;
-            const enderecoImovelNormalizado = input.enderecoImovel || contato.enderecoImovel || undefined;
-            const tipoImovelNormalizado = input.tipoImovel || contato.tipoImovel || undefined;
+            const enderecoImovelNormalizado = input.enderecoImovel || contato?.enderecoImovel || undefined;
+            const tipoImovelNormalizado = input.tipoImovel || contato?.tipoImovel || undefined;
             const { timelineEhConfiavel, prazoDesejadoNormalizado, urgencia } = normalizarPrazoEUrgencia({
                 timeline: input.timeline,
                 prazoDesejado: input.prazoDesejado
@@ -173,14 +183,20 @@ export class QualificarLeadUseCase {
                 temDividas: valorComEvidencia(input.temDividas, input.temDividasEvidencia),
             };
             const schemaUpdatesBriefing: Record<string, unknown> = {
-                enderecoImovel: !input.enderecoImovel ? contato.enderecoImovel : undefined,
-                tipoImovel: !input.tipoImovel ? contato.tipoImovel : undefined,
+                enderecoImovel: !input.enderecoImovel ? contato?.enderecoImovel : undefined,
+                tipoImovel: !input.tipoImovel ? contato?.tipoImovel : undefined,
             };
 
             // Se contato já tem Lead, usar esse ID
-            if (contato.leadId) {
+            if (contato?.leadId) {
                 leadId = contato.leadId;
-            } else {
+            } else if (!leadId) {
+                if (!contato) {
+                    return { success: false, error: 'Contato não encontrado' };
+                }
+                if (!contato?.campanha?.tenantId) {
+                    return { success: false, error: 'Contato sem tenant de campanha' };
+                }
                 // Criar novo Lead com dados enriquecidos
                 const novoLead = await db.lead.create({
                     data: {
@@ -224,7 +240,7 @@ export class QualificarLeadUseCase {
                 leadCriado = true;
 
                 await db.contato.update({
-                    where: { id: input.contatoId },
+                    where: { id: contato.id },
                     data: {
                         virouLead: true,
                         leadId: novoLead.id,

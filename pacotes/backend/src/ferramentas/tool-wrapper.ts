@@ -169,8 +169,9 @@ const validarConversao: ToolPreValidator = {
 const validarQualificacao: ToolPreValidator = {
     toolName: 'qualificar_lead',
     validate: (args) => {
-        if (!args.contatoId || typeof args.contatoId !== 'string' || args.contatoId.length < 10) {
-            return 'BLOQUEADO: contatoId inválido. Verifique os DADOS DO SISTEMA.';
+        const idResolvido = args.leadId ?? args.contatoId;
+        if (!idResolvido || typeof idResolvido !== 'string' || idResolvido.length < 10) {
+            return 'BLOQUEADO: leadId inválido. Verifique os DADOS DO SISTEMA.';
         }
         tratarConfusaoAreaValor(args, 'qualificar_lead');
         return null;

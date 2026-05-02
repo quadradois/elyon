@@ -107,7 +107,8 @@ Classifique como:
 IMPORTANTE: Passe TODOS os dados que o lead mencionou na conversa (dores, motivação, tipo de imóvel, quartos, valor). Esses dados são salvos automaticamente no cadastro do lead no kanban.`,
 
     parameters: z.object({
-        contatoId: z.string().describe('ID do contato no banco'),
+        leadId: z.string().optional().describe('ID canônico do lead no banco'),
+        contatoId: z.string().optional().describe('Alias legado para compatibilidade temporária'),
         temperatura: z.enum(['FRIO', 'MORNO', 'QUENTE']).describe('Temperatura do lead'),
         interesse: z.string().describe('O que quer: VENDER, ALUGAR, ou AMBOS'),
         timeline: z.string().nullable().optional().describe('Quando pretende: "1-2 meses", "urgente", "6 meses+"'),
@@ -150,6 +151,10 @@ IMPORTANTE: Passe TODOS os dados que o lead mencionou na conversa (dores, motiva
     execute: wrapToolExecute('qualificar_lead', async (args: any) => {
         const useCase = new QualificarLeadUseCase();
         const input: any = { ...args };
+        const leadIdResolvido = typeof args.leadId === 'string' && args.leadId.trim().length > 0
+            ? args.leadId
+            : args.contatoId;
+        input.leadId = leadIdResolvido;
         if (typeof args.doresIdentificadas === 'string') {
             input.doresIdentificadas = args.doresIdentificadas.split(',').map((d: string) => d.trim()).filter((d: string) => d);
         }

@@ -40,6 +40,80 @@ describe('QualificarLeadUseCase', () => {
     expect(mockPrisma.lead.create).not.toHaveBeenCalled();
   });
 
+  it('qualifica lead existente quando recebe leadId canônico sem contatoId', async () => {
+    mockPrisma.lead.findUnique
+      .mockResolvedValueOnce({ id: 'lead-canonico-1' })
+      .mockResolvedValueOnce({
+        doresIdentificadas: [],
+        status: 'QUALIFICADO',
+        schemaState: {},
+      });
+
+    mockPrisma.lead.update.mockResolvedValue({
+      interesseEm: 'Vender',
+      tipoImovel: null,
+      areaImovel: null,
+      valorPretendido: null,
+      ocupacaoImovel: null,
+      doresIdentificadas: [],
+      situacaoAtual: null,
+      motivacaoVenda: null,
+      consequencias: null,
+      custosAtuais: null,
+    });
+    mockPrisma.atividade.create.mockResolvedValue({});
+
+    const result = await useCase.execute({
+      leadId: 'lead-canonico-1',
+      temperatura: 'MORNO',
+      interesse: 'Vender',
+      timeline: '3 meses',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.leadId).toBe('lead-canonico-1');
+    expect(result.leadCriado).toBe(false);
+    expect(mockPrisma.contato.findUnique).not.toHaveBeenCalled();
+    expect(mockPrisma.lead.create).not.toHaveBeenCalled();
+  });
+
+  it('aceita contatoId legado quando ele aponta para um lead válido', async () => {
+    mockPrisma.contato.findUnique.mockResolvedValue(null);
+    mockPrisma.lead.findUnique
+      .mockResolvedValueOnce({ id: 'lead-legado-1' })
+      .mockResolvedValueOnce({
+        doresIdentificadas: [],
+        status: 'QUALIFICADO',
+        schemaState: {},
+      });
+
+    mockPrisma.lead.update.mockResolvedValue({
+      interesseEm: 'Vender',
+      tipoImovel: null,
+      areaImovel: null,
+      valorPretendido: null,
+      ocupacaoImovel: null,
+      doresIdentificadas: [],
+      situacaoAtual: null,
+      motivacaoVenda: null,
+      consequencias: null,
+      custosAtuais: null,
+    });
+    mockPrisma.atividade.create.mockResolvedValue({});
+
+    const result = await useCase.execute({
+      contatoId: 'lead-legado-1',
+      temperatura: 'MORNO',
+      interesse: 'Vender',
+      timeline: '3 meses',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.leadId).toBe('lead-legado-1');
+    expect(result.leadCriado).toBe(false);
+    expect(mockPrisma.lead.create).not.toHaveBeenCalled();
+  });
+
   it('qualifica lead existente sem criar novo lead', async () => {
     mockPrisma.contato.findUnique.mockResolvedValue({
       id: 'contato-1',
