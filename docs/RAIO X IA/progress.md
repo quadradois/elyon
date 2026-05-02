@@ -57,3 +57,11 @@ Documentação consolidada criada. Próxima etapa recomendada: revisar P0 e tran
 - Aplicado bloqueio cross-tenant com `reasonCode: TENANT_OWNERSHIP_DENIED` em tools com efeitos colaterais (fase, CRM, contrato, opt-out, handoff humano, atualizacao de dados, agenda e indicacao).
 - Criada suite `sdr-tools-ownership.test.ts` cobrindo bloqueio em tool de fase, tool externa e tool de compliance.
 - Validacao executada: `tsc --noEmit`, suite de ownership e regressao `gov-05` passando.
+
+## 2026-05-02 - Execucao P0-05 (Policy Deterministica)
+
+- Criado `sensitive-action-policy.ts` com regras deterministicas para acoes irreversiveis: `GERAR_CONTRATO`, `ENVIAR_CRM` e `MOVER_CAPTADO`.
+- Integrada aprovacao humana explicita (`aprovacaoHumana`) nas tools sensiveis e bloqueio com `reasonCode` quando policy reprova.
+- `enviar_para_crm` passou a nao mover automaticamente para `CAPTADO` por padrao (controlado por flag `AGENT_AUTO_CAPTADO_AFTER_CRM`).
+- Criada suite `sdr-tools-sensitive-policy.test.ts` cobrindo bloqueio sem aprovacao, bloqueio sem side effect externo e comportamento de CAPTADO via policy.
+- Validacao executada: `tsc --noEmit`, suites de policy/ownership e regressao `gov-05` passando.

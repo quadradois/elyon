@@ -26,6 +26,7 @@ import {
 } from '../casos-de-uso/agentes';
 import { sanitizeInt, sanitizeFloat, sanitizeBool, sanitizeStr, sanitizeEnum, sanitizeStringArray, temTexto } from './tool-sanitize';
 import { wrapToolExecute } from './tool-wrapper';
+import { avaliarPolicyAcaoSensivel, isAutoCaptadoAfterCrmEnabled } from './sensitive-action-policy';
 
 async function registrarExecucaoTool(params: {
     leadId?: string;
@@ -471,6 +472,7 @@ Use quando:
         leadId: z.string().describe('ID do lead'),
         faseDestino: z.enum(['FASE1', 'FASE2', 'FASE3', 'FASE4', 'CAPTADO']).describe('Fase de destino'),
         motivo: z.string().describe('Motivo da transição'),
+        aprovacaoHumana: z.boolean().optional().describe('Marcar true quando operador humano aprovar ação irreversível'),
         dadosAdicionais: z.object({
             tipoAutorizacao: z.enum(['exclusiva', 'simples']).nullable().describe('Tipo de autorização acordada (ou null se não houver)'),
             prazoTrabalho: z.number().nullable().describe('Prazo em dias (ou null)'),
@@ -486,6 +488,26 @@ Use quando:
             toolName: 'mover_para_fase'
         });
         if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+        if (args.faseDestino === 'CAPTADO') {
+            const leadParaPolicy = await prisma.lead.findUnique({
+                where: { id: args.leadId },
+                select: { status: true, crmSyncStatus: true }
+            });
+            if (!leadParaPolicy) return JSON.stringify({ success: false, error: 'Lead não encontrado', reasonCode: 'LEAD_NOT_FOUND' });
+            const policy = avaliarPolicyAcaoSensivel({
+                acao: 'MOVER_CAPTADO',
+                lead: leadParaPolicy as any,
+                aprovacaoHumana: args.aprovacaoHumana === true
+            });
+            if (!policy.permitido) {
+                return JSON.stringify({
+                    success: false,
+                    error: policy.error,
+                    reasonCode: policy.reasonCode,
+                    policyDetalhes: policy.detalhes
+                });
+            }
+        }
 
         // Sanitizar dadosAdicionais
         const dadosSanitizados = args.dadosAdicionais ? {
@@ -519,7 +541,8 @@ export const gerarLinkContratoTool = tool({
     description: 'gera um link único para o proprietário assinar a autorização de venda (contrato). Retorna a URL para enviar ao cliente.',
     parameters: z.object({
         leadId: z.string().describe('ID do lead'),
-        tipoContrato: z.enum(['CAPTACAO']).default('CAPTACAO').describe('Tipo do contrato')
+        tipoContrato: z.enum(['CAPTACAO']).default('CAPTACAO').describe('Tipo do contrato'),
+        aprovacaoHumana: z.boolean().optional().describe('Marcar true quando operador humano aprovar geração de contrato')
     }),
     execute: wrapToolExecute('gerar_link_contrato', async (args, runContext?: any) => {
         console.log(`[TOOL] gerar_link_contrato - Lead ${args.leadId}`);
@@ -538,6 +561,19 @@ export const gerarLinkContratoTool = tool({
 
         if (!lead) {
             return JSON.stringify({ success: false, error: 'Lead não encontrado' });
+        }
+        const policy = avaliarPolicyAcaoSensivel({
+            acao: 'GERAR_CONTRATO',
+            lead: lead as any,
+            aprovacaoHumana: args.aprovacaoHumana === true
+        });
+        if (!policy.permitido) {
+            return JSON.stringify({
+                success: false,
+                error: policy.error,
+                reasonCode: policy.reasonCode,
+                policyDetalhes: policy.detalhes
+            });
         }
 
         const contrato = await ContratoService.gerarContratoCaptacao({
@@ -685,7 +721,8 @@ Use APÓS:
 O CRM criará o Proprietário + Property para publicação nos portais.`,
 
     parameters: z.object({
-        leadId: z.string().describe('ID do lead a enviar')
+        leadId: z.string().describe('ID do lead a enviar'),
+        aprovacaoHumana: z.boolean().optional().describe('Marcar true quando operador humano aprovar envio ao CRM')
     }),
 
     execute: wrapToolExecute('enviar_para_crm', async (args, runContext?: any) => {
@@ -708,18 +745,17 @@ O CRM criará o Proprietário + Property para publicação nos portais.`,
                 error: 'Lead não encontrado'
             });
         }
-
-        if (!lead.tipoImovel && !lead.quartosImovel) {
+        const policy = avaliarPolicyAcaoSensivel({
+            acao: 'ENVIAR_CRM',
+            lead: lead as any,
+            aprovacaoHumana: args.aprovacaoHumana === true
+        });
+        if (!policy.permitido) {
             return JSON.stringify({
                 success: false,
-                error: 'Dados do imóvel incompletos. Colete tipo e características antes de enviar.'
-            });
-        }
-
-        if (!lead.tipoAutorizacao && !lead.comissaoAcordada) {
-            return JSON.stringify({
-                success: false,
-                error: 'Dados de contrato/negociação ainda incompletos. Confirme autorização e comissão antes de enviar ao CRM.'
+                error: policy.error,
+                reasonCode: policy.reasonCode,
+                policyDetalhes: policy.detalhes
             });
         }
 
@@ -728,17 +764,18 @@ O CRM criará o Proprietário + Property para publicação nos portais.`,
         if (resultado.success) {
             console.log(`[TOOL] enviar_para_crm - Sucesso! PropertyCode: ${resultado.property_code}`);
 
-            // CRM sincronizado: move automaticamente para CAPTADO
-            const useCase = new MoverParaFaseUseCase();
-            const moveResult = await useCase.execute({
-                leadId: args.leadId,
-                faseDestino: 'CAPTADO',
-                motivo: `CRM sincronizado — código ${resultado.property_code}`,
-                dadosAdicionais: null,
-            });
-
-            if (!moveResult.success) {
-                console.warn(`[TOOL] enviar_para_crm - CRM ok mas CAPTADO bloqueado: ${moveResult.error}`);
+            let moveResult: any = { success: false, error: 'Movimento para CAPTADO não executado automaticamente por policy.' };
+            if (isAutoCaptadoAfterCrmEnabled()) {
+                const useCase = new MoverParaFaseUseCase();
+                moveResult = await useCase.execute({
+                    leadId: args.leadId,
+                    faseDestino: 'CAPTADO',
+                    motivo: `CRM sincronizado — código ${resultado.property_code}`,
+                    dadosAdicionais: null,
+                });
+                if (!moveResult.success) {
+                    console.warn(`[TOOL] enviar_para_crm - CRM ok mas CAPTADO bloqueado: ${moveResult.error}`);
+                }
             }
 
             return JSON.stringify({
@@ -749,7 +786,7 @@ O CRM criará o Proprietário + Property para publicação nos portais.`,
                 avisoStatus: moveResult.success ? null : moveResult.error,
                 message: moveResult.success
                     ? `✅ Enviado para CRM e lead marcado como CAPTADO! Código: ${resultado.property_code}`
-                    : `✅ Enviado para CRM! Código: ${resultado.property_code}. Atenção: ${moveResult.error}`,
+                    : `✅ Enviado para CRM! Código: ${resultado.property_code}. Ação CAPTADO depende de policy/aprovação.`,
             });
         } else {
             return JSON.stringify({
