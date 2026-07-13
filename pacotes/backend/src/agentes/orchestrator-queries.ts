@@ -126,7 +126,8 @@ export async function buscarContextoConversa(
         const lead = await prisma.lead.findFirst({
             where: {
                 telefone: { contains: telefone.replace(/\D/g, '').slice(-11) },
-                tenantId
+                tenantId,
+                statusProspeccao: null
             },
             select: {
                 id: true,
