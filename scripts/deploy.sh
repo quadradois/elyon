@@ -81,8 +81,11 @@ wait_for_health() {
     done
 
     if [[ "$healthy" == true ]]; then
-      echo -e "${GREEN}Health checks de API, CRM e site aprovados.${NC}"
-      return 0
+      if docker compose -f docker-compose.yml exec -T worker \
+        node -e "fetch('http://127.0.0.1:3001/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"; then
+        echo -e "${GREEN}Health checks de API, worker, CRM e site aprovados.${NC}"
+        return 0
+      fi
     fi
     sleep 2
   done
@@ -112,7 +115,12 @@ rollback_application_images() {
   docker image tag "elyon-backend:rollback-${tag}" elyon-backend:latest || return 1
   docker image tag "elyon-frontend:rollback-${tag}" elyon-frontend:latest || return 1
   docker image tag "elyon-site:rollback-${tag}" elyon-site:latest || return 1
-  docker compose -f docker-compose.yml up -d --no-deps --force-recreate backend frontend site || return 1
+  if docker run --rm --entrypoint test elyon-backend:latest -f /app/dist/worker.js; then
+    docker compose -f docker-compose.yml up -d --no-deps --force-recreate backend worker frontend site || return 1
+  else
+    docker compose -f docker-compose.yml rm -sf worker >/dev/null 2>&1 || true
+    docker compose -f docker-compose.yml up -d --no-deps --force-recreate backend frontend site || return 1
+  fi
   # A imagem anterior pode anteceder a introdução de /ready.
   wait_for_health health
 }

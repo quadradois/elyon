@@ -206,6 +206,7 @@ describe('seguranca de webhooks', () => {
           eventoId: 'evt-1',
           tipo: 'PAYMENT_RECEIVED',
           payloadHash: 'hash-1',
+          payload: { id: 'evt-1' },
         };
 
         await expect(registrarEventoWebhook(entrada)).resolves.toEqual({
@@ -213,6 +214,12 @@ describe('seguranca de webhooks', () => {
           registroId: 'registro-1',
         });
         await expect(registrarEventoWebhook(entrada)).resolves.toEqual({ duplicado: true });
+        expect(webhookEvento.create).toHaveBeenNthCalledWith(1, expect.objectContaining({
+          data: expect.objectContaining({
+            payload: { id: 'evt-1' },
+            status: 'PENDENTE',
+          }),
+        }));
       },
     );
   });

@@ -6,6 +6,8 @@
     "dev": "tsx watch src/servidor.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/servidor.js",
+    "start:worker": "node dist/worker.js",
+    "webhook:replay": "node dist/scripts/replay-webhook-inbox.js",
     "test": "jest",
     "test:security:logs": "jest --runInBand src/lib/__tests__/logger-security.test.ts src/middleware/__tests__/correlation-id.test.ts",
     "crypto:inventory": "node dist/scripts/rotacionar-chave-criptografia.js --dry-run",
