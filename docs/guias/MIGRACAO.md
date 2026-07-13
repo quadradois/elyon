@@ -147,7 +147,7 @@ docker exec elyon_postgres psql -U elyon_user -d elyon -c "\dt"
 docker exec elyon_redis redis-cli -a "$REDIS_PASSWORD" PING
 
 # Testar endpoints
-curl -sf https://api.elyon.ia.br/health
+curl -sf https://api.elyon.ia.br/ready
 curl -I https://crm.elyon.ia.br
 ```
 

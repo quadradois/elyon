@@ -71,7 +71,7 @@ pode ser obtida pela API ou fixe a PEM fornecida oficialmente em
 3. Configure o access token do Asaas e valide o cadastro do Manus.
 4. Execute o deploy normal. O `scripts/deploy.sh` cria o backup pré-deploy, aplica
    a migração e substitui somente os contêineres pertencentes ao ELYON.
-5. Confirme `/health`, os três frontends e os logs sanitizados do backend.
+5. Confirme `/live`, `/ready`, os três frontends e os logs sanitizados do backend.
 6. Envie chamadas de uma origem fora da allowlist apenas com payload inofensivo e
    confirme `403`.
    Não simule eventos financeiros válidos em produção.

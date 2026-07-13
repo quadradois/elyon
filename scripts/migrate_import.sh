@@ -197,10 +197,10 @@ echo ""
 
 # Checar saúde do backend
 BACKEND_URL="${BACKEND_URL:-https://api.elyon.ia.br}"
-log "Testando backend em ${BACKEND_URL}/health ..."
+log "Testando readiness do backend em ${BACKEND_URL}/ready ..."
 sleep 5
-if curl -sf --max-time 10 "${BACKEND_URL}/health" &>/dev/null 2>&1; then
-  ok "Backend respondendo em ${BACKEND_URL}/health"
+if curl -sf --max-time 10 "${BACKEND_URL}/ready" &>/dev/null 2>&1; then
+  ok "Backend pronto em ${BACKEND_URL}/ready"
 else
   warn "Backend ainda não está respondendo. Verifique os logs:"
   echo "  docker logs elyon_backend --tail=50"

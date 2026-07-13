@@ -72,7 +72,7 @@ retained_volumes=evolution_evolution_postgres_data,evolution_evolution_redis_dat
 EOF
 chmod 600 "$evidence_path" "${dump_path}.sha256"
 
-for url in https://api.elyon.ia.br/health https://crm.elyon.ia.br https://elyon.ia.br; do
+for url in https://api.elyon.ia.br/ready https://crm.elyon.ia.br https://elyon.ia.br; do
   curl --fail --silent --show-error --max-time 10 "$url" >/dev/null
 done
 

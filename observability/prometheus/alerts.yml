@@ -1,0 +1,83 @@
+groups:
+  - name: elyon-availability
+    rules:
+      - alert: ElyonBackendUnavailable
+        expr: up{job="elyon-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: platform-sre
+        annotations:
+          summary: Backend ELYON sem coleta de métricas
+          description: O Prometheus não consegue acessar o backend há pelo menos 2 minutos.
+          runbook: docs/operacao/OBSERVABILIDADE_E_SLO.md#backend-indisponivel
+
+      - alert: ElyonBackendNotReady
+        expr: elyon_readiness_status == 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: platform-sre
+        annotations:
+          summary: Backend ELYON fora do balanceamento
+          description: PostgreSQL ou Redis permanece indisponível por pelo menos 2 minutos.
+          runbook: docs/operacao/OBSERVABILIDADE_E_SLO.md#backend-não-pronto
+
+      - alert: ElyonDependencyNotReady
+        expr: elyon_dependency_ready == 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: platform-sre
+        annotations:
+          summary: Dependência crítica do ELYON indisponível
+          description: A dependência {{ $labels.dependency }} falhou na verificação de readiness.
+          runbook: docs/operacao/OBSERVABILIDADE_E_SLO.md#dependência-indisponível
+
+  - name: elyon-red-use
+    rules:
+      - alert: ElyonHighHttpErrorRate
+        expr: |
+          (
+            sum(rate(elyon_http_requests_total{status_code=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(elyon_http_requests_total[5m])), 0.001)
+          ) > 0.05
+          and sum(rate(elyon_http_requests_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          owner: backend
+        annotations:
+          summary: Taxa de erros HTTP acima de 5%
+          description: O backend mantém mais de 5% de respostas 5xx há 5 minutos.
+          runbook: docs/operacao/OBSERVABILIDADE_E_SLO.md#taxa-de-erros-alta
+
+      - alert: ElyonHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(elyon_http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          owner: backend
+        annotations:
+          summary: Latência p95 acima de 2 segundos
+          description: A latência HTTP p95 permanece acima do objetivo inicial por 10 minutos.
+          runbook: docs/operacao/OBSERVABILIDADE_E_SLO.md#latência-alta
+
+      - alert: ElyonHighNodeHeapUsage
+        expr: |
+          elyon_nodejs_heap_size_used_bytes
+          /
+          clamp_min(elyon_nodejs_heap_size_total_bytes, 1) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          owner: backend
+        annotations:
+          summary: Heap Node.js acima de 85%
+          description: O uso do heap permanece acima de 85% há 10 minutos.
+          runbook: docs/operacao/OBSERVABILIDADE_E_SLO.md#saturação-de-memória
