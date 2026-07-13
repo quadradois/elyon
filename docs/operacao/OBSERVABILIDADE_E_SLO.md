@@ -11,7 +11,7 @@ latência da aplicação pertencem a `backend`.
 | Disponibilidade do backend | 99,5% | 30 dias | scrape ou readiness falhando por 2 min |
 | Respostas HTTP 5xx | < 5% | 5 min | acima do limite por 5 min |
 | Latência HTTP p95 | < 2 s | 5 min | acima do limite por 10 min |
-| Heap Node.js | < 85% | instantâneo | acima do limite por 10 min |
+| Memória residente do Node.js | < 1,5 GB | instantâneo | acima do limite por 10 min |
 
 Esses limiares são provisórios. Devem ser recalibrados com tráfego real e com o
 baseline de capacidade da issue #19.
