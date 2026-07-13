@@ -14,3 +14,9 @@ scrape_configs:
     static_configs:
       - targets:
           - backend:3000
+
+  - job_name: elyon-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - worker:3001

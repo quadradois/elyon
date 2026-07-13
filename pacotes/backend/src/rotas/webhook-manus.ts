@@ -82,8 +82,8 @@ const manusWebhookSchema = z.object({
  * POST /webhooks/manus
  * Recebe notificações do Manus sobre tarefas
  */
-router.post('/manus', autenticarWebhookManus, async (req: Request, res: Response) => {
-  let registroId: string | undefined;
+export async function processarWebhookManus(req: Request, res: Response): Promise<unknown> {
+  let registroId: string | undefined = req.get('x-elyon-inbox-id');
   try {
     const validacao = manusWebhookSchema.safeParse(req.body);
     if (!validacao.success) {
@@ -91,18 +91,21 @@ router.post('/manus', autenticarWebhookManus, async (req: Request, res: Response
     }
 
     const payload = validacao.data as ManusWebhookPayload;
-    const payloadHash = hashPayload(req.rawBody || Buffer.from(JSON.stringify(payload)));
-    const registro = await registrarEventoWebhook({
-      provedor: 'MANUS',
-      eventoId: payload.event_id,
-      tipo: payload.event_type,
-      payloadHash,
-    });
+    if (!registroId) {
+      const payloadHash = hashPayload(req.rawBody || Buffer.from(JSON.stringify(payload)));
+      const registro = await registrarEventoWebhook({
+        provedor: 'MANUS',
+        eventoId: payload.event_id,
+        tipo: payload.event_type,
+        payloadHash,
+        payload: { ...payload },
+      });
 
-    if (registro.duplicado) {
-      return res.status(200).json({ sucesso: true, duplicado: true });
+      if (registro.duplicado) {
+        return res.status(200).json({ sucesso: true, duplicado: true });
+      }
+      return res.status(202).json({ sucesso: true, eventoId: registro.registroId });
     }
-    registroId = registro.registroId;
     
     console.log(`[MANUS WEBHOOK] 📨 Recebido: ${payload.event_type}`);
     console.log(`[MANUS WEBHOOK] Event ID: ${payload.event_id}`);
@@ -164,7 +167,9 @@ router.post('/manus', autenticarWebhookManus, async (req: Request, res: Response
     console.error('[MANUS WEBHOOK] ❌ Erro:', error.message);
     return res.status(500).json({ sucesso: false, erro: 'Falha ao processar webhook' });
   }
-});
+}
+
+router.post('/manus', autenticarWebhookManus, processarWebhookManus);
 
 // ============================================
 // PROCESSADORES DE EVENTOS

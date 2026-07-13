@@ -1,5 +1,5 @@
 import { responderErro } from '../utilitarios/resposta';
-import { Router } from 'express';
+import { Request, Response, Router } from 'express';
 import { prisma } from '../lib/db';
 import { getWhatsAppService } from '../servicos/whatsapp';
 import { normalizarTelefone } from '../utils/telefone';
@@ -1581,22 +1581,26 @@ function normalizarWebhookEvolutionGo(body: any): any {
   return { event: evento, instance, data: body.data };
 }
 
-router.post('/', autenticarWebhookEvolution, async (req, res) => {
-  let registroId: string | undefined;
+export async function processarWebhookEvolution(req: Request, res: Response): Promise<unknown> {
+  let registroId: string | undefined = req.get('x-elyon-inbox-id');
   try {
-    const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body));
-    const payloadHash = hashPayload(rawBody);
-    const registro = await registrarEventoWebhook({
-      provedor: 'EVOLUTION',
-      eventoId: payloadHash,
-      tipo: String(req.body?.event || req.body?.type || 'UNKNOWN'),
-      payloadHash,
-    });
+    if (!registroId) {
+      const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body));
+      const payloadHash = hashPayload(rawBody);
+      const { instanceToken: _instanceToken, ...payloadPersistivel } = req.body || {};
+      const registro = await registrarEventoWebhook({
+        provedor: 'EVOLUTION',
+        eventoId: payloadHash,
+        tipo: String(req.body?.event || req.body?.type || 'UNKNOWN'),
+        payloadHash,
+        payload: payloadPersistivel,
+      });
 
-    if (registro.duplicado) {
-      return res.status(200).json({ status: 'duplicate_ignored' });
+      if (registro.duplicado) {
+        return res.status(200).json({ status: 'duplicate_ignored' });
+      }
+      return res.status(202).json({ status: 'accepted', eventoId: registro.registroId });
     }
-    registroId = registro.registroId;
 
     req.body = normalizarWebhookEvolutionGo(req.body);
     const { event, type, instance, data, sender } = req.body;
@@ -1738,7 +1742,8 @@ router.post('/', autenticarWebhookEvolution, async (req, res) => {
                 const chaveMsgProsp = messageId
                   ? `prosp:${instanceName}:${messageId}`
                   : `prosp:${instanceName}:${telefone}:${(texto || '').slice(0, 120)}:${message.messageTimestamp || ''}`;
-                if (await jaVimosMensagem(chaveMsgProsp)) {
+                const tentativaInbox = Number(req.get('x-elyon-inbox-attempt') || 1);
+                if (tentativaInbox <= 1 && await jaVimosMensagem(chaveMsgProsp)) {
                   console.log(`[Webhook] ⚠️ Prospecção duplicada detectada, ignorando: ${chaveMsgProsp}`);
                   continue;
                 }
@@ -2263,6 +2268,12 @@ router.post('/', autenticarWebhookEvolution, async (req, res) => {
                 const adicionado = adicionarAFilaDebounce(contatoProspeccao.id, mensagemPendente, contatoProspeccao, telefone, processarAposDebounce, debounceMs);
                 if (adicionado) console.log(`[Webhook] ⏳ DEBOUNCE: Mensagem aguardando ${debounceMs/1000}s (completa=${mensagemPareceCompleta(conteudoDebounce)})...`);
 
+                // Concluir o recibo somente depois dos efeitos. Se o processo
+                // cair durante o debounce, o lease expira e o worker retoma.
+                while (filasDebounce.has(contatoProspeccao.id)) {
+                  await new Promise((resolve) => setTimeout(resolve, 250));
+                }
+
                 // IMPORTANTÍSSIMO: Continue aqui impede que caia no fluxo de Lead Inbound
                 continue;
               }
@@ -2332,6 +2343,8 @@ router.post('/', autenticarWebhookEvolution, async (req, res) => {
     console.error('Erro webhook:', error);
     responderErro(res, 500, 'Internal server error');
   }
-});
+}
+
+router.post('/', autenticarWebhookEvolution, processarWebhookEvolution);
 
 export default router;

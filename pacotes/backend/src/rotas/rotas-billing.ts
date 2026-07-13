@@ -257,8 +257,8 @@ const EVENTOS_ASSINATURA_ASAAS = new Set([
   'SUBSCRIPTION_DELETED',
 ]);
 
-router.post('/webhook/asaas', autenticarWebhookAsaas, async (req: Request, res: Response) => {
-  let registroId: string | undefined;
+export async function processarWebhookAsaas(req: Request, res: Response): Promise<unknown> {
+  let registroId: string | undefined = req.get('x-elyon-inbox-id');
   try {
     const { event, payment, subscription } = req.body;
     const eventId = req.body?.id;
@@ -273,16 +273,19 @@ router.post('/webhook/asaas', autenticarWebhookAsaas, async (req: Request, res: 
       return res.status(400).json({ erro: 'Payload de assinatura invalido' });
     }
 
-    const payloadHash = hashPayload(req.rawBody || Buffer.from(JSON.stringify(req.body)));
-    const registro = await registrarEventoWebhook({
-      provedor: 'ASAAS',
-      eventoId: eventId,
-      tipo: event,
-      payloadHash,
-    });
+    if (!registroId) {
+      const payloadHash = hashPayload(req.rawBody || Buffer.from(JSON.stringify(req.body)));
+      const registro = await registrarEventoWebhook({
+        provedor: 'ASAAS',
+        eventoId: eventId,
+        tipo: event,
+        payloadHash,
+        payload: req.body,
+      });
 
-    if (registro.duplicado) return res.sendStatus(200);
-    registroId = registro.registroId;
+      if (registro.duplicado) return res.sendStatus(200);
+      return res.status(202).json({ aceito: true, eventoId: registro.registroId });
+    }
 
     if (!EVENTOS_PAGAMENTO_ASAAS.has(event) && !EVENTOS_ASSINATURA_ASAAS.has(event)) {
       if (registroId) await concluirEventoWebhook(registroId);
@@ -544,7 +547,9 @@ router.post('/webhook/asaas', autenticarWebhookAsaas, async (req: Request, res: 
     // Retornar 200 mesmo com erro para Asaas não retentar
     res.sendStatus(500);
   }
-});
+}
+
+router.post('/webhook/asaas', autenticarWebhookAsaas, processarWebhookAsaas);
 
 // ====================================
 // TESTAR CONEXÃO ASAAS (Admin)

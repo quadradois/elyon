@@ -34,6 +34,28 @@ groups:
           description: A dependência {{ $labels.dependency }} falhou na verificação de readiness.
           runbook: docs/operacao/OBSERVABILIDADE_E_SLO.md#dependência-indisponível
 
+      - alert: ElyonWorkerUnavailable
+        expr: up{job="elyon-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: platform-sre
+        annotations:
+          summary: Worker duravel do ELYON indisponivel
+          description: Webhooks e schedulers nao estao sendo processados ha pelo menos 2 minutos.
+          runbook: docs/operacao/WEBHOOK_INBOX_WORKER.md#saude-e-observabilidade
+
+      - alert: ElyonWebhookDeadLetter
+        expr: elyon_webhook_inbox_events{status="MORTO"} > 0
+        for: 1m
+        labels:
+          severity: warning
+          owner: backend
+        annotations:
+          summary: Inbox de webhooks possui eventos mortos
+          description: Existem {{ $value }} eventos aguardando diagnostico e replay controlado.
+          runbook: docs/operacao/WEBHOOK_INBOX_WORKER.md#replay-seguro
+
   - name: elyon-red-use
     rules:
       - alert: ElyonHighHttpErrorRate

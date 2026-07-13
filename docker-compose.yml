@@ -67,6 +67,7 @@ services:
   # BACKEND API
   # ==========================================
   backend:
+    image: elyon-backend:latest
     build:
       context: ./pacotes/backend
       dockerfile: Dockerfile
@@ -170,6 +171,45 @@ services:
       - "traefik.http.services.elyonapi.loadbalancer.healthcheck.interval=10s"
       - "traefik.http.services.elyonapi.loadbalancer.healthcheck.timeout=3s"
       - "traefik.docker.network=elyon_network"
+
+  # ==========================================
+  # WORKER DURAVEL (WEBHOOKS + SCHEDULERS)
+  # ==========================================
+  worker:
+    image: elyon-backend:latest
+    container_name: elyon_worker
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["node", "dist/worker.js"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      WEBHOOK_WORKER_PORT: 3001
+      DATABASE_URL: postgresql://${DB_USER:-elyon_user}:${DB_PASSWORD}@elyon_postgres:5432/${DB_NAME:-elyon}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@elyon_redis:6379
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Defina ENCRYPTION_KEY}
+      ENCRYPTION_KEY_ID: ${ENCRYPTION_KEY_ID:?Defina ENCRYPTION_KEY_ID}
+      ENCRYPTION_KEY_PREVIOUS: ${ENCRYPTION_KEY_PREVIOUS:-}
+      ENCRYPTION_KEY_PREVIOUS_ID: ${ENCRYPTION_KEY_PREVIOUS_ID:-}
+      ENCRYPTION_KEY_LEGACY: ${ENCRYPTION_KEY_LEGACY:-}
+      EVOLUTION_WEBHOOK_SOURCE_RANGE: ${EVOLUTION_WEBHOOK_SOURCE_RANGE:?Defina EVOLUTION_WEBHOOK_SOURCE_RANGE}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:?Defina ASAAS_WEBHOOK_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "node", "-e", "fetch('http://127.0.0.1:3001/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - elyon_network
 
   # ==========================================
   # FRONTEND DASHBOARD

@@ -51,10 +51,7 @@ export { prisma };
 
 // Importar serviço WebSocket
 import { websocketService } from './servicos/websocket';
-import { schedulerSincronizacaoMapa } from './servicos/scheduler-sincronizacao-mapa';
-import { schedulerLimpezaCache } from './servicos/scheduler-limpeza-cache';
 import { resolverTrustProxy } from './utils/trust-proxy';
-import { schedulerReconciliacaoWhatsapp } from './servicos/scheduler-reconciliacao-whatsapp';
 import { validarConfiguracaoCriptografia } from './lib/crypto';
 import { exigirAutenticacaoPorPadrao } from './middleware/default-deny';
 import { capturarRawBody, validarConfiguracaoWebhooks } from './servicos/webhook-seguranca';
@@ -258,10 +255,6 @@ if (require.main === module) {
     logger.info({ port: PORT }, '[BOOT] Servidor iniciado');
     logger.info('[BOOT] WebSocket ativo para alertas em tempo real');
     logger.info({ liveness: '/live', readiness: '/ready' }, '[BOOT] Health checks disponíveis');
-    schedulerSincronizacaoMapa.iniciar();
-    schedulerLimpezaCache.iniciar();
-    schedulerReconciliacaoWhatsapp.iniciar();
-
     // REMOVIDO: Autoconfiguração global de webhook
     // Cada sessão WhatsApp configura seu próprio webhook individualmente
     // Isso mantém o contexto multi-tenant e evita conflitos de instâncias

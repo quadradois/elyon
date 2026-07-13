@@ -12,6 +12,7 @@ interface RegistroWebhook {
   eventoId: string;
   tipo: string;
   payloadHash: string;
+  payload: Record<string, unknown>;
 }
 
 interface ResultadoRegistro {
@@ -198,6 +199,8 @@ export async function registrarEventoWebhook(registro: RegistroWebhook): Promise
         eventoId: registro.eventoId,
         tipo: registro.tipo,
         payloadHash: registro.payloadHash,
+        payload: registro.payload,
+        status: 'PENDENTE',
       },
       select: { id: true },
     });
@@ -210,17 +213,14 @@ export async function registrarEventoWebhook(registro: RegistroWebhook): Promise
   }
 }
 
-export async function concluirEventoWebhook(registroId: string): Promise<void> {
-  await prisma.webhookEvento.update({
-    where: { id: registroId },
-    data: { status: 'PROCESSADO', processadoEm: new Date() },
-  });
+export async function concluirEventoWebhook(_registroId: string): Promise<void> {
+  // Compatibilidade temporaria dos handlers. A conclusao e feita pelo worker
+  // com compare-and-set de id + leaseOwner, depois que o handler responde 2xx.
 }
 
-export async function liberarEventoWebhook(registroId: string): Promise<void> {
-  await prisma.webhookEvento.deleteMany({
-    where: { id: registroId, status: 'RECEBIDO' },
-  });
+export async function liberarEventoWebhook(_registroId: string): Promise<void> {
+  // O worker e o unico proprietario da transicao de falha/retry. Manter o lease
+  // aqui evita uma segunda execucao concorrente antes de a tentativa ser registrada.
 }
 
 export function validarConfiguracaoWebhooks(): void {

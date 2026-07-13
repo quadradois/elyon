@@ -1875,17 +1875,30 @@ model LogAuditoria {
 // SEGURANCA E IDEMPOTENCIA DE WEBHOOKS
 // ====================================
 model WebhookEvento {
-  id           String    @id @default(uuid())
-  provedor     String
-  eventoId     String
-  tipo         String
-  payloadHash  String
-  status       String    @default("RECEBIDO")
-  recebidoEm   DateTime  @default(now())
-  processadoEm DateTime?
+  id                 String    @id @default(uuid())
+  provedor           String
+  eventoId           String
+  tipo               String
+  payloadHash        String
+  payload            Json?
+  status             String    @default("PENDENTE")
+  tentativas         Int       @default(0)
+  maxTentativas      Int       @default(5)
+  proximaTentativaEm DateTime  @default(now())
+  leaseAte           DateTime?
+  leaseOwner         String?
+  ultimoErro         String?   @db.Text
+  replayCount        Int       @default(0)
+  ultimoReplayEm     DateTime?
+  ultimoReplayPor    String?
+  ultimoReplayMotivo String?   @db.Text
+  recebidoEm         DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+  processadoEm       DateTime?
 
   @@unique([provedor, eventoId])
   @@index([provedor, recebidoEm])
-  @@index([status, recebidoEm])
+  @@index([status, proximaTentativaEm])
+  @@index([status, leaseAte])
   @@map("webhook_eventos")
 }
