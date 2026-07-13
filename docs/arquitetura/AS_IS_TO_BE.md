@@ -1,7 +1,9 @@
 # Arquitetura ELYON: AS-IS e TO-BE
 
-Status: vivo  
-Owner: arquitetura e plataforma  
+Status: vivo
+
+Owner: arquitetura e plataforma
+
 Issue rastreadora: [#9](https://github.com/quadradois/elyon/issues/9)
 
 ## AS-IS

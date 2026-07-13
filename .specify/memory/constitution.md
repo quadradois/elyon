@@ -1,7 +1,9 @@
 # Constituicao de Engenharia do ELYON
 
-Versao: 1.0.0  
-Ratificada em: 2026-07-13  
+Versao: 1.0.0
+
+Ratificada em: 2026-07-13
+
 Ultima alteracao: 2026-07-13
 
 ## 1. Seguranca e isolamento por tenant

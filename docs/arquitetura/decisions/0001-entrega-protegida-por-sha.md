@@ -1,6 +1,7 @@
 # ADR-0001: entrega versionada e deploy por SHA
 
-Data: 2026-07-13  
+Data: 2026-07-13
+
 Estado: aceita
 
 ## Contexto
