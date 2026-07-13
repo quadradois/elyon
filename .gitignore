@@ -49,6 +49,8 @@ ssl/*.key
 # Backups
 backups/
 *_bak_*
+/docs/Dump_backup/
+/exports/
 
 # Temp
 temp/

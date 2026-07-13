@@ -1,0 +1,11 @@
+/var/lib/docker/containers/*/*-json.log {
+    daily
+    size 50M
+    rotate 5
+    compress
+    missingok
+    notifempty
+    copytruncate
+    dateext
+    dateformat -%Y%m%d-%s
+}

@@ -1,0 +1,15 @@
+[Unit]
+Description=ELYON disk usage monitor
+After=local-fs.target
+
+[Service]
+Type=oneshot
+Environment=DISK_WARNING_PERCENT=80
+Environment=DISK_CRITICAL_PERCENT=90
+Environment=DISK_MOUNTPOINT=/
+EnvironmentFile=-/etc/elyon/disk-monitor.env
+StateDirectory=elyon-disk-monitor
+ExecStart=/usr/local/sbin/elyon-check-disk-usage
+
+[Install]
+WantedBy=multi-user.target

@@ -4,6 +4,12 @@
 # Uso: docker-compose -f docker-compose.prod.yml up -d
 # ============================================
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 # ==========================================
 # SECRETS (arquivos seguros, não em env vars)
 # ==========================================
@@ -23,6 +29,7 @@ services:
     image: pgvector/pgvector:0.8.0-pg15
     container_name: elyon_postgres
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${DB_NAME:-elyon}
       POSTGRES_USER: ${DB_USER:-elyon_user}
@@ -44,6 +51,7 @@ services:
     image: redis:7-alpine
     container_name: elyon_redis
     restart: unless-stopped
+    logging: *default-logging
     command: redis-server --requirepass ${REDIS_PASSWORD:?Defina REDIS_PASSWORD}
     volumes:
       - redis_data:/data
@@ -64,6 +72,7 @@ services:
       dockerfile: Dockerfile
     container_name: elyon_backend
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -146,6 +155,7 @@ services:
         VITE_API_URL: ${BACKEND_URL:-https://api.elyon.ia.br}
     container_name: elyon_frontend
     restart: unless-stopped
+    logging: *default-logging
     networks:
       - elyon_network
     labels:
@@ -169,6 +179,7 @@ services:
       dockerfile: Dockerfile
     container_name: elyon_site
     restart: unless-stopped
+    logging: *default-logging
     networks:
       - elyon_network
       - crm_quadradois_net
@@ -211,6 +222,7 @@ services:
     image: traefik:v3.3
     container_name: elyon_traefik
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - DOCKER_API_VERSION=1.41
     command:
@@ -250,6 +262,7 @@ services:
     image: atendai/evolution-audio-converter:latest
     container_name: elyon_audio_converter
     restart: unless-stopped
+    logging: *default-logging
     environment:
       PORT: 4040
       API_KEY: ${AUDIO_CONVERTER_API_KEY:-elyon_audio_secret}
@@ -267,6 +280,7 @@ services:
     image: prodrigestivill/postgres-backup-local:15
     container_name: elyon_backup
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_HOST: elyon_postgres
       POSTGRES_DB: ${DB_NAME:-elyon}
