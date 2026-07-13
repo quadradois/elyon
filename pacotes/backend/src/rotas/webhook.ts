@@ -1472,12 +1472,115 @@ function obterMensagensConsolidadas(contatoId: string): { mensagens: MensagemPen
   };
 }
 
+// ====================================
+// NORMALIZAÇÃO DE PAYLOAD — EVOLUTION GO (whatsmeow)
+// ====================================
+// O Evolution GO entrega eventos no formato bruto do whatsmeow
+// ({ event, instanceName, instanceId, data:{ Info, Message } }).
+// As funções abaixo convertem para o formato Baileys já esperado pelo
+// restante deste handler ({ event: 'MESSAGES_UPSERT', instance, data:{ key, message } }).
+
+const TIPOS_MIDIA_WHATSMEOW = [
+  'imageMessage',
+  'audioMessage',
+  'videoMessage',
+  'documentMessage',
+  'stickerMessage',
+  'documentWithCaptionMessage',
+];
+
+function converterMensagemWhatsmeow(data: any): any | null {
+  if (!data) return null;
+  // Já está no formato Baileys (mensagem com key) — repassa.
+  if (data.key) return data;
+
+  const info = data.Info || data.info;
+  const conteudo = data.Message || data.message;
+  if (!info) return null;
+
+  let messageType = 'conversation';
+  const message: any = {};
+
+  if (conteudo && typeof conteudo === 'object') {
+    if (typeof conteudo.conversation === 'string') message.conversation = conteudo.conversation;
+    if (conteudo.extendedTextMessage) message.extendedTextMessage = conteudo.extendedTextMessage;
+
+    for (const tipo of TIPOS_MIDIA_WHATSMEOW) {
+      if (conteudo[tipo]) {
+        messageType = tipo;
+        const midia = { ...conteudo[tipo] };
+        // O Evolution GO acrescenta base64/mediaUrl/mimetype no nível de Message.
+        if (conteudo.base64) midia.base64 = conteudo.base64;
+        if (conteudo.mediaUrl) midia.mediaUrl = conteudo.mediaUrl;
+        if (conteudo.mimetype && !midia.mimetype) midia.mimetype = conteudo.mimetype;
+        // A url do whatsmeow é criptografada e não baixável diretamente.
+        delete midia.url;
+        message[tipo] = midia;
+        break;
+      }
+    }
+  }
+
+  const timestamp = info.Timestamp ?? info.timestamp;
+  let messageTimestamp: number | undefined;
+  if (typeof timestamp === 'number') {
+    messageTimestamp = timestamp;
+  } else if (typeof timestamp === 'string') {
+    const ms = Date.parse(timestamp);
+    if (!Number.isNaN(ms)) messageTimestamp = Math.floor(ms / 1000);
+  }
+
+  return {
+    key: {
+      remoteJid: info.Chat || info.chat || '',
+      fromMe: !!(info.IsFromMe ?? info.isFromMe),
+      id: info.ID || info.id,
+      remoteJidAlt: info.SenderAlt || info.senderAlt,
+    },
+    message,
+    messageType,
+    messageTimestamp,
+    pushName: info.PushName || info.pushName,
+    mediaUrl: conteudo?.mediaUrl,
+  };
+}
+
+function normalizarWebhookEvolutionGo(body: any): any {
+  if (!body || typeof body !== 'object') return body;
+
+  const evento = body.event;
+  // Formato legado/Baileys (campo `instance` ou event já em MAIÚSCULAS) — repassa.
+  if (!evento || body.instance) return body;
+
+  const eventoLc = String(evento).toLowerCase();
+  const instance = body.instanceName || body.instance;
+
+  if (eventoLc === 'connected' || eventoLc === 'pairsuccess') {
+    return { event: 'CONNECTION_UPDATE', instance, data: { ...(body.data || {}), state: 'open' } };
+  }
+  if (eventoLc === 'disconnected' || eventoLc === 'loggedout' || eventoLc === 'connectfailure') {
+    return { event: 'CONNECTION_UPDATE', instance, data: { ...(body.data || {}), state: 'close' } };
+  }
+  if (eventoLc === 'qrcode' || eventoLc === 'qrtimeout') {
+    return { event: 'CONNECTION_UPDATE', instance, data: { state: 'connecting' } };
+  }
+  if (eventoLc === 'message' || eventoLc === 'messages.upsert' || eventoLc === 'messages_upsert') {
+    const mensagem = converterMensagemWhatsmeow(body.data);
+    if (!mensagem) return body;
+    return { event: 'MESSAGES_UPSERT', instance, data: mensagem };
+  }
+
+  // Demais eventos do Evolution GO (Receipt, Presence, etc) não são tratados.
+  return { event: evento, instance, data: body.data };
+}
+
 router.post('/', async (req, res) => {
   try {
+    req.body = normalizarWebhookEvolutionGo(req.body);
     const { event, type, instance, data, sender } = req.body;
 
     // Normalizar instanceName:
-    // A Evolution pode mandar em: req.body.instance, req.query.instance, ou dentro do req.body.data.instance.
+    // O Evolution GO manda em req.body.instanceName (normalizado para `instance`).
     let instanceName = instance;
     if (!instanceName && req.query.instance) {
       instanceName = String(req.query.instance);
@@ -1485,9 +1588,7 @@ router.post('/', async (req, res) => {
     if (!instanceName && data?.instance) {
       instanceName = data.instance;
     }
-    // Falha apenas se todos os cenários falharem
-    instanceName = instanceName || process.env.EVOLUTION_INSTANCE_NAME;
-    
+
     // Se não conseguimos determinar a instância, retornar erro
     if (!instanceName) {
       console.error('[Webhook] ❌ Não foi possível determinar a instância do webhook');

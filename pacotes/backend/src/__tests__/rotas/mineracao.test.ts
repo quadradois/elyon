@@ -4,6 +4,7 @@ import express from 'express';
 import { prisma } from '../../lib/db';
 import { assertivaService } from '../../servicos/assertiva';
 import { scraperIPTU } from '../../servicos/scraper-iptu';
+import { imoveisRanchoService } from '../../servicos/imoveis-rancho';
 
 // Mock do banco de dados — todas as tabelas/métodos usados pela rota
 jest.mock('../../lib/db', () => ({
@@ -60,6 +61,11 @@ jest.mock('../../servicos/servico-auditoria', () => ({
 jest.mock('../../servicos/scraper-iptu', () => ({
   scraperIPTU: { consultarProprietario: jest.fn<any>() },
   parsearEnderecoPrefeitura: jest.fn<any>().mockReturnValue({}),
+}));
+
+// Fonte primária de proprietário: base local GEO360 (`imoveis_rancho`).
+jest.mock('../../servicos/imoveis-rancho', () => ({
+  imoveisRanchoService: { consultarProprietario: jest.fn<any>() },
 }));
 
 jest.mock('../../servicos/mapa', () => ({
@@ -179,9 +185,9 @@ describe('Rotas de Mineração - API', () => {
   });
 
   describe('POST /api/mineracao/iptu-unitario', () => {
-    it('deve retornar dados avançados do imóvel extraídos pelo scraper', async () => {
+    it('deve retornar dados avançados do imóvel a partir da base GEO360', async () => {
       // @ts-ignore
-      (scraperIPTU.consultarProprietario as jest.Mock).mockResolvedValue({
+      (imoveisRanchoService.consultarProprietario as jest.Mock).mockResolvedValue({
         nrinscr: '123456',
         nome: 'Maria',
         cpf: '12345678901',
