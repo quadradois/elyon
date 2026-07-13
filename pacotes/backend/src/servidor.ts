@@ -55,6 +55,7 @@ import { schedulerSincronizacaoMapa } from './servicos/scheduler-sincronizacao-m
 import { schedulerLimpezaCache } from './servicos/scheduler-limpeza-cache';
 import { resolverTrustProxy } from './utils/trust-proxy';
 import { schedulerReconciliacaoWhatsapp } from './servicos/scheduler-reconciliacao-whatsapp';
+import { validarConfiguracaoCriptografia } from './lib/crypto';
 
 const app = express();
 const server = http.createServer(app);
@@ -226,6 +227,9 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // Iniciar servidor
 if (require.main === module) {
+  // Falha antes de abrir a porta se a chave mestra estiver ausente ou inválida.
+  validarConfiguracaoCriptografia();
+
   // Inicializar WebSocket no servidor HTTP
   websocketService.inicializar(server);
 

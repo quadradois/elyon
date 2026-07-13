@@ -49,6 +49,8 @@ jobs:
         env:
           NODE_ENV: test
           NODE_OPTIONS: --max-old-space-size=4096
+          ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          ENCRYPTION_KEY_ID: ci-v1
 
       - name: Upload coverage artifact
         if: always()
@@ -89,6 +91,8 @@ jobs:
       DB_PASSWORD: ci-database-password
       REDIS_PASSWORD: ci-redis-password
       JWT_SECRET: ci-jwt-secret-with-at-least-32-characters
+      ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      ENCRYPTION_KEY_ID: ci-v1
       OPENAI_API_KEY: ci-openai-placeholder
 
     steps:
@@ -109,6 +113,8 @@ jobs:
       DB_PASSWORD: ci-database-password
       REDIS_PASSWORD: ci-redis-password
       JWT_SECRET: ci-jwt-secret-with-at-least-32-characters
+      ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      ENCRYPTION_KEY_ID: ci-v1
       OPENAI_API_KEY: ci-openai-placeholder
 
     steps:
