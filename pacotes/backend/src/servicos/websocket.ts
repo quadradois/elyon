@@ -1,15 +1,9 @@
-import { Server as SocketIOServer } from 'socket.io';
-import { Server as HTTPServer } from 'http';
-import { prisma } from '../lib/db';
-
-/**
- * SERVIÇO DE WEBSOCKET PARA ALERTAS
- * 
- * Responsável por:
- * - Gerenciar conexões WebSocket por tenant
- * - Emitir alertas em tempo real para corretores
- * - Notificar atualizações de leads
- */
+import { Server as HTTPServer } from "http";
+import { Server as SocketIOServer, Socket } from "socket.io";
+import { z } from "zod";
+import { prisma } from "../lib/db";
+import { logger } from "../lib/logger";
+import { verificarToken } from "../utilitarios/token";
 
 interface ConexaoCliente {
   socketId: string;
@@ -19,204 +13,347 @@ interface ConexaoCliente {
   papel: string;
 }
 
-class WebSocketService {
+const JANELA_EVENTOS_MS = 60_000;
+const MAX_EVENTOS_MUTACAO = 30;
+const alertaIdSchema = z.string().uuid();
+const alertaAtendidoSchema = z
+  .union([
+    alertaIdSchema,
+    z
+      .object({
+        alertaId: alertaIdSchema,
+        // Compatibilidade temporária com clientes antigos. O valor é ignorado:
+        // atendidoPor sempre vem da identidade autenticada no handshake.
+        usuarioId: z.unknown().optional(),
+      })
+      .strict(),
+  ])
+  .transform((valor) => (typeof valor === "string" ? valor : valor.alertaId));
+
+function resolverOrigensPermitidas(): string[] {
+  const configuradas = process.env.FRONTEND_URL?.split(",")
+    .map((origem) => origem.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+
+  if (configuradas?.length) return configuradas;
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "[FATAL] FRONTEND_URL não configurado para o WebSocket em produção.",
+    );
+  }
+
+  return ["http://localhost:5173", "http://localhost:3000"];
+}
+
+/**
+ * Serviço de WebSocket para alertas em tempo real.
+ *
+ * A identidade e o tenant são derivados exclusivamente do JWT validado no
+ * handshake. Eventos enviados pelo cliente nunca funcionam como autorização.
+ */
+export class WebSocketService {
   private io: SocketIOServer | null = null;
   private conexoes: Map<string, ConexaoCliente> = new Map();
-  
-  /**
-   * Inicializa o servidor WebSocket
-   */
+
   inicializar(httpServer: HTTPServer): void {
+    if (this.io) {
+      throw new Error("WebSocket Service já foi inicializado.");
+    }
+
     this.io = new SocketIOServer(httpServer, {
       cors: {
-        origin: process.env.FRONTEND_URL || '*',
-        methods: ['GET', 'POST']
+        origin: resolverOrigensPermitidas(),
+        methods: ["GET", "POST"],
       },
-      path: '/ws'
+      path: "/ws",
     });
-    
-    this.io.on('connection', (socket) => {
-      console.log(`[WS] 🔌 Nova conexão: ${socket.id}`);
-      
-      // Autenticação do cliente
-      socket.on('autenticar', async (dados: { token: string; tenantId: string }) => {
-        try {
-          // TODO: Validar token JWT
-          // Por enquanto, aceita qualquer conexão com tenantId
-          const { tenantId } = dados;
-          
-          if (!tenantId) {
-            socket.emit('erro', { mensagem: 'TenantId obrigatório' });
-            return;
-          }
-          
-          // Registrar conexão
-          this.conexoes.set(socket.id, {
-            socketId: socket.id,
-            tenantId,
-            usuarioId: 'temp', // TODO: extrair do token
-            nome: 'Usuário', // TODO: buscar do banco
-            papel: 'CORRETOR'
-          });
-          
-          // Entrar na sala do tenant
-          socket.join(`tenant:${tenantId}`);
-          
-          console.log(`[WS] ✅ Cliente autenticado: ${socket.id} (Tenant: ${tenantId})`);
-          socket.emit('autenticado', { sucesso: true });
-          
-          // Enviar alertas pendentes
-          await this.enviarAlertasPendentes(socket, tenantId);
-          
-        } catch (error) {
-          console.error('[WS] Erro na autenticação:', error);
-          socket.emit('erro', { mensagem: 'Erro na autenticação' });
+
+    this.io.use(async (socket, next) => {
+      try {
+        const token = socket.handshake.auth?.token;
+        if (typeof token !== "string" || !token) {
+          logger.warn(
+            { socketId: socket.id, motivo: "token_ausente" },
+            "[WS] Handshake recusado",
+          );
+          next(new Error("Não autorizado"));
+          return;
         }
-      });
-      
-      // Marcar alerta como visualizado
-      socket.on('alerta:visualizado', async (alertaId: string) => {
-        try {
-          await (prisma as any).alertaCorretor.update({
-            where: { id: alertaId },
-            data: {
-              status: 'VISUALIZADO',
-              visualizadoEm: new Date()
-            }
-          });
-          console.log(`[WS] 👁️ Alerta visualizado: ${alertaId}`);
-        } catch (error) {
-          console.error('[WS] Erro ao marcar alerta:', error);
+
+        const tokenValidado = verificarToken(token);
+        const usuarioId =
+          tokenValidado.payload?.id || tokenValidado.payload?.usuarioId;
+        if (tokenValidado.erro || typeof usuarioId !== "string" || !usuarioId) {
+          logger.warn(
+            {
+              socketId: socket.id,
+              motivo: tokenValidado.erro || "payload_invalido",
+            },
+            "[WS] Handshake recusado",
+          );
+          next(new Error("Não autorizado"));
+          return;
         }
-      });
-      
-      // Marcar alerta como atendido
-      socket.on('alerta:atendido', async (dados: { alertaId: string; usuarioId: string }) => {
-        try {
-          await (prisma as any).alertaCorretor.update({
-            where: { id: dados.alertaId },
-            data: {
-              status: 'ATENDIDO',
-              atendidoEm: new Date(),
-              atendidoPor: dados.usuarioId
-            }
+
+        const usuario = await prisma.usuario.findUnique({
+          where: { id: usuarioId },
+          select: {
+            id: true,
+            tenantId: true,
+            nome: true,
+            papel: true,
+            estaAtivo: true,
+          },
+        });
+
+        if (!usuario?.estaAtivo || !usuario.tenantId) {
+          logger.warn(
+            { socketId: socket.id, motivo: "usuario_inativo_ou_inexistente" },
+            "[WS] Handshake recusado",
+          );
+          next(new Error("Não autorizado"));
+          return;
+        }
+
+        socket.data.principal = {
+          socketId: socket.id,
+          tenantId: usuario.tenantId,
+          usuarioId: usuario.id,
+          nome: usuario.nome,
+          papel: usuario.papel,
+        } satisfies ConexaoCliente;
+
+        next();
+      } catch (error) {
+        logger.error(
+          { err: error, socketId: socket.id },
+          "[WS] Falha ao autenticar handshake",
+        );
+        next(new Error("Não autorizado"));
+      }
+    });
+
+    this.io.on("connection", async (socket) => {
+      const principal = socket.data.principal as ConexaoCliente;
+      this.conexoes.set(socket.id, principal);
+      await socket.join(`tenant:${principal.tenantId}`);
+
+      logger.info({ socketId: socket.id }, "[WS] Cliente autenticado");
+      socket.emit("autenticado", { sucesso: true });
+      await this.enviarAlertasPendentes(socket, principal.tenantId);
+
+      let janelaIniciadaEm = Date.now();
+      let eventosNaJanela = 0;
+
+      const permitirMutacao = (): boolean => {
+        const agora = Date.now();
+        if (agora - janelaIniciadaEm >= JANELA_EVENTOS_MS) {
+          janelaIniciadaEm = agora;
+          eventosNaJanela = 0;
+        }
+
+        eventosNaJanela += 1;
+        if (eventosNaJanela <= MAX_EVENTOS_MUTACAO) return true;
+
+        socket.emit("erro", {
+          codigo: "LIMITE_EVENTOS",
+          mensagem: "Limite de eventos excedido",
+        });
+        return false;
+      };
+
+      socket.on("alerta:visualizado", async (payload: unknown) => {
+        if (!permitirMutacao()) return;
+
+        const alertaId = alertaIdSchema.safeParse(payload);
+        if (!alertaId.success) {
+          socket.emit("erro", {
+            codigo: "PAYLOAD_INVALIDO",
+            mensagem: "Alerta inválido",
           });
-          
-          // Notificar outros clientes do tenant
-          const conexao = this.conexoes.get(socket.id);
-          if (conexao) {
-            this.io?.to(`tenant:${conexao.tenantId}`).emit('alerta:atualizado', {
-              alertaId: dados.alertaId,
-              status: 'ATENDIDO',
-              atendidoPor: dados.usuarioId
+          return;
+        }
+
+        try {
+          const resultado = await (prisma as any).alertaCorretor.updateMany({
+            where: {
+              id: alertaId.data,
+              tenantId: principal.tenantId,
+            },
+            data: {
+              status: "VISUALIZADO",
+              visualizadoEm: new Date(),
+            },
+          });
+
+          if (resultado.count === 0) {
+            socket.emit("erro", {
+              codigo: "ALERTA_NAO_ENCONTRADO",
+              mensagem: "Alerta não encontrado",
             });
           }
-          
-          console.log(`[WS] ✅ Alerta atendido: ${dados.alertaId}`);
         } catch (error) {
-          console.error('[WS] Erro ao atender alerta:', error);
+          logger.error(
+            { err: error, socketId: socket.id },
+            "[WS] Erro ao marcar alerta como visualizado",
+          );
+          socket.emit("erro", {
+            codigo: "ERRO_INTERNO",
+            mensagem: "Não foi possível atualizar o alerta",
+          });
         }
       });
-      
-      // Desconexão
-      socket.on('disconnect', () => {
+
+      socket.on("alerta:atendido", async (payload: unknown) => {
+        if (!permitirMutacao()) return;
+
+        const alertaId = alertaAtendidoSchema.safeParse(payload);
+        if (!alertaId.success) {
+          socket.emit("erro", {
+            codigo: "PAYLOAD_INVALIDO",
+            mensagem: "Alerta inválido",
+          });
+          return;
+        }
+
+        try {
+          const resultado = await (prisma as any).alertaCorretor.updateMany({
+            where: {
+              id: alertaId.data,
+              tenantId: principal.tenantId,
+            },
+            data: {
+              status: "ATENDIDO",
+              atendidoEm: new Date(),
+              atendidoPor: principal.usuarioId,
+            },
+          });
+
+          if (resultado.count === 0) {
+            socket.emit("erro", {
+              codigo: "ALERTA_NAO_ENCONTRADO",
+              mensagem: "Alerta não encontrado",
+            });
+            return;
+          }
+
+          this.io
+            ?.to(`tenant:${principal.tenantId}`)
+            .emit("alerta:atualizado", {
+              alertaId: alertaId.data,
+              status: "ATENDIDO",
+              atendidoPor: principal.usuarioId,
+            });
+        } catch (error) {
+          logger.error(
+            { err: error, socketId: socket.id },
+            "[WS] Erro ao atender alerta",
+          );
+          socket.emit("erro", {
+            codigo: "ERRO_INTERNO",
+            mensagem: "Não foi possível atualizar o alerta",
+          });
+        }
+      });
+
+      socket.on("disconnect", () => {
         this.conexoes.delete(socket.id);
-        console.log(`[WS] 🔌 Desconectado: ${socket.id}`);
+        logger.info({ socketId: socket.id }, "[WS] Cliente desconectado");
       });
     });
-    
-    console.log('[WS] 🚀 WebSocket Service inicializado');
+
+    logger.info("[WS] WebSocket Service inicializado");
   }
-  
-  /**
-   * Envia alertas pendentes para um socket
-   */
-  private async enviarAlertasPendentes(socket: any, tenantId: string): Promise<void> {
+
+  private async enviarAlertasPendentes(
+    socket: Socket,
+    tenantId: string,
+  ): Promise<void> {
     try {
       const alertas = await (prisma as any).alertaCorretor.findMany({
         where: {
           tenantId,
-          status: 'PENDENTE'
+          status: "PENDENTE",
         },
-        orderBy: [
-          { prioridade: 'desc' },
-          { criadoEm: 'desc' }
-        ],
-        take: 20
+        orderBy: [{ prioridade: "desc" }, { criadoEm: "desc" }],
+        take: 20,
       });
-      
+
       if (alertas.length > 0) {
-        socket.emit('alertas:pendentes', alertas);
-        console.log(`[WS] 📨 Enviados ${alertas.length} alertas pendentes`);
+        socket.emit("alertas:pendentes", alertas);
       }
     } catch (error) {
-      console.error('[WS] Erro ao buscar alertas:', error);
+      logger.error(
+        { err: error, socketId: socket.id },
+        "[WS] Erro ao buscar alertas pendentes",
+      );
     }
   }
-  
-  /**
-   * Emite um novo alerta para todos os clientes do tenant
-   */
-  emitirAlerta(tenantId: string, alerta: any): void {
+
+  emitirAlerta(tenantId: string, alerta: unknown): void {
     if (!this.io) {
-      console.warn('[WS] WebSocket não inicializado');
+      logger.warn("[WS] WebSocket não inicializado");
       return;
     }
-    
-    this.io.to(`tenant:${tenantId}`).emit('alerta:novo', alerta);
-    console.log(`[WS] 🚨 Alerta emitido para tenant ${tenantId}`);
+
+    this.io.to(`tenant:${tenantId}`).emit("alerta:novo", alerta);
   }
-  
-  /**
-   * Emite atualização de lead para todos os clientes do tenant
-   */
-  emitirAtualizacaoLead(tenantId: string, leadId: string, dados: any): void {
+
+  emitirAtualizacaoLead(
+    tenantId: string,
+    leadId: string,
+    dados: Record<string, unknown>,
+  ): void {
     if (!this.io) return;
-    
-    this.io.to(`tenant:${tenantId}`).emit('lead:atualizado', {
+
+    this.io.to(`tenant:${tenantId}`).emit("lead:atualizado", {
       leadId,
-      ...dados
+      ...dados,
     });
   }
-  
-  /**
-   * Emite notificação de nova mensagem
-   */
-  emitirNovaMensagem(tenantId: string, dados: {
-    leadId: string;
-    leadNome: string;
-    mensagem: string;
-    tipo: 'ENTRADA' | 'SAIDA';
-  }): void {
+
+  emitirNovaMensagem(
+    tenantId: string,
+    dados: {
+      leadId: string;
+      leadNome: string;
+      mensagem: string;
+      tipo: "ENTRADA" | "SAIDA";
+    },
+  ): void {
     if (!this.io) return;
-    
-    this.io.to(`tenant:${tenantId}`).emit('mensagem:nova', dados);
+    this.io.to(`tenant:${tenantId}`).emit("mensagem:nova", dados);
   }
-  
-  /**
-   * Retorna estatísticas de conexões
-   */
+
   getEstatisticas(): {
     totalConexoes: number;
     conexoesPorTenant: Record<string, number>;
   } {
     const conexoesPorTenant: Record<string, number> = {};
-    
-    this.conexoes.forEach(conexao => {
-      conexoesPorTenant[conexao.tenantId] = (conexoesPorTenant[conexao.tenantId] || 0) + 1;
+
+    this.conexoes.forEach((conexao) => {
+      conexoesPorTenant[conexao.tenantId] =
+        (conexoesPorTenant[conexao.tenantId] || 0) + 1;
     });
-    
+
     return {
       totalConexoes: this.conexoes.size,
-      conexoesPorTenant
+      conexoesPorTenant,
     };
   }
-  
-  /**
-   * Verifica se o serviço está ativo
-   */
+
   estaAtivo(): boolean {
     return this.io !== null;
+  }
+
+  async encerrar(): Promise<void> {
+    const io = this.io;
+    this.io = null;
+    this.conexoes.clear();
+
+    if (!io) return;
+    await new Promise<void>((resolve) => io.close(() => resolve()));
   }
 }
 
