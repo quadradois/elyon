@@ -23,6 +23,10 @@ action=${BASH_REMATCH[1]}
 requested_sha=${BASH_REMATCH[2]}
 
 cd "$REPO_DIR"
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+[[ "$branch" == 'main' ]] || fail "branch de produção inválida: ${branch:-detached}"
+[[ -z $(git status --porcelain) ]] || fail 'worktree de produção possui alterações'
+
 git fetch --prune origin main >/dev/null
 remote_sha=$(git rev-parse 'origin/main^{commit}')
 [[ "$requested_sha" == "$remote_sha" ]] || fail "SHA solicitado não corresponde a origin/main"
@@ -37,7 +41,7 @@ exec 9>"$LOCK_FILE"
 flock -n 9 || fail 'já existe outro deploy em andamento'
 
 logger -t "$LOG_TAG" -- "action=deploy commit=$requested_sha status=started"
-if ./scripts/deploy.sh update "$requested_sha"; then
+if git merge --ff-only "$requested_sha" && ./scripts/deploy.sh update "$requested_sha"; then
   logger -t "$LOG_TAG" -- "action=deploy commit=$requested_sha status=success"
   exit 0
 else
