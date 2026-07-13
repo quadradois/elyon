@@ -45,6 +45,13 @@ import {
   deveExecutarFallbackConversao,
   deveExecutarFallbackAtualizacaoLead
 } from './webhook-resilience';
+import {
+  autenticarWebhookEvolution,
+  concluirEventoWebhook,
+  hashPayload,
+  liberarEventoWebhook,
+  registrarEventoWebhook,
+} from '../servicos/webhook-seguranca';
 
 const router = Router();
 const MODO_OUTBOUND_ONLY = process.env.MODO_OUTBOUND_ONLY !== 'false';
@@ -1574,8 +1581,23 @@ function normalizarWebhookEvolutionGo(body: any): any {
   return { event: evento, instance, data: body.data };
 }
 
-router.post('/', async (req, res) => {
+router.post('/', autenticarWebhookEvolution, async (req, res) => {
+  let registroId: string | undefined;
   try {
+    const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body));
+    const payloadHash = hashPayload(rawBody);
+    const registro = await registrarEventoWebhook({
+      provedor: 'EVOLUTION',
+      eventoId: payloadHash,
+      tipo: String(req.body?.event || req.body?.type || 'UNKNOWN'),
+      payloadHash,
+    });
+
+    if (registro.duplicado) {
+      return res.status(200).json({ status: 'duplicate_ignored' });
+    }
+    registroId = registro.registroId;
+
     req.body = normalizarWebhookEvolutionGo(req.body);
     const { event, type, instance, data, sender } = req.body;
 
@@ -1592,6 +1614,7 @@ router.post('/', async (req, res) => {
     // Se não conseguimos determinar a instância, retornar erro
     if (!instanceName) {
       console.error('[Webhook] ❌ Não foi possível determinar a instância do webhook');
+      if (registroId) await concluirEventoWebhook(registroId);
       return responderErro(res, 400, 'Instância não especificada');
     }
 
@@ -2303,8 +2326,10 @@ router.post('/', async (req, res) => {
       }
     }
 
+    if (registroId) await concluirEventoWebhook(registroId);
     res.status(200).json({ status: 'success' });
   } catch (error) {
+    if (registroId) await liberarEventoWebhook(registroId).catch(() => undefined);
     console.error('Erro webhook:', error);
     responderErro(res, 500, 'Internal server error');
   }

@@ -93,14 +93,18 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       EVOLUTION_API_URL: ${EVOLUTION_API_URL}
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      EVOLUTION_WEBHOOK_SOURCE_RANGE: ${EVOLUTION_WEBHOOK_SOURCE_RANGE:?Defina EVOLUTION_WEBHOOK_SOURCE_RANGE}
       ASAAS_API_URL: ${ASAAS_API_URL:-https://api.asaas.com/v3}
       ASAAS_API_KEY: ${ASAAS_API_KEY}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:?Defina ASAAS_WEBHOOK_TOKEN}
       ASSERTIVA_CLIENT_ID: ${ASSERTIVA_CLIENT_ID}
       ASSERTIVA_CLIENT_SECRET: ${ASSERTIVA_CLIENT_SECRET}
       ASSERTIVA_API_URL: ${ASSERTIVA_API_URL:-https://api.assertivasolucoes.com.br}
       FRONTEND_URL: ${FRONTEND_URL:-https://crm.elyon.ia.br}
       BACKEND_URL: ${BACKEND_URL:-https://api.elyon.ia.br}
       MANUS_API_KEY: ${MANUS_API_KEY}
+      MANUS_WEBHOOK_PUBLIC_KEY: ${MANUS_WEBHOOK_PUBLIC_KEY:-}
+      MANUS_WEBHOOK_URL: ${MANUS_WEBHOOK_URL:-https://api.elyon.ia.br/webhooks/manus}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GROQ_API_KEY: ${GROQ_API_KEY}
       SERPER_API_KEY: ${SERPER_API_KEY}
@@ -143,6 +147,13 @@ services:
       - "traefik.http.routers.elyonapi.entrypoints=websecure"
       - "traefik.http.routers.elyonapi.tls.certresolver=letsencrypt"
       - "traefik.http.routers.elyonapi.service=elyonapi"
+      - "traefik.http.routers.elyonapi-evolution-webhook.rule=Host(`api.elyon.ia.br`) && Path(`/webhooks`)"
+      - "traefik.http.routers.elyonapi-evolution-webhook.entrypoints=websecure"
+      - "traefik.http.routers.elyonapi-evolution-webhook.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.elyonapi-evolution-webhook.service=elyonapi"
+      - "traefik.http.routers.elyonapi-evolution-webhook.priority=100"
+      - "traefik.http.routers.elyonapi-evolution-webhook.middlewares=elyon-evolution-webhook-ipallowlist"
+      - "traefik.http.middlewares.elyon-evolution-webhook-ipallowlist.ipallowlist.sourcerange=${EVOLUTION_WEBHOOK_SOURCE_RANGE:?Defina EVOLUTION_WEBHOOK_SOURCE_RANGE}"
       - "traefik.http.routers.elyonapi-http.rule=Host(`api.elyon.ia.br`)"
       - "traefik.http.routers.elyonapi-http.entrypoints=web"
       - "traefik.http.routers.elyonapi-http.service=elyonapi"

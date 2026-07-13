@@ -1870,3 +1870,22 @@ model LogAuditoria {
   @@index([criadoEm])
   @@map("logs_auditoria")
 }
+
+// ====================================
+// SEGURANCA E IDEMPOTENCIA DE WEBHOOKS
+// ====================================
+model WebhookEvento {
+  id           String    @id @default(uuid())
+  provedor     String
+  eventoId     String
+  tipo         String
+  payloadHash  String
+  status       String    @default("RECEBIDO")
+  recebidoEm   DateTime  @default(now())
+  processadoEm DateTime?
+
+  @@unique([provedor, eventoId])
+  @@index([provedor, recebidoEm])
+  @@index([status, recebidoEm])
+  @@map("webhook_eventos")
+}

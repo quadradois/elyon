@@ -57,6 +57,7 @@ import { resolverTrustProxy } from './utils/trust-proxy';
 import { schedulerReconciliacaoWhatsapp } from './servicos/scheduler-reconciliacao-whatsapp';
 import { validarConfiguracaoCriptografia } from './lib/crypto';
 import { exigirAutenticacaoPorPadrao } from './middleware/default-deny';
+import { capturarRawBody, validarConfiguracaoWebhooks } from './servicos/webhook-seguranca';
 
 const app = express();
 const server = http.createServer(app);
@@ -125,8 +126,10 @@ const loginLimiter = rateLimit({
 // A Evolution API envia mídia (imagens, documentos) via base64 no body JSON,
 // o que pode gerar payloads grandes. 50MB cobre arquivos de até ~37MB (overhead base64).
 // O limite global de 1MB protege todas as outras rotas da API.
-app.use('/webhooks', express.json({ limit: '50mb' }));
-app.use('/webhooks', express.urlencoded({ limit: '50mb', extended: true }));
+app.use('/webhooks', express.json({ limit: '50mb', verify: capturarRawBody }));
+
+// O Asaas tambem exige o corpo original para auditoria/hash de idempotencia.
+app.use('/api/billing/webhook/asaas', express.json({ limit: '1mb', verify: capturarRawBody }));
 
 // Limite global de 1MB para todas as demais rotas.
 app.use(express.json({ limit: '1mb' }));
@@ -233,6 +236,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 if (require.main === module) {
   // Falha antes de abrir a porta se a chave mestra estiver ausente ou inválida.
   validarConfiguracaoCriptografia();
+  validarConfiguracaoWebhooks();
 
   // Inicializar WebSocket no servidor HTTP
   websocketService.inicializar(server);
