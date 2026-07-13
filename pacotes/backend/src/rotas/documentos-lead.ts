@@ -99,7 +99,9 @@ router.get('/:id/documentos/:docId/download', async (req: Request, res: Response
       Key: doc.s3Key,
     });
 
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+    // cast: @aws-sdk/client-s3 e s3-request-presigner estão em versões
+    // diferentes no package.json e trazem cópias distintas dos tipos @smithy.
+    const url = await getSignedUrl(s3Client as any, command, { expiresIn: 300 });
     res.json({ url });
   } catch (error) {
     console.error('[DocumentosLead] Erro ao gerar URL:', error);

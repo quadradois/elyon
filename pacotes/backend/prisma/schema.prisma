@@ -309,6 +309,11 @@ model SessaoWhatsapp {
   descricao    String?
   instanceName String  @unique // "elyon_${tenantId}_${slug}"
 
+  // Evolution GO: a instância é identificada pelo id (uuid) e autenticada
+  // pelo token próprio (header apikey). Preenchidos ao criar a instância.
+  evolutionInstanceId String?
+  evolutionToken      String?
+
   // Número WhatsApp (preenchido após conexão)
   numeroWhatsapp String?
   nomeWhatsapp   String? // Nome do perfil WhatsApp
@@ -1125,6 +1130,51 @@ model SincronizacaoMapa {
   @@index([status])
   @@index([iniciadoEm])
   @@map("sincronizacoes_mapa")
+}
+
+/// Base imobiliária completa de Goiânia + Aparecida (GEO360/ICAD), importada do sistema externo.
+/// Fonte de consulta primária para identificação de proprietário (substitui o scraper da Prefeitura).
+/// Tabela criada via restore externo — somente leitura pelo app; NÃO rodar migrate destrutivo.
+model ImovelRancho {
+  id                    String    @id
+  cidade                String
+  inscricaoCartografica String    @unique @map("inscricao_cartografica")
+  idLote                Int?      @map("id_lote")
+  numeroCadastro        Int?      @map("numero_cadastro")
+  cpfCnpj               String?   @map("cpf_cnpj")
+  nomePessoa            String?   @map("nome_pessoa")
+  tipoPessoa            Int?      @map("tipo_pessoa")
+  endereco              String?
+  bairro                String?
+  cep                   String?
+  latitude              Float?
+  longitude             Float?
+  sincronizadoEm        DateTime  @map("sincronizado_em")
+  atualizadoEm          DateTime  @map("atualizado_em")
+  complemento           String?
+  logradouro            String?
+  areaConstruida        Float?    @map("area_construida")
+  areaTerreno           Float?    @map("area_terreno")
+  tipoEdificacao        Int?      @map("tipo_edificacao")
+  nrLote                String?   @map("nr_lote")
+  idBairro              Int?      @map("id_bairro")
+  idQuadra              Int?      @map("id_quadra")
+  idSetor               Int?      @map("id_setor")
+  raw                   Json?
+  versaoEnriquecimento  Int       @default(0) @map("versao_enriquecimento")
+  detalheEm             DateTime? @map("detalhe_em")
+
+  // Classificação/enriquecimento via MapaServer + scraper (backfill Goiânia)
+  propriedadMapa        Int?      @map("propriedad_mapa") // cru do MapaServer: 1=particular, 2/3/4=público, 0/5/-1=indefinido
+  statusProprietario    String?   @map("status_proprietario") // CANDIDATO|AREA_PUBLICA|INDEFINIDO|ENRIQUECIDO|CERTIDAO_BLOQUEADA|NAO_ENCONTRADO|ERRO
+  fonteProprietario     String?   @map("fonte_proprietario") // ex.: SCRAPER_WEB
+  enriquecidoEm         DateTime? @map("enriquecido_em")
+
+  @@index([cpfCnpj])
+  @@index([cidade, idSetor, idQuadra])
+  @@index([idBairro])
+  @@index([statusProprietario])
+  @@map("imoveis_rancho")
 }
 
 // ====================================

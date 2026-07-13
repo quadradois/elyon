@@ -18,10 +18,14 @@ import { responderErro } from '../utilitarios/resposta';
 import { Router, Request } from 'express';
 import { prisma } from '../lib/db';
 import { StatusConexao } from '@prisma/client';
-import { getWhatsAppService, limparCacheWhatsApp } from '../servicos/whatsapp';
-import axios from 'axios';
+import {
+  getWhatsAppService,
+  limparCacheWhatsApp,
+  listarInstanciasEvolution,
+  deletarInstanciaEvolutionPorId,
+} from '../servicos/whatsapp';
 import { z } from 'zod';
-import { verificarAutenticacao } from '../middleware/middleware-auth';
+import { verificarAutenticacao, verificarSuperAdmin } from '../middleware/middleware-auth';
 import { getTenantId } from '../utils/tenant';
 
 const router = Router();
@@ -34,12 +38,19 @@ router.use(verificarAutenticacao);
 // ============================================
 
 /**
+ * Prefixo que identifica instâncias do Elyon no Evolution GO.
+ * O servidor é COMPARTILHADO com outros projetos (ex.: QuadraDois usa `tenant_*`),
+ * então toda operação administrativa em massa DEVE filtrar por este prefixo.
+ */
+const PREFIXO_ELYON = 'elyon_';
+
+/**
  * Gera instanceName único para a sessão
  */
 const gerarInstanceName = (tenantId: string, slug: string): string => {
   // Remove caracteres especiais do slug
   const slugLimpo = slug.toLowerCase().replace(/[^a-z0-9]/g, '_');
-  return `elyon_${tenantId.substring(0, 8)}_${slugLimpo}`;
+  return `${PREFIXO_ELYON}${tenantId.substring(0, 8)}_${slugLimpo}`;
 };
 
 // ============================================
@@ -50,6 +61,113 @@ const criarSessaoSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   descricao: z.string().optional(),
   agenteId: z.string().optional(), // Vincular a agente existente
+});
+
+// ============================================
+// RECONCILIAÇÃO (ADMIN) — instâncias órfãs no Evolution GO
+// ============================================
+
+interface RelatorioReconciliacao {
+  totalInstanciasElyon: number;
+  totalSessoesBanco: number;
+  orfas: Array<{ id: string; name: string; connected: boolean; createdAt: string | null }>;
+  fantasmas: Array<{ instanceName: string; nome: string }>; // sessão no banco sem instância no servidor
+}
+
+/**
+ * Cruza as instâncias do Evolution GO (filtradas pelo prefixo do Elyon) com as
+ * sessões do banco e identifica divergências:
+ *  - órfãs:    instância existe no Evolution GO mas NÃO há sessão no banco (lixo a remover)
+ *  - fantasmas: sessão existe no banco mas NÃO há instância no servidor (apenas informativo)
+ */
+async function montarRelatorioReconciliacao(): Promise<RelatorioReconciliacao> {
+  const [instancias, sessoes] = await Promise.all([
+    listarInstanciasEvolution(),
+    prisma.sessaoWhatsapp.findMany({
+      select: { instanceName: true, evolutionInstanceId: true, nome: true },
+    }),
+  ]);
+
+  // Só consideramos instâncias do Elyon — o servidor é compartilhado.
+  const instanciasElyon = instancias.filter(
+    (i: any) => typeof i?.name === 'string' && i.name.startsWith(PREFIXO_ELYON),
+  );
+
+  const nomesBanco = new Set(sessoes.map((s) => s.instanceName));
+  const idsBanco = new Set(sessoes.map((s) => s.evolutionInstanceId).filter(Boolean));
+
+  const orfas = instanciasElyon
+    .filter((i: any) => !nomesBanco.has(i.name) && !idsBanco.has(i.id))
+    .map((i: any) => ({
+      id: i.id,
+      name: i.name,
+      connected: !!i.connected,
+      createdAt: i.createdAt || null,
+    }));
+
+  const nomesServidor = new Set(instanciasElyon.map((i: any) => i.name));
+  const fantasmas = sessoes
+    .filter((s) => !nomesServidor.has(s.instanceName))
+    .map((s) => ({ instanceName: s.instanceName, nome: s.nome }));
+
+  return {
+    totalInstanciasElyon: instanciasElyon.length,
+    totalSessoesBanco: sessoes.length,
+    orfas,
+    fantasmas,
+  };
+}
+
+/**
+ * GET /api/sessoes-whatsapp/admin/reconciliacao
+ * Dry-run: lista instâncias órfãs do Elyon no Evolution GO (não remove nada).
+ * Restrito a SUPER_ADMIN.
+ */
+router.get('/admin/reconciliacao', verificarSuperAdmin, async (_req, res) => {
+  try {
+    const relatorio = await montarRelatorioReconciliacao();
+    return res.json({ sucesso: true, ...relatorio });
+  } catch (error: any) {
+    console.error('[SessoesWhatsapp] Erro na reconciliação (dry-run):', error?.message);
+    return responderErro(res, 502, 'Não foi possível consultar o Evolution GO');
+  }
+});
+
+/**
+ * POST /api/sessoes-whatsapp/admin/reconciliacao
+ * Executa a faxina: remove do Evolution GO as instâncias órfãs do Elyon.
+ * Restrito a SUPER_ADMIN.
+ */
+router.post('/admin/reconciliacao', verificarSuperAdmin, async (_req, res) => {
+  try {
+    const relatorio = await montarRelatorioReconciliacao();
+
+    const removidas: string[] = [];
+    const falhas: Array<{ name: string; erro: string }> = [];
+
+    for (const orfa of relatorio.orfas) {
+      try {
+        await deletarInstanciaEvolutionPorId(orfa.id);
+        limparCacheWhatsApp(orfa.name);
+        removidas.push(orfa.name);
+        console.log(`[Reconciliação] 🧹 Instância órfã removida do Evolution GO: ${orfa.name} (id=${orfa.id})`);
+      } catch (e: any) {
+        falhas.push({ name: orfa.name, erro: e?.message || 'erro desconhecido' });
+        console.error(`[Reconciliação] Falha ao remover órfã ${orfa.name}:`, e?.message);
+      }
+    }
+
+    return res.json({
+      sucesso: true,
+      analisadas: relatorio.orfas.length,
+      removidas,
+      falhas,
+      fantasmas: relatorio.fantasmas,
+    });
+  } catch (error: any) {
+    console.error('[SessoesWhatsapp] Erro na reconciliação (execução):', error?.message);
+    return responderErro(res, 502, 'Não foi possível consultar o Evolution GO');
+  }
 });
 
 // ============================================
@@ -93,20 +211,18 @@ router.get('/', async (req, res) => {
           if (statusEvolution?.instance?.state === 'open') {
             statusReal = StatusConexao.CONECTADO;
 
-            // Buscar número e nome do perfil via fetchInstances (retorna dados completos)
+            if (statusEvolution.instance.profileName) {
+              nomeAtualizado = statusEvolution.instance.profileName;
+            }
+
+            // Buscar número do WhatsApp (jid) via /instance/all
             try {
-              const apiUrl = process.env.EVOLUTION_API_URL || '';
-              const apiKey = process.env.EVOLUTION_API_KEY || '';
-              const instancesRes = await axios.get(
-                `${apiUrl}/instance/fetchInstances?instanceName=${s.instanceName}`,
-                { headers: { 'apikey': apiKey } }
-              );
-              const instanceData = instancesRes.data?.[0];
-              if (instanceData?.ownerJid) {
-                numeroAtualizado = instanceData.ownerJid.split('@')[0];
+              const detalhes = await service.buscarDetalhesInstancia();
+              if (detalhes?.ownerJid) {
+                numeroAtualizado = String(detalhes.ownerJid).split('@')[0].split(':')[0];
               }
-              if (instanceData?.profileName) {
-                nomeAtualizado = instanceData.profileName;
+              if (detalhes?.profileName) {
+                nomeAtualizado = detalhes.profileName;
               }
             } catch (fetchErr) {
               console.warn(`[SessoesWhatsapp] Erro ao buscar dados da instância ${s.instanceName}:`, fetchErr);
@@ -134,23 +250,11 @@ router.get('/', async (req, res) => {
 
           // Buscar configurações extras quando conectado
           let ignorarGrupos = false;
-          let webhookBase64 = false;
 
           if (statusReal === StatusConexao.CONECTADO) {
             try {
               const config = await service.buscarConfiguracao();
-              // Evolution API retorna groupsIgnore diretamente na raiz, não em settings
               ignorarGrupos = config?.groupsIgnore || false;
-            } catch { }
-
-            try {
-              const apiUrl = process.env.EVOLUTION_API_URL || '';
-              const apiKey = process.env.EVOLUTION_API_KEY || '';
-              const webhookRes = await axios.get(
-                `${apiUrl}/webhook/find/${s.instanceName}`,
-                { headers: { 'apikey': apiKey } }
-              );
-              webhookBase64 = webhookRes.data?.webhookBase64 || false;
             } catch { }
           }
 
@@ -164,8 +268,7 @@ router.get('/', async (req, res) => {
             status: statusReal,
             agente: s.agente,
             criadoEm: s.criadoEm,
-            ignorarGrupos,
-            webhookBase64
+            ignorarGrupos
           };
         } catch (err) {
           // Se falhar ao verificar Evolution, retorna status do banco
@@ -325,23 +428,31 @@ router.delete('/:id', async (req, res) => {
       return responderErro(res, 403, 'Acesso negado');
     }
 
-    // Tentar deletar instância na Evolution API
+    // Deletar instância no Evolution GO ANTES de remover o registro local.
+    // Se a remoção remota falhar de verdade (rede/5xx), abortamos e mantemos
+    // o registro — assim o usuário pode retentar e não acumulamos instâncias
+    // órfãs no Evolution GO.
     try {
-      await axios.delete(
-        `${process.env.EVOLUTION_API_URL}/instance/delete/${sessao.instanceName}`,
-        { headers: { apikey: process.env.EVOLUTION_API_KEY } }
+      const resultado = await getWhatsAppService(sessao.instanceName).deletarInstancia();
+      if (resultado === 'inexistente') {
+        console.log(`[SessoesWhatsapp] Instância ${sessao.instanceName} já não existia no Evolution GO`);
+      }
+    } catch (e: any) {
+      console.error('[SessoesWhatsapp] Falha ao deletar instância no Evolution GO, abortando exclusão local:', e?.message);
+      return responderErro(
+        res,
+        502,
+        'Não foi possível remover a instância no Evolution GO. A sessão foi mantida — tente novamente em instantes.',
       );
-    } catch (e) {
-      console.log('[SessoesWhatsapp] Instância já não existia na Evolution');
     }
 
     // Limpar cache
     limparCacheWhatsApp(sessao.instanceName);
 
-    // Deletar do banco
+    // Deletar do banco (apenas após confirmar remoção no Evolution GO)
     await prisma.sessaoWhatsapp.delete({ where: { id } });
 
-    console.log(`[SessoesWhatsapp] ✅ Sessão deletada: ${sessao.nome}`);
+    console.log(`[SessoesWhatsapp] ✅ Sessão deletada (local + Evolution GO): ${sessao.nome}`);
 
     return res.json({ sucesso: true, mensagem: 'Sessão removida' });
 
@@ -400,36 +511,7 @@ router.post('/:id/conectar', async (req, res) => {
     // Verificar se já está conectado
     const status = await service.verificarStatus();
     if (status?.instance?.state === 'open') {
-      // Configurar webhook automaticamente quando conectado
-      try {
-        const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.ia.br';
-        const webhookUrl = `${backendUrl}/api/webhooks/whatsapp?instance=${sessao.instanceName}`;
-        const apiUrl = process.env.EVOLUTION_API_URL || 'http://evolution:8080';
-        
-        await axios.post(
-          `${apiUrl}/webhook/set/${sessao.instanceName}`,
-          {
-            webhook: {
-              url: webhookUrl,
-              webhook_by_events: true,
-              events: [
-                'MESSAGES_UPSERT',
-                'MESSAGES_UPDATE',
-                'MESSAGES_DELETE',
-                'SEND_MESSAGE',
-                'CONNECTION_UPDATE'
-              ],
-              base64: false
-            }
-          }
-        );
-        
-        console.log(`[SessoesWhatsapp] ✅ Webhook configurado automaticamente para ${sessao.instanceName}`);
-      } catch (webhookError: any) {
-        console.error('[SessoesWhatsapp] ⚠️ Erro ao configurar webhook automaticamente:', webhookError.message);
-        // Não falha a conexão se o webhook não conseguir ser configurado
-      }
-      
+      // O webhook já é configurado pelo conectarInstancia (/instance/connect).
       await prisma.sessaoWhatsapp.update({
         where: { id },
         data: { status: 'CONECTADO', ultimoStatus: new Date() }
@@ -564,12 +646,9 @@ router.post('/:id/desconectar', async (req, res) => {
       return responderErro(res, 403, 'Acesso negado');
     }
 
-    // Logout na Evolution API
+    // Logout no Evolution GO
     try {
-      await axios.delete(
-        `${process.env.EVOLUTION_API_URL}/instance/logout/${sessao.instanceName}`,
-        { headers: { apikey: process.env.EVOLUTION_API_KEY } }
-      );
+      await getWhatsAppService(sessao.instanceName).desconectarInstancia();
     } catch (e) {
       console.log('[SessoesWhatsapp] Logout falhou (pode já estar desconectado)');
     }
@@ -626,26 +705,11 @@ router.get('/:id/configurar', async (req, res) => {
     // Buscar settings da instância
     const settings = await service.buscarConfiguracao();
 
-    // Buscar configuração do webhook
-    let webhookConfig = null;
-    try {
-      const apiUrl = process.env.EVOLUTION_API_URL || '';
-      const apiKey = process.env.EVOLUTION_API_KEY || '';
-
-      const webhookResponse = await axios.get(
-        `${apiUrl}/webhook/find/${sessao.instanceName}`,
-        { headers: { 'apikey': apiKey } }
-      );
-      webhookConfig = webhookResponse.data;
-    } catch (err) {
-      console.warn('[SessoesWhatsapp] Webhook não encontrado para', sessao.instanceName);
-    }
-
     return res.json({
       sucesso: true,
       config: {
         settings,
-        webhook: webhookConfig
+        webhook: { url: sessao.webhookUrl || null }
       }
     });
 
@@ -667,7 +731,7 @@ router.post('/:id/configurar', async (req, res) => {
     }
 
     const { id } = req.params;
-    const { ignorarGrupos, webhookBase64 } = req.body;
+    const { ignorarGrupos } = req.body;
 
     const sessao = await prisma.sessaoWhatsapp.findUnique({ where: { id } });
 
@@ -684,35 +748,6 @@ router.post('/:id/configurar', async (req, res) => {
     // Se foi passado ignorarGrupos, atualiza
     if (typeof ignorarGrupos === 'boolean') {
       await service.atualizarConfiguracao(ignorarGrupos);
-    }
-
-    // Se foi passado webhookBase64, atualiza o webhook
-    if (typeof webhookBase64 === 'boolean') {
-      const backendUrl = process.env.BACKEND_URL || 'https://api.elyon.ia.br';
-      const webhookUrl = `${backendUrl}/api/webhooks/whatsapp?instance=${sessao.instanceName}`;
-
-      const apiUrl = process.env.EVOLUTION_API_URL || '';
-      const apiKey = process.env.EVOLUTION_API_KEY || '';
-
-      try {
-        await axios.post(
-          `${apiUrl}/webhook/set/${sessao.instanceName}`,
-          {
-            webhook: {
-              url: webhookUrl,
-              enabled: true,
-              byEvents: false,
-              base64: webhookBase64,
-              events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE']
-            }
-          },
-          { headers: { 'Content-Type': 'application/json', 'apikey': apiKey } }
-        );
-        console.log(`[SessoesWhatsapp] Webhook Base64 ${webhookBase64 ? 'ativado' : 'desativado'} para ${sessao.instanceName}`);
-      } catch (webhookError: any) {
-        console.error('[SessoesWhatsapp] Erro ao configurar webhook:', webhookError.message);
-        return responderErro(res, 500, 'Erro ao configurar webhook Base64');
-      }
     }
 
     return res.json({ sucesso: true, mensagem: 'Configuração atualizada' });

@@ -14,6 +14,7 @@ import { Router } from 'express';
 import { logger } from '../../lib/logger';
 import { mapaService } from '../../servicos/mapa';
 import { scraperIPTU, parsearEnderecoPrefeitura } from '../../servicos/scraper-iptu';
+import { imoveisRanchoService } from '../../servicos/imoveis-rancho';
 import { assertivaService } from '../../servicos/assertiva';
 import { prisma } from '../../lib/db';
 import { servicoCreditos } from '../../servicos/servico-creditos';
@@ -21,6 +22,12 @@ import { z } from 'zod';
 import { ServicoAuditoria } from '../../servicos/servico-auditoria';
 
 const router = Router();
+
+// Fonte de identificação de proprietário:
+// - USAR_BASE_GEO360 (default ON): consulta a base local `imoveis_rancho` (instantâneo, sem carga na API).
+// - GEO360_FALLBACK_SCRAPER (default OFF): se o imóvel não estiver na base, cai no scraper da Prefeitura.
+const USAR_BASE_GEO360 = process.env.USAR_BASE_GEO360 !== 'false';
+const GEO360_FALLBACK_SCRAPER = process.env.GEO360_FALLBACK_SCRAPER === 'true';
 
 // TTL do cache de CPFs da Assertiva (compartilhado entre todos os tenants):
 // Proprietário de imóvel raramente muda telefone em menos de 1 ano.
@@ -210,9 +217,25 @@ router.post('/identificar-proprietarios', async (req, res) => {
       const resultadosBatch = await Promise.all(
         batch.map(async (imovel) => {
           try {
-            const dadosScraper = await scraperIPTU.consultarProprietario(imovel.nrinscr);
+            // Fonte primária: base local GEO360 (`imoveis_rancho`) — instantânea, sem carga na API.
+            // Fallback opcional ao scraper da Prefeitura quando o imóvel não está na base.
+            let dadosProprietario: Awaited<ReturnType<typeof imoveisRanchoService.consultarProprietario>>
+              | Awaited<ReturnType<typeof scraperIPTU.consultarProprietario>>
+              | null = null;
 
-            // CONSUMIR CRÉDITO após consulta bem-sucedida
+            if (USAR_BASE_GEO360) {
+              dadosProprietario = await imoveisRanchoService.consultarProprietario(imovel.nrinscr);
+            }
+            if (!dadosProprietario && (!USAR_BASE_GEO360 || GEO360_FALLBACK_SCRAPER)) {
+              dadosProprietario = await scraperIPTU.consultarProprietario(imovel.nrinscr);
+            }
+
+            // Imóvel não encontrado na base e sem fallback → devolve sem proprietário e NÃO cobra crédito.
+            if (!dadosProprietario) {
+              return imovel;
+            }
+
+            // CONSUMIR CRÉDITO após identificação bem-sucedida
             try {
               await servicoCreditos.consumirCredito(tenantId);
               creditosConsumidos++;
@@ -227,7 +250,7 @@ router.post('/identificar-proprietarios', async (req, res) => {
             // 3. Leads só são criados após qualificação SPIN
             // Veja: /rotas/campanhas/contatos.rotas.ts
 
-            return { ...imovel, ...dadosScraper };
+            return { ...imovel, ...dadosProprietario };
           } catch (error) {
             logger.error('Erro registrado');
             return imovel;
@@ -747,14 +770,27 @@ router.post('/iptu-unitario', async (req, res) => {
         {mensagem: 'Recarregue seus créditos para usar a Busca Inteligente.'});
     }
 
-    // 2. SCRAPER PREFEITURA
-    let dadosProprietario;
+    // 2. FONTE: base local GEO360 (`imoveis_rancho`) — fallback opcional ao scraper.
+    let dadosProprietario:
+      | Awaited<ReturnType<typeof imoveisRanchoService.consultarProprietario>>
+      | Awaited<ReturnType<typeof scraperIPTU.consultarProprietario>>
+      | null = null;
     try {
-      dadosProprietario = await scraperIPTU.consultarProprietario(iptu);
+      if (USAR_BASE_GEO360) {
+        dadosProprietario = await imoveisRanchoService.consultarProprietario(iptu);
+      }
+      if (!dadosProprietario && (!USAR_BASE_GEO360 || GEO360_FALLBACK_SCRAPER)) {
+        dadosProprietario = await scraperIPTU.consultarProprietario(iptu);
+      }
     } catch (error) {
       logger.error('Erro registrado');
-      return responderErro(res, 404, 'Dados não encontrados na Prefeitura',
+      return responderErro(res, 404, 'Dados não encontrados',
         {detalhes: 'Verifique se o número do IPTU está correto.'});
+    }
+
+    if (!dadosProprietario) {
+      return responderErro(res, 404, 'Imóvel não encontrado na base',
+        {detalhes: 'Inscrição não localizada na base GEO360 (Goiânia/Aparecida).'});
     }
 
     // REMOVIDO: Cobrança pelo scraper.

@@ -9,8 +9,14 @@
 
 import { getRedisClient } from '../lib/redis';
 import { scraperIPTU, parsearEnderecoPrefeitura } from './scraper-iptu';
+import { imoveisRanchoService } from './imoveis-rancho';
 import { servicoCreditos } from './servico-creditos';
 import { prisma } from '../lib/db';
+
+// Fonte de identificação de proprietário (ver imoveis-rancho.ts):
+// USAR_BASE_GEO360 (default ON) consulta a base local; GEO360_FALLBACK_SCRAPER (default OFF) cai no scraper.
+const USAR_BASE_GEO360 = process.env.USAR_BASE_GEO360 !== 'false';
+const GEO360_FALLBACK_SCRAPER = process.env.GEO360_FALLBACK_SCRAPER === 'true';
 
 // ============================================
 // TIPOS
@@ -320,9 +326,26 @@ async function processarJobEmBackground(jobId: string, tenantId: string): Promis
                     continue;
                 }
 
-                // 3. Sem cache L1 fresco → raspar prefeitura
-                console.log(`[JobMineracao] Raspando IPTU ${imovel.nrinscr}...`);
-                const dadosScraper = await scraperIPTU.consultarProprietario(imovel.nrinscr);
+                // 3. Sem cache L1 fresco → consultar base local GEO360 (`imoveis_rancho`).
+                //    Fallback opcional ao scraper da Prefeitura quando o imóvel não está na base.
+                let dadosScraper: Awaited<ReturnType<typeof imoveisRanchoService.consultarProprietario>>
+                    | Awaited<ReturnType<typeof scraperIPTU.consultarProprietario>>
+                    | null = null;
+
+                if (USAR_BASE_GEO360) {
+                    dadosScraper = await imoveisRanchoService.consultarProprietario(imovel.nrinscr);
+                }
+                if (!dadosScraper && (!USAR_BASE_GEO360 || GEO360_FALLBACK_SCRAPER)) {
+                    console.log(`[JobMineracao] Raspando IPTU ${imovel.nrinscr}...`);
+                    dadosScraper = await scraperIPTU.consultarProprietario(imovel.nrinscr);
+                }
+
+                // Não encontrado na base e sem fallback → registra e segue (sem cobrar).
+                if (!dadosScraper) {
+                    console.log(`[JobMineracao] IPTU ${imovel.nrinscr} não encontrado na base GEO360.`);
+                    resultadosBatch.push({ ...imovel, origem: 'NAO_ENCONTRADO' });
+                    continue;
+                }
 
                 // 4. Deduplicação Intra-Job (Após Scraping)
                 const cpfRetornado = dadosScraper.cpf || (dadosScraper as any).cpfCnpj;
