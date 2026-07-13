@@ -1,18 +1,32 @@
 const mockPrisma = {
-  contato: {
+  lead: {
     findUnique: jest.fn(),
     update: jest.fn(),
-  },
-  lead: {
-    create: jest.fn(),
   },
   atividade: {
     create: jest.fn(),
   },
+  tenant: {
+    findUnique: jest.fn(),
+  },
+  sessaoWhatsapp: {
+    findFirst: jest.fn(),
+  },
 };
+
+const mockResolverEspecialistaCampanha = jest.fn();
+const mockGetWhatsAppService = jest.fn();
 
 jest.mock('../../../lib/db', () => ({
   prisma: mockPrisma,
+}));
+
+jest.mock('../../../servicos/resolucao-especialista-campanha', () => ({
+  resolverEspecialistaCampanha: mockResolverEspecialistaCampanha,
+}));
+
+jest.mock('../../../servicos/whatsapp', () => ({
+  getWhatsAppService: mockGetWhatsAppService,
 }));
 
 import { EncaminharCorretorUseCase } from '../encaminhar-corretor.usecase';
@@ -22,10 +36,13 @@ describe('EncaminharCorretorUseCase', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.lead.update.mockResolvedValue({});
+    mockPrisma.tenant.findUnique.mockResolvedValue({ nome: 'Imobiliária Teste' });
+    mockResolverEspecialistaCampanha.mockResolvedValue(null);
   });
 
-  it('retorna erro quando contato não existe', async () => {
-    mockPrisma.contato.findUnique.mockResolvedValue(null);
+  it('retorna erro quando lead não existe', async () => {
+    mockPrisma.lead.findUnique.mockResolvedValue(null);
 
     const result = await useCase.execute({
       leadId: 'nao-existe',
@@ -34,21 +51,21 @@ describe('EncaminharCorretorUseCase', () => {
       urgencia: 'NORMAL',
     });
 
-    expect(result).toEqual({ success: false, error: 'Contato não encontrado' });
-    expect(mockPrisma.lead.create).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: false, error: 'Lead não encontrado' });
+    expect(mockPrisma.lead.update).not.toHaveBeenCalled();
+    expect(mockPrisma.atividade.create).not.toHaveBeenCalled();
   });
 
-  it('usa lead existente sem criar novo lead e cria tarefa normal', async () => {
-    mockPrisma.contato.findUnique.mockResolvedValue({
-      id: 'contato-1',
-      leadId: 'lead-1',
-      virouLead: true,
-      campanha: { tenantId: 'tenant-1' },
+  it('transfere lead existente para atendimento humano e cria tarefa normal', async () => {
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      id: 'lead-1',
+      telefone: '5511999999999',
+      campanhaOrigem: { id: 'camp-1', tenantId: 'tenant-1' },
     });
     mockPrisma.atividade.create.mockResolvedValue({});
 
     const result = await useCase.execute({
-      leadId: 'contato-1',
+      leadId: 'lead-1',
       motivo: 'Solicitou reunião',
       contextoConversa: 'Falou que tem interesse',
       urgencia: 'NORMAL',
@@ -57,93 +74,57 @@ describe('EncaminharCorretorUseCase', () => {
     expect(result.success).toBe(true);
     expect(result.leadId).toBe('lead-1');
     expect(result.message).toContain('em breve');
-
-    expect(mockPrisma.lead.create).not.toHaveBeenCalled();
-    expect(mockPrisma.contato.update).not.toHaveBeenCalled();
+    expect(mockPrisma.lead.update).toHaveBeenCalledWith({
+      where: { id: 'lead-1' },
+      data: { modoAtendimento: 'HUMANO' },
+    });
     expect(mockPrisma.atividade.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           leadId: 'lead-1',
           tipo: 'TAREFA',
-          titulo: expect.stringContaining('📞'),
         }),
       })
     );
   });
 
-  it('converte contato para lead quando ainda não virou lead', async () => {
-    mockPrisma.contato.findUnique.mockResolvedValue({
-      id: 'contato-2',
-      leadId: null,
-      virouLead: false,
-      nome: 'Joana',
-      telefone: '5511999999999',
-      email: 'joana@teste.com',
-      cpf: '12345678900',
-      endereco: 'Rua A',
-      campanhaId: 'camp-1',
-      criadoEm: new Date('2026-01-01'),
-      campanha: { tenantId: 'tenant-2' },
+  it('identifica tarefa urgente para o lead unificado', async () => {
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      id: 'lead-2',
+      telefone: '5511888888888',
+      campanhaOrigem: { id: 'camp-2', tenantId: 'tenant-2' },
     });
-
-    mockPrisma.lead.create.mockResolvedValue({ id: 'lead-novo' });
-    mockPrisma.contato.update.mockResolvedValue({});
     mockPrisma.atividade.create.mockResolvedValue({});
 
     const result = await useCase.execute({
-      leadId: 'contato-2',
+      leadId: 'lead-2',
       motivo: 'Pediu proposta',
       contextoConversa: 'Mostrou forte interesse',
       urgencia: 'ALTA',
     });
 
     expect(result.success).toBe(true);
-    expect(result.leadId).toBe('lead-novo');
     expect(result.message).toContain('imediatamente');
-
-    expect(mockPrisma.lead.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          tenantId: 'tenant-2',
-          temperatura: 'QUENTE',
-          estagio: 'encaminhado_corretor',
-        }),
-      })
-    );
-
-    expect(mockPrisma.contato.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'contato-2' },
-        data: expect.objectContaining({
-          virouLead: true,
-          leadId: 'lead-novo',
-          statusProspeccao: 'LEAD',
-        }),
-      })
-    );
-
     expect(mockPrisma.atividade.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          leadId: 'lead-novo',
-          titulo: expect.stringContaining('🔥 URGENTE'),
+          leadId: 'lead-2',
+          titulo: expect.stringContaining('URGENTE'),
         }),
       })
     );
   });
 
   it('retorna erro quando criação da tarefa falha', async () => {
-    mockPrisma.contato.findUnique.mockResolvedValue({
-      id: 'contato-3',
-      leadId: 'lead-3',
-      virouLead: true,
-      campanha: { tenantId: 'tenant-1' },
+    mockPrisma.lead.findUnique.mockResolvedValue({
+      id: 'lead-3',
+      telefone: '5511777777777',
+      campanhaOrigem: { id: 'camp-3', tenantId: 'tenant-1' },
     });
-
     mockPrisma.atividade.create.mockRejectedValue(new Error('Erro criando tarefa'));
 
     const result = await useCase.execute({
-      leadId: 'contato-3',
+      leadId: 'lead-3',
       motivo: 'Quer proposta hoje',
       contextoConversa: 'Insistiu no contato',
       urgencia: 'ALTA',

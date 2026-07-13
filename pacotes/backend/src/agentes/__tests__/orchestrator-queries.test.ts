@@ -14,9 +14,6 @@ const mockPrisma = {
     lead: {
         findFirst: jest.fn().mockResolvedValue(null),
     },
-    contato: {
-        findFirst: jest.fn().mockResolvedValue(null),
-    },
 };
 
 jest.mock('../../lib/db', () => ({
@@ -35,6 +32,8 @@ import { buscarConfiguracaoTenant, buscarContextoConversa } from '../orchestrato
 
 beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.tenant.findUnique.mockResolvedValue(null);
+    mockPrisma.lead.findFirst.mockResolvedValue(null);
 });
 
 // ====================================
@@ -149,9 +148,10 @@ describe('buscarContextoConversa', () => {
         expect(result.prazoTrabalho).toBe(90);
     });
 
-    it('busca contato quando lead não encontrado', async () => {
-        mockPrisma.lead.findFirst.mockResolvedValue(null);
-        mockPrisma.contato.findFirst.mockResolvedValue({ id: 'contato-001' });
+    it('busca lead de prospecção quando lead CRM não encontrado', async () => {
+        mockPrisma.lead.findFirst
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ id: 'contato-001' });
 
         const result = await buscarContextoConversa('5511999990001', 'tenant-001');
         expect(result.telefone).toBe('5511999990001');
@@ -159,14 +159,38 @@ describe('buscarContextoConversa', () => {
         expect(result.contatoId).toBe('contato-001');
     });
 
-    it('retorna apenas telefone se nem lead nem contato encontrado', async () => {
-        mockPrisma.lead.findFirst.mockResolvedValue(null);
-        mockPrisma.contato.findFirst.mockResolvedValue(null);
+    it('retorna apenas telefone se nem lead CRM nem lead de prospecção for encontrado', async () => {
+        mockPrisma.lead.findFirst
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null);
 
         const result = await buscarContextoConversa('5511999990001', 'tenant-001');
         expect(result.telefone).toBe('5511999990001');
         expect(result.leadId).toBeUndefined();
         expect(result.contatoId).toBeUndefined();
+    });
+
+    it('distingue lead CRM de lead em prospecção pelos filtros', async () => {
+        mockPrisma.lead.findFirst
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ id: 'prospeccao-001' });
+
+        await buscarContextoConversa('5511999990001', 'tenant-001');
+
+        expect(mockPrisma.lead.findFirst).toHaveBeenNthCalledWith(
+            1,
+            expect.objectContaining({
+                where: expect.objectContaining({ statusProspeccao: null }),
+            })
+        );
+        expect(mockPrisma.lead.findFirst).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    statusProspeccao: { not: null },
+                }),
+            })
+        );
     });
 
     it('retorna apenas telefone em caso de erro', async () => {

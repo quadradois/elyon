@@ -5,7 +5,7 @@ const mockPrisma = {
     findMany: jest.fn(),
     findFirst: jest.fn(),
   },
-  contato: {
+  lead: {
     findMany: jest.fn(),
   },
 };
@@ -141,7 +141,7 @@ describe('ElyonCore', () => {
 
   describe('fiscalizarConversoesPendentes', () => {
     it('retorna zerado quando não há contatos pendentes', async () => {
-      mockPrisma.contato.findMany.mockResolvedValue([]);
+      mockPrisma.lead.findMany.mockResolvedValue([]);
       mockPrisma.conversa.findMany.mockResolvedValue([]);
 
       const result = await core.fiscalizarConversoesPendentes();
@@ -151,12 +151,12 @@ describe('ElyonCore', () => {
     });
 
     it('converte contato quando detecta sinal de aceitação', async () => {
-      mockPrisma.contato.findMany.mockResolvedValue([
+      mockPrisma.lead.findMany.mockResolvedValue([
         {
           id: 'contato-1',
           nome: 'Maria',
           telefone: '5511999991111',
-          campanha: { tenantId: 'tenant-1', empreendimento: null },
+          campanhaOrigem: { tenantId: 'tenant-1', empreendimento: null },
         },
       ]);
 
@@ -178,7 +178,7 @@ describe('ElyonCore', () => {
       expect(MockConverterParaLeadUseCase).toHaveBeenCalledTimes(1);
       expect(mockConverterExecute).toHaveBeenCalledWith(
         expect.objectContaining({
-          contatoId: 'contato-1',
+          leadId: 'contato-1',
           tipoInteresse: 'VENDA',
           temperatura: 'QUENTE',
           timeline: '10/03',
@@ -201,12 +201,12 @@ describe('ElyonCore', () => {
         choices: [{ message: { content: 'NAO' } }],
       });
 
-      mockPrisma.contato.findMany.mockResolvedValue([
+      mockPrisma.lead.findMany.mockResolvedValue([
         {
           id: 'contato-2',
           nome: 'João',
           telefone: '5511988887777',
-          campanha: { tenantId: 'tenant-2' },
+          campanhaOrigem: { tenantId: 'tenant-2' },
         },
       ]);
 
@@ -227,12 +227,12 @@ describe('ElyonCore', () => {
     });
 
     it('contabiliza erro quando conversão automática falha', async () => {
-      mockPrisma.contato.findMany.mockResolvedValue([
+      mockPrisma.lead.findMany.mockResolvedValue([
         {
           id: 'contato-3',
           nome: 'Carlos',
           telefone: '5511977776666',
-          campanha: { tenantId: 'tenant-3' },
+          campanhaOrigem: { tenantId: 'tenant-3' },
         },
       ]);
 
@@ -251,12 +251,12 @@ describe('ElyonCore', () => {
     });
 
     it('contabiliza erro quando LLM de avaliação falha e regex também não detecta', async () => {
-      mockPrisma.contato.findMany.mockResolvedValue([
+      mockPrisma.lead.findMany.mockResolvedValue([
         {
           id: 'contato-4',
           nome: 'Paula',
           telefone: '5511966665555',
-          campanha: { tenantId: 'tenant-4' },
+          campanhaOrigem: { tenantId: 'tenant-4' },
         },
       ]);
 
@@ -275,7 +275,7 @@ describe('ElyonCore', () => {
     });
 
     it('retorna zerado quando consulta principal falha', async () => {
-      mockPrisma.contato.findMany.mockRejectedValue(new Error('DB indisponível'));
+      mockPrisma.lead.findMany.mockRejectedValue(new Error('DB indisponível'));
 
       const result = await core.fiscalizarConversoesPendentes();
 

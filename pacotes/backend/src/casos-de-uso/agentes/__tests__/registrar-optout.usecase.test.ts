@@ -1,7 +1,4 @@
 const mockPrisma = {
-  contato: {
-    update: jest.fn(),
-  },
   lead: {
     update: jest.fn(),
   },
@@ -23,38 +20,36 @@ describe('RegistrarOptoutUseCase', () => {
     jest.clearAllMocks();
   });
 
-  it('registra opt-out como contato com sucesso', async () => {
-    mockPrisma.contato.update.mockResolvedValue({});
+  it('registra opt-out no lead unificado com sucesso', async () => {
+    mockPrisma.lead.update.mockResolvedValue({});
     mockPrisma.conversa.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await useCase.execute({
-      leadId: 'contato-1',
+      leadId: 'lead-1',
       motivo: 'NAO_INCOMODAR',
     });
 
     expect(result.success).toBe(true);
     expect(result.message).toContain('não receberá mais mensagens');
 
-    expect(mockPrisma.contato.update).toHaveBeenCalledWith({
-      where: { id: 'contato-1' },
+    expect(mockPrisma.lead.update).toHaveBeenCalledWith({
+      where: { id: 'lead-1' },
       data: expect.objectContaining({
         statusProspeccao: 'OPTOUT',
         motivoDesinteresse: 'NAO_INCOMODAR',
-        observacoes: 'Opt-out: NAO_INCOMODAR',
+        ultimaInteracao: expect.any(Date),
       }),
     });
 
-    expect(mockPrisma.lead.update).not.toHaveBeenCalled();
     expect(mockPrisma.conversa.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { leadId: 'contato-1', estadoConversa: 'ativa' },
+        where: { leadId: 'lead-1', estadoConversa: 'ativa' },
         data: expect.objectContaining({ estadoConversa: 'concluida' }),
       })
     );
   });
 
-  it('faz fallback para lead quando update de contato falha', async () => {
-    mockPrisma.contato.update.mockRejectedValue(new Error('Contato não encontrado'));
+  it('persiste o motivo do opt-out no lead unificado', async () => {
     mockPrisma.lead.update.mockResolvedValue({});
     mockPrisma.conversa.updateMany.mockResolvedValue({ count: 0 });
 
@@ -67,13 +62,13 @@ describe('RegistrarOptoutUseCase', () => {
     expect(mockPrisma.lead.update).toHaveBeenCalledWith({
       where: { id: 'lead-1' },
       data: expect.objectContaining({
-        status: 'PERDIDO',
+        statusProspeccao: 'OPTOUT',
+        motivoDesinteresse: 'IMOVEL_VENDIDO',
       }),
     });
   });
 
-  it('retorna erro quando contato e lead falham', async () => {
-    mockPrisma.contato.update.mockRejectedValue(new Error('Falha contato'));
+  it('retorna erro quando a atualização do lead falha', async () => {
     mockPrisma.lead.update.mockRejectedValue(new Error('Falha lead'));
 
     const result = await useCase.execute({
@@ -87,11 +82,11 @@ describe('RegistrarOptoutUseCase', () => {
   });
 
   it('retorna erro quando encerrar conversa falha', async () => {
-    mockPrisma.contato.update.mockResolvedValue({});
+    mockPrisma.lead.update.mockResolvedValue({});
     mockPrisma.conversa.updateMany.mockRejectedValue(new Error('Falha conversa'));
 
     const result = await useCase.execute({
-      leadId: 'contato-2',
+      leadId: 'lead-2',
       motivo: 'SEM_INTERESSE_AGORA',
     });
 
