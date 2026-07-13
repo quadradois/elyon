@@ -43,11 +43,20 @@ type UsuarioAutenticado = {
   tenantId: string;
 };
 
+type UsuarioAutenticadoCache = UsuarioAutenticado & {
+  estaAtivo: boolean;
+  tenantStatus: string;
+};
+
 type ResultadoAuth =
   | { usuario: UsuarioAutenticado }
   | { erro: 401 | 403; mensagem: string };
 
 async function buscarUsuarioAutenticado(req: Request): Promise<ResultadoAuth> {
+  // O guard global já autenticou a requisição; evita lookup/cache duplicado em
+  // routers que mantêm middleware de papel mais restritivo.
+  if (req.usuario) return { usuario: req.usuario };
+
   const token = extrairToken(req);
   if (!token) {
     return { erro: 401, mensagem: 'Token não fornecido' };
@@ -73,8 +82,20 @@ async function buscarUsuarioAutenticado(req: Request): Promise<ResultadoAuth> {
     redis = await getRedisClient();
     cachedUser = await redis.get(`auth:user:${userId}`);
     if (cachedUser) {
-      const usuarioFromCache = JSON.parse(cachedUser) as UsuarioAutenticado;
-      return { usuario: usuarioFromCache };
+      const usuarioFromCache = JSON.parse(cachedUser) as Partial<UsuarioAutenticadoCache>;
+      if (usuarioFromCache.estaAtivo === true && usuarioFromCache.tenantStatus === 'ATIVO'
+        && usuarioFromCache.id && usuarioFromCache.email && usuarioFromCache.papel && usuarioFromCache.tenantId) {
+        return {
+          usuario: {
+            id: usuarioFromCache.id,
+            email: usuarioFromCache.email,
+            papel: usuarioFromCache.papel,
+            tenantId: usuarioFromCache.tenantId
+          }
+        };
+      }
+      // Entradas do formato antigo não carregam status e devem ser revalidadas no banco.
+      await redis.del(`auth:user:${userId}`);
     }
   } catch (erroCache) {
     console.warn(`[Auth] Falha no Redis para o usuário ${userId}:`, erroCache);
@@ -82,23 +103,46 @@ async function buscarUsuarioAutenticado(req: Request): Promise<ResultadoAuth> {
 
   const usuario = await prisma.usuario.findUnique({
     where: { id: userId },
-    select: { id: true, email: true, papel: true, tenantId: true }
+    select: {
+      id: true,
+      email: true,
+      papel: true,
+      tenantId: true,
+      estaAtivo: true,
+      tenant: { select: { status: true } }
+    }
   });
 
   if (!usuario) {
     return { erro: 401, mensagem: 'Usuário não encontrado' };
   }
 
+  if (!usuario.estaAtivo || usuario.tenant.status !== 'ATIVO') {
+    return { erro: 403, mensagem: 'Usuário ou tenant inativo' };
+  }
+
+  const usuarioAutenticado: UsuarioAutenticado = {
+    id: usuario.id,
+    email: usuario.email,
+    papel: usuario.papel,
+    tenantId: usuario.tenantId
+  };
+
   // Grava no cache por 5 min (300s)
   if (redis) {
     try {
-      await redis.setEx(`auth:user:${userId}`, 300, JSON.stringify(usuario));
+      const usuarioCache: UsuarioAutenticadoCache = {
+        ...usuarioAutenticado,
+        estaAtivo: true,
+        tenantStatus: 'ATIVO'
+      };
+      await redis.setEx(`auth:user:${userId}`, 300, JSON.stringify(usuarioCache));
     } catch (e) {
       console.warn(`[Auth] Erro ao gravar cache do usuário ${userId}:`, e);
     }
   }
 
-  return { usuario: usuario as UsuarioAutenticado };
+  return { usuario: usuarioAutenticado };
 }
 
 /**
@@ -193,12 +237,6 @@ export const verificarAutenticacao = async (
 
     req.usuario = usuario;
     req.tenantId = usuario.tenantId;
-
-    // Permitir que ADMIN/SUPER_ADMIN assuma contexto de outro tenant via header
-    if (!req.tenantId && req.headers['x-tenant-id'] && ['ADMIN', 'SUPER_ADMIN'].includes(usuario.papel)) {
-      console.log(`[Auth] Usuário ADMIN ${usuario.email} assumindo contexto do tenant ${req.headers['x-tenant-id']}`);
-      req.tenantId = req.headers['x-tenant-id'] as string;
-    }
 
     if (!req.tenantId) {
       console.warn(`[Auth] Usuário ${usuario.email} autenticado mas sem Tenant ID vinculado.`);

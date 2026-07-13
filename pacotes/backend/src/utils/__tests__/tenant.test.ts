@@ -23,19 +23,19 @@ describe('getTenantId', () => {
     expect(getTenantId(req)).toBe('tenant-middleware');
   });
 
-  it('usa header x-tenant-id como segunda prioridade', () => {
+  it('ignora header x-tenant-id controlado pelo cliente', () => {
     const req = mockReq({
       headers: { 'x-tenant-id': 'tenant-header' },
       query: { tenantId: 'tenant-query' },
     });
-    expect(getTenantId(req)).toBe('tenant-header');
+    expect(getTenantId(req)).toBeNull();
   });
 
-  it('usa query param como terceira prioridade', () => {
+  it('ignora query param tenantId controlado pelo cliente', () => {
     const req = mockReq({
       query: { tenantId: 'tenant-query' },
     });
-    expect(getTenantId(req)).toBe('tenant-query');
+    expect(getTenantId(req)).toBeNull();
   });
 
   it('retorna null quando nenhuma fonte tem tenantId', () => {
@@ -43,12 +43,11 @@ describe('getTenantId', () => {
     expect(getTenantId(req)).toBeNull();
   });
 
-  it('ignora valores falsy de req.tenantId', () => {
-    // se req.tenantId for undefined, deve cair no fallback
+  it('não usa fallback quando req.tenantId está ausente', () => {
     const req = mockReq({
       tenantId: undefined,
       headers: { 'x-tenant-id': 'fallback' },
     });
-    expect(getTenantId(req)).toBe('fallback');
+    expect(getTenantId(req)).toBeNull();
   });
 });
