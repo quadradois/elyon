@@ -1,8 +1,11 @@
 # Relatório de execução — P0 imediato antes de deploy
 
-Data: 12/07/2026  
-VPS: ELYON  
-Escopo: tarefas 2 a 6 do plano P0 imediato  
+Data: 12/07/2026
+
+VPS: ELYON
+
+Escopo: tarefas 2 a 6 do plano P0 imediato
+
 Resultado: concluído sem rebuild, migração ou restart da aplicação
 
 ## Resumo
