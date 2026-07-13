@@ -1,3 +1,8 @@
 /.github/workflows/ @quadradois @monokingdev
 /scripts/deploy.sh @quadradois @monokingdev
 /scripts/ops/elyon-ci-deploy @quadradois @monokingdev
+/.github/ISSUE_TEMPLATE/ @quadradois @monokingdev
+/.github/pull_request_template.md @quadradois @monokingdev
+/.specify/ @quadradois @monokingdev
+/docs/arquitetura/ @quadradois @monokingdev
+/docs/governanca/ @quadradois @monokingdev

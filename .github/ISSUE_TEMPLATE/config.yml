@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Incidente de seguranca
+    url: https://github.com/quadradois/elyon/security/advisories/new
+    about: Nao publique vulnerabilidades ou dados sensiveis em issues.

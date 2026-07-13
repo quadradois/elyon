@@ -12,6 +12,15 @@ Este diretorio foi organizado por tema para facilitar manutencao e descoberta.
 - `guias/`: guias gerais, migracao, estrategia e auditorias.
 - `relatorios/`: pendencias e relatorios executivos.
 - `skills/`: materiais de apoio para skills.
+- `arquitetura/`: estado AS-IS/TO-BE e registros de decisao (ADRs).
+- `governanca/`: processo de issues, branches, PRs, rollout e rollback.
+
+## Governanca tecnica
+
+- [Arquitetura AS-IS/TO-BE](arquitetura/AS_IS_TO_BE.md)
+- [Indice de ADRs](arquitetura/decisions/README.md)
+- [Workflow de engenharia](governanca/WORKFLOW_ENGENHARIA.md)
+- [Constituicao de engenharia](../.specify/memory/constitution.md)
 
 ## Limpeza aplicada em 2026-04-27
 
