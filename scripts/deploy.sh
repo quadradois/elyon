@@ -64,8 +64,9 @@ validate_compose() {
 
 wait_for_health() {
   local attempts=30
+  local api_path="${1:-ready}"
   local urls=(
-    'https://api.elyon.ia.br/health'
+    "https://api.elyon.ia.br/${api_path}"
     'https://crm.elyon.ia.br'
     'https://elyon.ia.br'
   )
@@ -112,7 +113,8 @@ rollback_application_images() {
   docker image tag "elyon-frontend:rollback-${tag}" elyon-frontend:latest || return 1
   docker image tag "elyon-site:rollback-${tag}" elyon-site:latest || return 1
   docker compose -f docker-compose.yml up -d --no-deps --force-recreate backend frontend site || return 1
-  wait_for_health
+  # A imagem anterior pode anteceder a introdução de /ready.
+  wait_for_health health
 }
 
 cleanup_old_rollback_tags() {

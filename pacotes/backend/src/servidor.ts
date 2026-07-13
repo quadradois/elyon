@@ -60,6 +60,12 @@ import { exigirAutenticacaoPorPadrao } from './middleware/default-deny';
 import { capturarRawBody, validarConfiguracaoWebhooks } from './servicos/webhook-seguranca';
 import { installSecureConsoleBridge, logger } from './lib/logger';
 import { correlationIdMiddleware } from './middleware/correlation-id';
+import {
+  httpMetricsMiddleware,
+  metricsHandler,
+  requireInternalMetricsAccess,
+} from './observabilidade/metricas';
+import { registerHealthRoutes } from './observabilidade/saude';
 
 installSecureConsoleBridge();
 
@@ -73,6 +79,7 @@ app.set('trust proxy', resolverTrustProxy());
 
 // Middlewares
 app.use(correlationIdMiddleware);
+app.use(httpMetricsMiddleware);
 app.use(helmet());
 
 // CORS - Permitir múltiplas origens
@@ -140,18 +147,10 @@ app.use('/api/billing/webhook/asaas', express.json({ limit: '1mb', verify: captu
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
-// Rota de Health Check
-app.get('/api/saude', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Health check simplificado para Docker/Kubernetes
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
-});
+// Endpoints operacionais ficam antes do default-deny. /metrics rejeita acesso
+// encaminhado pelo proxy em produção e é coletado apenas pela rede interna.
+app.get('/metrics', requireInternalMetricsAccess, metricsHandler);
+registerHealthRoutes(app);
 
 // Registrar Rotas (autenticação com rate-limit no login)
 app.use('/api/auth/login', loginLimiter);
@@ -258,7 +257,7 @@ if (require.main === module) {
   server.listen(PORT, async () => {
     logger.info({ port: PORT }, '[BOOT] Servidor iniciado');
     logger.info('[BOOT] WebSocket ativo para alertas em tempo real');
-    logger.info({ path: '/api/saude' }, '[BOOT] Health check disponível');
+    logger.info({ liveness: '/live', readiness: '/ready' }, '[BOOT] Health checks disponíveis');
     schedulerSincronizacaoMapa.iniciar();
     schedulerLimpezaCache.iniciar();
     schedulerReconciliacaoWhatsapp.iniciar();

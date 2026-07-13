@@ -9,6 +9,8 @@ interface RotaPublica {
 
 // Toda nova rota nasce privada. Inclusões nesta lista exigem revisão de segurança.
 export const ROTAS_PUBLICAS: readonly RotaPublica[] = Object.freeze([
+  { metodo: 'GET', caminho: '/live' },
+  { metodo: 'GET', caminho: '/ready' },
   { metodo: 'GET', caminho: '/health' },
   { metodo: 'GET', caminho: '/api/saude' },
   { metodo: 'POST', caminho: '/api/auth/login' },

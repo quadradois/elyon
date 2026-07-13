@@ -137,6 +137,14 @@ services:
       EXPERIENCE_REPLAY_MAX_PATTERNS: ${EXPERIENCE_REPLAY_MAX_PATTERNS:-60}
       MODO_OUTBOUND_ONLY: ${MODO_OUTBOUND_ONLY:-true}
       DESATIVAR_INBOUND: ${DESATIVAR_INBOUND:-true}
+      READINESS_TIMEOUT_MS: ${READINESS_TIMEOUT_MS:-1500}
+
+    healthcheck:
+      test: [ "CMD", "node", "-e", "fetch('http://127.0.0.1:3000/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
     networks:
       - elyon_network
@@ -158,6 +166,9 @@ services:
       - "traefik.http.routers.elyonapi-http.entrypoints=web"
       - "traefik.http.routers.elyonapi-http.service=elyonapi"
       - "traefik.http.services.elyonapi.loadbalancer.server.port=3000"
+      - "traefik.http.services.elyonapi.loadbalancer.healthcheck.path=/ready"
+      - "traefik.http.services.elyonapi.loadbalancer.healthcheck.interval=10s"
+      - "traefik.http.services.elyonapi.loadbalancer.healthcheck.timeout=3s"
       - "traefik.docker.network=elyon_network"
 
   # ==========================================
@@ -290,6 +301,25 @@ services:
       - elyon_network
 
   # ==========================================
+  # OBSERVABILIDADE INTERNA
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:v3.13.0
+    container_name: elyon_prometheus
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--storage.tsdb.retention.size=2GB"
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    networks:
+      - elyon_network
+
+  # ==========================================
   # BACKUP AUTOMATIZADO
   # ==========================================
   backup:
@@ -322,6 +352,7 @@ volumes:
   postgres_data:
   redis_data:
   traefik_letsencrypt:
+  prometheus_data:
 
     # ==========================================
     # NETWORKS
