@@ -21,6 +21,7 @@ Este diretorio foi organizado por tema para facilitar manutencao e descoberta.
 - [Indice de ADRs](arquitetura/decisions/README.md)
 - [Workflow de engenharia](governanca/WORKFLOW_ENGENHARIA.md)
 - [Constituicao de engenharia](../.specify/memory/constitution.md)
+- [Copia anonimizada para testes de migration](operacao/COPIA_BANCO_ANONIMIZADA.md)
 
 ## Limpeza aplicada em 2026-04-27
 

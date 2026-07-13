@@ -111,6 +111,14 @@ jobs:
           prom/prometheus:v3.13.0
           check config /etc/prometheus/prometheus.yml
 
+      - name: Validar utilitario de copia anonimizada
+        run: >-
+          docker run --rm
+          -v "$PWD:/repo:ro"
+          koalaman/shellcheck:v0.10.0
+          --severity=warning
+          /repo/scripts/ops/create-anonymized-db-copy.sh
+
   images:
     name: Imagens - build
     needs: [backend, frontend, compose]
