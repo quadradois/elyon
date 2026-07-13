@@ -24,6 +24,7 @@ const CAPTURA_DOCS_INCLUIR_AUDIO = process.env.CAPTURA_DOCS_INCLUIR_AUDIO === 't
 
 interface DadosMidia {
   url?: string;
+  base64?: string;
   mimetype?: string;
   fileName?: string;
   fileLength?: number;
@@ -69,6 +70,7 @@ function extrairDadosMidia(message: any, messageType: string): DadosMidia | null
 
   return {
     url:        campoMensagem.url          || campoMensagem.mediaUrl || message.mediaUrl,
+    base64:     campoMensagem.base64       || message.message?.base64 || message.base64,
     mimetype:   campoMensagem.mimetype     || MIME_FALLBACK[messageType],
     fileName:   campoMensagem.fileName     || campoMensagem.title,
     fileLength: campoMensagem.fileLength   || campoMensagem.fileSize,
@@ -108,25 +110,37 @@ export async function capturarDocumentoWhatsapp(evento: EventoMidia): Promise<vo
 
   try {
     const dados = extrairDadosMidia(message, messageType);
-    if (!dados?.url) {
-      console.log(`[CapturaDoc] ⚠️ Sem URL de mídia para ${messageType} — ignorando`);
+    if (!dados?.url && !dados?.base64) {
+      console.log(`[CapturaDoc] ⚠️ Sem URL/base64 de mídia para ${messageType} — ignorando`);
       return;
     }
 
     console.log(`[CapturaDoc] 📥 Capturando ${messageType} do lead ${leadId}`);
 
-    // ── 1. Download da mídia ──────────────────────
+    // ── 1. Obter a mídia (base64 do Evolution GO ou download via URL) ──
     let buffer: Buffer;
-    try {
-      const resposta = await axios.get(dados.url, {
-        responseType: 'arraybuffer',
-        timeout: 30_000, // 30s timeout
-        headers: { 'User-Agent': 'Elyon/1.0' },
-      });
-      buffer = Buffer.from(resposta.data);
-    } catch (dlError: any) {
-      console.error(`[CapturaDoc] ❌ Falha no download: ${dlError.message}`);
-      return; // Não lança — fire-and-forget
+    if (dados.base64) {
+      try {
+        const b64 = dados.base64.includes(',')
+          ? dados.base64.slice(dados.base64.indexOf(',') + 1)
+          : dados.base64;
+        buffer = Buffer.from(b64, 'base64');
+      } catch (b64Error: any) {
+        console.error(`[CapturaDoc] ❌ Base64 inválido: ${b64Error.message}`);
+        return;
+      }
+    } else {
+      try {
+        const resposta = await axios.get(dados.url!, {
+          responseType: 'arraybuffer',
+          timeout: 30_000, // 30s timeout
+          headers: { 'User-Agent': 'Elyon/1.0' },
+        });
+        buffer = Buffer.from(resposta.data);
+      } catch (dlError: any) {
+        console.error(`[CapturaDoc] ❌ Falha no download: ${dlError.message}`);
+        return; // Não lança — fire-and-forget
+      }
     }
 
     // ── 2. Upload para S3 ─────────────────────────

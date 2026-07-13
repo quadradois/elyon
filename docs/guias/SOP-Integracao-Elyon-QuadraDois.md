@@ -322,3 +322,51 @@ Execute os passos abaixo para validar a integração:
 | Dúvidas técnicas API | Equipe Quadra Dois |
 | Geração/renovação de API Key | `https://crm.quadradois.com.br/settings/api-keys` |
 | Erros em produção | Verificar logs do Elyon + consultar `GET /api/leads/from-elyon/{id}` |
+
+---
+
+## 10. Anexo — Solicitação de Exportação da Base Imobiliária de Goiânia
+
+Precisamos receber uma exportação da base local usada no Elyon para consulta de imóveis da Prefeitura de Goiânia.
+
+O objetivo é importar essa base no banco do Rancho Delivery para viabilizar o módulo de mineração de contatos.
+
+### 10.1 Formato Preferencial
+
+- CSV ou JSON
+- Encoding: UTF-8
+- Separador CSV: `;` ou `,`, desde que informado
+- Pode ser arquivo completo ou particionado em lotes
+
+### 10.2 Campos Obrigatórios
+
+| Campo | Descrição |
+| --- | --- |
+| `nrinscr` | Inscrição/IPTU do imóvel |
+| `nmbairro` | Nome do bairro |
+| `nmlogradou` | Nome do logradouro/rua |
+| `nrimovel` | Número do imóvel |
+| `incompl` | Complemento, apartamento, bloco, sala etc. |
+| `nrquadra` | Quadra |
+| `nrlote` | Lote |
+
+### 10.3 Campos Recomendados
+
+| Campo | Descrição |
+| --- | --- |
+| `OBJECTID` ou `object_id` | Identificador original da API/mapa |
+| `cdbairro` | Código do bairro |
+| `cdlogradou` | Código do logradouro |
+| `tplogradou` | Tipo do logradouro |
+| `cdedificio` | Código do edifício, se houver |
+| `nmedificio` | Nome do edifício/condomínio, se houver |
+| `instatus` | Status cadastral, se houver |
+| `inposfisc` | Posição fiscal, se houver |
+| `raw` | Registro original completo, se disponível |
+
+### 10.4 Exemplo CSV
+
+```csv
+OBJECTID;nrinscr;nmbairro;nmlogradou;nrimovel;incompl;nrquadra;nrlote;cdbairro;cdlogradou;tplogradou;cdedificio;nmedificio
+123;00123456789012;JARDIM BURITI;AVENIDA EXEMPLO;100;APT 101;Q1;L2;55;999;AV;321;RESIDENCIAL OPUS
+```

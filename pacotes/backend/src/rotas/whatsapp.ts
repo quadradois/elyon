@@ -1,7 +1,6 @@
 import { responderErro } from '../utilitarios/resposta';
 import { Router } from 'express';
-import { getWhatsAppService } from '../servicos/whatsapp';
-import axios from 'axios';
+import { getWhatsAppService, limparCacheWhatsApp } from '../servicos/whatsapp';
 import { prisma } from '../lib/db';
 
 const router = Router();
@@ -100,10 +99,7 @@ router.post('/conectar', async (req, res) => {
              // Estado zumbi. Vamos deletar e recriar para forçar novo QR.
              console.log('Instância travada em close sem QR Code. Reiniciando...');
              try {
-                await axios.delete(
-                    `${process.env.EVOLUTION_API_URL}/instance/delete/${process.env.EVOLUTION_INSTANCE_NAME}`,
-                    { headers: { apikey: process.env.EVOLUTION_API_KEY } }
-                );
+                await whatsappService.deletarInstancia().catch(() => {});
                 await whatsappService.criarInstancia();
                 // Tenta pegar o QR Code novamente da nova instância
                 const novoResultado = await whatsappService.conectarInstancia();
@@ -140,19 +136,37 @@ router.post('/conectar', async (req, res) => {
 // POST /api/whatsapp/reset
 router.post('/reset', async (req, res) => {
   try {
-    console.log('Solicitação de reset manual da instância...');
-    try {
-        await axios.delete(
-            `${process.env.EVOLUTION_API_URL}/instance/delete/${process.env.EVOLUTION_INSTANCE_NAME}`,
-            { headers: { apikey: process.env.EVOLUTION_API_KEY } }
-        );
-    } catch (e: any) {
-        console.log('Erro ao deletar (pode não existir):', e.message);
+    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+
+    if (!tenantId) {
+      return responderErro(res, 400, 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.');
     }
-    
-    // Aguarda um pouco para garantir
-    await new Promise(r => setTimeout(r, 2000));
-    
+
+    const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
+      where: { tenantId },
+      orderBy: { criadoEm: 'desc' }
+    });
+
+    if (!sessaoWhatsapp || !sessaoWhatsapp.instanceName) {
+      return responderErro(res, 400, 'Nenhuma sessão WhatsApp encontrada para este tenant.');
+    }
+
+    console.log(`Solicitação de reset manual da instância ${sessaoWhatsapp.instanceName}...`);
+    const whatsappService = getWhatsAppService(sessaoWhatsapp.instanceName);
+
+    try {
+      await whatsappService.deletarInstancia();
+    } catch (e: any) {
+      console.log('Erro ao deletar (pode não existir):', e.message);
+    }
+
+    // Limpa instanceId/token para forçar recriação no próximo conectar
+    await prisma.sessaoWhatsapp.update({
+      where: { id: sessaoWhatsapp.id },
+      data: { evolutionInstanceId: null, evolutionToken: null, status: 'DESCONECTADO' }
+    });
+    limparCacheWhatsApp(sessaoWhatsapp.instanceName);
+
     res.json({ status: 'RESETADO', message: 'Instância resetada com sucesso. Tente conectar novamente.' });
   } catch (error: any) {
     console.error('Erro ao resetar:', error);

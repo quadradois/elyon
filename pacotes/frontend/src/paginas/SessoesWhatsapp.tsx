@@ -52,6 +52,9 @@ export function SessoesWhatsapp() {
   const [modalQrOpen, setModalQrOpen] = useState(false);
   const [qrCodeBase64, setQrCodeBase64] = useState<string | null>(null);
   const [sessaoConectando, setSessaoConectando] = useState<string | null>(null);
+  // Sessão cujo QR está sendo exibido no modal (para polling de conexão)
+  const [sessaoQrId, setSessaoQrId] = useState<string | null>(null);
+  const [conexaoConfirmada, setConexaoConfirmada] = useState(false);
 
   // Form state
   const [novoNome, setNovoNome] = useState("");
@@ -125,6 +128,39 @@ export function SessoesWhatsapp() {
     return () => clearInterval(interval);
   }, [carregarSessoes, sessoes]);
 
+  // Polling enquanto o modal do QR está aberto: fecha sozinho ao conectar
+  useEffect(() => {
+    if (!modalQrOpen || !sessaoQrId) return;
+
+    let cancelado = false;
+    const interval = setInterval(async () => {
+      try {
+        const response = await api.get(`/sessoes-whatsapp/${sessaoQrId}/status`);
+        if (!cancelado && response.data.status === "CONECTADO") {
+          clearInterval(interval);
+          setConexaoConfirmada(true);
+          // Pequeno respiro para o usuário ver o "Conectado!" antes de fechar
+          setTimeout(() => {
+            if (cancelado) return;
+            setModalQrOpen(false);
+            setQrCodeBase64(null);
+            setSessaoQrId(null);
+            setConexaoConfirmada(false);
+            toast.success("WhatsApp conectado com sucesso!");
+            carregarSessoes();
+          }, 1500);
+        }
+      } catch (error) {
+        console.error("Erro ao verificar status do QR:", error);
+      }
+    }, 3000);
+
+    return () => {
+      cancelado = true;
+      clearInterval(interval);
+    };
+  }, [modalQrOpen, sessaoQrId, carregarSessoes]);
+
   const criarSessao = async () => {
     if (!novoNome.trim()) return;
 
@@ -162,6 +198,8 @@ export function SessoesWhatsapp() {
             : response.data.qrcode.base64;
 
         setQrCodeBase64(qr);
+        setSessaoQrId(id);
+        setConexaoConfirmada(false);
         setModalQrOpen(true);
       } else if (response.data.status === "CONECTADO") {
         toast.success("Sessão já está conectada!");
@@ -201,8 +239,11 @@ export function SessoesWhatsapp() {
       await api.delete(`/sessoes-whatsapp/${id}`);
       toast.success("Sessão excluída");
       carregarSessoes();
-    } catch (error) {
-      toast.error("Erro ao excluir sessão");
+    } catch (error: any) {
+      toast.error("Erro ao excluir sessão", {
+        description: error.response?.data?.erro || "Tente novamente",
+      });
+      carregarSessoes();
     }
   };
 
@@ -449,18 +490,41 @@ export function SessoesWhatsapp() {
       </Dialog>
 
       {/* Modal QR Code */}
-      <Dialog open={modalQrOpen} onOpenChange={setModalQrOpen}>
+      <Dialog
+        open={modalQrOpen}
+        onOpenChange={(open) => {
+          setModalQrOpen(open);
+          if (!open) {
+            setQrCodeBase64(null);
+            setSessaoQrId(null);
+            setConexaoConfirmada(false);
+            carregarSessoes();
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Escaneie o QR Code</DialogTitle>
+            <DialogTitle>
+              {conexaoConfirmada ? "Conectado!" : "Escaneie o QR Code"}
+            </DialogTitle>
             <DialogDescription>
-              Abra o WhatsApp no seu celular, vá em Aparelhos Conectados e
-              escaneie o código abaixo.
+              {conexaoConfirmada
+                ? "Seu WhatsApp foi conectado com sucesso."
+                : "Abra o WhatsApp no seu celular, vá em Aparelhos Conectados e escaneie o código abaixo."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col items-center justify-center py-6 space-y-4">
-            {qrCodeBase64 ? (
+            {conexaoConfirmada ? (
+              <div className="w-64 h-64 bg-emerald-50 rounded-xl flex flex-col items-center justify-center gap-3 border border-emerald-100">
+                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
+                  <Smartphone className="w-8 h-8 text-emerald-600" />
+                </div>
+                <p className="font-semibold text-emerald-800">
+                  WhatsApp conectado!
+                </p>
+              </div>
+            ) : qrCodeBase64 ? (
               <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200">
                 <img
                   src={qrCodeBase64}
@@ -474,20 +538,29 @@ export function SessoesWhatsapp() {
               </div>
             )}
 
-            <p className="text-sm text-slate-500 text-center max-w-xs">
-              Mantenha esta janela aberta até escanear. A conexão será
-              atualizada automaticamente.
-            </p>
+            {!conexaoConfirmada && (
+              <div className="flex items-center gap-2 text-sm text-slate-500 text-center max-w-xs">
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                <span>
+                  Aguardando a leitura... A conexão será detectada
+                  automaticamente.
+                </span>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
             <Button
+              variant={conexaoConfirmada ? "default" : "outline"}
               onClick={() => {
                 setModalQrOpen(false);
+                setQrCodeBase64(null);
+                setSessaoQrId(null);
+                setConexaoConfirmada(false);
                 carregarSessoes(); // Recarregar para ver se conectou
               }}
             >
-              Concluir
+              {conexaoConfirmada ? "Pronto" : "Fechar"}
             </Button>
           </DialogFooter>
         </DialogContent>

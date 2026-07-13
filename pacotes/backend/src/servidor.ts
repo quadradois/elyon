@@ -52,6 +52,7 @@ export { prisma };
 import { websocketService } from './servicos/websocket';
 import { schedulerSincronizacaoMapa } from './servicos/scheduler-sincronizacao-mapa';
 import { schedulerLimpezaCache } from './servicos/scheduler-limpeza-cache';
+import { schedulerReconciliacaoWhatsapp } from './servicos/scheduler-reconciliacao-whatsapp';
 
 const app = express();
 const server = http.createServer(app);
@@ -230,6 +231,7 @@ if (require.main === module) {
     console.log(`🏥 Health check: http://localhost:${PORT}/api/saude`);
     schedulerSincronizacaoMapa.iniciar();
     schedulerLimpezaCache.iniciar();
+    schedulerReconciliacaoWhatsapp.iniciar();
 
     // REMOVIDO: Autoconfiguração global de webhook
     // Cada sessão WhatsApp configura seu próprio webhook individualmente

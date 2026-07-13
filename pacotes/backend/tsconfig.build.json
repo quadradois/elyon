@@ -4,6 +4,7 @@
     "node_modules",
     "dist",
     "src/**/*.test.ts",
-    "src/**/__tests__/**"
+    "src/**/__tests__/**",
+    "src/agentes_bak_pre_sdr_20260411_155803"
   ]
 }
