@@ -35,7 +35,8 @@ automática das imagens anteriores.
 
 O serviço `elyon_prometheus` coleta `backend:3000/metrics` a cada 15 segundos,
 avalia `observability/prometheus/alerts.yml` e mantém até 15 dias ou 2 GB no
-volume `prometheus_data`. O Prometheus não publica porta no host.
+volume `prometheus_data`. Alterações de configuração são recarregadas em até 30
+segundos, sem reinício manual. O Prometheus não publica porta no host.
 
 Validações operacionais:
 
