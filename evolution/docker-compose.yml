@@ -1,10 +1,15 @@
-version: '3.3'
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
 
 services:
   evolution_api:
     container_name: evolution_api
     image: evoapicloud/evolution-api:v2.3.6
     restart: always
+    logging: *default-logging
     # ports:
     #   - "8081:8080"
     environment:
@@ -77,6 +82,7 @@ services:
     container_name: postgres_evolution
     image: postgres:15-alpine
     restart: always
+    logging: *default-logging
     environment:
       - POSTGRES_USER=evolution
       - POSTGRES_PASSWORD=evolution_pass
@@ -90,6 +96,7 @@ services:
     container_name: redis_evolution
     image: redis:7-alpine
     restart: always
+    logging: *default-logging
     command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
       - evolution_redis_data:/data

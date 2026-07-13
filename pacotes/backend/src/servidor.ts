@@ -8,6 +8,7 @@ import http from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { ipKeyGenerator } from 'express-rate-limit';
 import rotaAutenticacao from './rotas/autenticacao';
 import rotaMineracao from './rotas/mineracao';
 import rotaSincronizacao from './rotas/sincronizacao';
@@ -52,10 +53,15 @@ export { prisma };
 import { websocketService } from './servicos/websocket';
 import { schedulerSincronizacaoMapa } from './servicos/scheduler-sincronizacao-mapa';
 import { schedulerLimpezaCache } from './servicos/scheduler-limpeza-cache';
+import { resolverTrustProxy } from './utils/trust-proxy';
 
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+
+// A API de produção recebe tráfego por exatamente um proxy confiável (Traefik).
+// Em outros ambientes, o proxy permanece desabilitado por padrão.
+app.set('trust proxy', resolverTrustProxy());
 
 // Middlewares
 app.use(helmet());
@@ -90,15 +96,13 @@ app.use(cors({
 // (ex: alguém chamando /exportar-csv ou Smart Discovery em loop consumindo créditos Assertiva)
 const globalLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
-  max: 200,            // 200 req/min por tenant (ou IP como fallback)
+  max: 200,            // 200 req/min por IP de origem validado pelo Express
   message: { erro: 'Muitas requisições. Aguarde um momento e tente novamente.' },
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
-    return (req.headers['x-tenant-id'] as string) || 
-           (req.headers['x-forwarded-for'] as string)?.split(',')[0] || 
-           req.socket.remoteAddress || 
-           'unknown';
+    const endereco = req.ip || req.socket.remoteAddress || 'unknown';
+    return ipKeyGenerator(endereco);
   },
   skip: (req) => process.env.NODE_ENV !== 'production'
 });
