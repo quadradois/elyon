@@ -65,17 +65,68 @@ validate_compose() {
 
 wait_for_health() {
   local attempts=30
-  local url='https://api.elyon.ia.br/health'
+  local urls=(
+    'https://api.elyon.ia.br/health'
+    'https://crm.elyon.ia.br'
+    'https://elyon.ia.br'
+  )
 
   for ((i = 1; i <= attempts; i++)); do
-    if curl --fail --silent --show-error --max-time 5 "$url" >/dev/null; then
-      echo -e "${GREEN}Health check aprovado.${NC}"
+    local healthy=true
+    for url in "${urls[@]}"; do
+      if ! curl --fail --silent --show-error --max-time 5 "$url" >/dev/null; then
+        healthy=false
+        break
+      fi
+    done
+
+    if [[ "$healthy" == true ]]; then
+      echo -e "${GREEN}Health checks de API, CRM e site aprovados.${NC}"
       return 0
     fi
     sleep 2
   done
 
-  fail "Health check falhou após $((attempts * 2)) segundos."
+  echo -e "${RED}Health check falhou após $((attempts * 2)) segundos.${NC}" >&2
+  return 1
+}
+
+snapshot_current_images() {
+  local tag="$1"
+  local container repository image_id
+
+  while read -r container repository; do
+    image_id=$(docker inspect --format '{{.Image}}' "$container") || return 1
+    docker image tag "$image_id" "${repository}:rollback-${tag}" || return 1
+  done <<'EOF'
+elyon_backend elyon-backend
+elyon_frontend elyon-frontend
+elyon_site elyon-site
+EOF
+}
+
+rollback_application_images() {
+  local tag="$1"
+  echo -e "${YELLOW}Restaurando imagens da aplicação do release anterior...${NC}" >&2
+
+  docker image tag "elyon-backend:rollback-${tag}" elyon-backend:latest || return 1
+  docker image tag "elyon-frontend:rollback-${tag}" elyon-frontend:latest || return 1
+  docker image tag "elyon-site:rollback-${tag}" elyon-site:latest || return 1
+  docker compose -f docker-compose.yml up -d --no-deps --force-recreate backend frontend site || return 1
+  wait_for_health
+}
+
+cleanup_old_rollback_tags() {
+  local keep_tag="$1"
+  local repository image_ref
+
+  for repository in elyon-backend elyon-frontend elyon-site; do
+    while read -r image_ref; do
+      [[ -n "$image_ref" ]] || continue
+      [[ "$image_ref" == "${repository}:rollback-${keep_tag}" ]] && continue
+      docker image rm "$image_ref" >/dev/null 2>&1 || true
+    done < <(docker image ls "$repository" --format '{{.Repository}}:{{.Tag}}' | grep ':rollback-' || true)
+  done
 }
 
 record_deployment() {
@@ -111,16 +162,47 @@ do_up() {
 do_update() {
   require_env
   validate_release_state
-  local expected
+  local expected previous rollback_tag
   expected=$(resolve_expected_commit "${1:-}")
+  previous=$(cat /var/lib/elyon-last-deployed-commit 2>/dev/null || git rev-parse HEAD)
+  rollback_tag=${previous:0:12}
+
+  snapshot_current_images "$rollback_tag" || fail "Não foi possível preservar as imagens atuais."
 
   git merge --ff-only "$expected"
   validate_compose
-  docker compose -f docker-compose.yml build
-  docker compose -f docker-compose.yml up -d --remove-orphans
-  docker compose -f evolution/docker-compose.yml up -d --remove-orphans
-  wait_for_health
+
+  if ! docker exec elyon_backup /backup.sh; then
+    fail "Backup pré-deploy falhou; release cancelado."
+  fi
+
+  if ! docker compose -f docker-compose.yml build; then
+    rollback_application_images "$rollback_tag" || true
+    fail "Build falhou; imagens anteriores restauradas."
+  fi
+
+  if ! docker compose -f docker-compose.yml run --rm --no-deps backend npx prisma migrate deploy; then
+    rollback_application_images "$rollback_tag" || true
+    fail "Migration falhou; aplicação anterior restaurada."
+  fi
+
+  if ! docker compose -f docker-compose.yml up -d --remove-orphans; then
+    rollback_application_images "$rollback_tag" || true
+    fail "Inicialização falhou; aplicação anterior restaurada."
+  fi
+
+  if ! docker compose -f evolution/docker-compose.yml up -d --remove-orphans; then
+    rollback_application_images "$rollback_tag" || true
+    fail "Evolution não iniciou; aplicação anterior restaurada."
+  fi
+
+  if ! wait_for_health; then
+    rollback_application_images "$rollback_tag" || true
+    fail "Health check falhou; aplicação anterior restaurada."
+  fi
+
   record_deployment "$expected"
+  cleanup_old_rollback_tags "$rollback_tag"
   echo -e "${GREEN}Deploy concluído no commit $expected.${NC}"
 }
 
