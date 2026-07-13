@@ -56,6 +56,7 @@ import { schedulerLimpezaCache } from './servicos/scheduler-limpeza-cache';
 import { resolverTrustProxy } from './utils/trust-proxy';
 import { schedulerReconciliacaoWhatsapp } from './servicos/scheduler-reconciliacao-whatsapp';
 import { validarConfiguracaoCriptografia } from './lib/crypto';
+import { exigirAutenticacaoPorPadrao } from './middleware/default-deny';
 
 const app = express();
 const server = http.createServer(app);
@@ -146,6 +147,9 @@ app.get('/health', (req, res) => {
 
 // Registrar Rotas (autenticação com rate-limit no login)
 app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/admin-login', loginLimiter);
+// Default deny: somente a allowlist explícita permanece pública.
+app.use(exigirAutenticacaoPorPadrao);
 app.use('/api/auth', rotaAutenticacao);
 app.use('/api/mineracao', rotaMineracao);
 app.use('/api/mineracao/jobs', rotaJobsMineracao);  // Jobs assíncronos de mineração

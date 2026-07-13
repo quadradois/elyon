@@ -1,12 +1,9 @@
 import { Request } from 'express';
 
 /**
- * Extrai o tenantId do request
- * Prioridade: req.tenantId (middleware) > header x-tenant-id > query param
+ * Retorna exclusivamente o tenant derivado pelo middleware de autenticação.
+ * Header, query e body nunca são fontes de identidade/autorização.
  */
 export function getTenantId(req: Request): string | null {
-  if ((req as any).tenantId) return (req as any).tenantId;
-  if (req.headers['x-tenant-id']) return req.headers['x-tenant-id'] as string;
-  if (req.query.tenantId) return req.query.tenantId as string;
-  return null;
+  return req.tenantId || req.usuario?.tenantId || null;
 }

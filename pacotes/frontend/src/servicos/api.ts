@@ -32,7 +32,6 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('elyon_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-    config.headers['X-Access-Token'] = token;
   }
 
   // Adicionar tenant ID do objeto salvo no login
