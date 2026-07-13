@@ -426,7 +426,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     // Validar dados de entrada
-    console.log('[Agentes] Dados recebidos:', JSON.stringify(req.body, null, 2));
+    console.log('[Agentes] Solicitação de criação recebida');
 
     const validacao = CriarAgenteSchema.safeParse(req.body);
     if (!validacao.success) {

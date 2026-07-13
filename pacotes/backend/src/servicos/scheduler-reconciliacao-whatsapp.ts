@@ -18,6 +18,7 @@ import {
   deletarInstanciaEvolutionPorId,
   limparCacheWhatsApp,
 } from './whatsapp';
+import { runWithJobLogContext } from '../lib/log-context';
 
 const PREFIXO_ELYON = 'elyon_';
 const CHECK_INTERVAL_MS = 60 * 1000; // verifica a cada minuto
@@ -30,7 +31,7 @@ class SchedulerReconciliacaoWhatsapp {
     if (this.timer) return;
 
     this.timer = setInterval(() => {
-      this.verificarJanelaExecucao().catch((err) => {
+      runWithJobLogContext('scheduler-whatsapp-reconciliation', () => this.verificarJanelaExecucao()).catch((err) => {
         console.error('[ReconciliacaoWA] Erro no ciclo de verificação:', err);
       });
     }, CHECK_INTERVAL_MS);

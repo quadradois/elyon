@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/servidor.js",
     "test": "jest",
+    "test:security:logs": "jest --runInBand src/lib/__tests__/logger-security.test.ts src/middleware/__tests__/correlation-id.test.ts",
     "crypto:inventory": "node dist/scripts/rotacionar-chave-criptografia.js --dry-run",
     "crypto:rotate": "node dist/scripts/rotacionar-chave-criptografia.js --apply",
     "crypto:verify": "node dist/scripts/rotacionar-chave-criptografia.js --verify",

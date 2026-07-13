@@ -28,6 +28,7 @@ jest.mock("../../lib/logger", () => ({
 }));
 
 import { prisma } from "../../lib/db";
+import { logger } from "../../lib/logger";
 import { verificarToken } from "../../utilitarios/token";
 import { WebSocketService } from "../websocket";
 
@@ -37,6 +38,11 @@ const prismaMock = prisma as unknown as {
   alertaCorretor: { findMany: jest.Mock; updateMany: jest.Mock };
 };
 const verificarTokenMock = verificarToken as jest.Mock;
+const loggerMock = logger as unknown as {
+  info: jest.Mock;
+  warn: jest.Mock;
+  error: jest.Mock;
+};
 
 describe("WebSocketService - autenticação e isolamento tenant", () => {
   let httpServer: HTTPServer;
@@ -98,7 +104,10 @@ describe("WebSocketService - autenticação e isolamento tenant", () => {
     await service.encerrar();
   });
 
-  function conectar(auth: Record<string, unknown>): Promise<SocketCliente> {
+  function conectar(
+    auth: Record<string, unknown>,
+    extraHeaders?: Record<string, string>,
+  ): Promise<SocketCliente> {
     const cliente = criarSocketCliente(url, {
       path: "/ws",
       transports: ["websocket"],
@@ -106,6 +115,7 @@ describe("WebSocketService - autenticação e isolamento tenant", () => {
       forceNew: true,
       autoConnect: false,
       auth,
+      extraHeaders,
     });
     clientes.push(cliente);
 
@@ -169,6 +179,18 @@ describe("WebSocketService - autenticação e isolamento tenant", () => {
       totalConexoes: 2,
       conexoesPorTenant: { "tenant-a": 1, "tenant-b": 1 },
     });
+  });
+
+  it("propaga correlation id do handshake para os logs", async () => {
+    await conectar(
+      { token: "token-a" },
+      { "x-correlation-id": "websocket-request-123" },
+    );
+
+    expect(loggerMock.info).toHaveBeenCalledWith(
+      expect.objectContaining({ correlationId: "websocket-request-123" }),
+      "[WS] Cliente autenticado",
+    );
   });
 
   it("aplica ownership do tenant ao atualizar um alerta", async () => {

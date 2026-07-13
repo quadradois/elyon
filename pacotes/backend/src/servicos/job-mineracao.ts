@@ -12,6 +12,7 @@ import { scraperIPTU, parsearEnderecoPrefeitura } from './scraper-iptu';
 import { imoveisRanchoService } from './imoveis-rancho';
 import { servicoCreditos } from './servico-creditos';
 import { prisma } from '../lib/db';
+import { runWithJobLogContext } from '../lib/log-context';
 
 // Fonte de identificação de proprietário (ver imoveis-rancho.ts):
 // USAR_BASE_GEO360 (default ON) consulta a base local; GEO360_FALLBACK_SCRAPER (default OFF) cai no scraper.
@@ -113,7 +114,7 @@ export async function criarJobMineracao(
     );
 
     // Iniciar processamento em background (não bloqueia)
-    processarJobEmBackground(jobId, tenantId).catch(err => {
+    runWithJobLogContext(jobId, () => processarJobEmBackground(jobId, tenantId)).catch(err => {
         console.error(`[JobMineracao] Erro fatal no job ${jobId}:`, err);
     });
 

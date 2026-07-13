@@ -76,7 +76,7 @@ router.post('/conectar', async (req, res) => {
     const whatsappService = getWhatsAppService(instanceName);
     const resultado = await whatsappService.conectarInstancia();
     
-    console.log('Resultado da conexão Evolution:', JSON.stringify(resultado, null, 2));
+    console.log('[WhatsApp] Solicitação de conexão concluída');
 
     // A Evolution retorna { qrcode: { base64: "..." } } ou algo similar dependendo da versão
     // Vamos garantir que retornamos o base64 ou o código para o frontend

@@ -237,7 +237,7 @@ export class ElyonCore {
           }
 
           if (leadAceitou) {
-            logger.debug(`[ELYON] ✅ Lead ${contato.nome} (${contato.telefone}) ACEITOU mas não foi promovido!`);
+            logger.debug({ contatoId: contato.id }, '[ELYON] Lead aceitou, mas não foi promovido');
 
             // Extrair dados básicos da conversa
             const regexQuartos = /(\d+)\s*quartos?/i;

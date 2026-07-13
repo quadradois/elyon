@@ -3,6 +3,7 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { z } from "zod";
 import { prisma } from "../lib/db";
 import { logger } from "../lib/logger";
+import { resolveCorrelationId, runWithLogContext } from "../lib/log-context";
 import { verificarToken } from "../utilitarios/token";
 
 interface ConexaoCliente {
@@ -70,11 +71,16 @@ export class WebSocketService {
     });
 
     this.io.use(async (socket, next) => {
+      const correlationId = resolveCorrelationId(
+        socket.handshake.headers["x-correlation-id"],
+      );
+      socket.data.correlationId = correlationId;
+
       try {
         const token = socket.handshake.auth?.token;
         if (typeof token !== "string" || !token) {
           logger.warn(
-            { socketId: socket.id, motivo: "token_ausente" },
+            { correlationId, socketId: socket.id, motivo: "token_ausente" },
             "[WS] Handshake recusado",
           );
           next(new Error("Não autorizado"));
@@ -88,6 +94,7 @@ export class WebSocketService {
           logger.warn(
             {
               socketId: socket.id,
+              correlationId,
               motivo: tokenValidado.erro || "payload_invalido",
             },
             "[WS] Handshake recusado",
@@ -109,7 +116,7 @@ export class WebSocketService {
 
         if (!usuario?.estaAtivo || !usuario.tenantId) {
           logger.warn(
-            { socketId: socket.id, motivo: "usuario_inativo_ou_inexistente" },
+            { correlationId, socketId: socket.id, motivo: "usuario_inativo_ou_inexistente" },
             "[WS] Handshake recusado",
           );
           next(new Error("Não autorizado"));
@@ -127,7 +134,7 @@ export class WebSocketService {
         next();
       } catch (error) {
         logger.error(
-          { err: error, socketId: socket.id },
+          { err: error, correlationId, socketId: socket.id },
           "[WS] Falha ao autenticar handshake",
         );
         next(new Error("Não autorizado"));
@@ -135,12 +142,17 @@ export class WebSocketService {
     });
 
     this.io.on("connection", async (socket) => {
+      const correlationId = resolveCorrelationId(socket.data.correlationId);
+      socket.use((_event, next) => {
+        runWithLogContext({ correlationId, channel: "websocket" }, next);
+      });
+
       const principal = socket.data.principal as ConexaoCliente;
       this.conexoes.set(socket.id, principal);
       await socket.join(`tenant:${principal.tenantId}`);
 
-      logger.info({ socketId: socket.id }, "[WS] Cliente autenticado");
-      socket.emit("autenticado", { sucesso: true });
+      logger.info({ correlationId, socketId: socket.id }, "[WS] Cliente autenticado");
+      socket.emit("autenticado", { sucesso: true, correlationId });
       await this.enviarAlertasPendentes(socket, principal.tenantId);
 
       let janelaIniciadaEm = Date.now();
@@ -195,7 +207,7 @@ export class WebSocketService {
           }
         } catch (error) {
           logger.error(
-            { err: error, socketId: socket.id },
+            { err: error, correlationId, socketId: socket.id },
             "[WS] Erro ao marcar alerta como visualizado",
           );
           socket.emit("erro", {
@@ -247,7 +259,7 @@ export class WebSocketService {
             });
         } catch (error) {
           logger.error(
-            { err: error, socketId: socket.id },
+            { err: error, correlationId, socketId: socket.id },
             "[WS] Erro ao atender alerta",
           );
           socket.emit("erro", {
@@ -258,8 +270,10 @@ export class WebSocketService {
       });
 
       socket.on("disconnect", () => {
-        this.conexoes.delete(socket.id);
-        logger.info({ socketId: socket.id }, "[WS] Cliente desconectado");
+        runWithLogContext({ correlationId, channel: "websocket" }, () => {
+          this.conexoes.delete(socket.id);
+          logger.info({ socketId: socket.id }, "[WS] Cliente desconectado");
+        });
       });
     });
 

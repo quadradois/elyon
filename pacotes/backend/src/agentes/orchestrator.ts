@@ -198,7 +198,7 @@ export async function processarMensagemOrquestrada(
         let handoffsTurno = 0;
         let paolDecision: PaolDecision | null = null;
 
-        logger.debug(`[ORCHESTRATOR] Processando mensagem para ${contexto.telefone}`);
+        logger.debug({ telefone: contexto.telefone }, '[ORCHESTRATOR] Processando mensagem');
 
         // 1. EXECUTAR GUARDRAILS DE ENTRADA (opt-out, spam, blacklist, comprador)
         const guardrailEntrada = await executarGuardrailsEntrada({
@@ -212,7 +212,11 @@ export async function processarMensagemOrquestrada(
 
         if (guardrailEntrada.bloqueado && guardrailEntrada.guardrailResult) {
             const guardrailResult = guardrailEntrada.guardrailResult;
-            logger.debug(`[ORCHESTRATOR] Guardrail acionado: ${guardrailResult.tipo} telefone=${contexto.telefone} acao=${guardrailResult.acao || 'N/A'}`);
+            logger.debug({
+                guardrail: guardrailResult.tipo,
+                telefone: contexto.telefone,
+                acao: guardrailResult.acao || 'N/A',
+            }, '[ORCHESTRATOR] Guardrail acionado');
 
             if (guardrailResult.acao === 'REGISTRAR_OPTOUT') {
                 const leadIdParaOptout = contexto.leadId || contexto.contatoId;

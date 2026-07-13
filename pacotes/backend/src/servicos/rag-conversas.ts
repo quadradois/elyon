@@ -235,7 +235,7 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
     mensagemAtual: string,
     tiposDesejados?: string[]
   ): Promise<ResultadoBuscaRAG> {
-    console.log(`[RAG] 🔍 Buscando contexto para: "${mensagemAtual.substring(0, 50)}..."`);
+    console.log(`[RAG] Buscando contexto para mensagem com ${mensagemAtual.length} caracteres`);
 
     try {
       // 0. Resolver chaves RAG

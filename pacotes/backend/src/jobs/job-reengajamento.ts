@@ -166,13 +166,13 @@ export async function processarReengajamento(): Promise<ResultadoReengajamento> 
           });
 
           resultado.enviados++;
-          console.log(`   ✅ ${contato.nome} — re-engajado com sucesso`);
+          console.log(`[Reengajamento] contatoId=${contato.id} reengajado com sucesso`);
 
           // Delay entre envios (3-6 segundos)
           await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 3000));
 
         } catch (error: any) {
-          console.error(`   ❌ ${contato.nome}: ${error.message}`);
+          console.error(`[Reengajamento] contatoId=${contato.id} falhou:`, error);
           resultado.erros++;
         }
       }
