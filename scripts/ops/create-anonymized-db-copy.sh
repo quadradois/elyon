@@ -110,7 +110,7 @@ inventory_path="${output_root_canonical}/elyon-anonymized-${timestamp}.inventory
 evidence_path="${output_root_canonical}/elyon-anonymized-${timestamp}.evidence"
 
 cleanup() {
-  docker rm -f "$scrub_container" "$verify_container" >/dev/null 2>&1 || true
+  docker rm -fv "$scrub_container" "$verify_container" >/dev/null 2>&1 || true
   unset target_password
 }
 trap cleanup EXIT INT TERM
@@ -158,120 +158,142 @@ timeout --foreground "$TIMEOUT_SECONDS" docker exec "$SOURCE_CONTAINER" pg_dump 
 echo 'Anonimizando colunas sensiveis na copia isolada...'
 timeout --foreground "$TIMEOUT_SECONDS" docker exec -i "$scrub_container" psql \
   -v ON_ERROR_STOP=1 -U "$target_user" -d "$target_db" <<'SQL'
+CREATE TEMP TABLE anonymization_columns AS
+SELECT
+  table_schema,
+  table_name,
+  column_name,
+  data_type,
+  udt_name,
+  character_maximum_length,
+  ordinal_position,
+  lower(column_name) AS normalized_name
+FROM information_schema.columns columns
+WHERE table_schema = 'public'
+  AND table_name <> '_prisma_migrations'
+  AND is_generated = 'NEVER'
+  AND EXISTS (
+    SELECT 1
+    FROM information_schema.tables tables
+    WHERE tables.table_schema = columns.table_schema
+      AND tables.table_name = columns.table_name
+      AND tables.table_type = 'BASE TABLE'
+  )
+  AND (
+    data_type IN ('json', 'jsonb')
+    OR lower(column_name) ~ '(cpf|cnpj|email|telefone|whatsapp|nome|endereco|logradouro|complemento|cep|senha|password|token|secret|api.*key|apikey|payload|conteudo|texto|mensagem|resposta|prompt|descricao|observacoes|avatar|url|instagram|facebook|site|rawbody|foto|hash|erro)'
+    OR lower(column_name) ~ '(dados|detalhes|config|regras|scripts|tools|snapshot|resultado|briefing|parametros|personalidade|expertise|diferenciais|perfil)'
+    OR lower(column_name) ~ '(asaas|evolution|messageid|eventoid|crm.*id)'
+    OR lower(column_name) ~ '(^ip$|aceiteip|clientip|sourceip|remoteip|useragent|nascimento|idade|^sexo$|profissao|renda|salario|^rg$|mae|escolaridade|estadocivil|obito|^ppe$|signo|latitude|longitude|social|empresa|s3key|storage|por$)'
+    OR lower(column_name) ~ '(^numero$|bairro|cidade|^estado$|quadra|lote|apartamento|bloco|unidade|^box$|inscricao|iptu|slug|taskid|motivo|situacao|dores|consequencias|expectativa|objecoes)'
+  )
+  AND (
+    data_type IN (
+      'text', 'character varying', 'character', 'json', 'jsonb', 'bytea',
+      'smallint', 'integer', 'bigint', 'numeric', 'decimal', 'real', 'double precision',
+      'date', 'timestamp without time zone', 'timestamp with time zone', 'boolean'
+    )
+    OR (data_type = 'ARRAY' AND udt_name = '_text')
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM information_schema.table_constraints constraints
+    JOIN information_schema.key_column_usage key_columns
+      ON key_columns.constraint_schema = constraints.constraint_schema
+      AND key_columns.constraint_name = constraints.constraint_name
+      AND key_columns.table_schema = constraints.table_schema
+      AND key_columns.table_name = constraints.table_name
+    WHERE constraints.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY')
+      AND key_columns.table_schema = columns.table_schema
+      AND key_columns.table_name = columns.table_name
+      AND key_columns.column_name = columns.column_name
+  );
+
 DO $elyon_anonymize$
 DECLARE
+  table_item record;
   item record;
   assignment text;
+  assignments text;
   digest_expr text;
   replacement text;
   affected bigint;
+  column_count integer;
 BEGIN
-  FOR item IN
-    SELECT
-      table_schema,
-      table_name,
-      column_name,
-      data_type,
-      udt_name,
-      character_maximum_length,
-      lower(column_name) AS normalized_name
-    FROM information_schema.columns columns
-    WHERE table_schema = 'public'
-      AND table_name <> '_prisma_migrations'
-      AND is_generated = 'NEVER'
-      AND EXISTS (
-        SELECT 1
-        FROM information_schema.tables tables
-        WHERE tables.table_schema = columns.table_schema
-          AND tables.table_name = columns.table_name
-          AND tables.table_type = 'BASE TABLE'
-      )
-      AND (
-        lower(column_name) ~ '(cpf|cnpj|email|telefone|whatsapp|nome|endereco|logradouro|complemento|cep|senha|password|token|secret|api.*key|apikey|payload|conteudo|texto|mensagem|resposta|prompt|descricao|observacoes|avatar|url|instagram|facebook|site|rawbody|foto|hash|erro)'
-        OR lower(column_name) ~ '(dados|detalhes|config|regras|scripts|tools|snapshot|resultado|briefing|parametros|personalidade|expertise|diferenciais|perfil)'
-        OR lower(column_name) ~ '(asaas|evolution|messageid|eventoid|crm.*id)'
-        OR lower(column_name) ~ '(^ip$|aceiteip|clientip|sourceip|remoteip|useragent|nascimento|idade|^sexo$|profissao|renda|salario|^rg$|mae|escolaridade|estadocivil|obito|^ppe$|signo|latitude|longitude|social|empresa|s3key|storage|por$)'
-        OR lower(column_name) ~ '(^numero$|bairro|cidade|^estado$|quadra|lote|apartamento|bloco|unidade|^box$|inscricao|iptu|slug|taskid|motivo|situacao|dores|consequencias|expectativa|objecoes)'
-      )
-      AND (
-        data_type IN (
-          'text', 'character varying', 'character', 'json', 'jsonb', 'bytea',
-          'smallint', 'integer', 'bigint', 'numeric', 'decimal', 'real', 'double precision',
-          'date', 'timestamp without time zone', 'timestamp with time zone', 'boolean'
-        )
-        OR (data_type = 'ARRAY' AND udt_name = '_text')
-      )
-      AND NOT EXISTS (
-        SELECT 1
-        FROM information_schema.table_constraints constraints
-        JOIN information_schema.key_column_usage key_columns
-          ON key_columns.constraint_schema = constraints.constraint_schema
-          AND key_columns.constraint_name = constraints.constraint_name
-          AND key_columns.table_schema = constraints.table_schema
-          AND key_columns.table_name = constraints.table_name
-        WHERE constraints.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY')
-          AND key_columns.table_schema = columns.table_schema
-          AND key_columns.table_name = columns.table_name
-          AND key_columns.column_name = columns.column_name
-      )
-    ORDER BY table_name, ordinal_position
+  FOR table_item IN
+    SELECT table_schema, table_name
+    FROM anonymization_columns
+    GROUP BY table_schema, table_name
+    ORDER BY table_schema, table_name
   LOOP
-    digest_expr := format(
-      'md5(%L || ctid::text || coalesce(%I::text, %L))',
-      item.table_schema || '.' || item.table_name || '.' || item.column_name,
-      item.column_name,
-      ''
-    );
+    assignments := '';
+    column_count := 0;
 
-    IF item.data_type = 'jsonb' THEN
-      replacement := '''{}''::jsonb';
-    ELSIF item.data_type = 'json' THEN
-      replacement := '''{}''::json';
-    ELSIF item.data_type = 'bytea' THEN
-      replacement := 'decode('''', ''hex'')';
-    ELSIF item.data_type = 'ARRAY' THEN
-      replacement := 'ARRAY[]::text[]';
-    ELSIF item.data_type IN ('smallint', 'integer', 'bigint', 'numeric', 'decimal', 'real', 'double precision') THEN
-      replacement := format('mod((''x'' || substring(%s from 1 for 8))::bit(32)::bigint, 30000)', digest_expr);
-    ELSIF item.data_type = 'date' THEN
-      replacement := 'DATE ''2000-01-01''';
-    ELSIF item.data_type IN ('timestamp without time zone', 'timestamp with time zone') THEN
-      replacement := 'TIMESTAMP ''2000-01-01 00:00:00''';
-    ELSIF item.data_type = 'boolean' THEN
-      replacement := 'false';
-    ELSIF item.normalized_name ~ 'email' THEN
-      replacement := format('''anon+'' || substring(%s from 1 for 20) || ''@example.invalid''', digest_expr);
-    ELSIF item.normalized_name ~ 'cnpj' THEN
-      replacement := format('substring(translate(%s, ''abcdef'', ''123456'') from 1 for 14)', digest_expr);
-    ELSIF item.normalized_name ~ 'cpf' THEN
-      replacement := format('substring(translate(%s, ''abcdef'', ''123456'') from 1 for 11)', digest_expr);
-    ELSIF item.normalized_name ~ '(telefone|whatsapp)' THEN
-      replacement := format('''55'' || substring(translate(%s, ''abcdef'', ''123456'') from 1 for 11)', digest_expr);
-    ELSIF item.normalized_name ~ '(senha|password)' THEN
-      replacement := format('''$2b$12$invalid-anonymized-'' || substring(%s from 1 for 20)', digest_expr);
-    ELSE
-      replacement := format('''anon_'' || substring(%s from 1 for 24)', digest_expr);
-    END IF;
+    FOR item IN
+      SELECT *
+      FROM anonymization_columns
+      WHERE table_schema = table_item.table_schema
+        AND table_name = table_item.table_name
+      ORDER BY ordinal_position
+    LOOP
+      digest_expr := format(
+        'md5(%L || ctid::text || coalesce(%I::text, %L))',
+        item.table_schema || '.' || item.table_name || '.' || item.column_name,
+        item.column_name,
+        ''
+      );
 
-    IF item.character_maximum_length IS NOT NULL THEN
-      replacement := format('left((%s)::text, %s)', replacement, item.character_maximum_length);
-    END IF;
+      IF item.data_type = 'jsonb' THEN
+        replacement := '''{}''::jsonb';
+      ELSIF item.data_type = 'json' THEN
+        replacement := '''{}''::json';
+      ELSIF item.data_type = 'bytea' THEN
+        replacement := 'decode('''', ''hex'')';
+      ELSIF item.data_type = 'ARRAY' THEN
+        replacement := 'ARRAY[]::text[]';
+      ELSIF item.data_type IN ('smallint', 'integer', 'bigint', 'numeric', 'decimal', 'real', 'double precision') THEN
+        replacement := format('mod((''x'' || substring(%s from 1 for 8))::bit(32)::bigint, 30000)', digest_expr);
+      ELSIF item.data_type = 'date' THEN
+        replacement := 'DATE ''2000-01-01''';
+      ELSIF item.data_type IN ('timestamp without time zone', 'timestamp with time zone') THEN
+        replacement := 'TIMESTAMP ''2000-01-01 00:00:00''';
+      ELSIF item.data_type = 'boolean' THEN
+        replacement := 'false';
+      ELSIF item.normalized_name ~ 'email' THEN
+        replacement := format('''anon+'' || substring(%s from 1 for 20) || ''@example.invalid''', digest_expr);
+      ELSIF item.normalized_name ~ 'cnpj' THEN
+        replacement := format('substring(translate(%s, ''abcdef'', ''123456'') from 1 for 14)', digest_expr);
+      ELSIF item.normalized_name ~ 'cpf' THEN
+        replacement := format('substring(translate(%s, ''abcdef'', ''123456'') from 1 for 11)', digest_expr);
+      ELSIF item.normalized_name ~ '(telefone|whatsapp)' THEN
+        replacement := format('''55'' || substring(translate(%s, ''abcdef'', ''123456'') from 1 for 11)', digest_expr);
+      ELSIF item.normalized_name ~ '(senha|password)' THEN
+        replacement := format('''$2b$12$invalid-anonymized-'' || substring(%s from 1 for 20)', digest_expr);
+      ELSE
+        replacement := format('''anon_'' || substring(%s from 1 for 24)', digest_expr);
+      END IF;
 
-    assignment := format(
-      'CASE WHEN %1$I IS NULL THEN NULL ELSE %2$s END',
-      item.column_name,
-      replacement
-    );
+      IF item.character_maximum_length IS NOT NULL THEN
+        replacement := format('left((%s)::text, %s)', replacement, item.character_maximum_length);
+      END IF;
+
+      assignment := format(
+        '%1$I = CASE WHEN %1$I IS NULL THEN NULL ELSE %2$s END',
+        item.column_name,
+        replacement
+      );
+      assignments := concat_ws(', ', nullif(assignments, ''), assignment);
+      column_count := column_count + 1;
+    END LOOP;
 
     EXECUTE format(
-      'UPDATE %I.%I SET %I = %s',
-      item.table_schema,
-      item.table_name,
-      item.column_name,
-      assignment
+      'UPDATE %I.%I SET %s',
+      table_item.table_schema,
+      table_item.table_name,
+      assignments
     );
     GET DIAGNOSTICS affected = ROW_COUNT;
-    RAISE NOTICE 'anonymized %.% rows=%', item.table_name, item.column_name, affected;
+    RAISE NOTICE 'anonymized % columns=% rows=%', table_item.table_name, column_count, affected;
   END LOOP;
 END
 $elyon_anonymize$;
@@ -297,7 +319,8 @@ echo 'Gerando inventario sem valores de usuario...'
             AND tables.table_type = 'BASE TABLE'
         )
         AND (
-          lower(column_name) ~ '(cpf|cnpj|email|telefone|whatsapp|nome|endereco|logradouro|complemento|cep|senha|password|token|secret|api.*key|apikey|payload|conteudo|texto|mensagem|resposta|prompt|descricao|observacoes|avatar|url|instagram|facebook|site|rawbody|foto|hash|erro)'
+          data_type IN ('json', 'jsonb')
+          OR lower(column_name) ~ '(cpf|cnpj|email|telefone|whatsapp|nome|endereco|logradouro|complemento|cep|senha|password|token|secret|api.*key|apikey|payload|conteudo|texto|mensagem|resposta|prompt|descricao|observacoes|avatar|url|instagram|facebook|site|rawbody|foto|hash|erro)'
           OR lower(column_name) ~ '(dados|detalhes|config|regras|scripts|tools|snapshot|resultado|briefing|parametros|personalidade|expertise|diferenciais|perfil)'
           OR lower(column_name) ~ '(asaas|evolution|messageid|eventoid|crm.*id)'
           OR lower(column_name) ~ '(^ip$|aceiteip|clientip|sourceip|remoteip|useragent|nascimento|idade|^sexo$|profissao|renda|salario|^rg$|mae|escolaridade|estadocivil|obito|^ppe$|signo|latitude|longitude|social|empresa|s3key|storage|por$)'
@@ -348,7 +371,7 @@ timeout --foreground "$TIMEOUT_SECONDS" docker exec "$scrub_container" pg_dump \
 [[ -s "$dump_path" ]] || fail 'dump anonimizado vazio'
 chmod 600 "$dump_path" "$inventory_path"
 
-docker rm -f "$scrub_container" >/dev/null
+docker rm -fv "$scrub_container" >/dev/null
 
 echo 'Restaurando o artefato em um segundo PostgreSQL descartavel...'
 start_isolated_postgres "$verify_container"
