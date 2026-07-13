@@ -388,7 +388,7 @@ Se perguntarem imobiliária → DIGA: "Eliézer Barbosas - Imóveis"
 
 ---
 
-### 4. Integração WhatsApp (Evolution API)
+### 4. Integração WhatsApp (Evolution Go dedicada)
 
 **Status:** ✅ 100% Funcional
 
@@ -399,15 +399,15 @@ Se perguntarem imobiliária → DIGA: "Eliézer Barbosas - Imóveis"
 - ✅ Recebimento via webhook
 - ✅ Suporte a texto, imagem, áudio
 - ✅ Normalização de telefones (com/sem 9º dígito)
-- ✅ Configuração automática de webhook no startup
+- ✅ Configuração do webhook ao conectar cada sessão
 
 **Configuração:**
-- URL: `http://192.168.1.7:8081` (Evolution API)
-- Webhook: `http://192.168.1.7:3000/webhooks`
-- Instance: `elyon_main`
+- API externa: definida por `EVOLUTION_API_URL`
+- Webhook: `https://api.elyon.ia.br/webhooks`
+- Isolamento: a Evolution Go roda em VPS dedicada, fora do Compose ELYON
 
 **Arquivos principais:**
-- `pacotes/backend/src/servicos/whatsapp-service.ts`
+- `pacotes/backend/src/servicos/whatsapp.ts`
 - `pacotes/backend/src/rotas/webhook.ts`
 
 ---
@@ -619,7 +619,7 @@ const resposta = await anthropic.messages.create({
 ```bash
 - Node.js v23.11.0+
 - PostgreSQL (ou Docker)
-- Evolution API rodando (porta 8081)
+- Acesso autorizado à Evolution Go dedicada
 ```
 
 ### 1. Clonar o repositório
@@ -646,13 +646,10 @@ DATABASE_URL="postgresql://user:pass@localhost:5432/elyon"
 # Anthropic
 ANTHROPIC_API_KEY="sk-ant-..."
 
-# Evolution API
-EVOLUTION_API_URL="http://192.168.1.7:8081"
+# Evolution Go dedicada
+EVOLUTION_API_URL="https://evolution-go.exemplo.com"
 EVOLUTION_API_KEY="sua-chave"
-EVOLUTION_INSTANCE="elyon_main"
-
-# Webhook
-WEBHOOK_URL="http://192.168.1.7:3000/webhooks"
+EVOLUTION_WEBHOOK_SOURCE_RANGE="203.0.113.10/32"
 
 # Manus AI
 MANUS_API_KEY="sua-chave"
@@ -676,10 +673,10 @@ cd pacotes/backend && npm run dev  # Backend: http://localhost:3000
 cd pacotes/frontend && npm run dev # Frontend: http://localhost:5173
 ```
 
-### 6. Verificar Evolution API
+### 6. Verificar Evolution Go dedicada
 
 ```bash
-curl http://192.168.1.7:8081/instance/elyon_main/status
+curl -H "apikey: $EVOLUTION_API_KEY" "$EVOLUTION_API_URL/instance/all"
 ```
 
 ---

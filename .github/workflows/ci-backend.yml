@@ -94,15 +94,15 @@ jobs:
       ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       ENCRYPTION_KEY_ID: ci-v1
       OPENAI_API_KEY: ci-openai-placeholder
+      EVOLUTION_WEBHOOK_SOURCE_RANGE: 203.0.113.10/32
+      ASAAS_WEBHOOK_TOKEN: ci-asaas-webhook-token-with-32-chars
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Validar Docker Compose
-        run: |
-          docker compose -f docker-compose.yml config --quiet
-          docker compose -f evolution/docker-compose.yml config --quiet
+        run: docker compose -f docker-compose.yml config --quiet
 
   images:
     name: Imagens - build
@@ -116,6 +116,8 @@ jobs:
       ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       ENCRYPTION_KEY_ID: ci-v1
       OPENAI_API_KEY: ci-openai-placeholder
+      EVOLUTION_WEBHOOK_SOURCE_RANGE: 203.0.113.10/32
+      ASAAS_WEBHOOK_TOKEN: ci-asaas-webhook-token-with-32-chars
 
     steps:
       - name: Checkout

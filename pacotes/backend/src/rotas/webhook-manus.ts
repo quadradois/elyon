@@ -11,10 +11,18 @@
 
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/db';
+import { z } from 'zod';
 import { 
   extrairJSONBriefing,
   gerarResumoTextual
 } from '../servicos/manus';
+import {
+  autenticarWebhookManus,
+  concluirEventoWebhook,
+  hashPayload,
+  liberarEventoWebhook,
+  registrarEventoWebhook,
+} from '../servicos/webhook-seguranca';
 
 const router = Router();
 
@@ -44,6 +52,28 @@ interface ManusWebhookPayload {
   };
 }
 
+const manusWebhookSchema = z.object({
+  event_id: z.string().min(1).max(255),
+  event_type: z.enum(['task_created', 'task_progress', 'task_stopped']),
+  task_detail: z.object({
+    task_id: z.string().min(1),
+    task_title: z.string(),
+    task_url: z.string(),
+    message: z.string().optional(),
+    attachments: z.array(z.object({
+      file_name: z.string(),
+      url: z.string(),
+      size_bytes: z.number(),
+    })).optional(),
+    stop_reason: z.enum(['finish', 'ask']).optional(),
+  }).optional(),
+  progress_detail: z.object({
+    task_id: z.string().min(1),
+    progress_type: z.string(),
+    message: z.string(),
+  }).optional(),
+});
+
 // ============================================
 // WEBHOOK DO MANUS
 // ============================================
@@ -52,9 +82,27 @@ interface ManusWebhookPayload {
  * POST /webhooks/manus
  * Recebe notificações do Manus sobre tarefas
  */
-router.post('/manus', async (req: Request, res: Response) => {
+router.post('/manus', autenticarWebhookManus, async (req: Request, res: Response) => {
+  let registroId: string | undefined;
   try {
-    const payload = req.body as ManusWebhookPayload;
+    const validacao = manusWebhookSchema.safeParse(req.body);
+    if (!validacao.success) {
+      return res.status(400).json({ sucesso: false, erro: 'Payload invalido' });
+    }
+
+    const payload = validacao.data as ManusWebhookPayload;
+    const payloadHash = hashPayload(req.rawBody || Buffer.from(JSON.stringify(payload)));
+    const registro = await registrarEventoWebhook({
+      provedor: 'MANUS',
+      eventoId: payload.event_id,
+      tipo: payload.event_type,
+      payloadHash,
+    });
+
+    if (registro.duplicado) {
+      return res.status(200).json({ sucesso: true, duplicado: true });
+    }
+    registroId = registro.registroId;
     
     console.log(`[MANUS WEBHOOK] 📨 Recebido: ${payload.event_type}`);
     console.log(`[MANUS WEBHOOK] Event ID: ${payload.event_id}`);
@@ -70,6 +118,7 @@ router.post('/manus', async (req: Request, res: Response) => {
     
     if (!taskId) {
       console.log('[MANUS WEBHOOK] ⚠️ Payload sem task_id, ignorando');
+      if (registroId) await concluirEventoWebhook(registroId);
       return res.status(200).json({ sucesso: true, ignorado: true });
     }
     
@@ -83,6 +132,7 @@ router.post('/manus', async (req: Request, res: Response) => {
     if (!pesquisa) {
       console.log(`[MANUS WEBHOOK] ⚠️ Pesquisa não encontrada para task: ${taskId}`);
       // Retornar 200 mesmo assim para não causar retries
+      if (registroId) await concluirEventoWebhook(registroId);
       return res.status(200).json({ sucesso: true, pesquisaNaoEncontrada: true });
     }
     
@@ -106,12 +156,13 @@ router.post('/manus', async (req: Request, res: Response) => {
         console.log(`[MANUS WEBHOOK] Evento desconhecido: ${payload.event_type}`);
     }
     
+    if (registroId) await concluirEventoWebhook(registroId);
     return res.status(200).json({ sucesso: true });
     
   } catch (error: any) {
+    if (registroId) await liberarEventoWebhook(registroId).catch(() => undefined);
     console.error('[MANUS WEBHOOK] ❌ Erro:', error.message);
-    // Retornar 200 para evitar retries desnecessários
-    return res.status(200).json({ sucesso: false, erro: error.message });
+    return res.status(500).json({ sucesso: false, erro: 'Falha ao processar webhook' });
   }
 });
 

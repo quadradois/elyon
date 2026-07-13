@@ -117,18 +117,17 @@ O script de importação realiza automaticamente:
 
 ---
 
-### Etapa 5 — Evolution API (WhatsApp)
+### Etapa 5 — Evolution Go dedicada (WhatsApp)
 
-A Evolution API roda como serviço separado. Após a migração:
+A Evolution Go não faz parte da VPS ou do Compose do ELYON. Após migrar o ELYON:
 
-1. Verifique se a Evolution está configurada:
-   ```bash
-   curl https://evo.elyon.ia.br/manager
-   ```
-
-2. Se a Evolution também precisar migrar, repita processo similar com o `docker-compose.yml` do diretório `evolution/`.
-
-3. **Reconectar instâncias WhatsApp:** Cada instância precisará de um novo QR Code se o servidor mudar. Acesse o Manager da Evolution e clique em "Conectar".
+1. Preserve `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` e os tokens individuais das
+   sessões no banco.
+2. Atualize `EVOLUTION_WEBHOOK_SOURCE_RANGE` caso o IP público da VPS dedicada
+   tenha mudado.
+3. Confirme que `https://api.elyon.ia.br/webhooks` responde `403` fora da origem
+   dedicada e reconecte uma sessão para validar a entrega real.
+4. Não instale Evolution API, Postgres Evolution ou Redis Evolution no host ELYON.
 
 ---
 

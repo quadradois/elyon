@@ -11,6 +11,13 @@ import {
   verificarSuperAdmin,
   verificarAutenticacao
 } from '../middleware/middleware-auth';
+import {
+  autenticarWebhookAsaas,
+  concluirEventoWebhook,
+  hashPayload,
+  liberarEventoWebhook,
+  registrarEventoWebhook,
+} from '../servicos/webhook-seguranca';
 
 // Cast para evitar erros de tipo até regenerar Prisma
 const prisma = prismaClient as any;
@@ -229,19 +236,58 @@ router.post('/recarga', verificarAutenticacao, async (req: Request, res: Respons
  * - SUBSCRIPTION_RENEWED: Assinatura renovada
  * - SUBSCRIPTION_DELETED: Assinatura cancelada
  */
-router.post('/webhook/asaas', async (req: Request, res: Response) => {
-  try {
-    // Validar token de autenticação (se configurado)
-    const webhookToken = servicoAsaas.getWebhookToken();
-    const receivedToken = req.headers['asaas-access-token'] as string;
+const EVENTOS_PAGAMENTO_ASAAS = new Set([
+  'PAYMENT_CONFIRMED',
+  'PAYMENT_RECEIVED',
+  'PAYMENT_CREATED',
+  'PAYMENT_UPDATED',
+  'PAYMENT_OVERDUE',
+  'PAYMENT_DELETED',
+  'PAYMENT_REFUNDED',
+  'PAYMENT_PARTIALLY_REFUNDED',
+  'PAYMENT_RESTORED',
+  'PAYMENT_CHARGEBACK_REQUESTED',
+]);
 
-    if (webhookToken && receivedToken !== webhookToken) {
-      console.warn('[Webhook Asaas] ⚠️ Token inválido recebido');
-      // Ainda retorna 200 para não ficar retentando
-      return res.sendStatus(200);
+const EVENTOS_ASSINATURA_ASAAS = new Set([
+  'SUBSCRIPTION_CREATED',
+  'SUBSCRIPTION_UPDATED',
+  'SUBSCRIPTION_RENEWED',
+  'SUBSCRIPTION_INACTIVATED',
+  'SUBSCRIPTION_DELETED',
+]);
+
+router.post('/webhook/asaas', autenticarWebhookAsaas, async (req: Request, res: Response) => {
+  let registroId: string | undefined;
+  try {
+    const { event, payment, subscription } = req.body;
+    const eventId = req.body?.id;
+    if (typeof eventId !== 'string' || !eventId || typeof event !== 'string' || !event) {
+      return res.status(400).json({ erro: 'Payload invalido' });
     }
 
-    const { event, payment, subscription } = req.body;
+    if (EVENTOS_PAGAMENTO_ASAAS.has(event) && !payment?.id) {
+      return res.status(400).json({ erro: 'Payload de pagamento invalido' });
+    }
+    if (EVENTOS_ASSINATURA_ASAAS.has(event) && !subscription?.id) {
+      return res.status(400).json({ erro: 'Payload de assinatura invalido' });
+    }
+
+    const payloadHash = hashPayload(req.rawBody || Buffer.from(JSON.stringify(req.body)));
+    const registro = await registrarEventoWebhook({
+      provedor: 'ASAAS',
+      eventoId: eventId,
+      tipo: event,
+      payloadHash,
+    });
+
+    if (registro.duplicado) return res.sendStatus(200);
+    registroId = registro.registroId;
+
+    if (!EVENTOS_PAGAMENTO_ASAAS.has(event) && !EVENTOS_ASSINATURA_ASAAS.has(event)) {
+      if (registroId) await concluirEventoWebhook(registroId);
+      return res.status(202).json({ ignorado: true });
+    }
     const timestamp = new Date().toISOString();
 
     console.log(`[Webhook Asaas] ${timestamp} | Evento: ${event} | ID: ${payment?.id || subscription?.id}`);
@@ -257,32 +303,45 @@ router.post('/webhook/asaas', async (req: Request, res: Response) => {
       });
 
       if (!transacao) {
+        if (registroId) await concluirEventoWebhook(registroId);
         console.warn('[Webhook Asaas] Transação não encontrada para payment:', payment.id);
         return res.sendStatus(200);
       }
 
       // Verificar se já foi processado
       if (transacao.status === 'CONFIRMADO') {
+        if (registroId) await concluirEventoWebhook(registroId);
         console.log('[Webhook Asaas] Transação já confirmada, ignorando duplicata');
         return res.sendStatus(200);
       }
 
       // Confirmar transação
-      await prisma.transacao.update({
-        where: { id: transacao.id },
-        data: {
-          status: 'CONFIRMADO',
-          confirmadoEm: new Date()
-        }
+      const creditado = await prisma.$transaction(async (tx: any) => {
+        const atualizado = await tx.transacao.updateMany({
+          where: { id: transacao.id, status: { not: 'CONFIRMADO' } },
+          data: { status: 'CONFIRMADO', confirmadoEm: new Date() },
+        });
+        if (atualizado.count === 0) return false;
+
+        const campoCredito = transacao.tipoCredito === 'MENSAIS'
+          ? 'creditosMensais'
+          : transacao.tipoCredito === 'BONUS'
+            ? 'creditosBonus'
+            : 'creditosPrepagos';
+
+        await tx.tenant.update({
+          where: { id: transacao.tenantId },
+          data: { [campoCredito]: { increment: transacao.creditos } },
+        });
+        return true;
       });
 
+      if (!creditado) {
+        if (registroId) await concluirEventoWebhook(registroId);
+        return res.sendStatus(200);
+      }
+
       // Adicionar créditos
-      await servicoCreditos.adicionarCreditos(transacao.tenantId, {
-        quantidade: transacao.creditos,
-        tipo: transacao.tipoCredito,
-        descricao: transacao.descricao || 'Recarga via Asaas',
-        promocao: transacao.promocaoAplicada || undefined
-      });
 
       console.log(
         `[Webhook Asaas] ✅ PAGAMENTO CONFIRMADO | ${transacao.creditos} créditos → tenant ${transacao.tenantId}`
@@ -477,11 +536,13 @@ router.post('/webhook/asaas', async (req: Request, res: Response) => {
       }
     }
 
+    if (registroId) await concluirEventoWebhook(registroId);
     res.sendStatus(200);
   } catch (erro) {
+    if (registroId) await liberarEventoWebhook(registroId).catch(() => undefined);
     console.error('[Webhook Asaas] ❌ Erro:', erro);
     // Retornar 200 mesmo com erro para Asaas não retentar
-    res.sendStatus(200);
+    res.sendStatus(500);
   }
 });
 

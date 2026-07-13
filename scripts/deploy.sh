@@ -60,7 +60,6 @@ validate_release_state() {
 
 validate_compose() {
   docker compose -f docker-compose.yml config --quiet
-  docker compose -f evolution/docker-compose.yml config --quiet
 }
 
 wait_for_health() {
@@ -155,7 +154,6 @@ do_up() {
   [[ "$head" == "$remote_main" ]] || fail "main local não corresponde a origin/main."
   validate_compose
   docker compose -f docker-compose.yml up -d --remove-orphans
-  docker compose -f evolution/docker-compose.yml up -d --remove-orphans
   wait_for_health
 }
 
@@ -189,11 +187,6 @@ do_update() {
   if ! docker compose -f docker-compose.yml up -d --remove-orphans; then
     rollback_application_images "$rollback_tag" || true
     fail "Inicialização falhou; aplicação anterior restaurada."
-  fi
-
-  if ! docker compose -f evolution/docker-compose.yml up -d --remove-orphans; then
-    rollback_application_images "$rollback_tag" || true
-    fail "Evolution não iniciou; aplicação anterior restaurada."
   fi
 
   if ! wait_for_health; then
@@ -239,7 +232,6 @@ case "${1:-help}" in
   status)
     require_env
     docker compose -f docker-compose.yml ps
-    docker compose -f evolution/docker-compose.yml ps
     ;;
   logs)
     require_env
