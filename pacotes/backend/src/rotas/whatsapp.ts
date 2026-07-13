@@ -9,7 +9,7 @@ const router = Router();
 router.get('/status', async (req, res) => {
   try {
     // Obter tenantId do header ou query parameter
-    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+    const tenantId = req.tenantId as string;
     
     if (!tenantId) {
       return responderErro(res, 400, 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.');
@@ -49,7 +49,7 @@ router.get('/status', async (req, res) => {
 router.post('/conectar', async (req, res) => {
   try {
     // Obter tenantId do header ou query parameter
-    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+    const tenantId = req.tenantId as string;
     
     if (!tenantId) {
       return responderErro(res, 400, 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.');
@@ -136,7 +136,7 @@ router.post('/conectar', async (req, res) => {
 // POST /api/whatsapp/reset
 router.post('/reset', async (req, res) => {
   try {
-    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+    const tenantId = req.tenantId as string;
 
     if (!tenantId) {
       return responderErro(res, 400, 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.');
@@ -253,7 +253,7 @@ router.post('/enviar', async (req, res) => {
 router.get('/configurar', async (req, res) => {
   try {
     // Obter tenantId do header ou query parameter
-    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+    const tenantId = req.tenantId as string;
     
     if (!tenantId) {
       return responderErro(res, 400, 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.');
@@ -291,7 +291,7 @@ router.post('/configurar', async (req, res) => {
     }
 
     // Obter tenantId do header ou query parameter
-    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+    const tenantId = req.tenantId as string;
     
     if (!tenantId) {
       return responderErro(res, 400, 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.');
@@ -329,7 +329,7 @@ router.post('/configurar-webhook', async (req, res) => {
     }
 
     // Obter tenantId do header ou query parameter
-    const tenantId = req.headers['x-tenant-id'] as string || req.query.tenantId as string;
+    const tenantId = req.tenantId as string;
     
     if (!tenantId) {
       return responderErro(res, 400, 'Tenant ID é obrigatório. Forneça via header X-Tenant-Id ou query parameter tenantId.');

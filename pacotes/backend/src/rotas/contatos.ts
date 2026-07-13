@@ -6,12 +6,7 @@ const router = Router();
 
 // Helper para tenantId (copiado de outros arquivos)
 const getTenantId = async (req: Request): Promise<string> => {
-    if (req.headers['x-tenant-id']) return req.headers['x-tenant-id'] as string;
-    if (req.query.tenantId) return req.query.tenantId as string;
-
-    // Fallback
-    const tenant = await prisma.tenant.findFirst({ orderBy: { criadoEm: 'desc' } });
-    return tenant?.id || '';
+    return req.tenantId || '';
 };
 
 /**

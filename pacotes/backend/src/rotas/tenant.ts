@@ -30,11 +30,7 @@ const S3_BUCKET_LOGOS = process.env.AWS_S3_BUCKET_LOGOS || process.env.AWS_S3_BU
 
 // Helper para extrair tenantId do request
 const extrairTenantId = (req: Request): string | null => {
-  // Tentar do header primeiro
-  if (req.headers['x-tenant-id']) return req.headers['x-tenant-id'] as string;
-  // Fallback para query
-  if (req.query.tenantId) return req.query.tenantId as string;
-  return null;
+  return req.tenantId || req.usuario?.tenantId || null;
 };
 
 // ====================================

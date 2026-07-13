@@ -166,7 +166,7 @@ router.post('/identificar-proprietarios', async (req, res) => {
     logger.info(`[Mineracao] 🚀 Identificando proprietários de ${imoveis.length} imóveis (modo otimizado)...`);
 
     // Obter tenant do header X-Tenant-Id
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     if (!tenantId) {
       return responderErro(res, 400, 'Tenant não identificado. Envie o header X-Tenant-Id.');
     }
@@ -317,7 +317,7 @@ router.post('/confirmar-leads', async (req, res) => {
     logger.info(`[Mineracao] 🚀 Processando ${proprietarios.length} leads (modo otimizado)...`);
 
     // Obter tenant do header X-Tenant-Id
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     if (!tenantId) {
       return responderErro(res, 400, 'Tenant não identificado. Envie o header X-Tenant-Id.');
     }
@@ -757,7 +757,7 @@ router.post('/iptu-unitario', async (req, res) => {
     }
 
     // Obter tenant do header X-Tenant-Id
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     if (!tenantId) {
       return responderErro(res, 401, 'Não autorizado');
     }

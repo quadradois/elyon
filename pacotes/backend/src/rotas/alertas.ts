@@ -17,7 +17,7 @@ const router = Router();
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     const status = req.query.status as string || 'pendente';
     const limite = parseInt(req.query.limite as string) || 50;
     
@@ -55,7 +55,7 @@ router.get('/', async (req: Request, res: Response) => {
  */
 router.get('/resumo', async (req: Request, res: Response) => {
   try {
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     
     if (!tenantId) {
       return responderErro(res, 400, 'Tenant ID não informado');
@@ -96,7 +96,7 @@ router.get('/resumo', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     
     const alerta = await (prisma as any).alertaCorretor.findFirst({
       where: { 
@@ -136,7 +136,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.patch('/:id/visualizar', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     
     const alerta = await (prisma as any).alertaCorretor.update({
       where: { id },
@@ -165,7 +165,7 @@ router.patch('/:id/resolver', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { resolvidoPor } = req.body;
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     
     const alerta = await (prisma as any).alertaCorretor.update({
       where: { id },
@@ -193,7 +193,7 @@ router.patch('/:id/resolver', async (req: Request, res: Response) => {
  */
 router.post('/visualizar-todos', async (req: Request, res: Response) => {
   try {
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     
     if (!tenantId) {
       return responderErro(res, 400, 'Tenant ID não informado');

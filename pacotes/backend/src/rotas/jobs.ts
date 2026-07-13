@@ -15,8 +15,10 @@ import {
   executarLembretesConfirmacaoCorretor,
   executarCutoffRemanejamentoCorretor
 } from '../jobs/job-confirmacao-corretor';
+import { verificarSuperAdmin } from '../middleware/middleware-auth';
 
 const router = Router();
+router.use(verificarSuperAdmin);
 
 /**
  * POST /api/jobs/recontato
@@ -116,9 +118,7 @@ router.get('/recontato/preview', async (req: Request, res: Response) => {
  */
 router.post('/experience-replay', async (req: Request, res: Response) => {
   try {
-    const tenantIdBody = typeof req.body?.tenantId === 'string' ? req.body.tenantId.trim() : '';
-    const tenantIdHeader = typeof req.headers['x-tenant-id'] === 'string' ? req.headers['x-tenant-id'].trim() : '';
-    const tenantId = tenantIdBody || tenantIdHeader;
+    const tenantId = req.tenantId;
     const forcar = req.body?.forcar !== false;
 
     const resultado = await experienceReplayService.executarReplayDiario({

@@ -16,27 +16,7 @@ const router = Router();
  * Ordem de prioridade: header > query > body > fallback para último tenant
  */
 const getTenantId = async (req: Request): Promise<string> => {
-  // 1. Header x-tenant-id
-  if (req.headers['x-tenant-id']) {
-    return req.headers['x-tenant-id'] as string;
-  }
-
-  // 2. Query param
-  if (req.query.tenantId) {
-    return req.query.tenantId as string;
-  }
-
-  // 3. Body
-  if (req.body?.tenantId) {
-    return req.body.tenantId;
-  }
-
-  // 4. Fallback: buscar o último tenant criado (mais provável ser o ativo)
-  const tenant = await prisma.tenant.findFirst({
-    orderBy: { criadoEm: 'desc' }
-  });
-
-  return tenant?.id || '';
+  return req.tenantId || '';
 };
 
 // ====================================

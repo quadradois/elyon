@@ -43,10 +43,7 @@ function podeUsarAlvoAdministrativo(req: Request, canal: 'query' | 'body'): bool
   return req.path.startsWith('/api/billing/admin/');
 }
 
-/**
- * Contenção compatível com handlers legados: rejeita divergência e substitui
- * canais controlados pelo cliente pelo tenant já derivado do usuário.
- */
+/** Rejeita divergência e mantém o tenant somente no contexto autenticado. */
 export function normalizarContextoTenant(req: Request, res: Response, next: NextFunction): void {
   const tenantId = req.usuario?.tenantId || req.tenantId;
   if (!tenantId) {
@@ -72,12 +69,6 @@ export function normalizarContextoTenant(req: Request, res: Response, next: Next
   }
 
   req.tenantId = tenantId;
-  // Compatibilidade transitória; estes fallbacks serão removidos na onda seguinte.
-  req.headers['x-tenant-id'] = tenantId;
-  if (!podeUsarAlvoAdministrativo(req, 'query')) req.query.tenantId = tenantId;
-  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body) && !podeUsarAlvoAdministrativo(req, 'body')) {
-    req.body.tenantId = tenantId;
-  }
   next();
 }
 
