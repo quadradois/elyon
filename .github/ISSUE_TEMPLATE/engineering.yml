@@ -1,0 +1,52 @@
+name: Mudanca de engenharia
+description: Bug, melhoria, plataforma, seguranca, dados ou arquitetura
+title: "[Prioridade][Area] "
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexto e evidencia
+      description: Descreva o problema, estado atual e evidencia reproduzivel.
+      placeholder: O que acontece, onde e como foi confirmado?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Escopo
+      description: Liste o resultado esperado e o que fica explicitamente fora.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceite
+      description: Use itens observaveis e verificaveis.
+      placeholder: "- [ ] Comportamento ou evidencia esperada"
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencias e decisoes
+      description: Informe issues, pessoas, ambientes ou decisoes que bloqueiam a execucao. Escreva "Nenhuma" quando aplicavel.
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risco
+      options:
+        - Critico - indisponibilidade, perda de dados ou exposicao
+        - Alto - tenant, autenticacao, migration ou fluxo principal
+        - Medio - degradacao com contorno
+        - Baixo - mudanca localizada ou documental
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validacao, rollout e rollback
+      description: Indique testes, sinais pos-deploy e como interromper ou reverter. Escreva "Nao aplicavel" com justificativa quando for documental.
+    validations:
+      required: true
