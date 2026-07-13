@@ -1,28 +1,27 @@
-name: CI Backend
+name: CI/CD ELYON
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'pacotes/backend/**'
-      - '.github/workflows/ci-backend.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'pacotes/backend/**'
-      - '.github/workflows/ci-backend.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
-  group: ci-backend-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-cd-${{ github.event_name }}-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'current' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  test:
-    name: Testes & Type Check
+  backend:
+    name: Backend - testes e tipos
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -32,10 +31,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
 
-      - name: Instalar dependências
-        run: npm ci
+      - name: Instalar dependencias
+        run: npm ci --no-audit --no-fund
 
       - name: Prisma generate
         working-directory: pacotes/backend
@@ -45,7 +44,7 @@ jobs:
         working-directory: pacotes/backend
         run: npx tsc --noEmit
 
-      - name: Testes unitários + coverage
+      - name: Testes unitarios e coverage
         run: node node_modules/jest/bin/jest.js --config pacotes/backend/jest.config.js --runInBand --coverage --collectCoverageFrom='src/agentes/**/*.ts' --collectCoverageFrom='!src/agentes/__tests__/**' --ci
         env:
           NODE_ENV: test
@@ -58,3 +57,113 @@ jobs:
           name: coverage-report
           path: pacotes/backend/coverage/
           retention-days: 7
+
+  frontend:
+    name: Frontend - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci --no-audit --no-fund
+
+      - name: Build frontend
+        run: npm run build --workspace @elyon/frontend
+        env:
+          VITE_API_URL: https://api.elyon.ia.br
+
+  compose:
+    name: Compose - validacao
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DB_PASSWORD: ci-database-password
+      REDIS_PASSWORD: ci-redis-password
+      JWT_SECRET: ci-jwt-secret-with-at-least-32-characters
+      OPENAI_API_KEY: ci-openai-placeholder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar Docker Compose
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f evolution/docker-compose.yml config --quiet
+
+  images:
+    name: Imagens - build
+    needs: [backend, frontend, compose]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DB_PASSWORD: ci-database-password
+      REDIS_PASSWORD: ci-redis-password
+      JWT_SECRET: ci-jwt-secret-with-at-least-32-characters
+      OPENAI_API_KEY: ci-openai-placeholder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build das imagens da aplicacao
+        run: docker compose -f docker-compose.yml build backend frontend site
+
+  deploy:
+    name: Producao - deploy
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main'
+    needs: [backend, frontend, compose, images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: production
+      url: https://elyon.ia.br
+    concurrency:
+      group: elyon-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Configurar SSH restrito
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Validar release na VPS
+        env:
+          DEPLOY_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+        run: >-
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes
+          "$DEPLOY_USER@$DEPLOY_HOST" "probe $GITHUB_SHA"
+
+      - name: Deploy do SHA aprovado
+        env:
+          DEPLOY_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+        run: >-
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes
+          "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA"
+
+      - name: Smoke test externo
+        run: |
+          curl --fail --show-error --silent --retry 6 --retry-all-errors --retry-delay 5 https://api.elyon.ia.br/health >/dev/null
+          curl --fail --show-error --silent --retry 6 --retry-all-errors --retry-delay 5 https://crm.elyon.ia.br >/dev/null
+          curl --fail --show-error --silent --retry 6 --retry-all-errors --retry-delay 5 https://elyon.ia.br >/dev/null

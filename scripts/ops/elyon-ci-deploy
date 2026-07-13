@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly REPO_DIR='/root/elyon'
+readonly LOCK_FILE='/var/lock/elyon-deploy.lock'
+readonly LOG_TAG='elyon-ci-deploy'
+
+fail() {
+  logger -t "$LOG_TAG" -- "status=denied reason=$*"
+  echo "ERRO: $*" >&2
+  exit 1
+}
+
+[[ $(id -u) -eq 0 ]] || fail 'o wrapper deve executar como root'
+[[ -d "$REPO_DIR/.git" ]] || fail 'repositório de produção não encontrado'
+
+original_command=${SSH_ORIGINAL_COMMAND:-}
+if [[ ! "$original_command" =~ ^(probe|deploy)[[:space:]]+([0-9a-f]{40})$ ]]; then
+  fail 'comando permitido: probe|deploy seguido de SHA completo'
+fi
+
+action=${BASH_REMATCH[1]}
+requested_sha=${BASH_REMATCH[2]}
+
+cd "$REPO_DIR"
+git fetch --prune origin main >/dev/null
+remote_sha=$(git rev-parse 'origin/main^{commit}')
+[[ "$requested_sha" == "$remote_sha" ]] || fail "SHA solicitado não corresponde a origin/main"
+
+if [[ "$action" == 'probe' ]]; then
+  logger -t "$LOG_TAG" -- "action=probe commit=$requested_sha status=success"
+  echo "OK: release $requested_sha disponível em origin/main"
+  exit 0
+fi
+
+exec 9>"$LOCK_FILE"
+flock -n 9 || fail 'já existe outro deploy em andamento'
+
+logger -t "$LOG_TAG" -- "action=deploy commit=$requested_sha status=started"
+if ./scripts/deploy.sh update "$requested_sha"; then
+  logger -t "$LOG_TAG" -- "action=deploy commit=$requested_sha status=success"
+  exit 0
+else
+  status=$?
+  logger -t "$LOG_TAG" -- "action=deploy commit=$requested_sha status=failed exit=$status"
+  exit "$status"
+fi

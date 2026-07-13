@@ -1,0 +1,3 @@
+/.github/workflows/ @quadradois @monokingdev
+/scripts/deploy.sh @quadradois @monokingdev
+/scripts/ops/elyon-ci-deploy @quadradois @monokingdev
