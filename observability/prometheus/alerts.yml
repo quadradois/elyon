@@ -68,16 +68,13 @@ groups:
           description: A latência HTTP p95 permanece acima do objetivo inicial por 10 minutos.
           runbook: docs/operacao/OBSERVABILIDADE_E_SLO.md#latência-alta
 
-      - alert: ElyonHighNodeHeapUsage
-        expr: |
-          elyon_nodejs_heap_size_used_bytes
-          /
-          clamp_min(elyon_nodejs_heap_size_total_bytes, 1) > 0.85
+      - alert: ElyonHighNodeMemoryUsage
+        expr: elyon_process_resident_memory_bytes > 1.5 * 1024 * 1024 * 1024
         for: 10m
         labels:
           severity: warning
           owner: backend
         annotations:
-          summary: Heap Node.js acima de 85%
-          description: O uso do heap permanece acima de 85% há 10 minutos.
+          summary: Memória residente do Node.js acima de 1,5 GB
+          description: O RSS do backend permanece acima de 1,5 GB há 10 minutos.
           runbook: docs/operacao/OBSERVABILIDADE_E_SLO.md#saturação-de-memória
