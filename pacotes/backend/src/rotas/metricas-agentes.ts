@@ -16,11 +16,7 @@ const router = Router();
  */
 
 const extrairTenantId = (req: Request): string | null => {
-  const tenantDoContexto = typeof req.tenantId === 'string' ? req.tenantId : '';
-  const tenantDoHeader = typeof req.headers['x-tenant-id'] === 'string'
-    ? req.headers['x-tenant-id']
-    : '';
-  const tenantId = (tenantDoContexto || tenantDoHeader).trim();
+  const tenantId = typeof req.tenantId === 'string' ? req.tenantId.trim() : '';
   return tenantId.length > 0 ? tenantId : null;
 };
 

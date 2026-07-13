@@ -79,7 +79,6 @@ app.use(express.json());
 // Simulando o middleware de auth para testes
 app.use((req, res, next) => {
   req.tenantId = 'tenant-123';
-  req.headers['x-tenant-id'] = 'tenant-123';
   next();
 });
 

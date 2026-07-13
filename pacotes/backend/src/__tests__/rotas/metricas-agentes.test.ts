@@ -20,6 +20,11 @@ jest.mock('../../lib/db', () => ({
 
 const app = express();
 app.use(express.json());
+app.use((req, _res, next) => {
+  const tenantId = req.headers['x-test-tenant-id'];
+  if (typeof tenantId === 'string') req.tenantId = tenantId;
+  next();
+});
 app.use('/api/metricas-agentes', rotasMetricasAgentes);
 
 describe('Rotas de Métricas dos Agentes', () => {
@@ -94,7 +99,7 @@ describe('Rotas de Métricas dos Agentes', () => {
 
       const resposta = await request(app)
         .get('/api/metricas-agentes/governanca?periodo=7d')
-        .set('x-tenant-id', 'tenant-123');
+        .set('x-test-tenant-id', 'tenant-123');
 
       expect(resposta.status).toBe(200);
       expect(resposta.body.resumo).toEqual({
@@ -128,7 +133,7 @@ describe('Rotas de Métricas dos Agentes', () => {
     it('deve retornar 400 quando leadId não for informado', async () => {
       const resposta = await request(app)
         .get('/api/metricas-agentes/governanca/trilha')
-        .set('x-tenant-id', 'tenant-123');
+        .set('x-test-tenant-id', 'tenant-123');
 
       expect(resposta.status).toBe(400);
       expect(resposta.body.sucesso).toBe(false);
@@ -171,7 +176,7 @@ describe('Rotas de Métricas dos Agentes', () => {
 
       const resposta = await request(app)
         .get('/api/metricas-agentes/governanca/trilha?leadId=lead-1&limite=20')
-        .set('x-tenant-id', 'tenant-123');
+        .set('x-test-tenant-id', 'tenant-123');
 
       expect(resposta.status).toBe(200);
       expect(resposta.body.lead).toEqual({

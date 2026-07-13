@@ -17,10 +17,11 @@ const router = Router();
  */
 router.get('/', async (req, res) => {
   try {
-    const { pagina = '1', limite = '50', tenantId, busca, motivo } = req.query;
+    const { pagina = '1', limite = '50', busca, motivo } = req.query;
+    const tenantId = req.tenantId as string;
 
     const resultado = await blacklistService.listar(
-      tenantId as string,
+      tenantId,
       parseInt(pagina as string),
       parseInt(limite as string),
       busca as string | undefined,
@@ -40,9 +41,9 @@ router.get('/', async (req, res) => {
  */
 router.get('/estatisticas', async (req, res) => {
   try {
-    const { tenantId } = req.query;
+    const tenantId = req.tenantId as string;
 
-    const contagens = await blacklistService.contarPorMotivo(tenantId as string);
+    const contagens = await blacklistService.contarPorMotivo(tenantId);
 
     const total = Object.values(contagens).reduce((a, b) => a + b, 0);
 
@@ -63,9 +64,9 @@ router.get('/estatisticas', async (req, res) => {
 router.get('/verificar/:telefone', async (req, res) => {
   try {
     const { telefone } = req.params;
-    const { tenantId } = req.query;
+    const tenantId = req.tenantId as string;
 
-    const bloqueado = await blacklistService.estaBlacklist(telefone, tenantId as string);
+    const bloqueado = await blacklistService.estaBlacklist(telefone, tenantId);
 
     return res.json({
       telefone,
@@ -94,7 +95,7 @@ router.post('/', async (req, res) => {
 
     const dados = schema.parse(req.body);
 
-    await blacklistService.adicionar(dados);
+    await blacklistService.adicionar({ ...dados, tenantId: req.tenantId });
 
     return res.json({
       sucesso: true,
@@ -122,7 +123,8 @@ router.post('/lote', async (req, res) => {
       observacoes: z.string().optional()
     });
 
-    const { telefones, motivo, tenantId, observacoes } = schema.parse(req.body);
+    const { telefones, motivo, observacoes } = schema.parse(req.body);
+    const tenantId = req.tenantId as string;
 
     let adicionados = 0;
     let erros = 0;
@@ -163,9 +165,9 @@ router.post('/lote', async (req, res) => {
 router.delete('/:telefone', async (req, res) => {
   try {
     const { telefone } = req.params;
-    const { tenantId } = req.query;
+    const tenantId = req.tenantId as string;
 
-    const removido = await blacklistService.remover(telefone, tenantId as string);
+    const removido = await blacklistService.remover(telefone, tenantId);
 
     if (removido) {
       return res.json({

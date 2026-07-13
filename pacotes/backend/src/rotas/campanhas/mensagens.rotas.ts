@@ -48,7 +48,7 @@ router.get('/contatos/:id', async (req, res) => {
 
     // ✅ TASK-02: Isolamento multi-tenant (IDOR fix)
     // Verificar se o contato pertence ao tenant autenticado via header
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     if (tenantId && contato.campanhaOrigem?.tenantId && contato.campanhaOrigem.tenantId !== tenantId) {
       return responderErro(res, 403, 'Acesso negado');
     }

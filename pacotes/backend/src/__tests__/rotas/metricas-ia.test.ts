@@ -29,6 +29,11 @@ import rotaMetricasIA from '../../rotas/metricas-ia.rotas';
 
 const app = express();
 app.use(express.json());
+app.use((req, _res, next) => {
+  const tenantId = req.headers['x-test-tenant-id'];
+  if (typeof tenantId === 'string') req.tenantId = tenantId;
+  next();
+});
 app.use('/api/metricas-ia', rotaMetricasIA);
 
 describe('Rotas métricas IA', () => {
@@ -63,7 +68,7 @@ describe('Rotas métricas IA', () => {
 
     const resposta = await request(app)
       .get('/api/metricas-ia/learning-bank/top-padroes?dias=30&limite=10&minimoAmostra=3')
-      .set('x-tenant-id', 'tenant-1');
+      .set('x-test-tenant-id', 'tenant-1');
 
     expect(resposta.status).toBe(200);
     expect(resposta.body.total).toBe(1);
@@ -99,7 +104,7 @@ describe('Rotas métricas IA', () => {
 
     const resposta = await request(app)
       .get('/api/metricas-ia/learning-bank/replay-auditoria?limite=5')
-      .set('x-tenant-id', 'tenant-1');
+      .set('x-test-tenant-id', 'tenant-1');
 
     expect(resposta.status).toBe(200);
     expect(resposta.body.resumo.totalExecucoes).toBe(1);
@@ -150,7 +155,7 @@ describe('Rotas métricas IA', () => {
 
     const resposta = await request(app)
       .get('/api/metricas-ia/cockpit/experimentos/ab/promocao?dias=7&minOutcomes=1')
-      .set('x-tenant-id', 'tenant-1');
+      .set('x-test-tenant-id', 'tenant-1');
 
     expect(resposta.status).toBe(200);
     expect(resposta.body.gates.conversaoNaoInferior).toBe(true);

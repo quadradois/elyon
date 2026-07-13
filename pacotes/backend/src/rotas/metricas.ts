@@ -13,7 +13,7 @@ const prisma = new PrismaClient();
 router.get('/dashboard', async (req, res) => {
   try {
     // ✅ Exigir tenantId - sem fallback inseguro
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     
     if (!tenantId) {
       return responderErro(res, 401, 'Não autorizado - tenant não identificado');
@@ -268,7 +268,7 @@ router.get('/dashboard', async (req, res) => {
 router.get('/mineracao', async (req, res) => {
   try {
     // ✅ Exigir tenantId - sem fallback inseguro
-    const tenantId = req.headers['x-tenant-id'] as string;
+    const tenantId = req.tenantId as string;
     
     if (!tenantId) {
       return responderErro(res, 401, 'Não autorizado - tenant não identificado');

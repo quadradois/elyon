@@ -19,7 +19,6 @@ const app = express();
 app.use(express.json());
 app.use((req, _res, next) => {
   req.tenantId = 'tenant-123';
-  req.headers['x-tenant-id'] = 'tenant-123';
   next();
 });
 app.use('/api/leads', rotasLeads);

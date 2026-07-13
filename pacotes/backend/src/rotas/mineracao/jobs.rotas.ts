@@ -45,7 +45,7 @@ const iniciarJobSchema = z.object({
  */
 router.post('/iniciar', async (req: Request, res: Response) => {
     try {
-        const tenantId = req.headers['x-tenant-id'] as string;
+        const tenantId = req.tenantId as string;
         if (!tenantId) {
             return responderErro(res, 400, 'Tenant não identificado');
         }

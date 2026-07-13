@@ -51,21 +51,18 @@ describe('default deny REST', () => {
     expect(autenticar).toHaveBeenCalledTimes(1);
   });
 
-  it('deriva e normaliza tenant exclusivamente do usuário autenticado', async () => {
+  it('deriva tenant exclusivamente do usuário sem criar canais legados', async () => {
     autenticarComo();
 
     const resposta = await request(criarApp())
-      .post('/api/blacklist?tenantId=tenant-a')
-      .set('x-tenant-id', 'tenant-a')
-      .send({ tenantId: 'tenant-a' });
+      .post('/api/blacklist')
+      .send({ telefone: '5511999999999' });
 
     expect(resposta.status).toBe(200);
-    expect(resposta.body).toMatchObject({
-      tenantId: 'tenant-a',
-      headerTenant: 'tenant-a',
-      queryTenant: 'tenant-a',
-      bodyTenant: 'tenant-a'
-    });
+    expect(resposta.body.tenantId).toBe('tenant-a');
+    expect(resposta.body.headerTenant).toBeUndefined();
+    expect(resposta.body.queryTenant).toBeUndefined();
+    expect(resposta.body.bodyTenant).toBeUndefined();
   });
 
   it('retorna 403 em divergência cross-tenant por header, query ou body', async () => {

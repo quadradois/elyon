@@ -34,19 +34,6 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // Adicionar tenant ID do objeto salvo no login
-  const tenantData = localStorage.getItem('elyon_tenant');
-  if (tenantData) {
-    try {
-      const tenant = JSON.parse(tenantData);
-      if (tenant?.id) {
-        config.headers['X-Tenant-Id'] = tenant.id;
-      }
-    } catch (e) {
-      console.error('[API] Erro ao parsear tenant:', e);
-    }
-  }
-
   return config;
 });
 

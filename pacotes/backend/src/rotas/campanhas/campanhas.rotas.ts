@@ -27,7 +27,7 @@ const router = Router();
  * Retorna null se não encontrar (forçando o chamador a tratar)
  */
 const getTenantIdFromHeader = (req: Request): string | null => {
-  const tenantId = req.headers['x-tenant-id'];
+  const tenantId = req.tenantId;
   if (tenantId && typeof tenantId === 'string') {
     return tenantId;
   }
