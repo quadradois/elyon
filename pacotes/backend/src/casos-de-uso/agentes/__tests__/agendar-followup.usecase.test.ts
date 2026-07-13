@@ -1,5 +1,5 @@
 const mockPrisma = {
-  contato: {
+  lead: {
     update: jest.fn(),
   },
 };
@@ -18,10 +18,10 @@ describe('AgendarFollowupUseCase', () => {
   });
 
   it('agenda recontato com sucesso em data válida', async () => {
-    mockPrisma.contato.update.mockResolvedValue({});
+    mockPrisma.lead.update.mockResolvedValue({});
 
     const result = await useCase.execute({
-      leadId: 'contato-1',
+      leadId: 'lead-1',
       dataRecontato: '20/03/2026',
       motivo: 'Cliente pediu retorno no fim do mês',
     });
@@ -30,8 +30,8 @@ describe('AgendarFollowupUseCase', () => {
     expect(result.message).toContain('20/03/2026');
     expect(result.dataRecontato).toBeDefined();
 
-    expect(mockPrisma.contato.update).toHaveBeenCalledWith({
-      where: { id: 'contato-1' },
+    expect(mockPrisma.lead.update).toHaveBeenCalledWith({
+      where: { id: 'lead-1' },
       data: expect.objectContaining({
         statusProspeccao: 'MORNO_FUTURO',
         motivoRecontato: 'Cliente pediu retorno no fim do mês',
@@ -39,7 +39,7 @@ describe('AgendarFollowupUseCase', () => {
       }),
     });
 
-    const dataArg = mockPrisma.contato.update.mock.calls[0][0].data.dataRecontato;
+    const dataArg = mockPrisma.lead.update.mock.calls[0][0].data.dataRecontato;
     expect(dataArg).toBeInstanceOf(Date);
     expect(dataArg.getHours()).toBe(9);
     expect(dataArg.getMinutes()).toBe(0);
@@ -47,7 +47,7 @@ describe('AgendarFollowupUseCase', () => {
 
   it('retorna erro para data inválida', async () => {
     const result = await useCase.execute({
-      leadId: 'contato-2',
+      leadId: 'lead-2',
       dataRecontato: 'data-invalida',
       motivo: 'Teste',
     });
@@ -56,14 +56,14 @@ describe('AgendarFollowupUseCase', () => {
       success: false,
       error: 'Data inválida. Use DD/MM/YYYY',
     });
-    expect(mockPrisma.contato.update).not.toHaveBeenCalled();
+    expect(mockPrisma.lead.update).not.toHaveBeenCalled();
   });
 
   it('retorna erro quando prisma update falha', async () => {
-    mockPrisma.contato.update.mockRejectedValue(new Error('Falha de banco'));
+    mockPrisma.lead.update.mockRejectedValue(new Error('Falha de banco'));
 
     const result = await useCase.execute({
-      leadId: 'contato-3',
+      leadId: 'lead-3',
       dataRecontato: '10/04/2026',
       motivo: 'Aguardar decisão familiar',
     });
@@ -73,15 +73,15 @@ describe('AgendarFollowupUseCase', () => {
   });
 
   it('preserva motivo no campo observacoes', async () => {
-    mockPrisma.contato.update.mockResolvedValue({});
+    mockPrisma.lead.update.mockResolvedValue({});
 
     await useCase.execute({
-      leadId: 'contato-4',
+      leadId: 'lead-4',
       dataRecontato: '01/05/2026',
       motivo: 'Retorno após viagem',
     });
 
-    expect(mockPrisma.contato.update).toHaveBeenCalledWith(
+    expect(mockPrisma.lead.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           observacoes: 'Futuro: Retorno após viagem',
