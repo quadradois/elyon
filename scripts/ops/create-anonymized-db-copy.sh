@@ -297,8 +297,6 @@ BEGIN
   END LOOP;
 END
 $elyon_anonymize$;
-
-VACUUM ANALYZE;
 SQL
 
 echo 'Gerando inventario sem valores de usuario...'
