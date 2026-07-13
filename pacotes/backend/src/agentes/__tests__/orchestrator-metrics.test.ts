@@ -29,11 +29,8 @@ describe('orchestrator-metrics', () => {
     });
 
     expect(mockLogger.debug).toHaveBeenCalledTimes(1);
-    const line = String(mockLogger.debug.mock.calls[0][0]);
-    expect(line.startsWith('[ORCH-METRICS] ')).toBe(true);
-
-    const payloadRaw = line.replace('[ORCH-METRICS] ', '');
-    const payload = JSON.parse(payloadRaw);
+    const payload = mockLogger.debug.mock.calls[0][0];
+    expect(mockLogger.debug.mock.calls[0][1]).toBe('[ORCH-METRICS] Métricas do turno');
 
     expect(payload.tenantId).toBe('tenant-1');
     expect(payload.statusLead).toBe('SEM_STATUS');
@@ -57,8 +54,7 @@ describe('orchestrator-metrics', () => {
       tokens: { inputTokens: 500, outputTokens: 150, totalTokens: 650 },
     });
 
-    const line = String(mockLogger.debug.mock.calls[0][0]);
-    const payload = JSON.parse(line.replace('[ORCH-METRICS] ', ''));
+    const payload = mockLogger.debug.mock.calls[0][0];
 
     expect(payload.tokensInput).toBe(500);
     expect(payload.tokensOutput).toBe(150);
@@ -79,13 +75,13 @@ describe('orchestrator-metrics', () => {
       tokens: { inputTokens: 3500, outputTokens: 1500, totalTokens: 5000 },
     });
 
-    const debugLine = String(mockLogger.debug.mock.calls[0][0]);
-    const payload = JSON.parse(debugLine.replace('[ORCH-METRICS] ', ''));
+    const payload = mockLogger.debug.mock.calls[0][0];
     expect(payload.tokenAlertLevel).toBe('warn');
 
     // Deve ter emitido logger.warn com alerta
     expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('[ORCH-TOKENS] ⚠️ WARN')
+      expect.objectContaining({ totalTokens: 5000, tenantId: 'tenant-warn' }),
+      '[ORCH-TOKENS] Limite de atenção de tokens',
     );
   });
 
@@ -102,16 +98,13 @@ describe('orchestrator-metrics', () => {
       tokens: { inputTokens: 7000, outputTokens: 3000, totalTokens: 10000 },
     });
 
-    const debugLine = String(mockLogger.debug.mock.calls[0][0]);
-    const payload = JSON.parse(debugLine.replace('[ORCH-METRICS] ', ''));
+    const payload = mockLogger.debug.mock.calls[0][0];
     expect(payload.tokenAlertLevel).toBe('critical');
 
     // Deve ter emitido logger.warn com alerta CRITICAL (mais detalhado)
     expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('[ORCH-TOKENS] 🚨 CRITICAL')
-    );
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('10000 tokens')
+      expect.objectContaining({ totalTokens: 10000, tenantId: 'tenant-crit' }),
+      '[ORCH-TOKENS] Limite crítico de tokens',
     );
   });
 

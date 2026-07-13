@@ -172,12 +172,12 @@ export async function verificarSpam(telefone: string, intervaloMs: number = 3000
 // ====================================
 
 export async function executarGuardrails(ctx: MensagemContext): Promise<GuardrailResult> {
-    logger.debug(`[GUARDRAIL] Verificando mensagem de ${ctx.telefone}`);
+    logger.debug({ telefone: ctx.telefone }, '[GUARDRAIL] Verificando mensagem');
 
     // 1. Verificar Blacklist
     const bloqueado = await verificarBlacklist(ctx.telefone, ctx.tenantId);
     if (bloqueado) {
-        logger.debug(`[GUARDRAIL] ❌ Telefone bloqueado: ${ctx.telefone}`);
+        logger.debug({ telefone: ctx.telefone }, '[GUARDRAIL] Telefone bloqueado');
         return {
             permitido: false,
             tipo: 'BLOQUEADO',
@@ -188,7 +188,7 @@ export async function executarGuardrails(ctx: MensagemContext): Promise<Guardrai
     // 2. Verificar Spam/Flood
     const isSpam = await verificarSpam(ctx.telefone);
     if (isSpam) {
-        logger.debug(`[GUARDRAIL] ⚠️ Spam detectado: ${ctx.telefone}`);
+        logger.debug({ telefone: ctx.telefone }, '[GUARDRAIL] Spam detectado');
         return {
             permitido: false,
             tipo: 'SPAM',
@@ -199,7 +199,7 @@ export async function executarGuardrails(ctx: MensagemContext): Promise<Guardrai
     // 3. Verificar Opt-out
     const isOptout = detectarOptout(ctx.conteudo);
     if (isOptout) {
-        logger.debug(`[GUARDRAIL] 🚫 Opt-out detectado: ${ctx.telefone}`);
+        logger.debug({ telefone: ctx.telefone }, '[GUARDRAIL] Opt-out detectado');
         return {
             permitido: false,
             tipo: 'OPTOUT',
@@ -211,7 +211,7 @@ export async function executarGuardrails(ctx: MensagemContext): Promise<Guardrai
     // 4. Verificar se é Comprador (não Proprietário)
     const isComprador = detectarComprador(ctx.conteudo);
     if (isComprador) {
-        logger.debug(`[GUARDRAIL] 🛒 Comprador detectado: ${ctx.telefone}`);
+        logger.debug({ telefone: ctx.telefone }, '[GUARDRAIL] Comprador detectado');
         return {
             permitido: false,
             tipo: 'COMPRADOR',
@@ -221,7 +221,7 @@ export async function executarGuardrails(ctx: MensagemContext): Promise<Guardrai
     }
 
     // ✅ Todas as verificações passaram
-    logger.debug(`[GUARDRAIL] ✅ Mensagem liberada: ${ctx.telefone}`);
+    logger.debug({ telefone: ctx.telefone }, '[GUARDRAIL] Mensagem liberada');
     return {
         permitido: true
     };

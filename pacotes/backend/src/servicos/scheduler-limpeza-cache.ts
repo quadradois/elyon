@@ -10,6 +10,7 @@
  */
 
 import { prisma } from '../lib/db';
+import { runWithJobLogContext } from '../lib/log-context';
 
 const CHECK_INTERVAL_MS = 60 * 1000; // verifica a cada minuto
 
@@ -21,7 +22,7 @@ class SchedulerLimpezaCache {
     if (this.timer) return;
 
     this.timer = setInterval(() => {
-      this.verificarJanelaExecucao().catch((err) => {
+      runWithJobLogContext('scheduler-cache-cleanup', () => this.verificarJanelaExecucao()).catch((err) => {
         console.error('[CacheCleanup] Erro no ciclo de verificação:', err);
       });
     }, CHECK_INTERVAL_MS);

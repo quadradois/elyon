@@ -1278,7 +1278,7 @@ router.post('/:id/contatos/:contatoId/limpar-historico', async (req, res) => {
       }
     });
 
-    logger.info(`[Campanhas] 🧹 Histórico limpo para contato ${contato.nome} (${totalMensagensAntes} mensagens removidas)`);
+    logger.info({ contatoId: contato.id, totalMensagensAntes }, '[Campanhas] Histórico do contato limpo');
 
     return res.json({
       sucesso: true,
@@ -1468,7 +1468,7 @@ router.post('/:id/contatos/:contatoId/assumir-humano', async (req, res) => {
       }
     });
 
-    logger.info(`[Campanhas] 👤 Conversa de ${contato.nome} assumida por humano`);
+    logger.info({ contatoId: contato.id }, '[Campanhas] Conversa assumida por humano');
 
     return res.json({
       sucesso: true,
@@ -1517,7 +1517,7 @@ router.post('/:id/contatos/:contatoId/devolver-ia', async (req, res) => {
       }
     });
 
-    logger.info(`[Campanhas] 🤖 Conversa de ${contato.nome} devolvida para IA`);
+    logger.info({ contatoId: contato.id }, '[Campanhas] Conversa devolvida para IA');
 
     return res.json({
       sucesso: true,
@@ -1559,7 +1559,7 @@ router.post('/:id/contatos/:contatoId/pausar', async (req, res) => {
       }
     });
 
-    logger.info(`[Campanhas] ⏸️ Conversa de ${contato.nome} pausada`);
+    logger.info({ contatoId: contato.id }, '[Campanhas] Conversa pausada');
 
     return res.json({
       sucesso: true,
@@ -1629,7 +1629,7 @@ router.delete('/:id/contatos/:contatoId', async (req, res) => {
     });
     await cascadeDeleteLeads([contatoId]);
 
-    logger.info(`[Campanhas] 🗑️ Contato ${contato.nome} excluído da campanha ${id}`);
+    logger.info({ contatoId: contato.id, campanhaId: id }, '[Campanhas] Contato excluído da campanha');
 
     return res.json({
       sucesso: true,
@@ -1793,7 +1793,7 @@ router.post('/:campanhaId/contatos/:contatoId/promover', async (req, res) => {
       }
     });
 
-    logger.info(`[Campanhas] ✅ Contato ${contato.nome} promovido a Lead CRM`);
+    logger.info({ contatoId: contato.id }, '[Campanhas] Contato promovido a Lead CRM');
 
     return res.json({
       sucesso: true,

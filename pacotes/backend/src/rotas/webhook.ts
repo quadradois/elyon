@@ -513,7 +513,7 @@ async function buscarContatoProspeccao(telefone: string) {
 
     if (contatos && contatos.length > 0) {
       const c = contatos[0];
-      console.log(`[Webhook] ✅ Contato encontrado: ${c.nome} (${c.telefone}), Lead: ${c.lead_id || 'N/A'}, Status: ${c.lead_status || 'N/A'}`);
+      console.log(`[Webhook] Contato encontrado: contatoId=${c.id} leadId=${c.lead_id || 'N/A'} status=${c.lead_status || 'N/A'}`);
 
       // Montar objeto similar ao retorno do Prisma
       return {
@@ -1622,7 +1622,6 @@ router.post('/', autenticarWebhookEvolution, async (req, res) => {
     console.log(`--- WEBHOOK RECEBIDO [${agora}] ---`);
     console.log('Event:', event || type);
     // Log detalhado para debug (desabilitado para reduzir spam)
-    // console.log('Body:', JSON.stringify(req.body, null, 2));
 
     // Suporta tanto 'event' (novo) quanto 'type' (antigo)
     const eventType = event || type;
@@ -1705,7 +1704,7 @@ router.post('/', autenticarWebhookEvolution, async (req, res) => {
               : (texto || '');
 
             if (conteudoEntrada || isMedia) {
-              console.log(`[Webhook] 📨 Mensagem de ${telefone}: "${conteudoEntrada || '[Mídia]'}"`);
+              console.log(`[Webhook] Mensagem recebida: tipo=${tipoMensagemEntrada} possuiMidia=${isMedia}`);
 
               // ====================================
               // 1. VERIFICAR SE É RESPOSTA DE PROSPECÇÃO ATIVA
@@ -1713,7 +1712,7 @@ router.post('/', autenticarWebhookEvolution, async (req, res) => {
               const contatoProspeccao = await buscarContatoProspeccao(telefone);
 
               if (contatoProspeccao) {
-                console.log(`[Webhook] 🎯 Prospecção Ativa: ${contatoProspeccao.nome}`);
+                console.log(`[Webhook] Prospecção ativa: contatoId=${contatoProspeccao.id}`);
 
                 if (!contatoProspeccao.campanhaOrigemId) {
                   console.log(`[Webhook] ⚠️ Contato ${contatoProspeccao.id} sem campanha vinculada - ignorando inbound`);
@@ -1840,7 +1839,7 @@ router.post('/', autenticarWebhookEvolution, async (req, res) => {
                 };
 
                 const processarAposDebounce = async (): Promise<boolean> => {
-                  console.log(`[Debounce] 🚀 PROCESSANDO AGORA: ${contatoProspeccao.nome}`);
+                  console.log(`[Debounce] Processando contatoId=${contatoProspeccao.id}`);
                   
                   // 🔍 VERIFICAR COOLDOWN ANTES DE PROCESSAR
                   if (!(await podeMosResponder(contatoProspeccao.id))) {
@@ -2058,7 +2057,7 @@ router.post('/', autenticarWebhookEvolution, async (req, res) => {
                           instrucaoTurno: instrucaoTurnoFinal
                         }
                       );
-                      console.log('[DEBUG_ORQUESTRADOR] Resposta bruta do processarMensagemOrquestrada:', JSON.stringify(resultado, null, 2));
+                      console.log('[ORQUESTRADOR] Processamento concluído');
 
                       // Fallback técnico:
                       // No modelo unificado, contatoProspeccao já é um Lead (statusProspeccao != null).

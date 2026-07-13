@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getRedisClient } from '../lib/redis';
 import { sincronizacaoService } from './sincronizacao-mapa';
+import { runWithJobLogContext } from '../lib/log-context';
 
 const LOCK_KEY = 'elyon:sync_mapa:lock';
 const LOCK_TTL_SECONDS = 60 * 60 * 6;
@@ -21,14 +22,14 @@ class SchedulerSincronizacaoMapa {
         if (this.timer) return;
 
         this.timer = setInterval(() => {
-            this.verificarJanelaExecucao().catch((error) => {
+            runWithJobLogContext('scheduler-sync-map', () => this.verificarJanelaExecucao()).catch((error) => {
                 console.error('[SyncScheduler] Erro no ciclo de verificação:', error);
             });
         }, CHECK_INTERVAL_MS);
 
         console.log('[SyncScheduler] Agendador de sincronização iniciado (diário às 03:00 America/Sao_Paulo).');
 
-        this.verificarJanelaExecucao().catch((error) => {
+        runWithJobLogContext('scheduler-sync-map-initial', () => this.verificarJanelaExecucao()).catch((error) => {
             console.error('[SyncScheduler] Erro na verificação inicial:', error);
         });
     }

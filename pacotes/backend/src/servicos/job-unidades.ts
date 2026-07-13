@@ -1,6 +1,7 @@
 import { getRedisClient } from '../lib/redis';
 import { mapaService } from './mapa';
 import { prisma } from '../lib/db';
+import { runWithJobLogContext } from '../lib/log-context';
 
 export interface JobUnidades {
     id: string;
@@ -51,7 +52,7 @@ export async function criarJobUnidades(
     await redis.set(`${JOB_PREFIX}${jobId}`, JSON.stringify(job), { EX: JOB_TTL_SECONDS });
 
     // Iniciar processamento em background (sem await)
-    processarJobUnidades(jobId).catch(err => {
+    runWithJobLogContext(jobId, () => processarJobUnidades(jobId)).catch(err => {
         console.error(`[JobUnidades] Erro não tratado no job ${jobId}:`, err);
     });
 

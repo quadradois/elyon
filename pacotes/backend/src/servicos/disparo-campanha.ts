@@ -553,7 +553,7 @@ export class DisparoCampanhaService {
       // Substituir variáveis restantes
       mensagem = substituirVariaveis(mensagem, dados);
 
-      console.log(`[Disparo] Enviando para ${contato.nome} (${telefone}) - Tentativa ${tentativa}`);
+      console.log(`[Disparo] contatoId=${contato.id} tentativa=${tentativa}`);
       console.log(`[Disparo] Usando instância WhatsApp: ${sessao.instanceName}`);
 
       // 🆕 Obter serviço WhatsApp para a instância do tenant
@@ -591,7 +591,7 @@ export class DisparoCampanhaService {
         console.error('[Disparo] Erro ao salvar histórico de mensagem:', e);
       }
 
-      console.log(`[Disparo] ✅ Enviado para ${contato.nome}`);
+      console.log(`[Disparo] contatoId=${contato.id} enviado`);
 
       return {
         sucesso: true,
@@ -601,7 +601,7 @@ export class DisparoCampanhaService {
       };
 
     } catch (error: any) {
-      console.error(`[Disparo] ❌ Erro ao enviar para ${contato.nome}:`, error.message);
+      console.error(`[Disparo] contatoId=${contato.id} falhou:`, error);
 
       // Marcar como falha após várias tentativas de envio
       if (contato.tentativasContato >= CONFIG_PADRAO.MAX_TENTATIVAS - 1) {

@@ -58,6 +58,10 @@ import { schedulerReconciliacaoWhatsapp } from './servicos/scheduler-reconciliac
 import { validarConfiguracaoCriptografia } from './lib/crypto';
 import { exigirAutenticacaoPorPadrao } from './middleware/default-deny';
 import { capturarRawBody, validarConfiguracaoWebhooks } from './servicos/webhook-seguranca';
+import { installSecureConsoleBridge, logger } from './lib/logger';
+import { correlationIdMiddleware } from './middleware/correlation-id';
+
+installSecureConsoleBridge();
 
 const app = express();
 const server = http.createServer(app);
@@ -68,6 +72,7 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', resolverTrustProxy());
 
 // Middlewares
+app.use(correlationIdMiddleware);
 app.use(helmet());
 
 // CORS - Permitir múltiplas origens
@@ -89,7 +94,7 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`[CORS] Origem bloqueada: ${origin}`);
+      logger.warn({ origin }, '[CORS] Origem bloqueada');
       callback(new Error('Origem não permitida pelo CORS'));
     }
   },
@@ -194,7 +199,10 @@ app.use('/webhooks', rotaWebhookManus);     // Webhooks do Manus (pesquisa IA)
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   // 1. Limite de Payload
   if (err.type === 'entity.too.large') {
-    console.warn(`[WARN] PayloadTooLargeError em ${req.path} - Tamanho: ${req.headers['content-length']} bytes`);
+    logger.warn(
+      { path: req.path, contentLength: req.headers['content-length'] },
+      '[HTTP] Payload excedeu o limite',
+    );
     return responderErro(res, 413, 'Payload muito grande', { maxSize: '1mb', received: req.headers['content-length'] });
   }
 
@@ -205,7 +213,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
   // 3. Erros de Banco de Dados (Prisma)
   if (err.name === 'PrismaClientKnownRequestError') {
-    console.error(`[Prisma ERROR] Code ${err.code} em ${req.path}`);
+    logger.error({ err, prismaCode: err.code, path: req.path }, '[Prisma] Falha na requisição');
     if (err.code === 'P2002') {
       return responderErro(res, 409, 'Registro já existe (violação de restrição única)', { 
         alvo: err.meta?.target 
@@ -216,7 +224,10 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
   // 4. Erros de APIs Externas (Axios)
   if (err.isAxiosError) {
-    console.error(`[Axios ERROR] Erro chamando ${err.config?.url}: ${err.message}`);
+    logger.error(
+      { err, externalStatus: err.response?.status },
+      '[HTTP] Falha de comunicação com serviço externo',
+    );
     const statusApiExt = err.response?.status || 502;
     return responderErro(res, statusApiExt, 'Falha de comunicação com serviço externo', {
       api: err.config?.url,
@@ -225,7 +236,10 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   }
 
   // 5. Uncaught genérico
-  console.error(`[FATAL] Erro não tratado na rota ${req.method} ${req.path}:`, err);
+  logger.error(
+    { err, method: req.method, path: req.path },
+    '[HTTP] Erro não tratado na rota',
+  );
   return responderErro(res, 500, 'Erro interno no servidor', {
     mensagem: err.message || 'Erro inesperado'
   });
@@ -242,9 +256,9 @@ if (require.main === module) {
   websocketService.inicializar(server);
 
   server.listen(PORT, async () => {
-    console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
-    console.log(`🔌 WebSocket ativo para alertas em tempo real`);
-    console.log(`🏥 Health check: http://localhost:${PORT}/api/saude`);
+    logger.info({ port: PORT }, '[BOOT] Servidor iniciado');
+    logger.info('[BOOT] WebSocket ativo para alertas em tempo real');
+    logger.info({ path: '/api/saude' }, '[BOOT] Health check disponível');
     schedulerSincronizacaoMapa.iniciar();
     schedulerLimpezaCache.iniciar();
     schedulerReconciliacaoWhatsapp.iniciar();

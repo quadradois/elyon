@@ -123,13 +123,26 @@ export function logMetricaOrchestrator(params: LogMetricaOrchestratorParams): Or
     custoEstimadoUSD: tokenAlert.custoEstimadoUSD,
   };
 
-  logger.debug(`[ORCH-METRICS] ${JSON.stringify(payload)}`);
+  const { telefone: _telefone, erro: _erro, ...safeMetric } = payload;
+  logger.debug(
+    { ...safeMetric, hasError: Boolean(payload.erro) },
+    '[ORCH-METRICS] Métricas do turno',
+  );
 
   // Emitir alertas de consumo elevado
   if (tokenAlert.level === 'critical') {
-    logger.warn(`[ORCH-TOKENS] 🚨 CRITICAL — ${tokenAlert.totalTokens} tokens (custo ~$${tokenAlert.custoEstimadoUSD.toFixed(4)}) | tenant=${params.tenantId} agente=${params.agenteFinal || params.agenteInicial || 'N/A'} telefone=${params.telefone || 'N/A'}`);
+    logger.warn({
+      totalTokens: tokenAlert.totalTokens,
+      custoEstimadoUSD: tokenAlert.custoEstimadoUSD,
+      tenantId: params.tenantId,
+      agente: params.agenteFinal || params.agenteInicial || 'N/A',
+    }, '[ORCH-TOKENS] Limite crítico de tokens');
   } else if (tokenAlert.level === 'warn') {
-    logger.warn(`[ORCH-TOKENS] ⚠️ WARN — ${tokenAlert.totalTokens} tokens (custo ~$${tokenAlert.custoEstimadoUSD.toFixed(4)}) | tenant=${params.tenantId}`);
+    logger.warn({
+      totalTokens: tokenAlert.totalTokens,
+      custoEstimadoUSD: tokenAlert.custoEstimadoUSD,
+      tenantId: params.tenantId,
+    }, '[ORCH-TOKENS] Limite de atenção de tokens');
   }
 
   return payload;

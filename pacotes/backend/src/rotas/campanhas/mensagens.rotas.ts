@@ -65,7 +65,7 @@ router.get('/contatos/:id', async (req, res) => {
     if (precisaEnriquecimentoProfissional || precisaSmartBox) {
       const cpfLimpo = contato.cpf!.replace(/\D/g, '');
       // ✅ TASK-05: CPF mascarado nos logs (LGPD Art. 46)
-      logger.info(`[Campanhas] 🔍 Enriquecendo contato ${contato.nome} (CPF: ***${cpfLimpo.slice(-4)})...`);
+      logger.info({ contatoId: contato.id }, '[Campanhas] Enriquecendo contato');
       
       const cache = await prisma.cacheCpf.findFirst({
         where: { cpf: cpfLimpo }
@@ -74,7 +74,7 @@ router.get('/contatos/:id', async (req, res) => {
       if (cache && cache.dados) {
         // ✅ TASK-12: Tipagem correta — elimina `as any` em código crítico
         const dados = cache.dados as DadosCacheCpf;
-        logger.info(`[Campanhas] ✅ Dados de cache encontrados para ${contato.nome}`);
+        logger.info({ contatoId: contato.id }, '[Campanhas] Dados de cache encontrados');
         
         // Mapear campos que estão vazios no contato
         if (dados.profissao && !contato.profissao) {
@@ -183,7 +183,7 @@ router.get('/contatos/:id', async (req, res) => {
 
     // 3. Smart Box Discovery (Busca cruzada por CPF no mesmo prédio/edifício)
     if (!contato.box && contato.cpf) {
-      logger.info(`[Campanhas] 📦 Iniciando Smart Box Discovery para ${contato.nome}...`);
+      logger.info({ contatoId: contato.id }, '[Campanhas] Iniciando Smart Box Discovery');
       
       const iptuPref = contato.inscricaoIptu ? contato.inscricaoIptu.substring(0, 10) : null;
       const nomeEdifCurto = contato.nomeEdificio ? String(contato.nomeEdificio).split(' ')[0].toUpperCase() : null;

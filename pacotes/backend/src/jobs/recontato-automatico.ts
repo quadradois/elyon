@@ -122,10 +122,9 @@ export async function processarRecontatos(): Promise<ResultadoRecontato> {
     for (const contato of contatos) {
       resultado.processados++;
       
-      console.log(`\n[${resultado.processados}/${contatos.length}] Processando: ${contato.nome}`);
+      console.log(`\n[${resultado.processados}/${contatos.length}] Processando contatoId=${contato.id}`);
       console.log(`   📅 Data agendada: ${contato.dataRecontato?.toLocaleDateString('pt-BR')}`);
       console.log(`   📝 Motivo: ${contato.motivoRecontato || 'Não informado'}`);
-      console.log(`   📞 Telefone: ${contato.telefone}`);
       
       try {
         // Verificar se campanha ainda está ativa
@@ -156,7 +155,7 @@ export async function processarRecontatos(): Promise<ResultadoRecontato> {
         
         // Gerar mensagem personalizada de follow-up
         const mensagemFollowUp = gerarMensagemRecontato(contato);
-        console.log(`   💬 Mensagem: ${mensagemFollowUp.substring(0, 60)}...`);
+        console.log('   Mensagem de follow-up preparada');
         
         // Buscar sessão ativa do tenant da campanha
         const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
