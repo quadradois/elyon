@@ -46,7 +46,7 @@ type ConexaoCallback = (conectado: boolean) => void;
 class WebSocketService {
   private socket: Socket | null = null;
   private conectado: boolean = false;
-  private tenantId: string | null = null;
+  private tokenAtual: string | null = null;
 
   // Callbacks registrados
   private alertaCallbacks: AlertaCallback[] = [];
@@ -58,9 +58,14 @@ class WebSocketService {
   /**
    * Conecta ao servidor WebSocket
    */
-  conectar(tenantId: string): void {
-    if (this.socket?.connected && this.tenantId === tenantId) {
-      console.log('[WS] Já conectado ao tenant:', tenantId);
+  conectar(): void {
+    const token = localStorage.getItem('elyon_token');
+    if (!token) {
+      this.desconectar();
+      return;
+    }
+
+    if (this.socket?.connected && this.tokenAtual === token) {
       return;
     }
 
@@ -69,7 +74,7 @@ class WebSocketService {
       this.socket.disconnect();
     }
 
-    this.tenantId = tenantId;
+    this.tokenAtual = token;
 
     // Criar nova conexão
     // Criar nova conexão
@@ -78,6 +83,7 @@ class WebSocketService {
 
     this.socket = io(wsUrl, {
       path: '/ws',
+      auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,
@@ -89,9 +95,6 @@ class WebSocketService {
       console.log('[WS] ✅ Conectado ao servidor');
       this.conectado = true;
       this.notificarConexao(true);
-
-      // Autenticar após conexão
-      this.autenticar();
     });
 
     this.socket.on('disconnect', () => {
@@ -141,20 +144,6 @@ class WebSocketService {
   }
 
   /**
-   * Autentica no servidor WebSocket
-   */
-  private autenticar(): void {
-    if (!this.socket || !this.tenantId) return;
-
-    const token = localStorage.getItem('elyon_token');
-
-    this.socket.emit('autenticar', {
-      tenantId: this.tenantId,
-      token: token || ''
-    });
-  }
-
-  /**
    * Desconecta do servidor
    */
   desconectar(): void {
@@ -163,7 +152,7 @@ class WebSocketService {
       this.socket = null;
     }
     this.conectado = false;
-    this.tenantId = null;
+    this.tokenAtual = null;
   }
 
   /**
@@ -184,9 +173,9 @@ class WebSocketService {
   /**
    * Marca alerta como atendido
    */
-  marcarAlertaAtendido(alertaId: string, usuarioId: string): void {
+  marcarAlertaAtendido(alertaId: string): void {
     if (!this.socket) return;
-    this.socket.emit('alerta:atendido', { alertaId, usuarioId });
+    this.socket.emit('alerta:atendido', alertaId);
   }
 
   // ========================================

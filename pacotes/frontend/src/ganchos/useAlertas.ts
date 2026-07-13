@@ -42,18 +42,7 @@ export function useAlertas(): UseAlertasReturn {
   
   // Conectar WebSocket ao montar
   useEffect(() => {
-    // Obter tenant do localStorage
-    const tenantData = localStorage.getItem('elyon_tenant');
-    if (!tenantData) {
-      setCarregando(false);
-      return;
-    }
-    
-    let tenantId: string;
-    try {
-      const tenant = JSON.parse(tenantData);
-      tenantId = tenant.id;
-    } catch {
+    if (!localStorage.getItem('elyon_token')) {
       setCarregando(false);
       return;
     }
@@ -61,7 +50,7 @@ export function useAlertas(): UseAlertasReturn {
     const controller = new AbortController();
     
     // Conectar ao WebSocket
-    websocketService.conectar(tenantId);
+    websocketService.conectar();
     
     // Carregar alertas iniciais
     carregarAlertas(controller.signal);
@@ -121,18 +110,7 @@ export function useAlertas(): UseAlertasReturn {
   
   // Marcar como atendido
   const marcarAtendido = useCallback((alertaId: string) => {
-    const userData = localStorage.getItem('elyon_user');
-    let usuarioId = 'unknown';
-    try {
-      if (userData) {
-        const user = JSON.parse(userData);
-        usuarioId = user.id;
-      }
-    } catch {
-      // mantém fallback "unknown" quando localStorage estiver inválido
-    }
-    
-    websocketService.marcarAlertaAtendido(alertaId, usuarioId);
+    websocketService.marcarAlertaAtendido(alertaId);
     setAlertas(prev => prev.filter(a => a.id !== alertaId));
   }, []);
   
