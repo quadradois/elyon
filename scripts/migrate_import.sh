@@ -110,7 +110,7 @@ log "Iniciando container postgres..."
 DC_CMD="docker compose"
 command -v docker-compose &>/dev/null && DC_CMD="docker-compose"
 
-${DC_CMD} -f docker-compose.prod.yml up -d postgres
+${DC_CMD} -f docker-compose.yml up -d postgres
 log "Aguardando PostgreSQL ficar pronto..."
 
 MAX_WAIT=60
@@ -155,7 +155,7 @@ step "6/8 — Restaurando Redis"
 
 if [[ -f "${EXPORT_DIR}/redis/dump.rdb" ]]; then
   log "Subindo Redis..."
-  ${DC_CMD} -f docker-compose.prod.yml up -d redis
+  ${DC_CMD} -f docker-compose.yml up -d redis
   sleep 3
 
   # Parar o redis para substituir o RDB
@@ -165,7 +165,7 @@ if [[ -f "${EXPORT_DIR}/redis/dump.rdb" ]]; then
   ok "Redis restaurado."
 else
   warn "Sem snapshot Redis — subindo Redis vazio (dados de sessão e cache serão recriados)."
-  ${DC_CMD} -f docker-compose.prod.yml up -d redis
+  ${DC_CMD} -f docker-compose.yml up -d redis
 fi
 
 # ──────────────────────────────────────────
@@ -174,10 +174,10 @@ fi
 step "7/8 — Build e inicialização dos serviços"
 
 log "Construindo imagens (backend, frontend, site)..."
-${DC_CMD} -f docker-compose.prod.yml build
+${DC_CMD} -f docker-compose.yml build
 
 log "Subindo todos os serviços..."
-${DC_CMD} -f docker-compose.prod.yml up -d
+${DC_CMD} -f docker-compose.yml up -d
 
 log "Aguardando backend ficar pronto..."
 sleep 10
@@ -192,7 +192,7 @@ docker exec elyon_backend npx prisma migrate deploy 2>/dev/null && \
 step "8/8 — Verificação final"
 
 echo ""
-${DC_CMD} -f docker-compose.prod.yml ps
+${DC_CMD} -f docker-compose.yml ps
 echo ""
 
 # Checar saúde do backend
