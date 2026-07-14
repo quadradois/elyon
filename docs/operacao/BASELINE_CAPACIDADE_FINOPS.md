@@ -52,14 +52,19 @@ versao do Node e quantidade de vCPUs para impedir comparacoes sem contexto.
 
 | Cenario | p95 maximo | Erros maximos | Concorrencia CI |
 |---|---:|---:|---:|
-| Login | 1.500 ms | 1% | 4 |
-| Leads | 1.000 ms | 1% | 12 |
-| Webhook | 750 ms | 1% | 12 |
-| Orquestrador sem provedor | 2.000 ms | 1% | 3 |
+| Login | 500 ms | 1% | 4 |
+| Leads | 750 ms | 1% | 12 |
+| Webhook | 100 ms | 1% | 12 |
+| Orquestrador sem provedor | 250 ms | 1% | 3 |
 
-Os tetos sao gates de regressao, nao SLOs de produto. O limite seguro inicial
-de vazao e calculado como 70% do throughput observado no mesmo runner. Escalar
-vertical ou horizontalmente antes de sustentar carga acima desse limite.
+Os tetos sao gates de regressao, nao SLOs de produto. Eles foram derivados da
+execucao de referencia de 2026-07-14 usando cerca de 5 vezes o p95 observado,
+arredondamento operacional e um piso por classe de operacao. O limite seguro
+inicial de vazao e calculado como 70% do throughput observado no mesmo runner.
+Escalar vertical ou horizontalmente antes de sustentar carga acima desse limite.
+
+A evidencia de referencia e as decisoes de capacidade estao em
+`docs/operacao/EVIDENCIA_BASELINE_CAPACIDADE_2026-07-14.md`.
 
 ## Saturacao e gargalos
 
@@ -94,3 +99,17 @@ Teste em homologacao ou producao exige janela aprovada, owner de operacao,
 limite de requisicoes, dados anonimizados, rollback e observacao de SLO. A suite
 do CI nao possui endereco nem credenciais de producao e nao deve ser adaptada
 para recebe-los.
+
+## Plano de capacidade aprovado tecnicamente
+
+1. Manter a arquitetura modular atual; o baseline nao demonstra necessidade de
+   extrair microservicos.
+2. Tratar CPU como primeiro recurso de escala para login/bcrypt; priorizar
+   replica horizontal do backend antes de reduzir o custo de hash.
+3. Manter paginacao obrigatoria em leads e cache de autenticacao no Redis.
+4. Preservar inbox duravel e worker separado para webhooks; a recepcao HTTP nao
+   deve executar efeitos externos sincronos.
+5. Planejar capacidade do orquestrador somando p95 do ELYON ao p95 real do
+   provedor LLM; nao usar o numero sintetico como SLO ponta a ponta.
+6. Reavaliar quando a vazao sustentada atingir 70% do limite seguro, a taxa de
+   erros superar 1% ou o p95 exceder o gate em duas execucoes consecutivas.

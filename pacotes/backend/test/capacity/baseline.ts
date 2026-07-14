@@ -67,6 +67,12 @@ interface ScenarioResult {
   };
 }
 
+interface BaselineAssertion {
+  expected: number;
+  actual: number;
+  passed: boolean;
+}
+
 const PROFILE = process.env.CAPACITY_PROFILE || 'quick';
 const OUTPUT_DIR = process.env.CAPACITY_OUTPUT_DIR || 'capacity-results';
 const MAX_ERROR_RATE = 0.01;
@@ -97,16 +103,16 @@ function assertIsolatedTargets(): void {
 
 const profiles: Record<string, Record<ScenarioName, ScenarioConfig>> = {
   quick: {
-    login: { requests: 8, concurrency: 2, maxP95Ms: 1500 },
-    leads: { requests: 20, concurrency: 4, maxP95Ms: 1000 },
-    webhook: { requests: 20, concurrency: 4, maxP95Ms: 750 },
-    orchestrator: { requests: 6, concurrency: 2, maxP95Ms: 2000 },
+    login: { requests: 8, concurrency: 2, maxP95Ms: 500 },
+    leads: { requests: 20, concurrency: 4, maxP95Ms: 750 },
+    webhook: { requests: 20, concurrency: 4, maxP95Ms: 100 },
+    orchestrator: { requests: 6, concurrency: 2, maxP95Ms: 250 },
   },
   ci: {
-    login: { requests: 40, concurrency: 4, maxP95Ms: 1500 },
-    leads: { requests: 150, concurrency: 12, maxP95Ms: 1000 },
-    webhook: { requests: 120, concurrency: 12, maxP95Ms: 750 },
-    orchestrator: { requests: 30, concurrency: 3, maxP95Ms: 2000 },
+    login: { requests: 40, concurrency: 4, maxP95Ms: 500 },
+    leads: { requests: 150, concurrency: 12, maxP95Ms: 750 },
+    webhook: { requests: 120, concurrency: 12, maxP95Ms: 100 },
+    orchestrator: { requests: 30, concurrency: 3, maxP95Ms: 250 },
   },
 };
 
@@ -369,6 +375,10 @@ function formatReport(result: Record<string, unknown> & { scenarios: ScenarioRes
   const resources = result.scenarios.map((item) =>
     `- ${item.scenario}: CPU ${item.saturation.cpuPercent}%, RSS pico ${item.saturation.rssPeakMb} MB, event loop p95 ${item.saturation.eventLoopDelayP95Ms} ms.`,
   ).join('\n');
+  const assertions = result.assertions as Record<string, BaselineAssertion>;
+  const assertionRows = Object.entries(assertions).map(([name, assertion]) =>
+    `| ${name} | ${assertion.expected} | ${assertion.actual} | ${assertion.passed ? 'PASS' : 'FAIL'} |`,
+  ).join('\n');
   return `# Baseline de capacidade ELYON\n\n` +
     `Gerado em: ${result.generatedAt}\n\n` +
     `Perfil: ${result.profile}. Ambiente: ${result.environment}.\n\n` +
@@ -379,6 +389,8 @@ function formatReport(result: Record<string, unknown> & { scenarios: ScenarioRes
     `## Limites seguros iniciais\n\n${safe}\n\n` +
     `Os limites sao conservadores e valem para uma instancia equivalente ao runner medido. Recalibrar com janela aprovada antes de qualquer teste em producao.\n\n` +
     `## Saturacao observada\n\n${resources}\n\n` +
+    `## Assercoes de persistencia\n\n` +
+    `| Assercao | Esperado | Observado | Gate |\n|---|---:|---:|---|\n${assertionRows}\n\n` +
     `## FinOps de IA\n\n` +
     `Hipotese por turno: ${TOKEN_INPUT} tokens de entrada e ${TOKEN_OUTPUT} de saida. Precos configurados: US$ ${INPUT_PRICE_PER_1K}/1k entrada e US$ ${OUTPUT_PRICE_PER_1K}/1k saida.\n\n` +
     `- Custo estimado por turno: US$ ${cost.perTurnUsd}.\n` +
@@ -460,9 +472,27 @@ async function main(): Promise<void> {
       return result.sucesso && Boolean(result.resposta);
     }));
 
+    const expectedWebhookEvents = scenarioConfig.webhook.requests
+      + Math.min(scenarioConfig.webhook.concurrency, 3);
+    const [leadCount, webhookEventCount] = await Promise.all([
+      prisma.lead.count({ where: { tenantId } }),
+      prisma.webhookEvento.count({
+        where: { provedor: 'ASAAS', eventoId: { startsWith: `capacity-event-${process.pid}-` } },
+      }),
+    ]);
+    const assertions: Record<string, BaselineAssertion> = {
+      leadsSeeded: { expected: 1000, actual: leadCount, passed: leadCount === 1000 },
+      webhookEventsPersisted: {
+        expected: expectedWebhookEvents,
+        actual: webhookEventCount,
+        passed: webhookEventCount === expectedWebhookEvents,
+      },
+    };
+
     const perTurnUsd = (TOKEN_INPUT / 1000) * INPUT_PRICE_PER_1K
       + (TOKEN_OUTPUT / 1000) * OUTPUT_PRICE_PER_1K;
-    const passed = results.every((item) => item.threshold.passed);
+    const passed = results.every((item) => item.threshold.passed)
+      && Object.values(assertions).every((assertion) => assertion.passed);
     const report = {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
@@ -471,6 +501,7 @@ async function main(): Promise<void> {
       productionTraffic: false,
       providerMode: 'deterministic-no-network-no-billing',
       scenarios: results,
+      assertions,
       cost: {
         currency: 'USD',
         inputTokensPerTurn: TOKEN_INPUT,
