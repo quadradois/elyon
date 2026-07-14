@@ -59,6 +59,7 @@ install -m 0700 "$ROOT_DIR/scripts/ops/offhost-common.sh" /usr/local/libexec/ely
 install -m 0700 "$ROOT_DIR/scripts/ops/run-offhost-backup.sh" /usr/local/libexec/elyon/run-offhost-backup.sh
 install -m 0700 "$ROOT_DIR/scripts/ops/check-offhost-backup.sh" /usr/local/libexec/elyon/check-offhost-backup.sh
 install -m 0700 "$ROOT_DIR/scripts/ops/run-offhost-restore-drill.sh" /usr/local/libexec/elyon/run-offhost-restore-drill.sh
+install -m 0700 "$ROOT_DIR/scripts/ops/test-offhost-alert.sh" /usr/local/libexec/elyon/test-offhost-alert.sh
 
 config_tmp=$(mktemp)
 cron_current=$(mktemp)
@@ -109,6 +110,8 @@ OFFHOST_ENV_FILE=/etc/elyon/offhost-backup.env \
   /usr/local/libexec/elyon/run-offhost-backup.sh --check
 OFFHOST_ENV_FILE=/etc/elyon/offhost-backup.env \
   /usr/local/libexec/elyon/run-offhost-restore-drill.sh --check
+OFFHOST_ENV_FILE=/etc/elyon/offhost-backup.env \
+  /usr/local/libexec/elyon/test-offhost-alert.sh
 
 if [[ "$disable_legacy_cron" == true ]]; then
   crontab -l > "$cron_current" 2>/dev/null || true

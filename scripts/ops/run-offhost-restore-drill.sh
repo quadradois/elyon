@@ -120,7 +120,7 @@ on_exit() {
     umask 077
     printf 'status=failed\nstarted_utc=%s\nfailed_utc=%s\nexit_code=%s\nsnapshot_id=%s\n' \
       "$started_utc" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$rc" "$snapshot_id" > "$evidence_file"
-    offhost_alert CRITICAL "event=restore_drill_failed snapshot=${snapshot_id:0:8} exit_code=$rc"
+    offhost_alert CRITICAL "event=restore_drill_failed snapshot=${snapshot_id:0:8} exit_code=$rc" || true
   fi
   cleanup
   exit "$rc"
@@ -184,5 +184,5 @@ printf 'status=success\nstarted_utc=%s\ncompleted_utc=%s\nduration_seconds=%s\nr
 completed=true
 trap - EXIT INT TERM
 cleanup
-offhost_alert OK "event=restore_drill_success snapshot=${snapshot_id:0:8} duration_seconds=$duration_seconds rto_seconds=$rto_seconds tables=$table_count migrations=$migration_count"
+offhost_log OK "event=restore_drill_success snapshot=${snapshot_id:0:8} duration_seconds=$duration_seconds rto_seconds=$rto_seconds tables=$table_count migrations=$migration_count"
 echo "EVIDENCE_FILE=$evidence_file"

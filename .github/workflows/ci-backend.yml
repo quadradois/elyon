@@ -276,6 +276,7 @@ jobs:
               /repo/scripts/ops/run-offhost-backup.sh \
               /repo/scripts/ops/check-offhost-backup.sh \
               /repo/scripts/ops/run-offhost-restore-drill.sh \
+              /repo/scripts/ops/test-offhost-alert.sh \
               /repo/scripts/install-offhost-backup.sh
 
   images:

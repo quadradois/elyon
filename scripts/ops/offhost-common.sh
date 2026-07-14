@@ -22,6 +22,7 @@ offhost_load_config() {
   command -v restic >/dev/null || offhost_fail 'restic nao encontrado'
   command -v curl >/dev/null || offhost_fail 'curl nao encontrado'
   command -v logger >/dev/null || offhost_fail 'logger nao encontrado'
+  command -v python3 >/dev/null || offhost_fail 'python3 nao encontrado'
   [[ -n "${RESTIC_REPOSITORY:-}" ]] || offhost_fail 'RESTIC_REPOSITORY ausente'
   if [[ -z "${RESTIC_PASSWORD:-}" && -z "${RESTIC_PASSWORD_FILE:-}" ]]; then
     offhost_fail 'RESTIC_PASSWORD ou RESTIC_PASSWORD_FILE ausente'
@@ -32,7 +33,7 @@ offhost_state_dir() {
   printf '%s\n' "${OFFHOST_STATE_DIR:-/var/lib/elyon-offhost-backup}"
 }
 
-offhost_alert() {
+offhost_log() {
   local level="$1"
   shift
   local message
@@ -43,18 +44,30 @@ offhost_alert() {
 
   echo "$message"
   logger -t elyon-offhost-backup -p "$priority" -- "$message"
+}
+
+offhost_alert() {
+  local level="$1"
+  shift
+  local message
+  message="ELYON_OFFHOST_BACKUP level=${level} host=$(hostname) $*"
+
+  offhost_log "$level" "$*"
 
   local webhook="${OFFHOST_ALERT_WEBHOOK_URL:-${DISK_ALERT_WEBHOOK_URL:-}}"
   if [[ -n "$webhook" ]]; then
-    local escaped="$message"
-    escaped=${escaped//\\/\\\\}
-    escaped=${escaped//\"/\\\"}
-    escaped=${escaped//$'\n'/\\n}
-    curl --fail --silent --show-error --max-time 15 \
+    local field="${OFFHOST_ALERT_WEBHOOK_FIELD:-text}"
+    [[ "$field" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || \
+      offhost_fail 'OFFHOST_ALERT_WEBHOOK_FIELD invalido'
+    local payload
+    payload=$(python3 -c 'import json,sys; print(json.dumps({sys.argv[1]: sys.argv[2]}))' \
+      "$field" "$message")
+    if ! curl --fail --silent --show-error --max-time 15 \
       -H 'Content-Type: application/json' \
-      --data "{\"text\":\"${escaped}\"}" \
-      "$webhook" >/dev/null || logger -t elyon-offhost-backup -p daemon.err \
-        -- 'falha ao enviar alerta externo'
+      --data "$payload" "$webhook" >/dev/null; then
+      offhost_log CRITICAL 'event=external_alert_delivery_failed'
+      return 1
+    fi
   fi
 }
 

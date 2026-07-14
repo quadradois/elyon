@@ -32,9 +32,19 @@ printf 'checked_utc=%s\nsnapshot_id=%s\nsnapshot_time=%s\nage_seconds=%s\nmax_ag
   "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$snapshot_id" "$snapshot_time" \
   "$age_seconds" "$max_age_seconds" > "$STATE_DIR/freshness.env"
 
+status_file="$STATE_DIR/freshness.status"
+previous_status='unknown'
+[[ -f "$status_file" ]] && read -r previous_status < "$status_file"
+
 if ((age_seconds > max_age_seconds)); then
+  printf 'stale\n' > "$status_file"
   offhost_alert CRITICAL "event=backup_stale snapshot=${snapshot_id:0:8} age_seconds=$age_seconds max_age_seconds=$max_age_seconds"
   exit 1
 fi
 
-offhost_alert OK "event=backup_fresh snapshot=${snapshot_id:0:8} age_seconds=$age_seconds max_age_seconds=$max_age_seconds"
+printf 'fresh\n' > "$status_file"
+if [[ "$previous_status" == 'stale' ]]; then
+  offhost_alert OK "event=backup_fresh_recovered snapshot=${snapshot_id:0:8} age_seconds=$age_seconds max_age_seconds=$max_age_seconds"
+else
+  offhost_log OK "event=backup_fresh snapshot=${snapshot_id:0:8} age_seconds=$age_seconds max_age_seconds=$max_age_seconds"
+fi

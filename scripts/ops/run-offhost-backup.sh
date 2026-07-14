@@ -86,7 +86,7 @@ on_exit() {
     umask 077
     printf 'status=failed\nstarted_utc=%s\nfailed_utc=%s\nexit_code=%s\n' \
       "$started_utc" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$rc" > "$STATE_DIR/latest.env"
-    offhost_alert CRITICAL "event=backup_failed exit_code=$rc"
+    offhost_alert CRITICAL "event=backup_failed exit_code=$rc" || true
   fi
   exit "$rc"
 }
@@ -137,4 +137,4 @@ printf 'status=success\nstarted_utc=%s\ncompleted_utc=%s\nduration_seconds=%s\ns
 
 completed=true
 trap - EXIT INT TERM
-offhost_alert OK "event=backup_success snapshot=${snapshot_id:0:8} duration_seconds=$duration_seconds"
+offhost_log OK "event=backup_success snapshot=${snapshot_id:0:8} duration_seconds=$duration_seconds"

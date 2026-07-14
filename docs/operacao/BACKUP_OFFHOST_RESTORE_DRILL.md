@@ -40,10 +40,11 @@ Use `scripts/ops/offhost-backup.env.example` somente como referência. O arquivo
 real fica em `/etc/elyon/offhost-backup.env`, pertence a `root:root`, modo `0600`
 e nunca é versionado.
 
-Além das credenciais Restic/R2, configure um endpoint externo compatível com
-payload `{"text":"..."}`:
+Além das credenciais Restic/R2, configure um endpoint externo. Use `text` para
+Slack ou `content` para Discord:
 
 ```bash
+export OFFHOST_ALERT_WEBHOOK_FIELD=text
 export OFFHOST_ALERT_WEBHOOK_URL=https://endpoint-seguro.example/alerta
 ```
 
@@ -64,8 +65,10 @@ sudo ./scripts/install-offhost-backup.sh \
 ```
 
 Ele preserva uma cópia do crontab, remove apenas a entrada legada
-`/root/backup_r2.sh`, instala units systemd e executa os modos `--check` antes de
-ativar qualquer escrita off-host.
+`/root/backup_r2.sh`, instala units systemd, executa os modos `--check` e envia
+um alerta de teste antes de ativar qualquer escrita off-host. Falha HTTP no
+webhook interrompe a instalação. Sucessos rotineiros ficam apenas no journal;
+o canal externo recebe teste, falha, atraso e recuperação.
 
 Verifique:
 
