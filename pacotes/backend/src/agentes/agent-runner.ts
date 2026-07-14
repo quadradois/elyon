@@ -4,6 +4,8 @@ import type { ElyonContext } from './elyon-context';
 import type { ElyonAgent, ElyonRunResult } from './types';
 import { logger } from '../lib/logger';
 
+export type ExecutorAgente = typeof run;
+
 /** Limite de turnos por execução do agente (segurança contra loops infinitos e custos) */
 const MAX_TURNS = 15;
 
@@ -16,7 +18,7 @@ interface ExecutarAgenteComRetryParams {
   mensagensLength: number;
   construirInputSemCache: () => AgentInputItem[];
   limparHistoricoContato: (contatoId: string) => Promise<void>;
-  executarRun?: typeof run;
+  executarRun?: ExecutorAgente;
   maxTurns?: number;
   /**
    * Callback para criar agente usando o provedor da plataforma (OpenAI).

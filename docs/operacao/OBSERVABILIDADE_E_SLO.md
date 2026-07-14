@@ -13,8 +13,10 @@ latência da aplicação pertencem a `backend`.
 | Latência HTTP p95 | < 2 s | 5 min | acima do limite por 10 min |
 | Memória residente do Node.js | < 1,5 GB | instantâneo | acima do limite por 10 min |
 
-Esses limiares são provisórios. Devem ser recalibrados com tráfego real e com o
-baseline de capacidade da issue #19.
+Esses limiares continuam sendo SLOs de produto. O gate de regressão e os limites
+seguros de vazão são recalculados pelo baseline descrito em
+`docs/operacao/BASELINE_CAPACIDADE_FINOPS.md`; a latência real do provedor de IA
+continua sendo acompanhada separadamente.
 
 ## Contrato dos endpoints
 

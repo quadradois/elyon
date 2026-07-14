@@ -236,6 +236,80 @@ jobs:
           --to-schema-datamodel prisma/schema.prisma
           --exit-code
 
+  capacity:
+    name: Capacidade - baseline efemero
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg15
+        env:
+          POSTGRES_DB: elyon_capacity_ci
+          POSTGRES_USER: elyon_ci
+          POSTGRES_PASSWORD: ci-database-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U elyon_ci -d elyon_capacity_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://elyon_ci:ci-database-password@localhost:5432/elyon_capacity_ci?schema=public
+      REDIS_URL: redis://localhost:6379/14
+      JWT_SECRET: ci-capacity-jwt-secret-with-at-least-32-characters
+      ASAAS_WEBHOOK_TOKEN: ci-capacity-asaas-token-with-at-least-32-characters
+      ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      ENCRYPTION_KEY_ID: ci-v1
+      PRISMA_MIGRATION_TIMEOUT_SECONDS: 300
+      CAPACITY_PROFILE: ci
+      CAPACITY_OUTPUT_DIR: capacity-results
+      LEARNING_BANK_ENABLED: false
+      PAOL_SHADOW_ENABLED: false
+      PAOL_AB_ENABLED: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci --no-audit --no-fund
+
+      - name: Prisma generate
+        working-directory: pacotes/backend
+        run: npx prisma generate
+
+      - name: Preparar banco pelas migrations oficiais
+        working-directory: pacotes/backend
+        run: sh ./scripts/prisma-migrate-deploy.sh
+
+      - name: Executar baseline sem trafego de producao
+        run: npm run test:capacity --workspace @elyon/backend
+
+      - name: Publicar evidencias de capacidade
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-baseline
+          path: pacotes/backend/capacity-results/
+          retention-days: 30
+
   compose:
     name: Compose - validacao
     runs-on: ubuntu-latest
@@ -275,7 +349,7 @@ jobs:
 
   images:
     name: Imagens - build
-    needs: [backend, frontend, integration, migrations, compose]
+    needs: [backend, frontend, integration, migrations, capacity, compose]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

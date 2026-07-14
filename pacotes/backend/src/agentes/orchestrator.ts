@@ -25,7 +25,7 @@ import { persistirHistoricoSdk } from './history-persistence';
 import { extrairRespostaECot } from './output-extraction';
 import { construirInputSdk } from './input-builder';
 import { construirElyonContext } from './context-builder';
-import { executarAgenteComRetry } from './agent-runner';
+import { executarAgenteComRetry, type ExecutorAgente } from './agent-runner';
 import { processarPosHandoff } from './post-handoff';
 import { logMetricaOrchestrator } from './orchestrator-metrics';
 import { ServicoAuditoria } from '../servicos/servico-auditoria';
@@ -124,6 +124,11 @@ export interface ResultadoProcessamento {
     erro?: string;
 }
 
+export interface DependenciasOrquestrador {
+    /** Permite testes determinísticos sem chamar um provedor externo de IA. */
+    executarRun?: ExecutorAgente;
+}
+
 async function construirInstrucaoReidratacaoTools(leadId?: string): Promise<string | undefined> {
     if (!leadId) return undefined;
     try {
@@ -162,6 +167,7 @@ export async function processarMensagemOrquestrada(
     mensagens: Array<{ role: 'user' | 'assistant'; content: string }>,
     config: ConfiguracaoOrquestrador,
     contexto: ContextoConversa,
+    dependencias: DependenciasOrquestrador = {},
 ): Promise<ResultadoProcessamento> {
     const inicioTurno = Date.now();
     // Timestamps de cada fase para diagnóstico de latência
@@ -630,6 +636,7 @@ Use isso como desempate estratégico na próxima ação.`;
             }).inputSDK,
             limparHistoricoContato: clearHistory,
             criarAgenteFallback: criarAgenteFallbackFn,
+            executarRun: dependencias.executarRun,
         });
 
         tFases.llm = Date.now() - inicioTurno;
@@ -724,6 +731,9 @@ Use isso como desempate estratégico na próxima ação.`;
 
         const guardrailRuntime: string | undefined = undefined;
 
+        const usage = (result as unknown as {
+            usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+        }).usage;
         const payloadMetrica = logMetricaOrchestrator({
             tenantId: config.tenantId,
             telefone: contexto.telefone,
@@ -739,8 +749,7 @@ Use isso como desempate estratégico na próxima ação.`;
             guardrail: guardrailRuntime,
             duracaoMs: Date.now() - inicioTurno,
             sucesso: true,
-            // usage não existe no tipo RunResult do SDK — campo reservado para futuras versões
-            tokens: undefined,
+            tokens: usage,
         });
 
         tFases.total = Date.now() - inicioTurno;

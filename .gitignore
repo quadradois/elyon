@@ -35,6 +35,7 @@ logs/
 # Testes
 coverage/
 .nyc_output/
+capacity-results/
 
 # Prisma
 prisma/migracoes/.push
