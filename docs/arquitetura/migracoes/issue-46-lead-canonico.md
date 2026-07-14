@@ -10,8 +10,10 @@ Inventario: [referencias legadas](../inventarios/issue-46-referencias-contato.md
 
 Este mapa transforma a decisao da issue 46 em unidades revisaveis de trabalho.
 Ele nao cria issues, nao implementa mudancas e nao detalha a maquina de estados.
-As issues #47 e #48 permanecem fora do escopo; qualquer intersecao futura deve
-consumir o contrato de identidade deste ADR sem ser antecipada aqui.
+Conforme a ordem obrigatoria do epico #45, a issue #47 define os estados
+canonicos e a #48 estabelece o baseline de caracterizacao antes de nascerem as
+issues executaveis da Onda 1. Este documento registra somente essa dependencia,
+sem antecipar o escopo das duas issues.
 
 Estado final esperado:
 
@@ -24,7 +26,9 @@ Estado final esperado:
 ## Dependencias e ordem
 
 ```text
-ADR aprovado
+ADR #46 aceito
+  -> #47 estados canonicos
+  -> #48 baseline de caracterizacao
   -> I46-A baseline e telemetria
   -> I46-B bloqueios webhook/qualificacao
   -> I46-C tools, prompts e orquestracao
@@ -34,6 +38,7 @@ ADR aprovado
   -> I46-G contract de aliases e legado de banco
 ```
 
+`I46-A` somente pode ser iniciada depois da conclusao das issues #47 e #48.
 `I46-G` depende de todos os consumidores migrados e de 30 dias sem uso do alias.
 As demais unidades podem ser refinadas em paralelo apenas depois de `I46-A`,
 mas devem ser integradas na ordem que preserve compatibilidade.
@@ -65,7 +70,7 @@ Escopo: consultar metadados/contagens por ambiente sem PII, definir owner,
 instrumentar uso de `contatoId` por rota/tool/consumidor e publicar dashboard.
 
 Aceite: baseline assinado; metrica sem UUID/telefone; alertas e janela de 30 dias
-definidos. Dependencia: ADR aprovado.
+definidos. Dependencias: ADR #46 aceito e issues #47 e #48 concluidas.
 
 ### I46-B — Remover dependencias runtime bloqueantes
 

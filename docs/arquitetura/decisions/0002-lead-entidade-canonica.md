@@ -2,7 +2,7 @@
 
 Data: 2026-07-14
 
-Estado: proposta
+Estado: aceita
 
 Issue: [#46](https://github.com/quadradois/elyon/issues/46)
 
@@ -78,10 +78,12 @@ multiplas oportunidades e um ADR proprio; nao e etapa da migracao atual.
 3. O UUID de um prospecto nao muda quando ele e qualificado ou captado. A acao
    hoje chamada de "promover/converter para Lead" passa, nas issues de
    implementacao, a significar transicao de estado do mesmo `Lead`.
-4. Um prospecto frio ou ainda nao qualificado e um `Lead` com uma fase de
-   prospeccao ativa. No modelo atual isso e representado por
-   `statusProspeccao != null`, normalmente iniciado em `AGUARDANDO`. Isso nao
-   cria uma segunda entidade.
+4. Todo prospecto, qualificado ou nao, mantem a identidade `Lead.id`. No fluxo
+   outbound atual, a participacao e o progresso na prospeccao ativa sao
+   indicados por `statusProspeccao`, normalmente iniciado em `AGUARDANDO`. Um
+   Lead manual ou inbound pode estar nao qualificado com esse campo nulo;
+   portanto, `statusProspeccao` nao define qualificacao comercial. A semantica
+   canonica de qualificacao sera definida na issue #47.
 5. As dimensoes permanecem independentes:
    - `statusProspeccao`: elegibilidade e progresso da prospeccao ativa;
    - `status` (`StatusLead`): progresso comercial/CRM;
@@ -99,6 +101,10 @@ multiplas oportunidades e um ADR proprio; nao e etapa da migracao atual.
 `contatoId` pode existir somente em adaptadores de borda de contratos ja
 publicados. O adaptador deve:
 
+- resolver `contatoId` ou `leadId` somente dentro do tenant derivado da
+  autenticacao ou de contexto interno confiavel; `tenantId` fornecido pelo
+  consumidor nunca amplia esse escopo;
+- rejeitar e auditar, sem PII, identificadores pertencentes a outro tenant;
 - preferir `leadId` quando apenas ele for enviado;
 - mapear `contatoId` para `leadId` sem criar ou trocar UUID;
 - quando ambos forem enviados, aceitar somente valores identicos e rejeitar
