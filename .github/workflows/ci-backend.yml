@@ -282,6 +282,9 @@ jobs:
       cancel-in-progress: false
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Configurar SSH restrito
         shell: bash
         env:
