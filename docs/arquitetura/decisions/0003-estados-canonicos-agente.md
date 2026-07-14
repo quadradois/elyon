@@ -2,7 +2,7 @@
 
 Data: 2026-07-14
 
-Estado: proposta
+Estado: aceita
 
 Issue: [#47](https://github.com/quadradois/elyon/issues/47)
 
