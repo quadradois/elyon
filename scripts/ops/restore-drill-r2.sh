@@ -68,6 +68,9 @@ for _ in $(seq 1 60); do
 done
 docker exec "$CONTAINER" pg_isready -U elyon_restore -d elyon_restore >/dev/null
 
+# Roles são globais ao cluster e não fazem parte do pg_dump do banco.
+docker exec "$CONTAINER" psql -v ON_ERROR_STOP=1 -U elyon_restore -d elyon_restore \
+  -c 'CREATE ROLE elyon_tenant_access NOLOGIN' >/dev/null
 log "restaurando dump em PostgreSQL isolado"
 gzip -dc "$local_dump" \
   | docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U elyon_restore -d elyon_restore >/dev/null
