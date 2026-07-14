@@ -1,0 +1,13 @@
+[Unit]
+Description=Schedule ELYON encrypted off-host backup
+
+[Timer]
+OnBootSec=15m
+OnUnitActiveSec=24h
+AccuracySec=5m
+RandomizedDelaySec=5m
+Persistent=true
+Unit=elyon-offhost-backup.service
+
+[Install]
+WantedBy=timers.target

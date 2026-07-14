@@ -1,0 +1,24 @@
+[Unit]
+Description=ELYON encrypted off-host PostgreSQL backup
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Environment=OFFHOST_ENV_FILE=/etc/elyon/offhost-backup.env
+ExecStart=/usr/local/libexec/elyon/run-offhost-backup.sh --apply --confirm-offhost-write
+User=root
+Group=root
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/root/elyon/backups /var/lib/elyon-offhost-backup /var/cache/elyon-restic /run/lock /var/lock
+TimeoutStartSec=2h
+
+[Install]
+WantedBy=multi-user.target

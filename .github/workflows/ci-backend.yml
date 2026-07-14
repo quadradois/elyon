@@ -270,8 +270,13 @@ jobs:
             -v "$PWD:/repo:ro" \
             koalaman/shellcheck:v0.10.0 \
             --severity=warning \
-            /repo/scripts/ops/create-anonymized-db-copy.sh \
-            /repo/pacotes/backend/scripts/prisma-migrate-deploy.sh
+              /repo/scripts/ops/create-anonymized-db-copy.sh \
+              /repo/pacotes/backend/scripts/prisma-migrate-deploy.sh \
+              /repo/scripts/ops/offhost-common.sh \
+              /repo/scripts/ops/run-offhost-backup.sh \
+              /repo/scripts/ops/check-offhost-backup.sh \
+              /repo/scripts/ops/run-offhost-restore-drill.sh \
+              /repo/scripts/install-offhost-backup.sh
 
   images:
     name: Imagens - build

@@ -1,0 +1,12 @@
+[Unit]
+Description=Schedule ELYON off-host backup freshness checks
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=1h
+AccuracySec=5m
+Persistent=true
+Unit=elyon-offhost-freshness.service
+
+[Install]
+WantedBy=timers.target
