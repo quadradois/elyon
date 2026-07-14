@@ -12,6 +12,7 @@
     "test:unit": "jest --config jest.config.js",
     "test:integration": "jest --config jest.integration.config.js --runInBand",
     "test:security:logs": "jest --runInBand src/lib/__tests__/logger-security.test.ts src/middleware/__tests__/correlation-id.test.ts",
+    "test:architecture": "tsx src/scripts/verify-module-boundaries.ts",
     "crypto:inventory": "node dist/scripts/rotacionar-chave-criptografia.js --dry-run",
     "crypto:rotate": "node dist/scripts/rotacionar-chave-criptografia.js --apply",
     "crypto:verify": "node dist/scripts/rotacionar-chave-criptografia.js --verify",

@@ -44,6 +44,9 @@ jobs:
         working-directory: pacotes/backend
         run: npx tsc --noEmit
 
+      - name: Verificar fronteiras de arquitetura
+        run: npm run test:architecture --workspace @elyon/backend
+
       - name: Testes unitarios e coverage
         run: npm run test:unit --workspace @elyon/backend -- --runInBand --coverage --collectCoverageFrom='src/agentes/**/*.ts' --collectCoverageFrom='!src/agentes/__tests__/**' --ci
         env:
