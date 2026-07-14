@@ -100,3 +100,70 @@ groups:
           summary: Memória residente do Node.js acima de 1,5 GB
           description: O RSS do backend permanece acima de 1,5 GB há 10 minutos.
           runbook: docs/operacao/OBSERVABILIDADE_E_SLO.md#saturação-de-memória
+
+      - alert: ElyonLoginHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(elyon_http_request_duration_seconds_bucket{method="POST",route="/api/auth/login"}[5m]))
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          owner: backend
+        annotations:
+          summary: Login acima do guardrail de latência
+          description: A latência p95 do login permanece acima de 500 ms.
+          runbook: docs/operacao/CAPACIDADE_E_FINOPS.md#limite-de-cenário-excedido
+
+      - alert: ElyonLeadsHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(elyon_http_request_duration_seconds_bucket{method="GET",route="/api/leads"}[5m]))
+          ) > 0.75
+        for: 10m
+        labels:
+          severity: warning
+          owner: backend
+        annotations:
+          summary: Listagem de leads acima do guardrail de latência
+          description: A latência p95 da listagem de leads permanece acima de 750 ms.
+          runbook: docs/operacao/CAPACIDADE_E_FINOPS.md#limite-de-cenário-excedido
+
+      - alert: ElyonWebhookHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(elyon_http_request_duration_seconds_bucket{method="POST",route="/webhooks"}[5m]))
+          ) > 3.5
+        for: 10m
+        labels:
+          severity: warning
+          owner: backend
+        annotations:
+          summary: Entrada de webhook acima do guardrail de latência
+          description: A latência p95 da entrada de webhook permanece acima de 3,5 s.
+          runbook: docs/operacao/CAPACIDADE_E_FINOPS.md#limite-de-cenário-excedido
+
+      - alert: ElyonEventLoopSaturated
+        expr: elyon_nodejs_eventloop_lag_p99_seconds > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          owner: backend
+        annotations:
+          summary: Event loop do backend saturado
+          description: O atraso p99 do event loop permanece acima de 200 ms.
+          runbook: docs/operacao/CAPACIDADE_E_FINOPS.md#event-loop-saturado
+
+      - alert: ElyonOrchestratorHighHourlyCost
+        expr: increase(elyon_orchestrator_cost_usd_total[1h]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          owner: backend
+        annotations:
+          summary: Custo horário anormal no orquestrador
+          description: O custo estimado do orquestrador ultrapassou US$ 5 em uma hora.
+          runbook: docs/operacao/CAPACIDADE_E_FINOPS.md#custo-horário-anormal

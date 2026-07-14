@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "geradoEm": "2026-07-14T16:18:24.075Z",
+  "ambiente": {
+    "alvo": "http://127.0.0.1:3109",
+    "banco": "elyon_baseline",
+    "producaoBloqueada": true,
+    "duracaoMs": 5000,
+    "aquecimentoMs": 500
+  },
+  "cenarios": [
+    {
+      "nome": "login",
+      "duracaoSegundos": 5.08,
+      "concorrencia": 2,
+      "requisicoes": 82,
+      "sucessos": 82,
+      "erros": 0,
+      "taxaErro": 0,
+      "throughputPorSegundo": 16.13,
+      "latenciaMs": {
+        "p50": 114.46,
+        "p95": 210.49,
+        "p99": 331.32,
+        "max": 331.32
+      },
+      "bytesRecebidos": 55022,
+      "status": {
+        "200": 82
+      }
+    },
+    {
+      "nome": "leads-list",
+      "duracaoSegundos": 5.22,
+      "concorrencia": 8,
+      "requisicoes": 170,
+      "sucessos": 170,
+      "erros": 0,
+      "taxaErro": 0,
+      "throughputPorSegundo": 32.59,
+      "latenciaMs": {
+        "p50": 233.7,
+        "p95": 362.02,
+        "p99": 460.62,
+        "max": 529.28
+      },
+      "bytesRecebidos": 3747480,
+      "status": {
+        "200": 170
+      }
+    },
+    {
+      "nome": "webhook-ingress",
+      "duracaoSegundos": 6.62,
+      "concorrencia": 4,
+      "requisicoes": 119,
+      "sucessos": 119,
+      "erros": 0,
+      "taxaErro": 0,
+      "throughputPorSegundo": 17.97,
+      "latenciaMs": {
+        "p50": 35.71,
+        "p95": 1649.46,
+        "p99": 3562.1,
+        "max": 3566.15
+      },
+      "bytesRecebidos": 8449,
+      "status": {
+        "202": 119
+      }
+    },
+    {
+      "nome": "orchestrator-control-plane",
+      "duracaoSegundos": 5.03,
+      "concorrencia": 4,
+      "requisicoes": 444,
+      "sucessos": 444,
+      "erros": 0,
+      "taxaErro": 0,
+      "throughputPorSegundo": 88.3,
+      "latenciaMs": {
+        "p50": 45.72,
+        "p95": 49.61,
+        "p99": 53.19,
+        "max": 54.89
+      },
+      "bytesRecebidos": 0,
+      "status": {
+        "200": 444
+      }
+    }
+  ],
+  "saturacao": {
+    "aplicacaoPicos": {
+      "login": {
+        "rssBytes": 187625472,
+        "heapBytes": 110180576,
+        "eventLoopP99Seconds": 0.038076415,
+        "requestsInFlight": 3,
+        "cpuUserSeconds": 7.515999999999999
+      },
+      "leads-list": {
+        "rssBytes": 297660416,
+        "heapBytes": 145638496,
+        "eventLoopP99Seconds": 0.121241599,
+        "requestsInFlight": 9,
+        "cpuUserSeconds": 15.124999999999995
+      },
+      "webhook-ingress": {
+        "rssBytes": 297168896,
+        "heapBytes": 151946784,
+        "eventLoopP99Seconds": 0.029245439,
+        "requestsInFlight": 5,
+        "cpuUserSeconds": 16.578999999999986
+      }
+    },
+    "postgresDelta": {
+      "xact_commit": 1532,
+      "xact_rollback": 0,
+      "blks_read": 64,
+      "blks_hit": 36772,
+      "tup_returned": 571360,
+      "tup_fetched": 11812,
+      "temp_bytes": 0,
+      "deadlocks": 0
+    },
+    "redisDelta": {
+      "connected_clients": 0,
+      "used_memory": 55088,
+      "used_memory_peak": 73880,
+      "total_commands_processed": 286,
+      "rejected_connections": 0,
+      "keyspace_hits": 178,
+      "keyspace_misses": 8
+    },
+    "redisFinal": {
+      "connected_clients": 2,
+      "used_memory": 1166384,
+      "used_memory_peak": 1185176,
+      "total_commands_processed": 296,
+      "rejected_connections": 0,
+      "keyspace_hits": 178,
+      "keyspace_misses": 8
+    }
+  },
+  "custoIA": {
+    "natureza": "projecao-com-provedor-simulado",
+    "providerLatencyMs": 40,
+    "inputTokens": 1200,
+    "outputTokens": 300,
+    "inputCostPer1kUSD": 0.002,
+    "outputCostPer1kUSD": 0.008,
+    "custoPorTurnoUSD": 0.0048,
+    "custoPorMilTurnosUSD": 4.8
+  },
+  "limites": {
+    "login": {
+      "rpsSeguro": 9.68,
+      "alertaP95Ms": 421,
+      "concorrenciaValidada": 2
+    },
+    "leads-list": {
+      "rpsSeguro": 19.55,
+      "alertaP95Ms": 725,
+      "concorrenciaValidada": 8
+    },
+    "webhook-ingress": {
+      "rpsSeguro": 10.78,
+      "alertaP95Ms": 3299,
+      "concorrenciaValidada": 4
+    },
+    "orchestrator-control-plane": {
+      "rpsSeguro": 52.98,
+      "alertaP95Ms": 100,
+      "concorrenciaValidada": 4
+    }
+  },
+  "limitacoes": [
+    "Resultados representam uma máquina local e não substituem teste em staging equivalente à produção.",
+    "O cenário do orquestrador mede o control plane com latência de provedor simulada; tokens e custo são projeções configuráveis.",
+    "Nenhuma requisição de carga foi enviada à produção ou a provedores externos de IA."
+  ]
+}

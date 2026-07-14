@@ -2,6 +2,7 @@ const mockLogger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: 
 jest.mock('../../lib/logger', () => ({ logger: mockLogger }));
 
 import { logMetricaOrchestrator, shortId, avaliarConsumoTokens } from '../orchestrator-metrics';
+import { metricsRegistry } from '../../observabilidade/metricas';
 
 describe('orchestrator-metrics', () => {
   afterEach(() => {
@@ -61,6 +62,24 @@ describe('orchestrator-metrics', () => {
     expect(payload.tokensTotal).toBe(650);
     expect(payload.tokenAlertLevel).toBe('ok');
     expect(payload.custoEstimadoUSD).toBeGreaterThan(0);
+  });
+
+  it('publica duração, tokens, turnos e custo no Prometheus', async () => {
+    logMetricaOrchestrator({
+      tenantId: 'tenant-prometheus',
+      faseFluxo: 'FASE1_QUALIFICACAO',
+      toolCalls: 0,
+      handoffs: 0,
+      fallback: 'NONE',
+      duracaoMs: 250,
+      sucesso: true,
+      tokens: { inputTokens: 1000, outputTokens: 200, totalTokens: 1200 },
+    });
+    const metricas = await metricsRegistry.metrics();
+    expect(metricas).toContain('elyon_orchestrator_turns_total');
+    expect(metricas).toContain('elyon_orchestrator_duration_seconds_bucket');
+    expect(metricas).toContain('elyon_orchestrator_tokens_total');
+    expect(metricas).toContain('elyon_orchestrator_cost_usd_total');
   });
 
   it('emite warn quando tokens excedem threshold WARN (4000)', () => {

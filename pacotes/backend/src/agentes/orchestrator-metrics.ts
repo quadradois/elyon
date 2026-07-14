@@ -1,5 +1,7 @@
 import type { TipoAgente } from './agent-chain';
 import { logger } from '../lib/logger';
+import { Counter, Histogram } from 'prom-client';
+import { metricsRegistry } from '../observabilidade/metricas';
 
 // ====================================
 // LIMITES DE ALERTAS DE TOKENS
@@ -9,6 +11,34 @@ const TOKEN_ALERTA_WARN  = parseInt(process.env.TOKEN_ALERTA_WARN  || '4000', 10
 const TOKEN_ALERTA_CRIT  = parseInt(process.env.TOKEN_ALERTA_CRIT  || '8000', 10);
 const TOKEN_CUSTO_INPUT_PER_1K  = parseFloat(process.env.TOKEN_CUSTO_INPUT_1K  || '0.002');  // USD
 const TOKEN_CUSTO_OUTPUT_PER_1K = parseFloat(process.env.TOKEN_CUSTO_OUTPUT_1K || '0.008');   // USD
+
+const orchestratorTurns = new Counter({
+  name: 'elyon_orchestrator_turns_total',
+  help: 'Total de turnos processados pelo orquestrador.',
+  labelNames: ['success'] as const,
+  registers: [metricsRegistry],
+});
+
+const orchestratorDuration = new Histogram({
+  name: 'elyon_orchestrator_duration_seconds',
+  help: 'Duração dos turnos do orquestrador em segundos.',
+  labelNames: ['success'] as const,
+  buckets: [0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 40],
+  registers: [metricsRegistry],
+});
+
+const orchestratorTokens = new Counter({
+  name: 'elyon_orchestrator_tokens_total',
+  help: 'Tokens consumidos pelo orquestrador por direção.',
+  labelNames: ['direction'] as const,
+  registers: [metricsRegistry],
+});
+
+const orchestratorCost = new Counter({
+  name: 'elyon_orchestrator_cost_usd_total',
+  help: 'Custo estimado acumulado dos turnos do orquestrador em USD.',
+  registers: [metricsRegistry],
+});
 
 interface TokenUsage {
   inputTokens?: number;
@@ -122,6 +152,13 @@ export function logMetricaOrchestrator(params: LogMetricaOrchestratorParams): Or
     tokenAlertLevel: tokenAlert.level,
     custoEstimadoUSD: tokenAlert.custoEstimadoUSD,
   };
+
+  const success = String(params.sucesso);
+  orchestratorTurns.inc({ success });
+  orchestratorDuration.observe({ success }, Math.max(0, params.duracaoMs) / 1000);
+  if (params.tokens?.inputTokens) orchestratorTokens.inc({ direction: 'input' }, params.tokens.inputTokens);
+  if (params.tokens?.outputTokens) orchestratorTokens.inc({ direction: 'output' }, params.tokens.outputTokens);
+  if (tokenAlert.custoEstimadoUSD > 0) orchestratorCost.inc(tokenAlert.custoEstimadoUSD);
 
   const { telefone: _telefone, erro: _erro, ...safeMetric } = payload;
   logger.debug(
