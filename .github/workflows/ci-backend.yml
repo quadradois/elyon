@@ -61,7 +61,8 @@ jobs:
           retention-days: 7
 
   frontend:
-    name: Frontend - testes e build
+    # Nome preservado porque este contexto e obrigatorio na protecao da main.
+    name: Frontend - build
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
