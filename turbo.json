@@ -22,6 +22,10 @@
     "test": {
       "outputs": ["coverage/**"],
       "dependsOn": []
+    },
+    "test:unit": {
+      "outputs": ["coverage/**"],
+      "dependsOn": []
     }
   }
 }

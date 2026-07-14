@@ -20,7 +20,6 @@ import { PerfilImobiliaria } from "./paginas/PerfilImobiliaria";
 import DashboardProspeccao from "./paginas/DashboardProspeccao";
 import { Blacklist } from "./paginas/Blacklist";
 import { Creditos } from "./paginas/Creditos";
-import { WhatsAppProvider } from "./contextos/WhatsAppContext";
 import { SessoesWhatsapp } from "./paginas/SessoesWhatsapp";
 import { MeusAgentes } from "./paginas/MeusAgentes";
 import { Upgrade } from "./paginas/Upgrade";
@@ -31,35 +30,10 @@ import { Integracoes } from "./paginas/Integracoes";
 import { ConfiguracaoLLM } from "./paginas/ConfiguracaoLLM";
 import GestaoUsuarios from "./paginas/GestaoUsuarios";
 import { PainelConfirmacaoCorretor } from "./paginas/PainelConfirmacaoCorretor";
+import { RotaAdmin, RotaPrivada } from "./componentes/RotasProtegidas";
 
 // Páginas Admin
 import { AdminClientes, AdminTransacoes, AdminLeadsVip, AdminPacotes, AdminPlanos, AdminAuditoria } from "./paginas/admin";
-
-// Rota Protegida
-function RotaPrivada({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem("elyon_token");
-  return token ? (
-    <WhatsAppProvider>{children}</WhatsAppProvider>
-  ) : (
-    <Navigate to="/login" />
-  );
-}
-
-// Rota Protegida para Admin (verifica papel SUPER_ADMIN)
-function RotaAdmin({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem("elyon_token");
-  const usuario = JSON.parse(localStorage.getItem("elyon_usuario") || "{}");
-
-  if (!token) {
-    return <Navigate to="/login" />;
-  }
-
-  if (usuario.papel !== "SUPER_ADMIN") {
-    return <Navigate to="/dashboard" />;
-  }
-
-  return <WhatsAppProvider>{children}</WhatsAppProvider>;
-}
 
 function RedirectLeadToProprietario() {
   const { id } = useParams<{ id: string }>();
