@@ -14,6 +14,7 @@ import {
   obterLastSourceUpdateAt,
 } from '../agentes/governanca-qualificacao';
 import { priorizarLeads, calcularQualificacao, calcularUrgencia } from '../servicos/servico-priorizacao-leads';
+import { withTenantDb } from '../lib/tenant-db';
 
 const router = Router();
 
@@ -2205,10 +2206,10 @@ router.get('/:id/modo', async (req, res) => {
     const tenantId = getTenantId(req);
     if (!tenantId) return responderErro(res, 401, 'Não autorizado');
 
-    const lead = await prisma.lead.findFirst({
-      where: { id: req.params.id, tenantId },
+    const lead = await withTenantDb(tenantId, (tx) => tx.lead.findFirst({
+      where: { id: req.params.id },
       select: { modoAtendimento: true, id: true },
-    });
+    }));
 
     res.json({
       modo: (lead as any)?.modoAtendimento || 'IA',
@@ -2234,17 +2235,21 @@ router.post('/:id/controle-modo', async (req, res) => {
       return responderErro(res, 400, 'modo deve ser IA, HUMANO ou PAUSADO');
     }
 
-    const lead = await prisma.lead.findFirst({
-      where: { id: req.params.id, tenantId },
-      select: { id: true },
+    const lead = await withTenantDb(tenantId, async (tx) => {
+      const encontrado = await tx.lead.findFirst({
+        where: { id: req.params.id },
+        select: { id: true },
+      });
+      if (encontrado) {
+        await tx.lead.update({
+          where: { id: encontrado.id },
+          data: { modoAtendimento: modo },
+        });
+      }
+      return encontrado;
     });
 
     if (!lead) return responderErro(res, 404, 'Lead não encontrado');
-
-    await (prisma.lead as any).update({
-      where: { id: lead.id },
-      data: { modoAtendimento: modo },
-    });
 
     res.json({ sucesso: true, modo });
   } catch {
@@ -2261,17 +2266,21 @@ router.post('/:id/retomar-ia', async (req, res) => {
     const tenantId = getTenantId(req);
     if (!tenantId) return responderErro(res, 401, 'Não autorizado');
 
-    const lead = await prisma.lead.findFirst({
-      where: { id: req.params.id, tenantId },
-      select: { id: true },
+    const lead = await withTenantDb(tenantId, async (tx) => {
+      const encontrado = await tx.lead.findFirst({
+        where: { id: req.params.id },
+        select: { id: true },
+      });
+      if (encontrado) {
+        await tx.lead.update({
+          where: { id: encontrado.id },
+          data: { modoAtendimento: 'IA' },
+        });
+      }
+      return encontrado;
     });
 
     if (!lead) return responderErro(res, 404, 'Lead não encontrado');
-
-    await (prisma.lead as any).update({
-      where: { id: lead.id },
-      data: { modoAtendimento: 'IA' },
-    });
 
     res.json({ sucesso: true, modo: 'IA' });
   } catch {
@@ -2300,22 +2309,26 @@ router.post('/:id/followup', async (req, res) => {
       return responderErro(res, 400, 'dataEnvio inválida. Use formato ISO (YYYY-MM-DDTHH:mm)');
     }
 
-    const lead = await prisma.lead.findFirst({
-      where: { id: req.params.id, tenantId },
-      select: { id: true },
+    const lead = await withTenantDb(tenantId, async (tx) => {
+      const encontrado = await tx.lead.findFirst({
+        where: { id: req.params.id },
+        select: { id: true },
+      });
+      if (encontrado) {
+        // Prefixo [MSG] distingue mensagem customizada de keyword automática no job
+        await tx.lead.update({
+          where: { id: encontrado.id },
+          data: {
+            statusProspeccao: 'MORNO_FUTURO',
+            dataRecontato,
+            motivoRecontato: `[MSG] ${mensagem}`,
+          },
+        });
+      }
+      return encontrado;
     });
 
     if (!lead) return responderErro(res, 404, 'Lead não encontrado');
-
-    // Prefixo [MSG] distingue mensagem customizada de keyword automática no job
-    await (prisma.lead as any).update({
-      where: { id: lead.id },
-      data: {
-        statusProspeccao: 'MORNO_FUTURO',
-        dataRecontato,
-        motivoRecontato: `[MSG] ${mensagem}`,
-      },
-    });
 
     res.json({
       sucesso: true,
