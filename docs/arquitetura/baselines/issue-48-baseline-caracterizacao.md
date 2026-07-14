@@ -1,8 +1,11 @@
 # Baseline de caracterização do fluxo outbound — Issue #48
 
-Data: 2026-07-14  
-Baseline: `main@aecd650`  
-Decisões de entrada: ADR-0002 e ADR-0003 aceitos  
+Data: 2026-07-14
+
+Baseline: `main@aecd650`
+
+Decisões de entrada: ADR-0002 e ADR-0003 aceitos
+
 Owner: backend/arquitetura
 
 ## Objetivo e limites
