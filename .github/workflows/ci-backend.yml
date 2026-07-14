@@ -146,6 +146,32 @@ jobs:
         working-directory: pacotes/backend
         run: sh ./scripts/prisma-migrate-deploy.sh
 
+      - name: Verificar estado RLS aplicado
+        working-directory: pacotes/backend
+        run: node dist/scripts/verify-tenant-rls-state.js enabled
+
+      - name: Testar rollback do piloto RLS
+        working-directory: pacotes/backend
+        run: >-
+          npx prisma db execute
+          --file prisma/rollbacks/20260714130000_tenant_rls_pilot.sql
+          --schema prisma/schema.prisma
+
+      - name: Verificar estado RLS removido
+        working-directory: pacotes/backend
+        run: node dist/scripts/verify-tenant-rls-state.js disabled
+
+      - name: Reaplicar piloto RLS apos rollback
+        working-directory: pacotes/backend
+        run: >-
+          npx prisma db execute
+          --file prisma/migrations/20260714130000_tenant_rls_pilot/migration.sql
+          --schema prisma/schema.prisma
+
+      - name: Verificar estado RLS reaplicado
+        working-directory: pacotes/backend
+        run: node dist/scripts/verify-tenant-rls-state.js enabled
+
       - name: Testar tenant, replay e Redis reais
         run: npm run test:integration --workspace @elyon/backend
 
