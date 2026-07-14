@@ -135,13 +135,13 @@ testes locais, mas falta modelo executavel central e medicao de divergencias.
 
 | Legado | Classificacao | Destino canonico | Regra de migracao |
 |---|---|---|---|
-| `QUALIFICADO` comercial | semantica sobreposta | `etapaQualificacao=QUALIFICADA` | comercial default `NOVO`, salvo evidencia de estagio posterior |
-| `QUALIFICADO` em `faseSPIN` | conversa/resultado misturados | `faseConversa=ENCERRADA` + qualificacao | nao promover comercial automaticamente |
-| `EM_NEGOCIACAO` | comercial legado | `DOCUMENTACAO` condicional | exigir evidencia; senao pendencia manual |
+| `QUALIFICADO` comercial | semantica sobreposta | qualificacao condicional | mapear apenas com decisao/evidencias/policy versionada; senao quarentena |
+| `QUALIFICADO` em `faseSPIN` | conversa/resultado misturados | conversa e qualificacao condicionais | nao promover; sem evidencia deterministica, quarentena |
+| `EM_NEGOCIACAO` | comercial legado | `DOCUMENTACAO` condicional | exigir evidencia deterministica; senao quarentena, sem default |
 | `CONTATANDO` em mapa comercial | outreach deslocado | `estadoOutreach=CONTATANDO` | preservar comercial anterior |
-| `MORNO_FUTURO` | follow-up deslocado | follow-up `PENDENTE` | preservar outreach anterior/encerrado |
-| `LEAD` em outreach | identidade como estado | `ENCERRADO` | qualificacao/comercial avaliados separadamente |
-| `null` em outreach | ausencia ambigua | `NAO_APLICAVEL` | nao inferir qualificacao |
+| `MORNO_FUTURO` | follow-up deslocado | `PENDENTE` condicional | somente com data/timezone/motivo validos; senao quarentena |
+| `LEAD` em outreach | identidade como estado | `ENCERRADO` condicional | exigir evento verificavel; senao quarentena |
+| `null` em outreach | ausencia ambigua | `NAO_APLICAVEL` condicional | exigir ausencia comprovada de campanha/tentativa/historico; senao quarentena |
 | `OPENER/PRESENTER/CLOSER` | papel/agente | alias de role/skill | nunca persistir como dominio |
 
 ## Riscos priorizados
@@ -158,4 +158,6 @@ testes locais, mas falta modelo executavel central e medicao de divergencias.
 A baseline deve medir, sem mudar dados: distribuicao de valores, combinacoes
 impossiveis, nulos, transicoes observadas, duplicidade de side effects, idade de
 follow-ups, agendamentos inconsistentes e uso de aliases por consumidor. Este
-inventario nao presume esses numeros.
+inventario nao presume esses numeros. Deve ainda dimensionar a quarentena,
+validar policies candidatas de qualificacao por canal/perfil e impedir qualquer
+default de backfill que nao seja sustentado por evidencia deterministica.

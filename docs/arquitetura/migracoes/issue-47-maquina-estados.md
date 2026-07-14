@@ -20,6 +20,9 @@ autorizado, estado esperado e idempotency key.
 | `NOVO` | `INICIAR_TENTATIVA_AGENDAMENTO` | qualificacao adequada ao canal | `TENTATIVA_AGENDAMENTO` | atividade auditavel | `COMMERCIAL_SCHEDULING_STARTED` |
 | `TENTATIVA_AGENDAMENTO` | `CONFIRMAR_VISITA` | agendamento valido/confirmado | `VISITA_AGENDADA` | vincular agenda | `COMMERCIAL_VISIT_SCHEDULED` |
 | `VISITA_AGENDADA` | `INICIAR_AVALIACAO` | visita vigente, ator autorizado | `AVALIACAO_EM_ANDAMENTO` | atividade | `COMMERCIAL_EVALUATION_STARTED` |
+| `VISITA_AGENDADA` | `CANCELAR_VISITA` | agenda cancelada, sem substituta | `TENTATIVA_AGENDAMENTO` | preservar milestone no log | `COMMERCIAL_VISIT_CANCELLED` |
+| `VISITA_AGENDADA` | `REAGENDAR_VISITA` | antiga cancelada e nova agenda valida | `VISITA_AGENDADA` | vincular nova agenda e preservar anterior | `COMMERCIAL_VISIT_RESCHEDULED` |
+| `VISITA_AGENDADA` | `REGISTRAR_NO_SHOW` | tolerancia expirada e presenca ausente | `TENTATIVA_AGENDAMENTO` | registrar no-show; perda e comando separado | `COMMERCIAL_VISIT_NO_SHOW` |
 | `AVALIACAO_EM_ANDAMENTO` | `INICIAR_DOCUMENTACAO` | avaliacao registrada | `DOCUMENTACAO` | checklist | `COMMERCIAL_DOCUMENTATION_STARTED` |
 | `DOCUMENTACAO` | `INICIAR_ONBOARDING` | aceite/autorizacao evidenciados | `ONBOARDING` | atividade | `COMMERCIAL_ONBOARDING_STARTED` |
 | `ONBOARDING` | `CONFIRMAR_CAPTACAO` | CRM synced e requisitos completos | `CAPTADO` | criar cliente idempotente | `COMMERCIAL_CAPTURED` |
@@ -28,8 +31,12 @@ autorizado, estado esperado e idempotency key.
 | `PERDIDO` | `REABRIR_OPORTUNIDADE` | humano autorizado, nova evidencia | `NOVO` | evento de reabertura | `COMMERCIAL_REOPENED` |
 | `ARQUIVADO` | `DESARQUIVAR` | humano autorizado, motivo | estado anterior auditado | restaurar visibilidade | `COMMERCIAL_UNARCHIVED` |
 
-Recuos entre etapas ativas exigem `CORRIGIR_ESTAGIO`, permissao humana, motivo e
-estado destino adjacente; automacao nao regride comercial.
+O estagio comercial representa a situacao atual, nao o maior milestone
+historico. Milestones permanecem no log append-only. Cancelamento e no-show
+retornam explicitamente a `TENTATIVA_AGENDAMENTO`; reagendamento permanece em
+`VISITA_AGENDADA` somente quando a nova agenda e valida e criada atomicamente.
+Outros recuos exigem `CORRIGIR_ESTAGIO`, permissao humana, motivo e destino
+adjacente; automacao nao regride comercial fora das linhas normativas.
 
 ## Outreach: permitidas
 
@@ -41,11 +48,26 @@ estado destino adjacente; automacao nao regride comercial.
 | `CONTATANDO` | `REGISTRAR_RESPOSTA` | inbound correlacionado | `RESPONDEU` | persistir mensagem | `OUTREACH_REPLIED` |
 | `RESPONDEU` | `REGISTRAR_INTERESSE` | evidencia explicita | `INTERESSADO` | iniciar qualificacao por comando separado | `OUTREACH_INTERESTED` |
 | `AGUARDANDO/CONTATANDO/RESPONDEU` | `REGISTRAR_SEM_INTERESSE` | evidencia/motivo | `SEM_INTERESSE` | parar envios | `OUTREACH_NOT_INTERESTED` |
-| `*` | `REGISTRAR_OPT_OUT` | pedido explicito/policy | `OPT_OUT` | blacklist, encerrar outbound/IA | `OUTREACH_OPTED_OUT` |
+| qualquer estado exceto `OPT_OUT` | `REGISTRAR_OPT_OUT` | pedido explicito/policy | `OPT_OUT` | somente registrar revogacao no outreach | `OUTREACH_OPTED_OUT` |
+| `OPT_OUT` | `REGISTRAR_OPT_OUT` | pedido repetido correlacionado | `OPT_OUT` | no-op auditavel, sem repetir efeitos | `OUTREACH_OPT_OUT_ALREADY_SET` |
 | `AGUARDANDO/CONTATANDO` | `ESGOTAR_RETRIES` | limite comprovado | `FALHA` | parar envios | `OUTREACH_FAILED` |
 | `RESPONDEU/INTERESSADO` | `ENCERRAR_OUTBOUND` | motivo | `ENCERRADO` | retirar da fila | `OUTREACH_CLOSED` |
 | `SEM_INTERESSE/FALHA/ENCERRADO` | `REATIVAR_OUTBOUND` | comando humano, base legal, motivo | `AGUARDANDO` | novo ciclo auditado | `OUTREACH_REACTIVATED` |
 | `OPT_OUT` | `REGISTRAR_OPT_IN` | opt-in explicito e comprovado | `AGUARDANDO` | remover bloqueio conforme politica | `OUTREACH_OPTED_IN` |
+
+### Operacao composta de opt-out
+
+`PROCESSAR_OPT_OUT` e uma operacao atomica que declara subcomandos independentes:
+
+1. outreach: `REGISTRAR_OPT_OUT`;
+2. atendimento: `PAUSAR_ATENDIMENTO` com motivo `OPT_OUT`;
+3. conversa: `ENCERRAR_CONVERSA` com motivo `OPT_OUT`;
+4. jobs/follow-ups: `CANCELAR_JOBS_OUTBOUND` e `CANCELAR_FOLLOW_UP` aplicaveis.
+
+Cada subcomando passa pela propria policy e grava resultado. A operacao usa uma
+transacao quando os recursos forem locais e outbox/idempotencia quando houver
+fronteira assincrona; falha parcial nao pode deixar IA/jobs ativos. Nenhuma
+dimensao e alterada como side effect implicito da linha de outreach.
 
 ## Qualificacao: permitidas
 
@@ -53,7 +75,7 @@ estado destino adjacente; automacao nao regride comercial.
 |---|---|---|---|---|---|
 | `NAO_INICIADA` | `INICIAR_DESCOBERTA` | interacao valida | `DESCOBERTA` | registrar fontes | `QUALIFICATION_DISCOVERY_STARTED` |
 | `DESCOBERTA` | `INICIAR_DIAGNOSTICO` | intencao e dados basicos | `DIAGNOSTICO` | snapshot evidencia | `QUALIFICATION_DIAGNOSIS_STARTED` |
-| `DESCOBERTA/DIAGNOSTICO` | `QUALIFICAR` | gate minimo completo | `QUALIFICADA` | evento; sem mudar comercial | `QUALIFICATION_APPROVED` |
+| `DESCOBERTA/DIAGNOSTICO` | `QUALIFICAR` | contrato de evidencia aprovado pela `qualificationPolicyVersion` | `QUALIFICADA` | registrar policy/evidencias; sem mudar comercial | `QUALIFICATION_APPROVED` |
 | `DESCOBERTA/DIAGNOSTICO` | `DESQUALIFICAR` | criterio e evidencia | `DESQUALIFICADA` | motivo | `QUALIFICATION_REJECTED` |
 | `DESQUALIFICADA` | `REABRIR_QUALIFICACAO` | nova evidencia, humano/policy autorizada | `DESCOBERTA` | preservar historico | `QUALIFICATION_REOPENED` |
 | `QUALIFICADA` | `INVALIDAR_QUALIFICACAO` | evidencia corrigida, humano | `DIAGNOSTICO` | auditoria | `QUALIFICATION_INVALIDATED` |
@@ -102,6 +124,11 @@ estado destino adjacente; automacao nao regride comercial.
 | `CONFIRMADO` | `CONCLUIR_AGENDAMENTO` | horario ocorrido/ator | `REALIZADO` | atividade | `SCHEDULE_COMPLETED` |
 | `CONFIRMADO` | `REGISTRAR_NO_SHOW` | tolerancia expirada | `NAO_COMPARECEU` | follow-up opcional separado | `SCHEDULE_NO_SHOW` |
 
+As operacoes `CANCELAR_AGENDAMENTO`, `REAGENDAR` e `REGISTRAR_NO_SHOW` devem
+compor atomicamente o comando comercial correspondente quando o Lead estiver em
+`VISITA_AGENDADA`. Agenda e comercial continuam fontes distintas; a composicao
+torna ambas consistentes sem side effect oculto.
+
 ## Proibicoes explicitas
 
 | Cenario proibido | Resultado | Reason code |
@@ -112,7 +139,7 @@ estado destino adjacente; automacao nao regride comercial.
 | `OPT_OUT -> outreach ativo` sem opt-in | rejeitar | `OPT_OUT_REQUIRES_EXPLICIT_OPT_IN` |
 | IA responder em `HUMANO` ou `PAUSADO` | rejeitar/cancelar pendencia | `HUMAN_MODE_BLOCKS_AI` |
 | criar/reagendar sem data/hora/timezone | rejeitar | `INVALID_SCHEDULE` |
-| qualificar sem gate minimo | rejeitar | `MISSING_QUALIFICATION_EVIDENCE` |
+| qualificar sem contrato de evidencia/policy versionada aprovada | rejeitar | `MISSING_QUALIFICATION_EVIDENCE` |
 | fase de conversa alterar comercial diretamente | rejeitar | `TRANSITION_NOT_ALLOWED` |
 | reabrir `CAPTADO/PERDIDO/ARQUIVADO` automaticamente | rejeitar | `TERMINAL_STATE_REQUIRES_REOPEN` |
 | estado esperado divergir do persistido | rejeitar/reler | `STALE_STATE` |
@@ -146,8 +173,9 @@ Nenhuma iniciativa abaixo pode iniciar antes da conclusao da #48.
 
 ## Expand/contract, rollout e telemetria
 
-Expand: adicionar campos/log sem remover atuais; backfill a partir da #48; dual
-read/write; motor em shadow calcula decisao sem bloquear. Comparar estado
+Expand: adicionar campos/log sem remover atuais; backfill a partir da #48 apenas
+para mappings determinísticos; valores ambiguos preservam original e entram em
+quarentena auditavel. Usar dual read/write; motor em shadow calcula decisao sem bloquear. Comparar estado
 esperado, guard e reason code por dimensao, tenant e origem, sem IDs/PII como
 labels.
 
@@ -170,6 +198,7 @@ Schema contract exige backup e plano proprio; rollback de app nao reverte schema
 Caracterizar, sem mutar dados: distribuicao e combinacoes por dimensao; valores
 livres/desconhecidos; sequencias reais; nulos; terminais reabertos; opt-out com
 atividade posterior; IA durante modo humano; follow-ups vencidos; agendas
-invalidas; duplicidade por replay; e volume de cada mapping legado. A baseline
-deve produzir criterios numericos de backfill, shadow e abortagem para as issues
-da Onda 1.
+invalidas; cancelamento/reagendamento/no-show apos `VISITA_AGENDADA`;
+duplicidade por replay; policies de qualificacao por canal/perfil; e volume de
+cada mapping legado e da quarentena. A baseline deve produzir criterios
+numericos de backfill, shadow e abortagem para as issues da Onda 1.

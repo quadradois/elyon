@@ -84,11 +84,20 @@ Valores canonicos, preservando o enum vigente:
 | `PERDIDO` | oportunidade encerrada sem captacao; terminal reversivel por comando humano |
 | `ARQUIVADO` | registro fora da operacao ativa; terminal administrativo |
 
-`QUALIFICADO` nao e estagio comercial: migra para `etapaQualificacao=QUALIFICADA`
-e o estagio comercial e calculado pela evidencia existente, default `NOVO`.
-`EM_NEGOCIACAO` migra para `DOCUMENTACAO` somente quando houver evidencia de
-negociacao/documentacao; sem evidencia permanece no estagio anterior e gera
-pendencia de revisao.
+O estagio comercial representa a situacao atual. Milestones historicos ficam no
+log de transicoes e nao justificam manter `VISITA_AGENDADA` depois de
+cancelamento ou no-show. Cancelar/no-show retorna por comando explicito a
+`TENTATIVA_AGENDAMENTO`; reagendar preserva `VISITA_AGENDADA` somente quando o
+novo agendamento valido e criado na mesma operacao atomica.
+
+`QUALIFICADO` nao e estagio comercial. Seu mapping automatico somente e
+permitido quando existir decisao de qualificacao reproduzivel, com evidencias e
+`qualificationPolicyVersion`; nesse caso, migra para
+`etapaQualificacao=QUALIFICADA` sem alterar automaticamente o estagio comercial.
+Sem essa evidencia, o valor original e preservado e o registro vai para
+quarentena auditavel. `EM_NEGOCIACAO` somente migra para `DOCUMENTACAO` quando
+existir evidencia deterministica de negociacao/documentacao. Os demais casos
+tambem ficam em quarentena, sem default, ate a caracterizacao da #48.
 
 ### 2. Estado de outreach (`estadoOutreach`)
 
@@ -107,9 +116,13 @@ Persistido; `NAO_APLICAVEL` substitui `null` como semantica explicita.
 | `FALHA` | entrega inviavel apos politica de retry |
 | `ENCERRADO` | outreach concluido por entrada em outro fluxo, sem implicar qualificacao |
 
-`statusProspeccao=null` migra para `NAO_APLICAVEL`; `LEAD` migra para
-`ENCERRADO`; `MORNO_FUTURO` nao e outreach e migra para follow-up pendente,
-mantendo o outreach anterior ou `ENCERRADO` conforme evidencia.
+Mappings automaticos exigem evidencia deterministica. `statusProspeccao=null`
+somente vira `NAO_APLICAVEL` quando for comprovada a ausencia de campanha,
+tentativa e historico outbound; caso contrario fica em quarentena preservando o
+valor original. `LEAD` somente vira `ENCERRADO` quando houver evento verificavel
+de encerramento do outreach. `MORNO_FUTURO` somente gera follow-up `PENDENTE`
+quando data, timezone e motivo forem validos; sem isso fica em quarentena. A #48
+deve medir os casos e aprovar as regras numericas de backfill.
 
 ### 3. Etapa de qualificacao (`etapaQualificacao`)
 
@@ -124,9 +137,17 @@ atravessar conversas e canais.
 | `QUALIFICADA` | evidencia minima aprovada pela policy |
 | `DESQUALIFICADA` | criterio impeditivo registrado; terminal reversivel por nova evidencia |
 
-Guard minimo para `QUALIFICADA`: intencao explicita; `situacaoAtual`;
-`motivacaoVenda`; ao menos duas dores confirmadas; e ao menos uma implicacao em
-`consequencias` ou `custosAtuais`. Dados inferidos pelo LLM sem fonte nao contam.
+`QUALIFICADA` depende de um contrato de evidencias avaliado por uma
+`qualificationPolicyVersion` explicita. Cada decisao registra policy, versao,
+canal/perfil aplicavel, evidencias consumidas com fonte e instante, resultado e
+reason codes. Dados inferidos pelo LLM sem fonte nao contam como evidencia.
+
+A policy inicial pode reproduzir o gate SPIN atual (intencao, situacao,
+motivacao, dores e implicacao), mas esse checklist e uma proposta a caracterizar
+na #48, nao uma invariante universal do dominio. Outros canais ou perfis podem
+usar policies versionadas diferentes, desde que cumpram o mesmo contrato,
+tenham owner e sejam auditaveis. Trocar a versao nao reclassifica historico sem
+comando explicito de reavaliacao.
 
 ### 4. Fase conversacional (`faseConversa`)
 
@@ -171,6 +192,14 @@ leadId + tenantConfiavel + dimensao + estadoEsperado + comando + payload
 O executor valida ownership do tenant, estado esperado, guard, autorizacao e
 idempotencia; aplica estado e side effects atomicamente; e grava evento de
 auditoria sem PII. Retry retorna o resultado anterior e nao repete efeitos.
+Comandos de qualificacao tambem exigem `qualificationPolicyVersion` e o hash ou
+referencia imutavel do conjunto de evidencias avaliado.
+
+Operacoes que afetam mais de uma dimensao nao usam side effects ocultos. Por
+exemplo, `PROCESSAR_OPT_OUT` declara e coordena atomicamente
+`REGISTRAR_OPT_OUT`, `PAUSAR_ATENDIMENTO`, `ENCERRAR_CONVERSA` e cancelamentos
+de jobs/follow-ups. Cada subcomando e autorizado, idempotente e auditado; em
+fronteiras assincronas, outbox impede estado parcial observavel.
 
 Reason codes minimos:
 
@@ -195,14 +224,17 @@ LEGACY_STATE_REVIEW_REQUIRED
    escopo. Cross-tenant e rejeitado e auditado sem PII.
 2. Transicoes sao default-deny: apenas as listadas na matriz sao validas.
 3. Fase conversacional nao muda automaticamente estagio comercial.
-4. `OPT_OUT` bloqueia outreach e IA outbound ate opt-in explicito e auditado.
+4. Opt-out e aceito a partir de qualquer estado de outreach. Quando ja estiver
+   em `OPT_OUT`, produz no-op auditavel; reativacao exige opt-in explicito.
 5. `HUMANO` bloqueia resposta da IA, inclusive em retry concorrente.
 6. Agendamento exige data/hora valida, timezone e owner.
-7. Qualificacao exige evidencia com origem; inferencia isolada nao avanca.
+7. Qualificacao exige evidencia com origem e policy versionada; nenhum checklist
+   conversacional isolado e universal.
 8. `CAPTADO`, `PERDIDO`, `ARQUIVADO` e terminais; reabertura exige comando,
    permissao, motivo e evento de auditoria.
 9. Side effects ocorrem no maximo uma vez por `idempotencyKey`.
-10. Mudanca de uma dimensao nao produz mudanca implicita em outra.
+10. Mudanca de uma dimensao nao produz mudanca implicita em outra. Operacoes
+    compostas declaram subcomandos por dimensao e os executam atomicamente.
 
 ## Matriz normativa
 
