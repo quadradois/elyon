@@ -11,7 +11,8 @@ command -v python3 >/dev/null || offhost_fail 'python3 nao encontrado'
 
 readonly RPO_HOURS="${OFFHOST_RPO_HOURS:-24}"
 readonly GRACE_MINUTES="${OFFHOST_AGE_GRACE_MINUTES:-30}"
-readonly STATE_DIR="$(offhost_state_dir)"
+STATE_DIR=$(offhost_state_dir)
+readonly STATE_DIR
 offhost_require_positive_integer OFFHOST_RPO_HOURS "$RPO_HOURS"
 [[ "$GRACE_MINUTES" =~ ^[0-9]+$ ]] || offhost_fail 'OFFHOST_AGE_GRACE_MINUTES deve ser inteiro nao negativo'
 

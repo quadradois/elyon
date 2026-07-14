@@ -43,7 +43,8 @@ readonly RPO_HOURS="${OFFHOST_RPO_HOURS:-24}"
 readonly RTO_HOURS="${OFFHOST_RTO_HOURS:-4}"
 readonly CHECK_INTERVAL_HOURS="${OFFHOST_REPOSITORY_CHECK_INTERVAL_HOURS:-24}"
 readonly LOCK_FILE="${OFFHOST_LOCK_FILE:-/var/lock/elyon-offhost-backup.lock}"
-readonly STATE_DIR="$(offhost_state_dir)"
+STATE_DIR=$(offhost_state_dir)
+readonly STATE_DIR
 
 offhost_require_positive_integer OFFHOST_RPO_HOURS "$RPO_HOURS"
 offhost_require_positive_integer OFFHOST_RTO_HOURS "$RTO_HOURS"

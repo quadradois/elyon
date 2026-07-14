@@ -40,7 +40,8 @@ readonly RTO_HOURS="${OFFHOST_RTO_HOURS:-4}"
 readonly POSTGRES_IMAGE="${OFFHOST_RESTORE_IMAGE:-pgvector/pgvector:0.8.0-pg15}"
 readonly TMPFS_SIZE="${OFFHOST_RESTORE_TMPFS_SIZE:-6g}"
 readonly SOURCE_ROLE="${OFFHOST_SOURCE_DB_USER:-elyon_user}"
-readonly STATE_DIR="$(offhost_state_dir)"
+STATE_DIR=$(offhost_state_dir)
+readonly STATE_DIR
 readonly WORK_ROOT="${OFFHOST_RESTORE_WORK_ROOT:-$STATE_DIR/restore-work}"
 readonly RESTORE_FS_PATH="${OFFHOST_RESTORE_FS_PATH:-/var/lib}"
 readonly LOCK_FILE="${OFFHOST_RESTORE_LOCK_FILE:-/var/lock/elyon-offhost-restore-drill.lock}"

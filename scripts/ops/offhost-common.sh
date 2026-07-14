@@ -35,7 +35,8 @@ offhost_state_dir() {
 offhost_alert() {
   local level="$1"
   shift
-  local message="ELYON_OFFHOST_BACKUP level=${level} host=$(hostname) $*"
+  local message
+  message="ELYON_OFFHOST_BACKUP level=${level} host=$(hostname) $*"
   local priority='daemon.info'
   [[ "$level" == 'WARNING' ]] && priority='daemon.warning'
   [[ "$level" == 'CRITICAL' ]] && priority='daemon.crit'
