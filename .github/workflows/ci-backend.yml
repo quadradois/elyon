@@ -45,7 +45,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Testes unitarios e coverage
-        run: node node_modules/jest/bin/jest.js --config pacotes/backend/jest.config.js --runInBand --coverage --collectCoverageFrom='src/agentes/**/*.ts' --collectCoverageFrom='!src/agentes/__tests__/**' --ci
+        run: npm run test:unit --workspace @elyon/backend -- --runInBand --coverage --collectCoverageFrom='src/agentes/**/*.ts' --collectCoverageFrom='!src/agentes/__tests__/**' --ci
         env:
           NODE_ENV: test
           NODE_OPTIONS: --max-old-space-size=4096
@@ -61,7 +61,7 @@ jobs:
           retention-days: 7
 
   frontend:
-    name: Frontend - build
+    name: Frontend - testes e build
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -78,10 +78,75 @@ jobs:
       - name: Instalar dependencias
         run: npm ci --no-audit --no-fund
 
+      - name: Testes de autenticacao e fronteiras
+        run: npm run test:unit --workspace @elyon/frontend
+
       - name: Build frontend
         run: npm run build --workspace @elyon/frontend
         env:
           VITE_API_URL: https://api.elyon.ia.br
+
+  integration:
+    name: Integracao - PostgreSQL e Redis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg15
+        env:
+          POSTGRES_DB: elyon_integration
+          POSTGRES_USER: elyon_ci
+          POSTGRES_PASSWORD: ci-database-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U elyon_ci -d elyon_integration"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://elyon_ci:ci-database-password@localhost:5432/elyon_integration?schema=public
+      REDIS_URL: redis://localhost:6379/15
+      PRISMA_MIGRATION_TIMEOUT_SECONDS: 300
+      ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      ENCRYPTION_KEY_ID: ci-v1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci --no-audit --no-fund
+
+      - name: Prisma generate
+        working-directory: pacotes/backend
+        run: npx prisma generate
+
+      - name: Build do backend
+        run: npm run build --workspace @elyon/backend
+
+      - name: Preparar banco dedicado pelas migrations oficiais
+        working-directory: pacotes/backend
+        run: sh ./scripts/prisma-migrate-deploy.sh
+
+      - name: Testar tenant, replay e Redis reais
+        run: npm run test:integration --workspace @elyon/backend
 
   migrations:
     name: Migrations - banco vazio
@@ -180,7 +245,7 @@ jobs:
 
   images:
     name: Imagens - build
-    needs: [backend, frontend, migrations, compose]
+    needs: [backend, frontend, integration, migrations, compose]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -245,8 +310,4 @@ jobs:
           "$DEPLOY_USER@$DEPLOY_HOST" "deploy $GITHUB_SHA"
 
       - name: Smoke test externo
-        run: |
-          curl --fail --show-error --silent --retry 6 --retry-all-errors --retry-delay 5 https://api.elyon.ia.br/live >/dev/null
-          curl --fail --show-error --silent --retry 6 --retry-all-errors --retry-delay 5 https://api.elyon.ia.br/ready >/dev/null
-          curl --fail --show-error --silent --retry 6 --retry-all-errors --retry-delay 5 https://crm.elyon.ia.br >/dev/null
-          curl --fail --show-error --silent --retry 6 --retry-all-errors --retry-delay 5 https://elyon.ia.br >/dev/null
+        run: npm run test:smoke
