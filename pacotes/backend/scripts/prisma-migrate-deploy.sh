@@ -19,6 +19,19 @@ run_with_timeout() {
   timeout "$TIMEOUT_SECONDS" "$@"
 }
 
+normalize_sql() {
+  sed 's/\r$//' "$1" | awk '
+    /^[[:space:]]*$/ { blank_count++; next }
+    {
+      while (blank_count > 0) {
+        print ""
+        blank_count--
+      }
+      print
+    }
+  '
+}
+
 state=$(run_with_timeout node dist/scripts/prisma-baseline-state.js)
 echo "Prisma baseline state: ${state}"
 
@@ -26,16 +39,18 @@ case "$state" in
   EMPTY|BASELINE_APPLIED)
     ;;
   LEGACY_READY)
+    raw_drift=$(mktemp)
     actual_drift=$(mktemp)
     expected_drift=$(mktemp)
-    trap 'rm -f "$actual_drift" "$expected_drift"' EXIT INT TERM
-    sed 's/\r$//' "$ALLOWED_DRIFT" > "$expected_drift"
+    trap 'rm -f "$raw_drift" "$actual_drift" "$expected_drift"' EXIT INT TERM
+    normalize_sql "$ALLOWED_DRIFT" > "$expected_drift"
 
     PRISMA_HIDE_UPDATE_MESSAGE=true NO_UPDATE_NOTIFIER=1 \
       run_with_timeout npx prisma migrate diff \
         --from-schema-datasource prisma/schema.prisma \
         --to-schema-datamodel prisma/schema.prisma \
-        --script > "$actual_drift"
+        --script > "$raw_drift"
+    normalize_sql "$raw_drift" > "$actual_drift"
 
     if ! cmp -s "$expected_drift" "$actual_drift"; then
       expected_hash=$(sha256sum "$expected_drift" | awk '{print $1}')
