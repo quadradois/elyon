@@ -45,7 +45,9 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 # Copiar artefatos do build já com o dono correto (evita o lento chown -R)
 COPY --chown=nodejs:nodejs --from=builder /app/dist ./dist
 COPY --chown=nodejs:nodejs --from=builder /app/prisma ./prisma
+COPY --chown=nodejs:nodejs --from=builder /app/scripts ./scripts
 COPY --chown=nodejs:nodejs --from=builder /app/package*.json ./
+RUN chmod +x ./scripts/prisma-migrate-deploy.sh
 # Copiar arquivos .md das skills (tsc não os compila — precisam ir junto ao dist)
 COPY --chown=nodejs:nodejs --from=builder /app/src/agentes/skills ./dist/agentes/skills
 
@@ -67,4 +69,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Comando de inicialização
 # Roda migrations e depois inicia o servidor
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/servidor.js"]
+CMD ["sh", "-c", "./scripts/prisma-migrate-deploy.sh && node dist/servidor.js"]

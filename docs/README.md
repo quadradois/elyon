@@ -22,6 +22,7 @@ Este diretorio foi organizado por tema para facilitar manutencao e descoberta.
 - [Workflow de engenharia](governanca/WORKFLOW_ENGENHARIA.md)
 - [Constituicao de engenharia](../.specify/memory/constitution.md)
 - [Copia anonimizada para testes de migration](operacao/COPIA_BANCO_ANONIMIZADA.md)
+- [Baseline e bootstrap das migrations Prisma](operacao/BASELINE_MIGRATIONS.md)
 
 ## Limpeza aplicada em 2026-04-27
 
