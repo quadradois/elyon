@@ -189,7 +189,7 @@ do_update() {
     fail "Build falhou; imagens anteriores restauradas."
   fi
 
-  if ! docker compose -f docker-compose.yml run --rm --no-deps backend npx prisma migrate deploy; then
+  if ! docker compose -f docker-compose.yml run --rm --no-deps backend ./scripts/prisma-migrate-deploy.sh; then
     rollback_application_images "$rollback_tag" || true
     fail "Migration falhou; aplicação anterior restaurada."
   fi
@@ -216,7 +216,7 @@ do_migrate() {
   head=$(git rev-parse HEAD)
   remote_main=$(git rev-parse origin/main)
   [[ "$head" == "$remote_main" ]] || fail "Migração permitida somente no topo de origin/main."
-  docker compose -f docker-compose.yml exec -T backend npx prisma migrate deploy
+  docker compose -f docker-compose.yml exec -T backend ./scripts/prisma-migrate-deploy.sh
 }
 
 show_help() {

@@ -83,6 +83,64 @@ jobs:
         env:
           VITE_API_URL: https://api.elyon.ia.br
 
+  migrations:
+    name: Migrations - banco vazio
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg15
+        env:
+          POSTGRES_DB: elyon_migrations_ci
+          POSTGRES_USER: elyon_ci
+          POSTGRES_PASSWORD: ci-database-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U elyon_ci -d elyon_migrations_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://elyon_ci:ci-database-password@localhost:5432/elyon_migrations_ci?schema=public
+      PRISMA_MIGRATION_TIMEOUT_SECONDS: 300
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci --no-audit --no-fund
+
+      - name: Prisma generate
+        working-directory: pacotes/backend
+        run: npx prisma generate
+
+      - name: Build do verificador de baseline
+        run: npm run build --workspace @elyon/backend
+
+      - name: Aplicar migrations em banco vazio
+        working-directory: pacotes/backend
+        run: sh ./scripts/prisma-migrate-deploy.sh
+
+      - name: Provar idempotencia do deploy
+        working-directory: pacotes/backend
+        run: sh ./scripts/prisma-migrate-deploy.sh
+
+      - name: Verificar schema final sem drift
+        working-directory: pacotes/backend
+        run: >-
+          npx prisma migrate diff
+          --from-schema-datasource prisma/schema.prisma
+          --to-schema-datamodel prisma/schema.prisma
+          --exit-code
+
   compose:
     name: Compose - validacao
     runs-on: ubuntu-latest
@@ -112,16 +170,17 @@ jobs:
           check config /etc/prometheus/prometheus.yml
 
       - name: Validar utilitario de copia anonimizada
-        run: >-
-          docker run --rm
-          -v "$PWD:/repo:ro"
-          koalaman/shellcheck:v0.10.0
-          --severity=warning
-          /repo/scripts/ops/create-anonymized-db-copy.sh
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo:ro" \
+            koalaman/shellcheck:v0.10.0 \
+            --severity=warning \
+            /repo/scripts/ops/create-anonymized-db-copy.sh \
+            /repo/pacotes/backend/scripts/prisma-migrate-deploy.sh
 
   images:
     name: Imagens - build
-    needs: [backend, frontend, compose]
+    needs: [backend, frontend, migrations, compose]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
