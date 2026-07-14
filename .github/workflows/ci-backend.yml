@@ -295,6 +295,9 @@ jobs:
         working-directory: pacotes/backend
         run: npx prisma generate
 
+      - name: Build do backend e verificadores
+        run: npm run build --workspace @elyon/backend
+
       - name: Preparar banco pelas migrations oficiais
         working-directory: pacotes/backend
         run: sh ./scripts/prisma-migrate-deploy.sh
