@@ -1,7 +1,9 @@
 import express from 'express';
 import request from 'supertest';
 import {
+  httpMetricsMiddleware,
   metricsHandler,
+  metricsRegistry,
   requireInternalMetricsAccess,
 } from '../metricas';
 
@@ -34,5 +36,21 @@ describe('metrics endpoint', () => {
       .set('x-forwarded-for', '203.0.113.15');
 
     expect(response.status).toBe(404);
+  });
+
+  it('registra a rota completa sem valores de parâmetros', async () => {
+    process.env.NODE_ENV = 'test';
+    const app = express();
+    const router = express.Router();
+    app.use(httpMetricsMiddleware);
+    router.get('/:id', (_req, res) => res.status(200).json({ ok: true }));
+    app.use('/api/probe', router);
+
+    const response = await request(app).get('/api/probe/123');
+    const exposition = await metricsRegistry.metrics();
+
+    expect(response.status).toBe(200);
+    expect(exposition).toContain('route="/api/probe/:id"');
+    expect(exposition).not.toContain('route="/api/probe/123"');
   });
 });

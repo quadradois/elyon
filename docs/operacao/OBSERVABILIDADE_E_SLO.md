@@ -13,8 +13,9 @@ latência da aplicação pertencem a `backend`.
 | Latência HTTP p95 | < 2 s | 5 min | acima do limite por 10 min |
 | Memória residente do Node.js | < 1,5 GB | instantâneo | acima do limite por 10 min |
 
-Esses limiares são provisórios. Devem ser recalibrados com tráfego real e com o
-baseline de capacidade da issue #19.
+Os limiares gerais continuam provisórios. Os guardrails por rota, saturação e
+custo são derivados do [baseline de capacidade e FinOps](./CAPACIDADE_E_FINOPS.md)
+e devem ser recalibrados com tráfego real.
 
 ## Contrato dos endpoints
 
@@ -26,6 +27,11 @@ baseline de capacidade da issue #19.
 - `GET /health` e `GET /api/saude`: aliases compatíveis de `/ready`.
 - `GET /metrics`: formato Prometheus. Em produção aceita apenas acesso direto
   pela rede Docker; requisições encaminhadas pelo Traefik recebem `404`.
+
+As métricas HTTP usam a rota parametrizada completa, como
+`/api/leads/:id`, sem incluir valores de IDs. O orquestrador publica
+`elyon_orchestrator_turns_total`, `elyon_orchestrator_duration_seconds`,
+`elyon_orchestrator_tokens_total` e `elyon_orchestrator_cost_usd_total`.
 
 O Traefik consulta `/ready` a cada 10 segundos. O deploy também aguarda esse
 endpoint antes de registrar o novo SHA; falha persistente aciona a restauração

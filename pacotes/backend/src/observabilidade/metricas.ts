@@ -50,7 +50,10 @@ const dependencyStatus = new Gauge({
 
 function routeLabel(req: Request): string {
   const routePath = req.route?.path;
-  if (typeof routePath === 'string') return routePath;
+  if (typeof routePath === 'string') {
+    const baseUrl = req.baseUrl || '';
+    return `${baseUrl}${routePath === '/' ? '' : routePath}` || '/';
+  }
   return 'unmatched';
 }
 
