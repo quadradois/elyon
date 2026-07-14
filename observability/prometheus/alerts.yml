@@ -56,6 +56,39 @@ groups:
           description: Existem {{ $value }} eventos aguardando diagnostico e replay controlado.
           runbook: docs/operacao/WEBHOOK_INBOX_WORKER.md#replay-seguro
 
+      - alert: ElyonOffhostBackupFailed
+        expr: elyon_offhost_backup_last_run_success == 0
+        for: 10m
+        labels:
+          severity: critical
+          owner: platform-sre
+        annotations:
+          summary: Último backup off-host falhou ou não publicou status
+          description: A última tentativa de backup criptografado para o R2 não foi concluída.
+          runbook: docs/operacao/BACKUP_OFFHOST_E_RESTORE.md#backup-falhou-ou-está-atrasado
+
+      - alert: ElyonOffhostBackupStale
+        expr: (time() - elyon_offhost_backup_last_success_timestamp_seconds) > 5400
+        for: 10m
+        labels:
+          severity: critical
+          owner: platform-sre
+        annotations:
+          summary: Backup off-host excedeu o RPO operacional
+          description: Não existe backup off-host bem-sucedido nos últimos 90 minutos.
+          runbook: docs/operacao/BACKUP_OFFHOST_E_RESTORE.md#backup-falhou-ou-está-atrasado
+
+      - alert: ElyonRestoreDrillStale
+        expr: (time() - elyon_offhost_restore_last_success_timestamp_seconds) > 7776000
+        for: 1h
+        labels:
+          severity: warning
+          owner: platform-sre
+        annotations:
+          summary: Restore drill está vencido
+          description: Não existe restore isolado aprovado nos últimos 90 dias.
+          runbook: docs/operacao/BACKUP_OFFHOST_E_RESTORE.md#restore-drill-isolado
+
   - name: elyon-red-use
     rules:
       - alert: ElyonHighHttpErrorRate

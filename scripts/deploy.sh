@@ -180,6 +180,8 @@ do_update() {
   git merge --ff-only "$expected"
   validate_compose
 
+  scripts/ops/install-offhost-backup.sh || fail "Instalação do backup off-host falhou."
+
   if ! docker exec elyon_backup /backup.sh; then
     fail "Backup pré-deploy falhou; release cancelado."
   fi

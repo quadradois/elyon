@@ -1,0 +1,15 @@
+[Unit]
+Description=ELYON hourly encrypted off-host database backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/elyon
+ExecStart=/root/elyon/scripts/ops/backup-offhost-r2.sh
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=45min
