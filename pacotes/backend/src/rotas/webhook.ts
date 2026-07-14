@@ -52,12 +52,35 @@ import {
   liberarEventoWebhook,
   registrarEventoWebhook,
 } from '../servicos/webhook-seguranca';
+import {
+  MARCADOR_AUDIO_NEGADO,
+  MARCADOR_AUDIO_PERGUNTADO,
+  MARCADOR_AUDIO_PERMITIDO,
+  construirInstrucaoExclusividadePorTenant,
+  construirInstrucaoTurnoMensagensSequenciais,
+  detectarPermissaoAudioNoTexto,
+  gerarAssinaturaLote,
+  gerarFallbackSemSilencio,
+  normalizarTextoAssinatura,
+  normalizarTextoAssinaturaForte,
+  preferenciaAudioPorObservacoes,
+} from '../modulos/webhook/dominio/politicas-resposta';
+import type { MensagemPendente, PreferenciaAudio } from '../modulos/webhook/dominio/tipos';
+import {
+  extrairMetadadosMidia,
+  montarResumoMidiaParaIA,
+  normalizarWebhookEvolutionGo,
+} from '../modulos/webhook/adapters/evolution-go.adapter';
+import { PrepararRespostaWebhookUseCase } from '../modulos/webhook/aplicacao/preparar-resposta.usecase';
+import { DecidirCanalRespostaWebhookUseCase } from '../modulos/webhook/aplicacao/decidir-canal-resposta.usecase';
 
 const router = Router();
 const MODO_OUTBOUND_ONLY = process.env.MODO_OUTBOUND_ONLY !== 'false';
 const DESATIVAR_INBOUND = process.env.DESATIVAR_INBOUND !== 'false';
 const converterParaLeadUseCase = new ConverterParaLeadUseCase();
 const qualificarLeadUseCase = new QualificarLeadUseCase();
+const prepararRespostaWebhook = new PrepararRespostaWebhookUseCase();
+const decidirCanalRespostaWebhook = new DecidirCanalRespostaWebhookUseCase();
 const CAPTURA_DOCS_INCLUIR_AUDIO = process.env.CAPTURA_DOCS_INCLUIR_AUDIO === 'true';
 
 function lerEnvMs(nome: string, padrao: number, min: number = 100, max: number = 120000): number {
@@ -713,24 +736,10 @@ const TTL_IDEMPOTENCIA_LOTE_MS = 2 * 60 * 1000;
 const TTL_DEDUPE_RESPOSTA_MS = 30 * 1000;
 const DEBOUNCE_RETRY_WHEN_LOCKED_MS = lerEnvMs('WEBHOOK_DEBOUNCE_RETRY_WHEN_LOCKED_MS', 1500, 200, 30000);
 const MAX_TENTATIVAS_ENVIO_WHATSAPP = 3;
-const MARCADOR_AUDIO_PERMITIDO = '[PREFERENCIA_AUDIO=PERMITIDO]';
-const MARCADOR_AUDIO_NEGADO = '[PREFERENCIA_AUDIO=NEGADO]';
-const MARCADOR_AUDIO_PERGUNTADO = '[PREFERENCIA_AUDIO=PERGUNTADO]';
 const AUTORIZACAO_VENDA_DOC_URL = (process.env.AUTORIZACAO_VENDA_DOC_URL || '').trim();
 const AUTORIZACAO_VENDA_DOC_NOME = (process.env.AUTORIZACAO_VENDA_DOC_NOME || 'modelo_autorizacao_venda.pdf').trim();
 const AUTORIZACAO_VENDA_DOC_CAPTION = (process.env.AUTORIZACAO_VENDA_DOC_CAPTION || 'Segue o modelo de autorização de venda para você analisar com calma.').trim();
 const AUTO_RETORNO_HUMANO_PARA_IA = (process.env.AUTO_RETORNO_HUMANO_PARA_IA || 'true') === 'true';
-
-// Estrutura para armazenar mensagens pendentes por contato
-interface MensagemPendente {
-  conteudo: string;
-  tipo: string;
-  messageId?: string;
-  timestamp: number;
-  urlMidia?: string;
-  mimeTypeMidia?: string;
-  nomeArquivoMidia?: string;
-}
 
 interface FilaContato {
   mensagens: MensagemPendente[];
@@ -971,176 +980,7 @@ async function enviarDocumentoComRetry(params: {
   return false;
 }
 
-function normalizarTextoAssinatura(texto: string): string {
-  return (texto || '').replace(/\s+/g, ' ').trim().toLowerCase();
-}
-
-function normalizarTextoAssinaturaForte(texto: string): string {
-  return (texto || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function extrairMetadadosMidia(message: any, messageType: string): {
-  caption?: string;
-  fileName?: string;
-  mimeType?: string;
-  url?: string;
-  base64?: string;
-} {
-  const payload = message?.message || {};
-  const campoDireto = payload?.[messageType] || {};
-  const campoDocComLegenda = payload?.documentWithCaptionMessage?.message?.documentMessage || {};
-  const campo = Object.keys(campoDireto).length > 0 ? campoDireto : campoDocComLegenda;
-  const base64 =
-    campo?.base64
-    || campo?.media
-    || payload?.base64
-    || message?.base64
-    || message?.mediaBase64
-    || message?.message?.base64
-    || message?.message?.mediaBase64;
-
-  return {
-    caption: campo?.caption || payload?.extendedTextMessage?.text || undefined,
-    fileName: campo?.fileName || campo?.title || undefined,
-    mimeType: campo?.mimetype || undefined,
-    url: campo?.url || campo?.mediaUrl || message?.mediaUrl || undefined,
-    base64: typeof base64 === 'string' && !base64.startsWith('http') ? base64 : undefined,
-  };
-}
-
-function montarResumoMidiaParaIA(messageType: string, meta: {
-  caption?: string;
-  fileName?: string;
-  mimeType?: string;
-}, analiseAutomatica?: string | null): string {
-  const legenda = meta.caption ? ` | legenda: "${meta.caption}"` : '';
-  const analise = analiseAutomatica ? ` | análise: ${analiseAutomatica}` : '';
-  if (messageType === 'imageMessage') {
-    return `[MÍDIA RECEBIDA: imagem enviada pelo lead${legenda}${analise}]`;
-  }
-  if (messageType === 'audioMessage') {
-    return `[MÍDIA RECEBIDA: áudio enviado pelo lead${analise}]`;
-  }
-  if (messageType === 'videoMessage') {
-    return `[MÍDIA RECEBIDA: vídeo enviado pelo lead${legenda}${analise}]`;
-  }
-  if (messageType === 'documentMessage' || messageType === 'documentWithCaptionMessage') {
-    const nome = meta.fileName ? ` | arquivo: "${meta.fileName}"` : '';
-    const mime = meta.mimeType ? ` | mime: ${meta.mimeType}` : '';
-    return `[MÍDIA RECEBIDA: anexo/documento enviado pelo lead${nome}${mime}${legenda}${analise}]`;
-  }
-  return `[MÍDIA RECEBIDA pelo lead${analise ? ` | análise: ${analiseAutomatica}` : ''}]`;
-}
-
-function construirInstrucaoTurnoMensagensSequenciais(mensagens: MensagemPendente[]): string | undefined {
-  if (!Array.isArray(mensagens) || mensagens.length <= 1) return undefined;
-
-  const textos = mensagens
-    .map((m) => (m?.conteudo || '').trim())
-    .filter(Boolean);
-  if (textos.length <= 1) return undefined;
-
-  const blob = textos.join('\n').toLowerCase();
-  const topicos: string[] = [];
-  const instrucoesExtras: string[] = [];
-  if (/como.*(encontrou|conseguiu).*(numero|número)|onde.*(conseguiu|pegou).*(numero|número)|de onde.*(numero|número)|lista p[úu]blica|privacidade/.test(blob)) {
-    topicos.push('origem do número e privacidade');
-  }
-  if (/(quais|que|o que).*(informac|dados).*(enviar|preciso)|o que te enviar|quais informa(c|ç)ões tenho que te enviar/.test(blob)) {
-    topicos.push('dados necessários para avançar');
-  }
-  if (/documenta(c|ç)[aã]o|documentos?|precisa de alguma documenta/.test(blob)) {
-    topicos.push('documentação necessária');
-  }
-  if (/exclusiv|exclusivo|controle de tudo|como voc[eê]s conseguem ter o controle/.test(blob)) {
-    topicos.push('modelo de trabalho e exclusividade');
-  }
-
-  const valoresDetectados = Array.from(
-    new Set(
-      (blob.match(/(?:r\$\s*)?\d{2,3}(?:[.\s]?\d{3})*(?:,\d{2})?|\b\d+(?:[.,]\d+)?\s*(?:k|mil|mi)\b/gi) || [])
-        .map((v) => v.replace(/\s+/g, ' ').trim())
-        .filter((v) => /\d/.test(v))
-    )
-  );
-  if (valoresDetectados.length >= 2) {
-    topicos.push('reconciliação de valores informados no mesmo contexto');
-    instrucoesExtras.push(
-      `Há potencial conflito de valor (${valoresDetectados.slice(0, 3).join(' vs ')}). Confirme o valor final com uma frase objetiva no formato: "Confirmando: R$ X líquidos para você, comissão à parte, certo?"`
-    );
-  }
-
-  if (/\ba vista\b|à vista|financiamento|financiad[oa]/.test(blob)) {
-    topicos.push('condição de pagamento');
-    instrucoesExtras.push('Consolide condição financeira junto com valor final (à vista/financiamento e líquido/comissão).');
-  }
-
-  const mensagensComPergunta = textos.filter((t) => t.includes('?')).map((t) => t.slice(0, 140));
-  const perguntasRecentes = mensagensComPergunta.length > 0
-    ? `Perguntas recentes do lead: ${mensagensComPergunta.map((p) => `"${p}"`).join(' | ')}`
-    : '';
-  const topicosTxt = topicos.length > 0 ? topicos.join('; ') : 'responder todas as mensagens sequenciais sem omitir nenhuma pergunta';
-
-  return `[INSTRUÇÃO DE TURNO - MENSAGENS SEQUENCIAIS]
-O lead enviou múltiplas mensagens em sequência no mesmo contexto. Responda PRIMEIRO todos os tópicos pendentes antes de fazer uma nova pergunta.
-Tópicos obrigatórios neste turno: ${topicosTxt}.
-${perguntasRecentes}
-${instrucoesExtras.join('\n')}
-Regra: resposta única, objetiva, cobrindo tudo que o lead perguntou neste bloco.`;
-}
-
-function gerarFallbackSemSilencio(textoConsolidado: string): string {
-  const t = (textoConsolidado || '').toLowerCase();
-  if (/(como|onde).*(encontrou|conseguiu).*(numero|número)|de onde.*(numero|número)/.test(t)) {
-    return 'Perfeito, te explico com transparência: seu contato veio de base pública de proprietários da região para prospecção imobiliária. Se preferir, eu encerro por aqui sem problema.';
-  }
-  if (/(quais|que|o que).*(informac|dados).*(enviar|preciso)|documenta(c|ç)[aã]o|documentos?/.test(t)) {
-    return 'Ótima pergunta. Para avançar agora, preciso só de dados básicos do imóvel (metragem, situação, valor pretendido e se já está anunciando). A documentação completa fica para a etapa seguinte, com orientação do corretor.';
-  }
-  return 'Perfeito, recebi suas mensagens. Para não te deixar sem retorno: já organizei seu contexto aqui e vou te responder objetivamente no próximo passo. Pode contar comigo.';
-}
-
-function detectarPermissaoAudioNoTexto(texto: string): 'PERMITIDO' | 'NEGADO' | null {
-  const normalizado = normalizarTextoAssinaturaForte(texto || '');
-  if (!normalizado) return null;
-
-  if (
-    /\b(pode|podes|pode sim|manda|mandar|envia|enviar|responde|responder)\b.*\b(audio|áudio|voz|falando)\b/.test(normalizado)
-    || /\b(audio|áudio|voz)\b.*\b(pode|sim|manda|envia|ok|pode sim)\b/.test(normalizado)
-    || /\bpode mandar audio\b/.test(normalizado)
-    || /\bmanda audio\b/.test(normalizado)
-  ) {
-    return 'PERMITIDO';
-  }
-
-  if (
-    /\b(nao|não)\b.*\b(audio|áudio|voz)\b/.test(normalizado)
-    || /\b(prefiro|melhor)\b.*\b(texto|escrito|mensagem)\b/.test(normalizado)
-    || /\bsem audio\b/.test(normalizado)
-    || /\bagora nao posso ouvir\b/.test(normalizado)
-    || /\bnao posso ouvir\b/.test(normalizado)
-  ) {
-    return 'NEGADO';
-  }
-
-  return null;
-}
-
-function preferenciaAudioPorObservacoes(observacoes?: string | null): 'PERMITIDO' | 'NEGADO' | 'PERGUNTADO' | null {
-  const obs = observacoes || '';
-  if (obs.includes(MARCADOR_AUDIO_NEGADO)) return 'NEGADO';
-  if (obs.includes(MARCADOR_AUDIO_PERMITIDO)) return 'PERMITIDO';
-  if (obs.includes(MARCADOR_AUDIO_PERGUNTADO)) return 'PERGUNTADO';
-  return null;
-}
-
-async function salvarPreferenciaAudioContato(contatoId: string, preferencia: 'PERMITIDO' | 'NEGADO' | 'PERGUNTADO'): Promise<void> {
+async function salvarPreferenciaAudioContato(contatoId: string, preferencia: PreferenciaAudio): Promise<void> {
   const contato = await prisma.lead.findUnique({
     where: { id: contatoId },
     select: { observacoes: true }
@@ -1166,151 +1006,6 @@ async function salvarPreferenciaAudioContato(contatoId: string, preferencia: 'PE
   });
 }
 
-function clienteMandouAudio(mensagens: MensagemPendente[]): boolean {
-  return mensagens.some((m) => m.tipo === 'AUDIO');
-}
-
-function contemLinkOuAgendamentoOperacional(texto: string): boolean {
-  const normalizado = normalizarTextoAssinaturaForte(texto || '');
-  const bruto = texto || '';
-
-  const contemLink =
-    /https?:\/\/|www\.|wa\.me\/|bit\.ly\/|maps\.app\.goo\.gl|goo\.gl\/maps|calendar\.google|meet\.google|zoom\.us|teams\.microsoft/i.test(bruto);
-
-  const contemAgenda =
-    /\b(agendad[oa]|confirmad[oa]|marcad[oa]|horario confirmado|visita confirmada|agenda confirmada|reuniao confirmada|reunião confirmada)\b/.test(normalizado)
-    || /\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b.*\b(\d{1,2}h|\d{1,2}:\d{2})\b/.test(normalizado)
-    || /\b(hoje|amanha|amanhã)\b.*\b(\d{1,2}h|\d{1,2}:\d{2})\b/.test(normalizado);
-
-  return contemLink || contemAgenda;
-}
-
-function deveResponderEmAudio(params: {
-  respostaEmAudioAtiva: boolean;
-  preferenciaAudio: 'PERMITIDO' | 'NEGADO' | 'PERGUNTADO' | null;
-  clienteEnviouAudio: boolean;
-  resposta: string;
-}): boolean {
-  if (!params.respostaEmAudioAtiva) return false;
-  if (contemLinkOuAgendamentoOperacional(params.resposta)) return false;
-  if (params.preferenciaAudio === 'NEGADO') return false;
-  if (params.preferenciaAudio === 'PERMITIDO') return true;
-  if (params.clienteEnviouAudio) return true;
-
-  return false;
-}
-
-function devePedirPermissaoAudio(params: {
-  respostaEmAudioAtiva: boolean;
-  preferenciaAudio: 'PERMITIDO' | 'NEGADO' | 'PERGUNTADO' | null;
-  clienteEnviouAudio: boolean;
-  textoConsolidado: string;
-  resposta: string;
-}): boolean {
-  if (!params.respostaEmAudioAtiva) return false;
-  if (params.preferenciaAudio) return false; // PERMITIDO, NEGADO ou PERGUNTADO → não pergunta de novo
-  if (params.clienteEnviouAudio) return false;
-  if (detectarPermissaoAudioNoTexto(params.textoConsolidado)) return false;
-  if (params.resposta.length < 140) return false;
-  return true;
-}
-
-function anexarPedidoPermissaoAudio(resposta: string): string {
-  const base = resposta.trim();
-  const pedido = 'Se for mais prático pra você, posso te responder por áudio também. Pode ser ou prefere que eu mantenha tudo por texto?';
-  if (base.toLowerCase().includes('responder por áudio') || base.toLowerCase().includes('responder em áudio')) {
-    return base;
-  }
-  return `${base}\n\n${pedido}`;
-}
-
-function textoPedeDocumentoAutorizacao(texto: string): boolean {
-  const normalizado = normalizarTextoAssinaturaForte(texto || '');
-  if (!normalizado) return false;
-  return /(manda|enviar|envia|me mostra|quero ver|pode mandar).*(documento|termos|autorizacao|autorização|contrato)/.test(normalizado)
-    || /(documento|termos|autorizacao|autorização|contrato).*(manda|enviar|envia|ver)/.test(normalizado);
-}
-
-function respostaOfereceEmailParaTermos(resposta: string): boolean {
-  const texto = normalizarTextoAssinaturaForte(resposta || '');
-  return /(termos|autorizacao|autorização|documento).*(e mail|email)/.test(texto)
-    || /(enviar|envio).*(e mail|email).*(termos|autorizacao|autorização|documento)/.test(texto);
-}
-
-function normalizarCanalTermosParaWhatsapp(resposta: string): string {
-  let texto = resposta || '';
-  texto = texto.replace(
-    /quer que eu te envie os termos por e-?mail para ver antes ou prefere que o corretor explique tudo na nossa pr[oó]xima reuni[aã]o\?/gi,
-    'Quer que eu te envie o documento de autorização aqui no WhatsApp para você analisar com calma, ou prefere que o corretor explique tudo na nossa próxima reunião?'
-  );
-  texto = texto.replace(/por e-?mail/gi, 'aqui no WhatsApp');
-  return texto;
-}
-
-function construirInstrucaoExclusividadePorTenant(perfilVendaTenant: any, textoConsolidado: string): string | undefined {
-  const texto = normalizarTextoAssinaturaForte(textoConsolidado || '');
-  if (!/(exclusiv|exclusivo|controle de tudo)/.test(texto)) {
-    return undefined;
-  }
-
-  const modalidades = Array.isArray(perfilVendaTenant?.modalidadesVenda)
-    ? Array.from(new Set(perfilVendaTenant.modalidadesVenda))
-    : [];
-  const temExclusiva = modalidades.includes('EXCLUSIVA');
-  const temNaoExclusiva = modalidades.includes('NAO_EXCLUSIVA');
-  const preferencial = perfilVendaTenant?.modalidadePreferencial === 'NAO_EXCLUSIVA' ? 'NAO_EXCLUSIVA' : 'EXCLUSIVA';
-
-  if (temExclusiva && !temNaoExclusiva) {
-    return `[INSTRUÇÃO DE TURNO - EXCLUSIVIDADE]
-Pergunta do lead sobre exclusividade detectada.
-Responda DIRETAMENTE primeiro: esta imobiliária trabalha com autorização EXCLUSIVA.
-Depois explique em linguagem consultiva (sem termos proibidos) e convide para próximo passo.
-Nunca use "contrato simples" e nunca diga "duas opções de contrato".`;
-  }
-
-  if (!temExclusiva && temNaoExclusiva) {
-    return `[INSTRUÇÃO DE TURNO - EXCLUSIVIDADE]
-Pergunta do lead sobre exclusividade detectada.
-Responda DIRETAMENTE primeiro: esta imobiliária trabalha com autorização NÃO EXCLUSIVA.
-Depois explique como coordena processo e resultados mesmo sem exclusividade.
-Nunca use "contrato simples" e nunca diga "duas opções de contrato".`;
-  }
-
-  // Ambas modalidades habilitadas (ou fallback)
-  const prefTxt = preferencial === 'NAO_EXCLUSIVA' ? 'não exclusiva' : 'exclusiva';
-  return `[INSTRUÇÃO DE TURNO - EXCLUSIVIDADE]
-Pergunta do lead sobre exclusividade detectada.
-Responda DIRETAMENTE primeiro: a imobiliária pode operar com autorização exclusiva e não exclusiva.
-Em seguida, deixe claro que a recomendação inicial costuma ser ${prefTxt}, ajustada ao contexto do proprietário.
-Nunca use "contrato simples" e nunca diga "duas opções de contrato".`;
-}
-
-function gerarAssinaturaLote(contatoId: string, mensagens: MensagemPendente[]): string {
-  const ids = mensagens
-    .map(msg => msg.messageId)
-    .filter((id): id is string => !!id)
-    .sort();
-
-  if (ids.length > 0) {
-    return `${contatoId}|ids:${ids.join('|')}`;
-  }
-
-  const textos = mensagens
-    .map(msg => normalizarTextoAssinatura(msg.conteudo))
-    .filter(Boolean)
-    .join('|')
-    .slice(0, 240);
-  const ultimoTimestamp = mensagens.length > 0
-    ? Math.max(...mensagens.map(msg => msg.timestamp || 0))
-    : Date.now();
-  const bucket = Math.floor(ultimoTimestamp / 5000);
-
-  return `${contatoId}|txt:${textos}|n:${mensagens.length}|b:${bucket}`;
-}
-
-// ✅ limparCachesIdempotencia() não é mais necessária — Redis expira automaticamente via TTL
-
-// ✅ Versão assíncrona usando Redis (substitui Maps em memória)
 async function iniciarProcessamentoSerializado(contatoId: string, assinatura: string): Promise<boolean> {
   const chave = `${contatoId}|${assinatura}`;
 
@@ -1477,108 +1172,6 @@ function obterMensagensConsolidadas(contatoId: string): { mensagens: MensagemPen
     mensagens: fila.mensagens,
     textoConsolidado
   };
-}
-
-// ====================================
-// NORMALIZAÇÃO DE PAYLOAD — EVOLUTION GO (whatsmeow)
-// ====================================
-// O Evolution GO entrega eventos no formato bruto do whatsmeow
-// ({ event, instanceName, instanceId, data:{ Info, Message } }).
-// As funções abaixo convertem para o formato Baileys já esperado pelo
-// restante deste handler ({ event: 'MESSAGES_UPSERT', instance, data:{ key, message } }).
-
-const TIPOS_MIDIA_WHATSMEOW = [
-  'imageMessage',
-  'audioMessage',
-  'videoMessage',
-  'documentMessage',
-  'stickerMessage',
-  'documentWithCaptionMessage',
-];
-
-function converterMensagemWhatsmeow(data: any): any | null {
-  if (!data) return null;
-  // Já está no formato Baileys (mensagem com key) — repassa.
-  if (data.key) return data;
-
-  const info = data.Info || data.info;
-  const conteudo = data.Message || data.message;
-  if (!info) return null;
-
-  let messageType = 'conversation';
-  const message: any = {};
-
-  if (conteudo && typeof conteudo === 'object') {
-    if (typeof conteudo.conversation === 'string') message.conversation = conteudo.conversation;
-    if (conteudo.extendedTextMessage) message.extendedTextMessage = conteudo.extendedTextMessage;
-
-    for (const tipo of TIPOS_MIDIA_WHATSMEOW) {
-      if (conteudo[tipo]) {
-        messageType = tipo;
-        const midia = { ...conteudo[tipo] };
-        // O Evolution GO acrescenta base64/mediaUrl/mimetype no nível de Message.
-        if (conteudo.base64) midia.base64 = conteudo.base64;
-        if (conteudo.mediaUrl) midia.mediaUrl = conteudo.mediaUrl;
-        if (conteudo.mimetype && !midia.mimetype) midia.mimetype = conteudo.mimetype;
-        // A url do whatsmeow é criptografada e não baixável diretamente.
-        delete midia.url;
-        message[tipo] = midia;
-        break;
-      }
-    }
-  }
-
-  const timestamp = info.Timestamp ?? info.timestamp;
-  let messageTimestamp: number | undefined;
-  if (typeof timestamp === 'number') {
-    messageTimestamp = timestamp;
-  } else if (typeof timestamp === 'string') {
-    const ms = Date.parse(timestamp);
-    if (!Number.isNaN(ms)) messageTimestamp = Math.floor(ms / 1000);
-  }
-
-  return {
-    key: {
-      remoteJid: info.Chat || info.chat || '',
-      fromMe: !!(info.IsFromMe ?? info.isFromMe),
-      id: info.ID || info.id,
-      remoteJidAlt: info.SenderAlt || info.senderAlt,
-    },
-    message,
-    messageType,
-    messageTimestamp,
-    pushName: info.PushName || info.pushName,
-    mediaUrl: conteudo?.mediaUrl,
-  };
-}
-
-function normalizarWebhookEvolutionGo(body: any): any {
-  if (!body || typeof body !== 'object') return body;
-
-  const evento = body.event;
-  // Formato legado/Baileys (campo `instance` ou event já em MAIÚSCULAS) — repassa.
-  if (!evento || body.instance) return body;
-
-  const eventoLc = String(evento).toLowerCase();
-  const instance = body.instanceName || body.instance;
-
-  if (eventoLc === 'connected' || eventoLc === 'pairsuccess') {
-    return { event: 'CONNECTION_UPDATE', instance, data: { ...(body.data || {}), state: 'open' } };
-  }
-  if (eventoLc === 'disconnected' || eventoLc === 'loggedout' || eventoLc === 'connectfailure') {
-    return { event: 'CONNECTION_UPDATE', instance, data: { ...(body.data || {}), state: 'close' } };
-  }
-  if (eventoLc === 'qrcode' || eventoLc === 'qrtimeout') {
-    return { event: 'CONNECTION_UPDATE', instance, data: { state: 'connecting' } };
-  }
-  if (eventoLc === 'message' || eventoLc === 'messages.upsert' || eventoLc === 'messages_upsert') {
-    const mensagem = converterMensagemWhatsmeow(body.data);
-    if (!mensagem) return body;
-    return { event: 'MESSAGES_UPSERT', instance, data: mensagem };
-  }
-
-  // Demais eventos do Evolution GO (Receipt, Presence, etc) não são tratados.
-  return { event: evento, instance, data: body.data };
 }
 
 export async function processarWebhookEvolution(req: Request, res: Response): Promise<unknown> {
@@ -2103,16 +1696,17 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         });
                       }
 
+
                       if (resultado.sucesso) resposta = resultado.resposta;
-                      if (!resposta || !resposta.trim()) {
+                      const respostaPreparada = prepararRespostaWebhook.execute({
+                        respostaOrquestrador: resposta,
+                        textoConsolidado,
+                      });
+                      resposta = respostaPreparada.resposta;
+                      if (respostaPreparada.fallbackAplicado) {
                         registrarIgnorado(telefone, 'fallback_sem_silencio:orquestrador_sem_resposta', contatoProspeccao.id);
-                        resposta = gerarFallbackSemSilencio(textoConsolidado);
                       }
-                      const leadPediuDocumentoAutorizacao = textoPedeDocumentoAutorizacao(textoConsolidado);
-                      const respostaOfereceuEmail = respostaOfereceEmailParaTermos(resposta);
-                      if (respostaOfereceuEmail) {
-                        resposta = normalizarCanalTermosParaWhatsapp(resposta);
-                      }
+                      const { leadPediuDocumentoAutorizacao, respostaOfereceuEmail } = respostaPreparada;
 
                       const deveEnviarDocumentoAutorizacao = !!AUTORIZACAO_VENDA_DOC_URL && (leadPediuDocumentoAutorizacao || respostaOfereceuEmail);
                       if (deveEnviarDocumentoAutorizacao) {
@@ -2142,25 +1736,17 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                           resposta = `Consigo te mandar o documento por aqui no WhatsApp, mas houve uma instabilidade no envio agora. Se você quiser, já tento novamente em seguida.\n\n${resposta}`;
                         }
                       }
-                      const clienteEnviouAudioNesteTurno = clienteMandouAudio(mensagensAcumuladas);
-                      const enviarAudioNesteTurno = deveResponderEmAudio({
-                        respostaEmAudioAtiva,
-                        preferenciaAudio,
-                        clienteEnviouAudio: clienteEnviouAudioNesteTurno,
-                        resposta,
-                      });
-                      const pedirPermissaoAudioNesteTurno = devePedirPermissaoAudio({
-                        respostaEmAudioAtiva,
-                        preferenciaAudio,
-                        clienteEnviouAudio: clienteEnviouAudioNesteTurno,
-                        textoConsolidado,
-                        resposta,
-                      });
 
-                      if (pedirPermissaoAudioNesteTurno) {
-                        resposta = anexarPedidoPermissaoAudio(resposta);
-                        // Marca que já perguntamos — impede repetição nos próximos turnos
-                        // independente de o lead responder ou não
+                      const decisaoCanal = decidirCanalRespostaWebhook.execute({
+                        resposta,
+                        textoConsolidado,
+                        mensagens: mensagensAcumuladas,
+                        respostaEmAudioAtiva,
+                        preferenciaAudio,
+                      });
+                      resposta = decisaoCanal.resposta;
+                      const enviarAudioNesteTurno = decisaoCanal.enviarAudio;
+                      if (decisaoCanal.pedirPermissaoAudio) {
                         salvarPreferenciaAudioContato(contatoProspeccao.id, 'PERGUNTADO')
                           .catch(() => {/* silencioso */});
                       }
