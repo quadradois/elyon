@@ -74,6 +74,8 @@ services:
     container_name: elyon_backend
     restart: unless-stopped
     logging: *default-logging
+    volumes:
+      - ./backups/status:/var/lib/elyon-backup:ro
     environment:
       NODE_ENV: production
       PORT: 3000

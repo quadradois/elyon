@@ -6,6 +6,7 @@ import {
   Registry,
   collectDefaultMetrics,
 } from 'prom-client';
+import { createBackupMetrics } from './backup-metrics';
 
 export const metricsRegistry = new Registry();
 
@@ -47,6 +48,8 @@ const dependencyStatus = new Gauge({
   labelNames: ['dependency'] as const,
   registers: [metricsRegistry],
 });
+
+const backupMetrics = createBackupMetrics(metricsRegistry);
 
 function routeLabel(req: Request): string {
   const routePath = req.route?.path;
@@ -111,6 +114,7 @@ export function requireInternalMetricsAccess(req: Request, res: Response, next: 
 }
 
 export async function metricsHandler(_req: Request, res: Response): Promise<void> {
+  backupMetrics.refresh();
   res.setHeader('Content-Type', metricsRegistry.contentType);
   res.status(200).send(await metricsRegistry.metrics());
 }

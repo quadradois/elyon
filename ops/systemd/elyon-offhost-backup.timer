@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ELYON off-host backup every hour
+
+[Timer]
+OnCalendar=*-*-* *:05:00
+Persistent=true
+AccuracySec=1min
+Unit=elyon-offhost-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -257,6 +257,14 @@ jobs:
       - name: Validar Docker Compose
         run: docker compose -f docker-compose.yml config --quiet
 
+      - name: Validar scripts de backup e restore
+        run: |
+          bash -n scripts/ops/backup-offhost-r2.sh
+          bash -n scripts/ops/restore-drill-r2.sh
+          bash -n scripts/ops/install-offhost-backup.sh
+          test -f ops/systemd/elyon-offhost-backup.service
+          test -f ops/systemd/elyon-offhost-backup.timer
+
       - name: Validar configuração e alertas Prometheus
         run: >-
           docker run --rm --entrypoint promtool
