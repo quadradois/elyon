@@ -2,6 +2,18 @@
 
 Este diretorio foi organizado por tema para facilitar manutencao e descoberta.
 
+## Operacao de producao
+
+- [Runbook operacional canonico](operacao/RUNBOOK_OPERACIONAL.md)
+- [Pipeline CI/CD](operacao/PIPELINE_CI_CD_PRODUCAO.md)
+- [Backup off-host e restore](operacao/BACKUP_OFFHOST_E_RESTORE.md)
+- [Observabilidade e SLO](operacao/OBSERVABILIDADE_E_SLO.md)
+- [Rotacao da chave de criptografia](operacoes/ROTACAO_CHAVE_CRIPTOGRAFIA.md)
+
+Somente estes documentos e os arquivos ligados por eles sao normativos para
+producao. Diagnosticos, relatorios, planos e guias arquivados registram contexto
+historico e nao substituem o runbook canonico.
+
 ## Estrutura
 
 - `planos/`: planos tecnicos e de execucao.

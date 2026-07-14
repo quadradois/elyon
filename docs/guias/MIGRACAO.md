@@ -135,7 +135,7 @@ A Evolution Go não faz parte da VPS ou do Compose do ELYON. Após migrar o ELYO
 
 ```bash
 # Status de todos os containers
-docker compose -f /root/elyon/docker-compose.prod.yml ps
+docker compose -f /root/elyon/docker-compose.yml ps
 
 # Logs em tempo real
 docker logs elyon_backend -f --tail=100
@@ -157,10 +157,10 @@ curl -I https://crm.elyon.ia.br
 
 ```bash
 # No NOVO servidor — parar tudo
-docker compose -f /root/elyon/docker-compose.prod.yml down
+docker compose -f /root/elyon/docker-compose.yml down
 
 # No SERVIDOR ATUAL — reativar
-docker compose -f /root/elyon/docker-compose.prod.yml up -d
+docker compose -f /root/elyon/docker-compose.yml up -d
 
 # Reverter DNS para o IP antigo
 ```
@@ -169,7 +169,9 @@ docker compose -f /root/elyon/docker-compose.prod.yml up -d
 
 ## Manutenção de Backups Automáticos
 
-O serviço `backup` do `docker-compose.prod.yml` executa automaticamente:
+O serviço `backup` do `docker-compose.yml` mantém o backup local. O dump
+off-host horário é executado por `elyon-offhost-backup.timer`; consulte o
+[runbook de backup e restore](../operacao/BACKUP_OFFHOST_E_RESTORE.md).
 - **Daily:** 03h00 (mantém 7 dias)
 - **Weekly:** mantém 4 semanas
 - **Monthly:** mantém 6 meses

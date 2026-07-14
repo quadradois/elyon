@@ -265,6 +265,9 @@ jobs:
           test -f ops/systemd/elyon-offhost-backup.service
           test -f ops/systemd/elyon-offhost-backup.timer
 
+      - name: Validar runbooks e topologia operacional
+        run: bash scripts/ops/verify-runbooks.sh
+
       - name: Validar configuração e alertas Prometheus
         run: >-
           docker run --rm --entrypoint promtool
