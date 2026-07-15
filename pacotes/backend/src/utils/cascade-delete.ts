@@ -7,10 +7,11 @@ import { prisma } from '../lib/db';
  * 1. Contratos
  * 2. Mensagens (via conversas)
  * 3. Conversas
- * 4. Atividades
- * 5. Desvincular clientes (origemLeadId → null)
- * 6. Desvincular imóveis (leadId → null)
- * 7. Leads
+ * 4. Ledger e milestones de agenda
+ * 5. Atividades
+ * 6. Desvincular clientes (origemLeadId → null)
+ * 7. Desvincular imóveis (leadId → null)
+ * 8. Leads
  */
 export async function cascadeDeleteLeads(leadIds: string[]): Promise<void> {
   if (leadIds.length === 0) return;
@@ -38,24 +39,28 @@ export async function cascadeDeleteLeads(leadIds: string[]): Promise<void> {
     where: { leadId: { in: leadIds } },
   });
 
-  // 4. Deletar atividades
+  // 4. Preservados durante a vida do tenant; removidos apenas na exclusão explícita do Lead.
+  await prisma.comandoAgendaLedger.deleteMany({ where: { leadId: { in: leadIds } } });
+  await prisma.milestoneAgenda.deleteMany({ where: { leadId: { in: leadIds } } });
+
+  // 5. Deletar atividades
   await prisma.atividade.deleteMany({
     where: { leadId: { in: leadIds } },
   });
 
-  // 5. Desvincular clientes
+  // 6. Desvincular clientes
   await prisma.cliente.updateMany({
     where: { origemLeadId: { in: leadIds } },
     data: { origemLeadId: null },
   });
 
-  // 6. Desvincular imóveis
+  // 7. Desvincular imóveis
   await prisma.imovel.updateMany({
     where: { leadId: { in: leadIds } },
     data: { leadId: null },
   });
 
-  // 7. Deletar leads
+  // 8. Deletar leads
   await prisma.lead.deleteMany({
     where: { id: { in: leadIds } },
   });

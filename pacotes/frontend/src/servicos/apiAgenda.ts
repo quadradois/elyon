@@ -18,6 +18,7 @@ export interface EventoAgenda {
         leadNome: string;
         leadTelefone: string;
         descricao?: string;
+        versao: number;
     };
 }
 
@@ -56,7 +57,7 @@ export const agendaService = {
 
     cancelarAgendamento: async (
         id: string,
-        payload: { motivo?: string; avisarCliente?: boolean } = {}
+        payload: { motivo?: string; avisarCliente?: boolean; requestId: string; expectedVersion: number }
     ): Promise<{ sucesso: boolean; mensagem: string }> => {
         const response = await api.post(`/agenda/${id}/cancelar`, payload);
         return response.data;
@@ -64,7 +65,7 @@ export const agendaService = {
 
     reagendarAgendamento: async (
         id: string,
-        payload: { novoHorario: Date; motivo?: string; avisarCliente?: boolean }
+        payload: { novoHorario: Date; motivo?: string; avisarCliente?: boolean; requestId: string; expectedVersion: number }
     ): Promise<{ sucesso: boolean; mensagem: string }> => {
         const response = await api.post(`/agenda/${id}/reagendar`, {
             ...payload,

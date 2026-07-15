@@ -1328,6 +1328,8 @@ model Atividade {
   completadoEm DateTime?
   criadoPor    String?
   criadoEm     DateTime      @default(now())
+  versao       Int           @default(0)
+  substituidaPorId String?       @unique
 
   // ====================================
   // CONFIRMAÇÃO DE AGENDAMENTO
@@ -1364,7 +1366,49 @@ model Atividade {
   @@index([lembreteCorretorEnviadoEm])
   @@index([corretorOriginalId])
   @@index([corretorAtualId])
+  @@index([leadId, versao])
   @@map("atividades")
+}
+
+model MilestoneAgenda {
+  id                    String   @id @default(uuid())
+  tenantId              String
+  leadId                String
+  atividadeId           String
+  atividadeSubstitutaId String?
+  tipo                  String
+  ator                  String
+  origem                String
+  motivo                String
+  reasonCode            String
+  parteAusente          String?
+  ocorridoEm            DateTime
+  chaveIdempotencia     String   @unique
+  criadoEm              DateTime @default(now())
+
+  @@index([tenantId, leadId, ocorridoEm])
+  @@index([atividadeId, ocorridoEm])
+  @@map("milestones_agenda")
+}
+
+model ComandoAgendaLedger {
+  id                    String    @id @default(uuid())
+  chaveRequisicao       String    @unique
+  fingerprint           String
+  operacao              String
+  tenantId              String
+  leadId                String
+  atividadeId           String
+  atividadeResultanteId String
+  outcome               String
+  resultado             Json
+  criadoEm              DateTime  @default(now())
+  atualizadoEm          DateTime  @updatedAt
+  ultimoReplayEm        DateTime?
+
+  @@index([tenantId, leadId, criadoEm])
+  @@index([atividadeResultanteId, criadoEm])
+  @@map("comandos_agenda_ledger")
 }
 
 enum TipoAtividade {

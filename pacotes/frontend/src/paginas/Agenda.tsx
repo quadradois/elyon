@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Calendar, dateFnsLocalizer, Views, View } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -87,6 +87,14 @@ export function Agenda() {
     const [motivoAcao, setMotivoAcao] = useState('');
     const [motivoProposta, setMotivoProposta] = useState<MotivoReagendamento | ''>('');
     const [mensagemProposta, setMensagemProposta] = useState('');
+    const commandRequestIds = useRef(new Map<string, string>());
+    const requestIdFor = (key: string) => {
+        const existing = commandRequestIds.current.get(key);
+        if (existing) return existing;
+        const created = crypto.randomUUID();
+        commandRequestIds.current.set(key, created);
+        return created;
+    };
 
     // Estado Modal Configuração de Expediente
     const [showConfigModal, setShowConfigModal] = useState(false);
@@ -275,7 +283,9 @@ export function Agenda() {
         try {
             await agendaService.cancelarAgendamento(selectedEvent.id, {
                 motivo: motivoAcao || undefined,
-                avisarCliente: true
+                avisarCliente: true,
+                requestId: requestIdFor(`${selectedEvent.id}:${selectedEvent.extendedProps?.versao ?? 0}:cancelar`),
+                expectedVersion: selectedEvent.extendedProps?.versao ?? 0,
             });
             toast.success('Agendamento cancelado.');
             setShowEventModal(false);
@@ -299,7 +309,9 @@ export function Agenda() {
             await agendaService.reagendarAgendamento(selectedEvent.id, {
                 novoHorario: new Date(novoHorario),
                 motivo: motivoAcao || undefined,
-                avisarCliente: true
+                avisarCliente: true,
+                requestId: requestIdFor(`${selectedEvent.id}:${selectedEvent.extendedProps?.versao ?? 0}:reagendar:${novoHorario}`),
+                expectedVersion: selectedEvent.extendedProps?.versao ?? 0,
             });
             toast.success('Agendamento reagendado.');
             setShowEventModal(false);

@@ -27,6 +27,7 @@ import {
 import { sanitizeInt, sanitizeFloat, sanitizeBool, sanitizeStr, sanitizeEnum, sanitizeStringArray, temTexto } from './tool-sanitize';
 import { wrapToolExecute } from './tool-wrapper';
 import { avaliarPolicyAcaoSensivel, isAutoCaptadoAfterCrmEnabled } from './sensitive-action-policy';
+import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
 
 async function registrarExecucaoTool(params: {
     leadId?: string;
@@ -944,6 +945,8 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                 toolName: 'agendar_reuniao_closer'
             });
             if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+            const durableExecutionId = resolverExecucaoDuravelDoContexto(runContext);
+            if (!durableExecutionId) return JSON.stringify({ success: false, reasonCode: 'TRUSTED_REQUEST_ID_REQUIRED' });
 
             // 1. Resolver leadId a partir do contatoId
             const contato = await prisma.lead.findUnique({
@@ -1056,7 +1059,7 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                     agendadoPara: { gte: agora }
                 },
                 orderBy: { agendadoPara: 'asc' },
-                select: { id: true, agendadoPara: true, titulo: true }
+                select: { id: true, agendadoPara: true, titulo: true, versao: true }
             });
 
             const descricaoAtividade = [
@@ -1069,24 +1072,22 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
             ].filter(Boolean).join(' | ');
 
             if (atividadeAberta) {
-                await prisma.atividade.update({
-                    where: { id: atividadeAberta.id },
-                    data: {
-                        titulo: `Atendimento reagendado — ${args.dataHora}`,
-                        descricao: descricaoAtividade,
-                        agendadoPara,
-                        statusAgendamento: 'PENDENTE',
-                        statusConfirmacaoCorretor: 'PENDENTE',
-                        tokenConfirmacaoCorretor: crypto.randomUUID(),
-                        confirmacaoCorretorSolicitadaEm: null,
-                        confirmadoCorretorEm: null,
-                        expiradoCorretorEm: null,
-                        remanejadoCorretorEm: null,
-                    }
+                const tenantId = resolverTenantIdDoContexto(runContext)!;
+                const result = await executarComandoAgenda({
+                    operacao: 'REAGENDAR', tenantId, leadId, atividadeId: atividadeAberta.id,
+                    requestIdentity: { source: 'INBOUND_BATCH', id: `${durableExecutionId}:agenda-reschedule` },
+                    ator: 'ai_agent', origem: 'TOOL_AGENDAR_REUNIAO', motivo: 'Novo horario confirmado pelo Lead',
+                    policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION, ocorridoEm: new Date(),
+                    expectedVersion: atividadeAberta.versao, novoHorario: agendadoPara,
+                    novoTitulo: `Atendimento reagendado — ${args.dataHora}`, novaDescricao: descricaoAtividade,
                 });
+                if (!result.success) return JSON.stringify({ success: false, reasonCode: result.reasonCode });
             } else {
-                await prisma.atividade.create({
-                    data: {
+                const tenantId = resolverTenantIdDoContexto(runContext)!;
+                await prisma.$transaction(async (tx) => {
+                    const leadAtual = await tx.lead.findFirst({ where: { id: leadId, tenantId }, select: { status: true } });
+                    if (!leadAtual || !['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA'].includes(leadAtual.status)) throw new Error('STATE_TRANSITION_DENIED');
+                    const criada = await tx.atividade.create({ data: {
                         leadId,
                         tipo: 'REUNIAO',
                         titulo: `Atendimento agendado — ${args.dataHora}`,
@@ -1096,7 +1097,13 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                         statusAgendamento: 'PENDENTE',
                         statusConfirmacaoCorretor: 'PENDENTE',
                         tokenConfirmacaoCorretor: crypto.randomUUID(),
-                    }
+                    } });
+                    await tx.lead.update({ where: { id: leadId }, data: { status: 'VISITA_AGENDADA' } });
+                    await tx.milestoneAgenda.create({ data: {
+                        tenantId, leadId, atividadeId: criada.id, tipo: 'VISITA_AGENDADA', ator: 'ai_agent',
+                        origem: 'TOOL_AGENDAR_REUNIAO', motivo: 'Horario confirmado pelo Lead', reasonCode: 'SCHEDULED',
+                        ocorridoEm: new Date(), chaveIdempotencia: crypto.createHash('sha256').update(`agenda-scheduled:${durableExecutionId}`).digest('hex'),
+                    } });
                 });
             }
 
