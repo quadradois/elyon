@@ -705,8 +705,6 @@ model FollowupOutbound {
   leaseOwner         String?
   leaseAte           DateTime?
   fencingToken       Int      @default(0)
-  chaveRequisicao    String   @unique
-  requestFingerprint String
   chaveEquivalencia  String
   origemPedido       String
   evidenciaPedido    String   @db.Text
@@ -717,11 +715,28 @@ model FollowupOutbound {
   executadoEm        DateTime?
   canceladoEm        DateTime?
   efeito             EfeitoFollowupOutbound?
+  requisicoes        RequisicaoFollowupOutbound[]
 
   @@index([tenantId, leadId, status, agendadoParaUtc])
   @@index([chaveEquivalencia])
   @@index([status, agendadoParaUtc, proximoRetryEm, leaseAte], map: "followups_outbound_claim_idx")
   @@map("followups_outbound")
+}
+
+model RequisicaoFollowupOutbound {
+  id              String   @id @default(cuid())
+  chaveRequisicao String   @unique
+  fingerprint     String
+  operacao        String
+  followupId      String
+  outcome         String
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+  ultimoReplayEm  DateTime?
+  followup        FollowupOutbound @relation(fields: [followupId], references: [id], onDelete: Cascade)
+
+  @@index([followupId, criadoEm])
+  @@map("requisicoes_followups_outbound")
 }
 
 model EfeitoFollowupOutbound {

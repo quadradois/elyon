@@ -43,6 +43,49 @@ describe('B08 follow-up outbound duravel', () => {
     const saved = await prisma.followupOutbound.findFirstOrThrow({ where: { leadId: f.leadA } });
     expect(saved).toMatchObject({ status: 'PENDENTE', timezoneIana: 'America/Sao_Paulo', policyVersion: 'followup-v1', tentativas: 0 });
     expect(mensagens).toContain(saved.mensagemEnvio);
+    const ledger = await prisma.requisicaoFollowupOutbound.findMany({ where: { followupId: saved.id }, orderBy: { criadoEm: 'asc' } });
+    expect(ledger).toHaveLength(2);
+    expect(new Set(ledger.map((item) => item.outcome))).toEqual(new Set(['CRIADO', 'FOLLOWUP_EQUIVALENTE_ATIVO']));
+  });
+
+  it('ledger preserva B -> F apos F terminal e rejeita fingerprint divergente', async () => {
+    const f = await harness.seed(); await seedEvidence(f.leadA);
+    const requestA = { source: 'BASELINE' as const, id: `ledger-a-${f.runId}` };
+    const requestB = { source: 'BASELINE' as const, id: `ledger-b-${f.runId}` };
+    const a = await criarFollowupOutbound(input(f, { requestIdentity: requestA }));
+    const b = await criarFollowupOutbound(input(f, { requestIdentity: requestB }));
+    if (!a.success || !b.success) throw new Error('requisicoes aceitas esperadas');
+    expect(b).toMatchObject({ followup: { id: a.followup.id }, deduplicado: true, reasonCode: 'FOLLOWUP_EQUIVALENTE_ATIVO' });
+
+    const ledgerB = await prisma.requisicaoFollowupOutbound.findFirstOrThrow({
+      where: { followupId: a.followup.id, outcome: 'FOLLOWUP_EQUIVALENTE_ATIVO' },
+    });
+    expect(ledgerB).toMatchObject({ operacao: 'CRIAR', followupId: a.followup.id, outcome: 'FOLLOWUP_EQUIVALENTE_ATIVO' });
+    await prisma.followupOutbound.update({ where: { id: a.followup.id }, data: { status: 'EXECUTADO', executadoEm: new Date() } });
+
+    const replayB = await criarFollowupOutbound(input(f, { requestIdentity: requestB }));
+    expect(replayB).toMatchObject({ success: true, followup: { id: a.followup.id }, deduplicado: true,
+      reasonCode: 'FOLLOWUP_REQUEST_REPLAY', requestOutcome: 'FOLLOWUP_EQUIVALENTE_ATIVO' });
+    const conflictB = await criarFollowupOutbound(input(f, { requestIdentity: requestB, expressaoOriginal: '20/01/2027 10:00' }));
+    expect(conflictB).toEqual({ success: false, reasonCode: 'REQUEST_ID_CONFLICT' });
+    expect(await prisma.followupOutbound.count({ where: { leadId: f.leadA } })).toBe(1);
+    expect(await prisma.requisicaoFollowupOutbound.count({ where: { followupId: a.followup.id } })).toBe(2);
+    expect((await prisma.requisicaoFollowupOutbound.findUniqueOrThrow({ where: { id: ledgerB.id } })).ultimoReplayEm).not.toBeNull();
+  });
+
+  it('colisao concorrente de chave reverte resultado sem ledger correspondente', async () => {
+    const f = await harness.seed(); await Promise.all([seedEvidence(f.leadA), seedEvidence(f.leadB)]);
+    const shared = { source: 'BASELINE' as const, id: `transaction-race-${f.runId}` };
+    const [a, b] = await Promise.all([
+      criarFollowupOutbound(input(f, { requestIdentity: shared })),
+      criarFollowupOutbound(input(f, { tenantId: f.tenantB, leadId: f.leadB, requestIdentity: shared, mensagemEnvio: 'Payload divergente tenant B' })),
+    ]);
+    expect([a.success, b.success].sort()).toEqual([false, true]);
+    expect((a.success ? b : a)).toEqual({ success: false, reasonCode: 'REQUEST_ID_CONFLICT' });
+    expect(await prisma.requisicaoFollowupOutbound.count()).toBe(1);
+    expect(await prisma.followupOutbound.count()).toBe(1);
+    const ledger = await prisma.requisicaoFollowupOutbound.findFirstOrThrow();
+    expect(await prisma.followupOutbound.count({ where: { id: ledger.followupId } })).toBe(1);
   });
 
   it('mesma identidade confiavel e mesmo fingerprint retorna replay idempotente', async () => {

@@ -28,6 +28,9 @@ export type FollowupRequestIdentity = {
   source: 'INBOUND_BATCH' | 'MANUAL_API' | 'BASELINE';
   id: string;
 };
+type FollowupRequestOperation = 'CRIAR' | 'REAGENDAR';
+type FollowupRequestOutcome = 'CRIADO' | 'REAGENDADO' | 'FOLLOWUP_EQUIVALENTE_ATIVO';
+type FollowupLedgerTransaction = Pick<typeof prisma, 'requisicaoFollowupOutbound'>;
 
 function validarIdentidadeConfiavel(origemPedido: string, identity?: FollowupRequestIdentity): identity is FollowupRequestIdentity {
   if (!identity?.id?.trim()) return false;
@@ -49,6 +52,28 @@ function fingerprintRequisicao(params: {
 
 function chaveDaRequisicao(input: CriarFollowupInput): string {
   return hash(['followup-request-v1', input.requestIdentity.source, input.requestIdentity.id.trim()]);
+}
+
+async function resolverRequisicaoPersistida(tx: FollowupLedgerTransaction, chaveRequisicao: string, fingerprint: string) {
+  const ledger = await tx.requisicaoFollowupOutbound.findUnique({
+    where: { chaveRequisicao }, include: { followup: true },
+  });
+  if (!ledger) return null;
+  if (ledger.fingerprint !== fingerprint) return { conflict: true as const };
+  await tx.requisicaoFollowupOutbound.update({
+    where: { id: ledger.id }, data: { ultimoReplayEm: new Date() },
+  });
+  return {
+    followup: ledger.followup, deduplicado: true,
+    reasonCode: 'FOLLOWUP_REQUEST_REPLAY', requestOutcome: ledger.outcome,
+  };
+}
+
+async function registrarRequisicaoAceita(tx: FollowupLedgerTransaction, params: {
+  chaveRequisicao: string; fingerprint: string; operacao: FollowupRequestOperation;
+  followupId: string; outcome: FollowupRequestOutcome;
+}) {
+  await tx.requisicaoFollowupOutbound.create({ data: params });
 }
 function sanitizeError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -84,7 +109,7 @@ export async function criarFollowupOutbound(input: CriarFollowupInput) {
     utc: temporal.utc, motivoNormalizado, policyVersion, mensagemEnvio });
   const chaveEquivalencia = hash([input.tenantId, input.leadId, temporal.utc.toISOString(), motivoNormalizado, policyVersion]);
 
-  let result: { followup: any; deduplicado: boolean; reasonCode?: string } | { conflict: true } | undefined;
+  let result: { followup: any; deduplicado: boolean; reasonCode?: string; requestOutcome?: string } | { conflict: true } | undefined;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       result = await prisma.$transaction(async (tx) => {
@@ -97,25 +122,28 @@ export async function criarFollowupOutbound(input: CriarFollowupInput) {
       const evidence = await tx.mensagemProspeccao.findFirst({ where: { leadId: input.leadId, direcao: 'ENTRADA', conteudo: { contains: input.evidenciaPedido.trim(), mode: 'insensitive' } }, select: { id: true } });
       if (!evidence) throw new Error('EVIDENCIA_NAO_CONFIRMADA');
     }
-    const replay = await tx.followupOutbound.findUnique({ where: { chaveRequisicao } });
-    if (replay) {
-      if (replay.requestFingerprint !== requestFingerprint) return { conflict: true as const };
-      return { followup: replay, deduplicado: true, reasonCode: 'FOLLOWUP_REQUEST_REPLAY' };
-    }
+    const replay = await resolverRequisicaoPersistida(tx, chaveRequisicao, requestFingerprint);
+    if (replay) return replay;
     const existing = await tx.followupOutbound.findFirst({ where: equivalenciaAtivaWhere(chaveEquivalencia) });
-    if (existing) return { followup: existing, deduplicado: true, reasonCode: 'FOLLOWUP_EQUIVALENTE_ATIVO' };
+    if (existing) {
+      await registrarRequisicaoAceita(tx, { chaveRequisicao, fingerprint: requestFingerprint,
+        operacao: 'CRIAR', followupId: existing.id, outcome: 'FOLLOWUP_EQUIVALENTE_ATIVO' });
+      return { followup: existing, deduplicado: true, reasonCode: 'FOLLOWUP_EQUIVALENTE_ATIVO', requestOutcome: 'FOLLOWUP_EQUIVALENTE_ATIVO' };
+    }
     const followup = await tx.followupOutbound.create({ data: {
       tenantId: input.tenantId, leadId: input.leadId, agendadoParaUtc: temporal.utc,
       timezoneIana: temporal.timezone, expressaoOriginal: input.expressaoOriginal,
-      motivo: input.motivo.trim(), motivoNormalizado, mensagemEnvio, policyVersion, chaveRequisicao, requestFingerprint, chaveEquivalencia,
+      motivo: input.motivo.trim(), motivoNormalizado, mensagemEnvio, policyVersion, chaveEquivalencia,
       origemPedido: input.origemPedido.trim(), evidenciaPedido: input.evidenciaPedido.trim(),
     } });
+    await registrarRequisicaoAceita(tx, { chaveRequisicao, fingerprint: requestFingerprint,
+      operacao: 'CRIAR', followupId: followup.id, outcome: 'CRIADO' });
     await tx.lead.update({ where: { id: input.leadId }, data: { dataRecontato: temporal.utc, motivoRecontato: input.motivo.trim() } });
-    return { followup, deduplicado: false, reasonCode: undefined };
+    return { followup, deduplicado: false, reasonCode: undefined, requestOutcome: 'CRIADO' };
       }, { isolationLevel: 'Serializable' });
       break;
     } catch (error) {
-      if ((error as { code?: string }).code !== 'P2034' || attempt === 3) throw error;
+      if (!['P2002', 'P2034'].includes((error as { code?: string }).code || '') || attempt === 3) throw error;
     }
   }
   if (!result) throw new Error('FOLLOWUP_CREATE_RETRY_EXHAUSTED');
@@ -148,11 +176,8 @@ export async function reagendarFollowupOutbound(params: CriarFollowupInput & { f
   const chaveEquivalencia = hash([params.tenantId, params.leadId, temporal.utc.toISOString(), motivoNormalizado, policyVersion]);
   const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${params.tenantId}:${params.leadId}:followup`}, 0))`;
-    const replay = await tx.followupOutbound.findUnique({ where: { chaveRequisicao } });
-    if (replay) {
-      if (replay.requestFingerprint !== requestFingerprint) return { blocked: 'REQUEST_ID_CONFLICT' as const };
-      return { followup: replay, deduplicado: true, reasonCode: 'FOLLOWUP_REQUEST_REPLAY' };
-    }
+    const replay = await resolverRequisicaoPersistida(tx, chaveRequisicao, requestFingerprint);
+    if (replay) return 'conflict' in replay ? { blocked: 'REQUEST_ID_CONFLICT' as const } : replay;
     const old = await tx.followupOutbound.findFirst({ where: { id: params.followupId, tenantId: params.tenantId, leadId: params.leadId, status: { in: ACTIVE } }, include: { efeito: true } });
     if (!old) throw new Error('FOLLOWUP_ACTIVE_NOT_FOUND');
     if (old.reasonCode === 'DELIVERY_UNKNOWN') return { blocked: 'FOLLOWUP_DELIVERY_UNKNOWN' as const };
@@ -167,8 +192,10 @@ export async function reagendarFollowupOutbound(params: CriarFollowupInput & { f
     const existing = await tx.followupOutbound.findFirst({ where: { ...equivalenciaAtivaWhere(chaveEquivalencia), id: { not: old.id } } });
     if (existing) return { blocked: 'FOLLOWUP_EQUIVALENTE_EXISTENTE' as const };
     await tx.followupOutbound.update({ where: { id: old.id }, data: { status: 'CANCELADO', reasonCode: 'REAGENDAMENTO', canceladoEm: new Date(), leaseOwner: null, leaseAte: null } });
-    const followup = await tx.followupOutbound.create({ data: { tenantId: params.tenantId, leadId: params.leadId, agendadoParaUtc: temporal.utc, timezoneIana: temporal.timezone, expressaoOriginal: params.expressaoOriginal, motivo: params.motivo.trim(), motivoNormalizado, mensagemEnvio, policyVersion, chaveRequisicao, requestFingerprint, chaveEquivalencia, origemPedido: params.origemPedido.trim(), evidenciaPedido: params.evidenciaPedido.trim() } });
-    return { followup, deduplicado: false, reasonCode: undefined };
+    const followup = await tx.followupOutbound.create({ data: { tenantId: params.tenantId, leadId: params.leadId, agendadoParaUtc: temporal.utc, timezoneIana: temporal.timezone, expressaoOriginal: params.expressaoOriginal, motivo: params.motivo.trim(), motivoNormalizado, mensagemEnvio, policyVersion, chaveEquivalencia, origemPedido: params.origemPedido.trim(), evidenciaPedido: params.evidenciaPedido.trim() } });
+    await registrarRequisicaoAceita(tx, { chaveRequisicao, fingerprint: requestFingerprint,
+      operacao: 'REAGENDAR', followupId: followup.id, outcome: 'REAGENDADO' });
+    return { followup, deduplicado: false, reasonCode: undefined, requestOutcome: 'REAGENDADO' };
   }, { isolationLevel: 'Serializable' });
   if ('blocked' in result) return { success: false as const, reasonCode: result.blocked };
   followupEventos.inc({ resultado: 'reagendado' });

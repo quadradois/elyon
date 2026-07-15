@@ -2338,6 +2338,7 @@ router.post('/:id/followup', async (req, res) => {
       dataRecontato: result.followup.agendadoParaUtc.toISOString(),
       deduplicado: result.deduplicado,
       reasonCode: 'reasonCode' in result ? result.reasonCode : undefined,
+      requestOutcome: 'requestOutcome' in result ? result.requestOutcome : undefined,
     });
   } catch {
     responderErro(res, 500, 'Erro interno');

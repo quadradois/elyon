@@ -21,7 +21,8 @@ export class AgendarFollowupUseCase {
       if (!result.success) return { success: false, error: result.reasonCode, reasonCode: result.reasonCode };
       return { success: true, message: result.deduplicado ? 'Follow-up ja existente' : 'Follow-up agendado',
         followupId: result.followup.id, dataRecontato: result.followup.agendadoParaUtc.toISOString(), deduplicado: result.deduplicado,
-        reasonCode: 'reasonCode' in result ? result.reasonCode : undefined };
+        reasonCode: 'reasonCode' in result ? result.reasonCode : undefined,
+        requestOutcome: 'requestOutcome' in result ? result.requestOutcome : undefined };
     } catch (error) {
       const reasonCode = error instanceof Error ? error.message.split(':')[0] : 'FOLLOWUP_CREATE_FAILED';
       return { success: false, error: reasonCode, reasonCode };

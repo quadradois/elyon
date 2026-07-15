@@ -22,11 +22,17 @@ exigem confirmacao. Conversao usa `date-fns-tz`, nunca offset manual.
 A idempotencia de replay usa `chaveRequisicao`. Na tool, o backend deriva essa
 identidade do `LoteMensagemInbound.id` persistido e a injeta no contexto da
 execucao; `requestId` nao faz parte do schema controlado pelo modelo. No fluxo
-manual, o UUID da tentativa continua vindo do `ChatPanel`. Em ambos os casos, o
-agregado persiste `requestFingerprint`, composto por tipo da operacao, tenant,
-Lead, `followupId`, UTC, motivo normalizado, policy e hash da mensagem. A mesma
-chave com o mesmo fingerprint retorna replay; qualquer divergencia retorna
-`REQUEST_ID_CONFLICT` antes de cancelamento ou criacao.
+manual, o UUID da tentativa continua vindo do `ChatPanel`.
+
+Cada requisicao aceita possui uma linha em `RequisicaoFollowupOutbound`, com
+chave unica, fingerprint, operacao, `followupId`, outcome, criacao, atualizacao e
+ultimo replay. O fingerprint cobre tipo da operacao, tenant, Lead, `followupId`,
+UTC, motivo normalizado, policy e hash da mensagem. A linha e criada na mesma
+transacao do follow-up ou da resolucao por equivalencia; a FK impede alias sem
+resultado. `FOLLOWUP_EQUIVALENTE_ATIVO` tambem persiste a relacao da nova chave
+com o agregado existente. A mesma chave com o mesmo fingerprint retorna esse
+resultado mesmo depois de o agregado ficar terminal; qualquer divergencia
+retorna `REQUEST_ID_CONFLICT` antes de cancelamento ou criacao.
 
 A equivalencia ativa usa outra chave SHA-256 de tenant, Lead,
 UTC, motivo normalizado e policy; o texto nao altera a identidade operacional.
@@ -81,9 +87,9 @@ remove nem transforma dados existentes.
 
 A validacao local reproduzivel usou PostgreSQL 15 com pgvector 0.8 e Redis 7.4,
 aplicou as quatro migrations desde banco vazio e executou o caminho real do
-agregado sem chamadas externas. O gate direcionado e composto por 39 cenarios automatizados:
+agregado sem chamadas externas. O gate direcionado e composto por 41 cenarios automatizados:
 
-- 18 cenarios de baseline real: criacao concorrente com mensagens diferentes,
+- 20 cenarios de baseline real: criacao concorrente com mensagens diferentes,
   payload real do
   ChatPanel pela API ate a persistencia, restart e takeover,
   gates HUMANO, PAUSADO e opt-out, reagendamento atomico, retry comprovadamente
@@ -91,7 +97,8 @@ agregado sem chamadas externas. O gate direcionado e composto por 39 cenarios au
   e confirmacao, reagendamento real pela API e pelo use case da tool, tres gates
   fail-closed de reagendamento ambiguo, ciclo horario 1 -> horario 2 -> horario 1,
   replay com fingerprint igual, conflito por data divergente, conflito entre
-  criacao e reagendamento sem mutacao e isolamento de dois tenants;
+  criacao e reagendamento sem mutacao, ledger A/B preservado apos estado
+  terminal, rollback atomico em colisao concorrente e isolamento de dois tenants;
 - 7 cenarios temporais: data relativa com timezone IANA, timezone invalido, tres
   expressoes ambiguas, passado, horario proibido e instantes DST inexistente ou
   duplicado, incluindo recusa explicita de `DD/MM/YYYY` sem hora;
@@ -106,5 +113,5 @@ agregado sem chamadas externas. O gate direcionado e composto por 39 cenarios au
 Comandos: `npm run build`, testes unitarios direcionados e
 `npm run test:baseline -- followup-outbound.integration.test.ts`. Resultado:
 builds backend/frontend verdes, 18 testes backend direcionados, 3 testes frontend
-e 18 testes de baseline verdes. O deploy de migrations foi executado duas vezes
+e 20 testes de baseline verdes. O deploy de migrations foi executado duas vezes
 e `prisma migrate diff --exit-code` confirmou drift zero.
