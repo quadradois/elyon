@@ -63,7 +63,7 @@ fixtures com prefixo/run UUID, deleção por tenant/evento e chaves Redis regist
 | B13 | lease expirado | `PROCESSANDO → CONCLUIDO` | tentativas = 2 | Automatizado | suportado/gate |
 | B14 | tool falha após duas escritas na transação | recibo concluído com fallback | 0 observação e 0 atividade parcial | Automatizado | suportado/gate |
 | B15 | tentativa cross-tenant | Lead estrangeiro inalterado | 0 efeitos estrangeiros | Automatizado | suportado/gate |
-| B16 | visita cancelada | CRM permanece `VISITA_AGENDADA` | agenda `CANCELADO` | Automatizado | expected-failure/probe |
+| B16 | cancelamento, reagendamento e no-show | agenda, estado atual, ledger e milestones coerentes | transação default-deny e tenant-safe | Automatizado | gate suportado pela #57 |
 | B17 | policy candidata | evidência sem promoção CRM | `status=NOVO` | Automatizado | suportado/gate |
 
 ## Analisador agregado sem PII

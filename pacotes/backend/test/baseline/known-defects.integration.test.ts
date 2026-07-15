@@ -39,10 +39,4 @@ describe('probes executáveis de falhas conhecidas', () => {
     expect(JSON.stringify(call.config)).not.toContain('RAG_FATO_SINTETICO');
   });
 
-  it('XF-B16 cancelamento deixa estágio VISITA_AGENDADA incoerente', async () => {
-    const f = await harness.seed();
-    await prisma.lead.update({ where: { id: f.leadA }, data: { status: 'VISITA_AGENDADA' } });
-    await prisma.atividade.create({ data: { leadId: f.leadA, tipo: 'AVALIACAO', titulo: 'Visita sintética', agendadoPara: new Date('2026-01-16T17:00:00Z'), statusAgendamento: 'CANCELADO', canceladoEm: new Date(), canceladoPor: 'sistema' } });
-    expect((await prisma.lead.findUniqueOrThrow({ where: { id: f.leadA } })).status).toBe('VISITA_AGENDADA');
-  });
 });

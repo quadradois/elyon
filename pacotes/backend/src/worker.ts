@@ -16,6 +16,8 @@ import { validarConfiguracaoWebhooks } from './servicos/webhook-seguranca';
 import { executarProximoLoteInbound } from './servicos/processador-lotes-inbound';
 import { renderizarMetricasWorker } from './observabilidade/metricas-worker';
 import { executarProximoFollowupOutbound } from './servicos/processador-followups-outbound';
+import { executarProximoEfeitoAgenda } from './servicos/efeitos-agenda-outbox';
+import { executarProximoNoShowAgenda } from './servicos/processador-no-show-agenda';
 
 const registry = new Registry();
 collectDefaultMetrics({ prefix: 'elyon_worker_', register: registry });
@@ -45,6 +47,8 @@ const filaPorStatus = new Gauge({
 
 const porta = Number(process.env.WEBHOOK_WORKER_PORT || 3001);
 const pollMs = Math.max(100, Math.min(10_000, Number(process.env.WEBHOOK_WORKER_POLL_MS || 1_000)));
+const efeitosAgendaHabilitados = process.env.AGENDA_EFFECTS_ENABLED === 'true';
+const noShowAgendaHabilitado = process.env.AGENDA_NO_SHOW_ENABLED === 'true';
 let encerrando = false;
 let bancoPronto = false;
 let ultimoLoopEm = 0;
@@ -86,7 +90,9 @@ async function loop(): Promise<void> {
       if (evento) await executarEvento(evento);
       const processouLote = await executarProximoLoteInbound();
       const processouFollowup = await executarProximoFollowupOutbound();
-      if (!evento && !processouLote && !processouFollowup) await esperar(pollMs);
+      const processouEfeitoAgenda = efeitosAgendaHabilitados ? await executarProximoEfeitoAgenda() : false;
+      const processouNoShow = noShowAgendaHabilitado ? await executarProximoNoShowAgenda() : false;
+      if (!evento && !processouLote && !processouFollowup && !processouEfeitoAgenda && !processouNoShow) await esperar(pollMs);
     } catch (erro) {
       bancoPronto = false;
       ultimoLoopEm = Date.now();

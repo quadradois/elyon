@@ -2,7 +2,7 @@
  * Hook para gerenciar estado e dados do Lead
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../../servicos/api';
 import { toast } from 'sonner';
@@ -51,6 +51,7 @@ export function useLeadDetalhes(): UseLeadDetalhesReturn {
 
     // Estado principal
     const [lead, setLead] = useState<Lead | null>(null);
+    const commandRequestIds = useRef(new Map<string, string>());
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
     const [salvando, setSalvando] = useState(false);
@@ -231,7 +232,17 @@ export function useLeadDetalhes(): UseLeadDetalhesReturn {
 
     const acaoAtividade = async (atividadeId: string, acao: string): Promise<boolean> => {
         try {
-            await api.patch(`/leads/${id}/atividades/${atividadeId}`, { acao });
+            const atividadeAtual = lead?.atividades?.find((item: any) => item.id === atividadeId)
+                || (lead?.proximaAtividade?.id === atividadeId ? lead.proximaAtividade : null);
+            const payload: Record<string, unknown> = { acao };
+            if (['cancelar', 'reagendar', 'nao_compareceu'].includes(acao)) {
+                payload.expectedVersion = atividadeAtual?.versao ?? 0;
+                const key = `${atividadeId}:${payload.expectedVersion}:${acao}`;
+                const existing = commandRequestIds.current.get(key);
+                payload.requestId = existing || crypto.randomUUID();
+                commandRequestIds.current.set(key, payload.requestId as string);
+            }
+            await api.patch(`/leads/${id}/atividades/${atividadeId}`, payload);
             toast.success('Atividade atualizada');
             await carregarLead();
             return true;

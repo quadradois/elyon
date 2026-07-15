@@ -214,11 +214,14 @@ export async function executarCutoffRemanejamentoCorretor(): Promise<{ processad
   for (const atividade of atividades) {
     try {
       expirados++;
+      const estadoAtualizadoEm = new Date();
       await (prisma.atividade as any).update({
         where: { id: atividade.id },
         data: {
           statusConfirmacaoCorretor: 'EXPIRADO',
-          expiradoCorretorEm: new Date(),
+          expiradoCorretorEm: estadoAtualizadoEm,
+          versao: { increment: 1 },
+          estadoAgendaAtualizadoEm: estadoAtualizadoEm,
         }
       });
       ServicoAuditoria.registrar({
@@ -244,6 +247,8 @@ export async function executarCutoffRemanejamentoCorretor(): Promise<{ processad
           statusConfirmacaoCorretor: 'REMANEJADO',
           remanejadoCorretorEm: new Date(),
           corretorAtualId: especialista.usuarioId || null,
+          versao: { increment: 1 },
+          estadoAgendaAtualizadoEm: new Date(),
         }
       });
 

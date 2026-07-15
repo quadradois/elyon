@@ -7,6 +7,8 @@ jest.mock('../../lib/db', () => ({
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     mensagem: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    comandoAgendaLedger: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    milestoneAgenda: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     atividade: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     cliente: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     imovel: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
@@ -49,6 +51,9 @@ describe('cascadeDeleteLeads', () => {
     expect(mockPrisma.conversa.deleteMany).toHaveBeenCalledWith({
       where: { leadId: { in: ids } },
     });
+
+    expect(mockPrisma.comandoAgendaLedger.deleteMany).toHaveBeenCalledWith({ where: { leadId: { in: ids } } });
+    expect(mockPrisma.milestoneAgenda.deleteMany).toHaveBeenCalledWith({ where: { leadId: { in: ids } } });
 
     expect(mockPrisma.atividade.deleteMany).toHaveBeenCalledWith({
       where: { leadId: { in: ids } },
@@ -110,6 +115,14 @@ describe('cascadeDeleteLeads', () => {
       callOrder.push('atividade');
       return { count: 0 };
     });
+    (mockPrisma.comandoAgendaLedger.deleteMany as jest.Mock).mockImplementation(async () => {
+      callOrder.push('agenda.ledger');
+      return { count: 0 };
+    });
+    (mockPrisma.milestoneAgenda.deleteMany as jest.Mock).mockImplementation(async () => {
+      callOrder.push('agenda.milestone');
+      return { count: 0 };
+    });
     (mockPrisma.cliente.updateMany as jest.Mock).mockImplementation(async () => {
       callOrder.push('cliente');
       return { count: 0 };
@@ -129,6 +142,8 @@ describe('cascadeDeleteLeads', () => {
       'contrato',
       'conversa.find',
       'conversa.delete',
+      'agenda.ledger',
+      'agenda.milestone',
       'atividade',
       'cliente',
       'imovel',

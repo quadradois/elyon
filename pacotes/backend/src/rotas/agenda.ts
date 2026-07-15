@@ -4,6 +4,7 @@ import { prisma } from '../lib/db';
 import { z } from 'zod';
 import { verificarAutenticacao } from '../middleware/middleware-auth';
 import { googleCalendarService } from '../servicos/google-calendar';
+import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
 
 const router = Router();
 
@@ -83,7 +84,8 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                 leadId: a.leadId,
                 leadNome: a.lead?.nome || 'Desconhecido',
                 leadTelefone: a.lead?.telefone || '',
-                descricao: a.descricao
+                descricao: a.descricao,
+                versao: a.versao
             },
             // Color coding básico
             backgroundColor:
@@ -311,7 +313,9 @@ router.post('/:id/aprovar', verificarAutenticacao, async (req, res) => {
             data: {
                 statusAgendamento: 'CONFIRMADO',
                 confirmadoPor: req.usuario?.email || 'corretor',
-                confirmadoEm: new Date()
+                confirmadoEm: new Date(),
+                versao: { increment: 1 },
+                estadoAgendaAtualizadoEm: new Date()
             }
         });
 
@@ -345,6 +349,8 @@ Aguardamos você! Se precisar reagendar, é só me avisar. 🏡`;
 const CancelarAgendamentoSchema = z.object({
     motivo: z.string().trim().max(500).optional(),
     avisarCliente: z.boolean().optional().default(true),
+    requestId: z.string().uuid(),
+    expectedVersion: z.number().int().nonnegative(),
 });
 
 router.post('/:id/cancelar', verificarAutenticacao, async (req, res) => {
@@ -362,26 +368,23 @@ router.post('/:id/cancelar', verificarAutenticacao, async (req, res) => {
         if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
         if (atividade.lead.tenantId !== tenantId) return responderErro(res, 403, 'Sem permissão para este agendamento');
 
-        const atividadeAtualizada = await prisma.atividade.update({
-            where: { id },
-            data: {
-                statusAgendamento: 'CANCELADO',
-                canceladoPor: req.usuario?.email || 'corretor',
-                canceladoEm: new Date(),
-                motivoCancelamento: body.motivo || null
-            }
-        });
-
-        if (body.avisarCliente) {
-            const mensagem = `⚠️ *Atualização do agendamento*
+        const mensagemNotificacao = `⚠️ *Atualização do agendamento*
 
 Olá, ${atividade.lead.nome}.
 Seu atendimento de ${formatarDataHoraPtBr(atividade.agendadoPara)} foi cancelado.${body.motivo ? `\nMotivo: ${body.motivo}` : ''}
 
 Se quiser, já te proponho novos horários para reagendar.`;
 
-            await enviarWhatsappAgenda({ tenantId, telefone: atividade.lead.telefone, mensagem });
-        }
+        const result = await executarComandoAgenda({
+            operacao: 'CANCELAR', tenantId, leadId: atividade.lead.id, atividadeId: id,
+            requestIdentity: { source: 'MANUAL_API', id: body.requestId },
+            ator: req.usuario?.email || 'corretor', origem: 'API_AGENDA',
+            motivo: body.motivo || 'Cancelamento pelo operador', policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION,
+            ocorridoEm: new Date(), expectedVersion: body.expectedVersion,
+            notificacao: body.avisarCliente ? { tipo: 'CANCELAMENTO', mensagem: mensagemNotificacao } : undefined,
+        });
+        if (!result.success) return responderErro(res, result.transient ? 503 : result.reasonCode === 'REQUEST_ID_CONFLICT' ? 409 : 422, result.reasonCode);
+        const atividadeAtualizada = await prisma.atividade.findUniqueOrThrow({ where: { id } });
 
         return res.json({ sucesso: true, mensagem: 'Agendamento cancelado com sucesso', atividade: atividadeAtualizada });
     } catch (error) {
@@ -395,6 +398,8 @@ const ReagendarAgendamentoSchema = z.object({
     novoHorario: z.string().datetime(),
     motivo: z.string().trim().max(500).optional(),
     avisarCliente: z.boolean().optional().default(true),
+    requestId: z.string().uuid(),
+    expectedVersion: z.number().int().nonnegative(),
 });
 
 router.post('/:id/reagendar', verificarAutenticacao, async (req, res) => {
@@ -414,22 +419,7 @@ router.post('/:id/reagendar', verificarAutenticacao, async (req, res) => {
         if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
         if (atividade.lead.tenantId !== tenantId) return responderErro(res, 403, 'Sem permissão para este agendamento');
 
-        const atividadeAtualizada = await prisma.atividade.update({
-            where: { id },
-            data: {
-                agendadoPara: novoHorario,
-                statusAgendamento: 'PENDENTE',
-                confirmadoPor: null,
-                confirmadoEm: null,
-                canceladoPor: null,
-                canceladoEm: null,
-                motivoCancelamento: null,
-                descricao: [atividade.descricao, body.motivo ? `Reagendamento: ${body.motivo}` : 'Reagendamento realizado pelo corretor'].filter(Boolean).join(' | ')
-            }
-        });
-
-        if (body.avisarCliente) {
-            const mensagem = `📅 *Reagendamento de atendimento*
+        const mensagemNotificacao = `📅 *Reagendamento de atendimento*
 
 Olá, ${atividade.lead.nome}.
 Seu atendimento foi reagendado para:
@@ -437,8 +427,16 @@ ${formatarDataHoraPtBr(novoHorario)}${body.motivo ? `\nMotivo: ${body.motivo}` :
 
 Pode me confirmar se esse horário funciona para você?`;
 
-            await enviarWhatsappAgenda({ tenantId, telefone: atividade.lead.telefone, mensagem });
-        }
+        const result = await executarComandoAgenda({
+            operacao: 'REAGENDAR', tenantId, leadId: atividade.lead.id, atividadeId: id,
+            requestIdentity: { source: 'MANUAL_API', id: body.requestId },
+            ator: req.usuario?.email || 'corretor', origem: 'API_AGENDA',
+            motivo: body.motivo || 'Reagendamento pelo operador', policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION,
+            ocorridoEm: new Date(), expectedVersion: body.expectedVersion, novoHorario,
+            notificacao: body.avisarCliente ? { tipo: 'REAGENDAMENTO', mensagem: mensagemNotificacao } : undefined,
+        });
+        if (!result.success) return responderErro(res, result.transient ? 503 : result.reasonCode === 'REQUEST_ID_CONFLICT' ? 409 : 422, result.reasonCode);
+        const atividadeAtualizada = await prisma.atividade.findUniqueOrThrow({ where: { id: result.atividadeResultanteId } });
 
         return res.json({ sucesso: true, mensagem: 'Agendamento reagendado com sucesso', atividade: atividadeAtualizada });
     } catch (error) {
@@ -474,7 +472,9 @@ router.post('/:id/propor-horario', verificarAutenticacao, async (req, res) => {
             where: { id },
             data: {
                 statusAgendamento: 'PENDENTE',
-                descricao: [atividade.descricao, `Horário proposto ao cliente: ${formatarDataHoraPtBr(horarioProposto)}`].filter(Boolean).join(' | ')
+                descricao: [atividade.descricao, `Horário proposto ao cliente: ${formatarDataHoraPtBr(horarioProposto)}`].filter(Boolean).join(' | '),
+                versao: { increment: 1 },
+                estadoAgendaAtualizadoEm: new Date()
             }
         });
 

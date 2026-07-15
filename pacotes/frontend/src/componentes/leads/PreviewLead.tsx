@@ -4,7 +4,7 @@
  * Exibe TODOS os dados disponíveis no lead.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   X, Phone, Mail, ExternalLink, Home, Bot, Calendar,
@@ -172,10 +172,15 @@ export function PreviewLead({ lead, onFechar, onLeadAtualizado }: PreviewLeadPro
     }
   };
 
+  const commandRequestIds = useRef(new Map<string, string>());
   const acionarAtividade = async (atividadeId: string, acao: 'completar' | 'cancelar' | 'reagendar') => {
     try {
       setAtividadeAcaoId(atividadeId);
+      const atividadeAtual = atividades.find((item: any) => item.id === atividadeId);
       const payload: Record<string, any> = { acao };
+      if (['cancelar', 'reagendar'].includes(acao)) {
+        payload.expectedVersion = atividadeAtual?.versao ?? 0;
+      }
 
       if (acao === 'cancelar') {
         const obs = window.prompt('Motivo do cancelamento (opcional):', '') || '';
@@ -186,6 +191,13 @@ export function PreviewLead({ lead, onFechar, onLeadAtualizado }: PreviewLeadPro
         const novaData = window.prompt('Nova data/hora (YYYY-MM-DDTHH:mm):', '');
         if (!novaData) return;
         payload.novaData = novaData;
+      }
+
+      if (['cancelar', 'reagendar'].includes(acao)) {
+        const key = `${atividadeId}:${payload.expectedVersion}:${acao}:${payload.novaData || ''}`;
+        const existing = commandRequestIds.current.get(key);
+        payload.requestId = existing || crypto.randomUUID();
+        commandRequestIds.current.set(key, payload.requestId);
       }
 
       await api.patch(`/leads/${lead.id}/atividades/${atividadeId}`, payload);

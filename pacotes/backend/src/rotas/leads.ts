@@ -17,6 +17,7 @@ import { priorizarLeads, calcularQualificacao, calcularUrgencia } from '../servi
 import { withTenantDb } from '../lib/tenant-db';
 import { criarFollowupOutbound, reagendarFollowupOutbound } from '../servicos/followup-outbound';
 import { formatInTimeZone } from 'date-fns-tz';
+import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
 
 const router = Router();
 
@@ -809,7 +810,8 @@ router.get('/:id', async (req, res) => {
         canceladoEm: atividade.canceladoEm,
         motivoCancelamento: atividade.motivoCancelamento,
         criadoPor: atividade.criadoPor,
-        criadoEm: atividade.criadoEm
+        criadoEm: atividade.criadoEm,
+        versao: atividade.versao
       })),
 
       // Conversas
@@ -1631,7 +1633,9 @@ router.post('/:id/reativar', async (req, res) => {
 router.patch('/:id/atividades/:atividadeId', async (req, res) => {
   try {
     const { id, atividadeId } = req.params;
-    const { acao, observacao, novaData } = req.body;
+    const { acao, observacao, novaData, requestId, expectedVersion } = req.body;
+    const tenantId = getTenantId(req);
+    if (!tenantId) return responderErro(res, 401, 'Tenant nao identificado');
 
     const atividade = await prisma.atividade.findFirst({
       where: { id: atividadeId, leadId: id }
@@ -1641,6 +1645,30 @@ router.patch('/:id/atividades/:atividadeId', async (req, res) => {
       return responderErro(res, 404, 'Atividade não encontrada');
     }
 
+    if (['cancelar', 'reagendar', 'nao_compareceu'].includes(acao)) {
+      if (typeof requestId !== 'string' || !Number.isInteger(expectedVersion)) {
+        return responderErro(res, 400, 'requestId e expectedVersion sao obrigatorios');
+      }
+      if (acao === 'reagendar' && (!novaData || Number.isNaN(new Date(novaData).getTime()))) {
+        return responderErro(res, 400, 'Nova data valida e obrigatoria para reagendar');
+      }
+      const base = {
+        tenantId, leadId: id, atividadeId, requestIdentity: { source: 'MANUAL_API' as const, id: requestId },
+        ator: req.usuario?.email || 'corretor', origem: 'API_LEADS_ATIVIDADE',
+        motivo: observacao || (acao === 'nao_compareceu' ? 'Ausencia do Lead' : `${acao} pelo operador`),
+        policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION, ocorridoEm: new Date(), expectedVersion,
+      };
+      const comando = acao === 'reagendar'
+        ? { ...base, operacao: 'REAGENDAR' as const, novoHorario: new Date(novaData) }
+        : acao === 'cancelar'
+          ? { ...base, operacao: 'CANCELAR' as const }
+          : { ...base, operacao: 'NO_SHOW' as const, parteAusente: 'LEAD' as const };
+      const result = await executarComandoAgenda(comando);
+      if (!result.success) return responderErro(res, result.transient ? 503 : result.reasonCode === 'REQUEST_ID_CONFLICT' ? 409 : 422, result.reasonCode);
+      const mensagemResultado = acao === 'reagendar' ? 'Atividade reagendada' : acao === 'cancelar' ? 'Atividade cancelada' : 'Marcado como nao compareceu';
+      return res.json({ sucesso: true, mensagem: mensagemResultado, result });
+    }
+
     let dadosAtualizacao: any = {};
     let mensagem = '';
 
@@ -1648,40 +1676,11 @@ router.patch('/:id/atividades/:atividadeId', async (req, res) => {
       case 'completar':
         dadosAtualizacao = {
           completadoEm: new Date(),
-          statusAgendamento: 'REALIZADO'
+          statusAgendamento: 'REALIZADO',
+          versao: { increment: 1 },
+          estadoAgendaAtualizadoEm: new Date()
         };
         mensagem = 'Atividade marcada como realizada';
-        break;
-
-      case 'cancelar':
-        dadosAtualizacao = {
-          statusAgendamento: 'CANCELADO',
-          canceladoPor: 'corretor',
-          canceladoEm: new Date(),
-          motivoCancelamento: observacao || 'Cancelado pelo corretor'
-        };
-        mensagem = 'Atividade cancelada';
-        break;
-
-      case 'reagendar':
-        if (!novaData) {
-          return responderErro(res, 400, 'Nova data é obrigatória para reagendar');
-        }
-        dadosAtualizacao = {
-          agendadoPara: new Date(novaData),
-          statusAgendamento: 'PENDENTE',
-          confirmadoPor: null,
-          confirmadoEm: null
-        };
-        mensagem = 'Atividade reagendada';
-        break;
-
-      case 'nao_compareceu':
-        dadosAtualizacao = {
-          statusAgendamento: 'NAO_COMPARECEU',
-          completadoEm: new Date()
-        };
-        mensagem = 'Marcado como não compareceu';
         break;
 
       default:
@@ -1954,7 +1953,8 @@ router.post('/confirmar/:atividadeId/:token', async (req, res) => {
       where: {
         id: atividadeId,
         tokenConfirmacao: token
-      }
+      },
+      include: { lead: { select: { id: true, tenantId: true } } }
     });
 
     if (!atividade) {
@@ -1986,7 +1986,9 @@ router.post('/confirmar/:atividadeId/:token', async (req, res) => {
         data: {
           statusAgendamento: 'CONFIRMADO',
           confirmadoPor: 'proprietario',
-          confirmadoEm: new Date()
+          confirmadoEm: new Date(),
+          versao: { increment: 1 },
+          estadoAgendaAtualizadoEm: new Date()
         }
       });
 
@@ -1996,15 +1998,13 @@ router.post('/confirmar/:atividadeId/:token', async (req, res) => {
         statusAgendamento: 'CONFIRMADO'
       });
     } else if (acao === 'cancelar') {
-      await prisma.atividade.update({
-        where: { id: atividadeId },
-        data: {
-          statusAgendamento: 'CANCELADO',
-          canceladoPor: 'proprietario',
-          canceladoEm: new Date(),
-          motivoCancelamento: motivoCancelamento || 'Não informado'
-        }
+      const result = await executarComandoAgenda({
+        operacao: 'CANCELAR', tenantId: atividade.lead.tenantId, leadId: atividade.lead.id, atividadeId,
+        requestIdentity: { source: 'PUBLIC_TOKEN', id: `${token}:cancelar` },
+        ator: 'proprietario', origem: 'LINK_CONFIRMACAO', motivo: motivoCancelamento || 'Cancelamento pelo proprietario',
+        policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION, ocorridoEm: new Date(), expectedVersion: atividade.versao,
       });
+      if (!result.success && result.reasonCode !== 'COMMAND_REPLAY') return responderErro(res, result.transient ? 503 : 422, result.reasonCode);
 
       res.json({
         sucesso: true,
@@ -2140,7 +2140,9 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
         where: { id: atividadeId },
         data: {
           statusConfirmacaoCorretor: 'CONFIRMADO',
-          confirmadoCorretorEm: agora
+          confirmadoCorretorEm: agora,
+          versao: { increment: 1 },
+          estadoAgendaAtualizadoEm: agora
         } as any
       });
 
@@ -2167,7 +2169,9 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
       where: { id: atividadeId },
       data: {
         statusConfirmacaoCorretor: 'RECUSADO',
-        motivoCancelamento: motivoRecusa || (atividade as any).motivoCancelamento || 'Recusa/Ausência do corretor'
+        motivoCancelamento: motivoRecusa || (atividade as any).motivoCancelamento || 'Recusa/Ausência do corretor',
+        versao: { increment: 1 },
+        estadoAgendaAtualizadoEm: agora
       } as any
     });
 
