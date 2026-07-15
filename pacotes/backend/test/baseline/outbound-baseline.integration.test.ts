@@ -59,6 +59,40 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
     expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, messageId: `foreign-${f.runId}` } })).toBe(0);
   });
 
+  it('B04 consolida mensagens sequenciais em ordem e executa o agente uma vez', async () => {
+    const f = await harness.seed();
+    await harness.acceptInbound(f, `b04-1-${f.runId}`, 'primeiro fragmento');
+    await harness.acceptInbound(f, `b04-2-${f.runId}`, 'segundo fragmento');
+    await Promise.all([
+      harness.runWorkerOnce('b04-worker-a'),
+      harness.runWorkerOnce('b04-worker-b'),
+    ]);
+    expect(captured.orchestrator).toHaveLength(1);
+    expect(JSON.stringify(captured.orchestrator[0].messages)).toContain('primeiro fragmento');
+    expect(JSON.stringify(captured.orchestrator[0].messages)).toContain('segundo fragmento');
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, direcao: 'ENTRADA' } })).toBe(2);
+    expect(await prisma.loteMensagemInbound.count({ where: { tenantId: f.tenantA, leadId: f.leadA, status: 'CONCLUIDO' } })).toBe(1);
+    expect(captured.sent).toHaveLength(1);
+  });
+
+  it.each([
+    ['HUMANO', 'CONTATANDO'],
+    ['IA', 'OPTOUT'],
+  ])('B04 bloqueia resposta se modo/outreach mudar durante a janela (%s/%s)', async (modoAtendimento, statusProspeccao) => {
+    const f = await harness.seed();
+    await harness.acceptInbound(f, `guard-${modoAtendimento}-${f.runId}`, 'mensagem antes da intervencao');
+    const processing = harness.runWorkerOnce(`guard-worker-${modoAtendimento}`);
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      if (await prisma.loteMensagemInbound.count({ where: { leadId: f.leadA, status: 'ABERTO' } })) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await prisma.lead.update({ where: { id: f.leadA }, data: { modoAtendimento, statusProspeccao } });
+    await expect(processing).resolves.toBe('CONCLUIDO');
+    expect(captured.orchestrator).toHaveLength(0);
+    expect(captured.sent).toHaveLength(0);
+    expect(await prisma.loteMensagemInbound.count({ where: { leadId: f.leadA, status: 'CANCELADO' } })).toBe(1);
+  });
+
   it('SEC-52 rejeita permanentemente instância Evolution sem sessão reconhecida', async () => {
     const f = await harness.seed();
     await harness.acceptInbound(f, `unknown-${f.runId}`, 'qualificar com evidências', { instanceName: `unknown-${f.runId}` });
@@ -124,8 +158,10 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
   it('B14 falha no meio do comando reverte todas as mutações da transação', async () => {
     const f = await harness.seed(); captured.failMidCommand = true;
     await harness.acceptInbound(f, `rollback-${f.runId}`, 'falhar comando');
-    await harness.runWorkerOnce('rollback-worker');
+    await expect(harness.runWorkerOnce('rollback-worker')).resolves.toBe('RETRY');
     expect((await prisma.lead.findUniqueOrThrow({ where: { id: f.leadA } })).observacoes).toBeNull();
     expect(await prisma.atividade.count({ where: { leadId: f.leadA, titulo: 'TOOL_EXEC:FAIL' } })).toBe(0);
+    expect(await prisma.loteMensagemInbound.count({ where: { leadId: f.leadA, status: 'FALHO' } })).toBe(1);
+    expect(captured.sent).toHaveLength(0);
   });
 });

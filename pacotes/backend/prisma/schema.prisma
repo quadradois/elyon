@@ -102,14 +102,15 @@ model Tenant {
   contratos          Contrato[]
   clientes           Cliente[]
   integracoes        ConfiguracaoIntegracao[]
+  lotesInbound       LoteMensagemInbound[]
 
-  criadoEm       DateTime         @default(now())
-  atualizadoEm   DateTime         @updatedAt
-  LogScraperIPTU LogScraperIPTU[]
-  LogAuditoria   LogAuditoria[]
-  aprendizadosAgente AprendizadoAgente[]
+  criadoEm                    DateTime                     @default(now())
+  atualizadoEm                DateTime                     @updatedAt
+  LogScraperIPTU              LogScraperIPTU[]
+  LogAuditoria                LogAuditoria[]
+  aprendizadosAgente          AprendizadoAgente[]
   auditoriasReplayAprendizado AuditoriaReplayAprendizado[]
-  politicasPaol PaolPolitica[]
+  politicasPaol               PaolPolitica[]
 
   @@index([slug])
   @@index([status])
@@ -350,22 +351,22 @@ enum StatusConexao {
 // ====================================
 
 model Usuario {
-  id            String         @id @default(uuid())
-  tenantId      String
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email         String
-  nome          String
-  senha         String
-  papel         PapelUsuario   @default(CORRETOR)
-  avatar        String?
-  telefone      String?
-  estaAtivo     Boolean        @default(true)
-  criadoEm      DateTime       @default(now())
-  atualizadoEm  DateTime       @updatedAt
-  ultimoLoginEm DateTime?
-  LogAuditoria  LogAuditoria[]
-  campanhasResponsavel Campanha[] @relation("CampanhaResponsavel")
-  campanhasFallback    Campanha[] @relation("CampanhaFallback")
+  id                   String         @id @default(uuid())
+  tenantId             String
+  tenant               Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email                String
+  nome                 String
+  senha                String
+  papel                PapelUsuario   @default(CORRETOR)
+  avatar               String?
+  telefone             String?
+  estaAtivo            Boolean        @default(true)
+  criadoEm             DateTime       @default(now())
+  atualizadoEm         DateTime       @updatedAt
+  ultimoLoginEm        DateTime?
+  LogAuditoria         LogAuditoria[]
+  campanhasResponsavel Campanha[]     @relation("CampanhaResponsavel")
+  campanhasFallback    Campanha[]     @relation("CampanhaFallback")
 
   @@unique([tenantId, email])
   @@index([email])
@@ -626,30 +627,68 @@ model MensagemProspeccao {
   @@map("mensagens_prospeccao")
 }
 
+model LoteMensagemInbound {
+  id           String                     @id @default(uuid())
+  tenantId     String
+  tenant       Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leadId       String
+  lead         Lead                       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  status       String                     @default("ABERTO")
+  fechaEm      DateTime
+  leaseAte     DateTime?
+  leaseOwner   String?
+  tentativas   Int                        @default(0)
+  ultimoErro   String?                    @db.Text
+  criadoEm     DateTime                   @default(now())
+  atualizadoEm DateTime                   @updatedAt
+  processadoEm DateTime?
+  fragmentos   FragmentoMensagemInbound[]
+
+  @@index([tenantId, leadId, status, fechaEm])
+  @@index([status, fechaEm, leaseAte])
+  @@map("lotes_mensagens_inbound")
+}
+
+model FragmentoMensagemInbound {
+  id              String              @id @default(uuid())
+  loteId          String
+  lote            LoteMensagemInbound @relation(fields: [loteId], references: [id], onDelete: Cascade)
+  webhookEventoId String              @unique
+  messageId       String?
+  conteudo        String              @db.Text
+  tipo            String              @default("TEXTO")
+  metadata        Json?
+  recebidoEm      DateTime
+  criadoEm        DateTime            @default(now())
+
+  @@index([loteId, recebidoEm, id])
+  @@map("fragmentos_mensagens_inbound")
+}
+
 // ====================================
 // LEADS
 // ====================================
 
 model Lead {
-  id                 String      @id @default(uuid())
+  id                 String                @id @default(uuid())
   tenantId           String
-  tenant             Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cpf                String?
   rg                 String?
   nome               String
   email              String?
   telefone           String?
-  telefoneVerificado Boolean     @default(false)
+  telefoneVerificado Boolean               @default(false)
   dataNascimento     DateTime?
   enderecoPrincipal  String?
-  origem             String      @default("manual")
+  origem             String                @default("manual")
   campanhaOrigemId   String?
-  campanhaOrigem     Campanha?   @relation("CampanhaOrigem", fields: [campanhaOrigemId], references: [id])
-  primeiroContato    DateTime    @default(now())
+  campanhaOrigem     Campanha?             @relation("CampanhaOrigem", fields: [campanhaOrigemId], references: [id])
+  primeiroContato    DateTime              @default(now())
   ultimaInteracao    DateTime?
-  status             StatusLead  @default(NOVO)
-  estagio            String      @default("contato_inicial")
-  temperatura        Temperatura @default(FRIO)
+  status             StatusLead            @default(NOVO)
+  estagio            String                @default("contato_inicial")
+  temperatura        Temperatura           @default(FRIO)
   imoveis            Imovel[]
   atividades         Atividade[]
   conversas          Conversa[]
@@ -657,8 +696,9 @@ model Lead {
   documentos         DocumentoLead[]
   cliente            Cliente?
   mensagens          MensagemProspeccao[]
-  criadoEm           DateTime    @default(now())
-  atualizadoEm       DateTime    @updatedAt
+  lotesInbound       LoteMensagemInbound[]
+  criadoEm           DateTime              @default(now())
+  atualizadoEm       DateTime              @updatedAt
   deletadoEm         DateTime?
 
   // ====================================
@@ -700,14 +740,14 @@ model Lead {
   nomeMae           String?
   escolaridade      String?
   situacaoCadastral String?
-  obitoProvavel     Boolean   @default(false)
-  ppe               Boolean   @default(false)
+  obitoProvavel     Boolean @default(false)
+  ppe               Boolean @default(false)
   signo             String?
   rendaEstimada     String?
   faixaSalarial     String?
   scoreAssertiva    Int?
   scoreQualificacao Int?
-  perfilInvestidor  Boolean   @default(false)
+  perfilInvestidor  Boolean @default(false)
 
   // Dados profissionais Assertiva
   empresaAtual String?
@@ -749,7 +789,7 @@ model Lead {
   // ====================================
   // statusProspeccao = null → lead CRM puro (entrada manual, sem prospecção)
   // statusProspeccao = AGUARDANDO|CONTATANDO|... → lead em prospecção ativa
-  statusProspeccao    String?   // AGUARDANDO|CONTATANDO|RESPONDEU|SEM_INTERESSE|INTERESSADO|LEAD|OPTOUT|FALHA
+  statusProspeccao    String? // AGUARDANDO|CONTATANDO|RESPONDEU|SEM_INTERESSE|INTERESSADO|LEAD|OPTOUT|FALHA
   tentativasContato   Int       @default(0)
   ultimaTentativa     DateTime?
   respondeu           Boolean   @default(false)
@@ -971,13 +1011,13 @@ model DocumentoLead {
 
   // Metadados do arquivo
   nomeOriginal String? // Nome do arquivo original (se houver)
-  mimeType     String  // image/jpeg, application/pdf, audio/ogg, etc
-  tamanhoBytes Int?    // Tamanho em bytes (se disponível)
-  s3Key        String  // Caminho no S3: documentos-lead/{tenantId}/{leadId}/{uuid}.ext
+  mimeType     String // image/jpeg, application/pdf, audio/ogg, etc
+  tamanhoBytes Int? // Tamanho em bytes (se disponível)
+  s3Key        String // Caminho no S3: documentos-lead/{tenantId}/{leadId}/{uuid}.ext
 
   // Classificação
   tipo   String @default("documento") // 'imagem' | 'audio' | 'video' | 'documento'
-  origem String @default("whatsapp")  // 'whatsapp' | 'upload_manual'
+  origem String @default("whatsapp") // 'whatsapp' | 'upload_manual'
 
   criadoEm DateTime @default(now())
 
@@ -1057,9 +1097,9 @@ model Imovel {
   // === Rastreamento de Proprietário (detecção de venda) ===
   // CPF atual do proprietário, verificado na Prefeitura.
   // Atualizado a cada scraping. Quando muda → imóvel foi vendido.
-  cpfProprietario   String?   // CPF/CNPJ atual do proprietário (Prefeitura)
+  cpfProprietario   String? // CPF/CNPJ atual do proprietário (Prefeitura)
   cpfVerificadoEm   DateTime? // Quando foi verificado pela última vez (TTL: 30 dias)
-  histProprietarios Json?     // [{cpf, ate: ISO}] — auditoria de trocas de proprietário
+  histProprietarios Json? // [{cpf, ate: ISO}] — auditoria de trocas de proprietário
 
   // Relacionamentos Base Local
   dadosEdificio Edificio? @relation(fields: [codigoEdificio], references: [codigo])
@@ -1165,10 +1205,10 @@ model ImovelRancho {
   detalheEm             DateTime? @map("detalhe_em")
 
   // Classificação/enriquecimento via MapaServer + scraper (backfill Goiânia)
-  propriedadMapa        Int?      @map("propriedad_mapa") // cru do MapaServer: 1=particular, 2/3/4=público, 0/5/-1=indefinido
-  statusProprietario    String?   @map("status_proprietario") // CANDIDATO|AREA_PUBLICA|INDEFINIDO|ENRIQUECIDO|CERTIDAO_BLOQUEADA|NAO_ENCONTRADO|ERRO
-  fonteProprietario     String?   @map("fonte_proprietario") // ex.: SCRAPER_WEB
-  enriquecidoEm         DateTime? @map("enriquecido_em")
+  propriedadMapa     Int?      @map("propriedad_mapa") // cru do MapaServer: 1=particular, 2/3/4=público, 0/5/-1=indefinido
+  statusProprietario String?   @map("status_proprietario") // CANDIDATO|AREA_PUBLICA|INDEFINIDO|ENRIQUECIDO|CERTIDAO_BLOQUEADA|NAO_ENCONTRADO|ERRO
+  fonteProprietario  String?   @map("fonte_proprietario") // ex.: SCRAPER_WEB
+  enriquecidoEm      DateTime? @map("enriquecido_em")
 
   @@index([cpfCnpj])
   @@index([cidade, idSetor, idQuadra])
@@ -1596,13 +1636,13 @@ model AuditoriaReplayAprendizado {
   status      String   @default("SUCESSO") // SUCESSO, SEM_DADOS, PULADO, ERRO
   erro        String?
 
-  periodoRecenteHoras Int   @default(24)
-  janelaHistoricaDias Int   @default(90)
-  amostraRecente      Int   @default(0)
-  amostraHistorica    Int   @default(0)
-  totalAmostras       Int   @default(0)
-  padroesAvaliados    Int   @default(0)
-  padroesAjustados    Int   @default(0)
+  periodoRecenteHoras Int @default(24)
+  janelaHistoricaDias Int @default(90)
+  amostraRecente      Int @default(0)
+  amostraHistorica    Int @default(0)
+  totalAmostras       Int @default(0)
+  padroesAvaliados    Int @default(0)
+  padroesAjustados    Int @default(0)
 
   taxaRecente             Float @default(0)
   taxaHistorica           Float @default(0)
@@ -1631,7 +1671,7 @@ model PaolPolitica {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   contextoHash String
-  acao        String
+  acao         String
 
   // EMA de performance
   emaRecompensa Float @default(0)

@@ -60,7 +60,6 @@ import {
   construirInstrucaoTurnoMensagensSequenciais,
   detectarPermissaoAudioNoTexto,
   gerarAssinaturaLote,
-  gerarFallbackSemSilencio,
   normalizarTextoAssinatura,
   normalizarTextoAssinaturaForte,
   preferenciaAudioPorObservacoes,
@@ -73,6 +72,15 @@ import {
 } from '../modulos/webhook/adapters/evolution-go.adapter';
 import { PrepararRespostaWebhookUseCase } from '../modulos/webhook/aplicacao/preparar-resposta.usecase';
 import { DecidirCanalRespostaWebhookUseCase } from '../modulos/webhook/aplicacao/decidir-canal-resposta.usecase';
+import {
+  cancelarLoteInbound,
+  concluirLoteInbound,
+  falharLoteInbound,
+  obterEstadoLoteInbound,
+  registrarFragmentoInbound,
+  renovarLeaseLoteInbound,
+  reivindicarLoteInbound,
+} from '../servicos/consolidacao-mensagens-inbound';
 
 const router = Router();
 const MODO_OUTBOUND_ONLY = process.env.MODO_OUTBOUND_ONLY !== 'false';
@@ -1457,23 +1465,8 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                   }
                   
                   // 🔍 VERIFICAR SE MENSAGENS SÃO MUITO RECENTES (< 2 segundos)
-                  const dadosDebounce = obterMensagensConsolidadas(contatoProspeccao.id);
-                  const mensagensAcumuladas = dadosDebounce?.mensagens || [mensagemPendente];
-                  
-                  const agora = Date.now();
-                  const mensagemMaisRecente = Math.max(...mensagensAcumuladas.map(m => m.timestamp));
-                  const tempoDesdeUltimaMensagem = agora - mensagemMaisRecente;
-                  
-                  if (tempoDesdeUltimaMensagem < 2000) { // Menos de 2 segundos
-                    console.log(`[Debounce] ⏸️ MUITO RECENTE - Aguardando mais ${2000 - tempoDesdeUltimaMensagem}ms`);
-                    
-                    const fila = filasDebounce.get(contatoProspeccao.id);
-                    if (fila && !fila.reagendado) {
-                      fila.reagendado = true;
-                      agendarProcessamentoFilaDebounce(contatoProspeccao.id, processarAposDebounce, 2000 - tempoDesdeUltimaMensagem);
-                    }
-                    return false;
-                  }
+                  // O claim PostgreSQL somente ocorre depois de fechaEm; nao existe
+                  // uma segunda espera baseada no relogio local do processo.
 
                   try {
                     // Consolidar mensagens
@@ -1841,34 +1834,90 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
 
                   } catch (err) {
                     console.error('[Debounce] Erro processamento:', err);
-                    try {
-                      const dadosAtuais = obterMensagensConsolidadas(contatoProspeccao.id);
-                      const textoFallback = dadosAtuais?.textoConsolidado || mensagemPendente.conteudo || '';
-                      const respostaFallback = gerarFallbackSemSilencio(textoFallback);
-                      const envioOk = await enviarMensagemComRetry({
-                        instanceName,
-                        telefone,
-                        resposta: respostaFallback,
-                        contatoId: contatoProspeccao.id
-                      });
-                      if (envioOk) {
-                        await registrarResposta(contatoProspeccao.id);
-                        await salvarMensagemProspeccao({ contatoId: contatoProspeccao.id, direcao: 'SAIDA', conteudo: respostaFallback, tipo: 'TEXTO', telefone });
-                      }
-                    } catch (fallbackErr) {
-                      console.error('[Debounce] Falha no fallback anti-silêncio:', fallbackErr);
-                    }
-                    return true;
+                    throw err;
                   }
                 };
 
-                const adicionado = adicionarAFilaDebounce(contatoProspeccao.id, mensagemPendente, contatoProspeccao, telefone, processarAposDebounce, debounceMs);
-                if (adicionado) console.log(`[Webhook] ⏳ DEBOUNCE: Mensagem aguardando ${debounceMs/1000}s (completa=${mensagemPareceCompleta(conteudoDebounce)})...`);
+                const eventoTecnicoId = registroId || `evolution:${instanceName}:${messageId || hashPayload(req.body)}`;
+                const registroLote = await registrarFragmentoInbound({
+                  tenantId: sessaoConfiavel.tenantId,
+                  leadId: contatoProspeccao.id,
+                  webhookEventoId: eventoTecnicoId,
+                  messageId,
+                  conteudo: mensagemPendente.conteudo,
+                  tipo: mensagemPendente.tipo,
+                  metadata: {
+                    urlMidia: mensagemPendente.urlMidia,
+                    mimeTypeMidia: mensagemPendente.mimeTypeMidia,
+                    nomeArquivoMidia: mensagemPendente.nomeArquivoMidia,
+                  },
+                  recebidoEm: new Date(mensagemPendente.timestamp),
+                  janelaMs: debounceMs,
+                });
+                const ownerLote = `${eventoTecnicoId}:${process.pid}`;
 
-                // Concluir o recibo somente depois dos efeitos. Se o processo
-                // cair durante o debounce, o lease expira e o worker retoma.
-                while (filasDebounce.has(contatoProspeccao.id)) {
-                  await new Promise((resolve) => setTimeout(resolve, 250));
+                while (true) {
+                  const lote = await reivindicarLoteInbound(
+                    registroLote.loteId,
+                    sessaoConfiavel.tenantId,
+                    contatoProspeccao.id,
+                    ownerLote,
+                  );
+                  if (lote) {
+                    const leadAtual = await prisma.lead.findFirst({
+                      where: { id: contatoProspeccao.id, tenantId: sessaoConfiavel.tenantId },
+                      select: { modoAtendimento: true, statusProspeccao: true },
+                    });
+                    if (!leadAtual) throw new Error('TENANT_MISMATCH: Lead ausente no momento do claim');
+                    if (leadAtual.modoAtendimento === 'HUMANO' || leadAtual.modoAtendimento === 'PAUSADO') {
+                      await cancelarLoteInbound(lote.id, 'HUMAN_MODE_BLOCKS_AI', ownerLote);
+                      break;
+                    }
+                    if (leadAtual.statusProspeccao === 'OPTOUT' || leadAtual.statusProspeccao === 'OPT_OUT') {
+                      await cancelarLoteInbound(lote.id, 'OPT_OUT_BLOCKS_AI', ownerLote);
+                      break;
+                    }
+
+                    const mensagensPersistidas: MensagemPendente[] = lote.fragmentos.map((fragmento) => {
+                      const metadata = (fragmento.metadata || {}) as Record<string, string | undefined>;
+                      return {
+                        conteudo: fragmento.conteudo,
+                        tipo: fragmento.tipo,
+                        messageId: fragmento.messageId || undefined,
+                        timestamp: fragmento.recebidoEm.getTime(),
+                        urlMidia: metadata.urlMidia,
+                        mimeTypeMidia: metadata.mimeTypeMidia,
+                        nomeArquivoMidia: metadata.nomeArquivoMidia,
+                      };
+                    });
+                    filasDebounce.set(contatoProspeccao.id, {
+                      mensagens: mensagensPersistidas,
+                      timer: null,
+                      contatoData: contatoProspeccao,
+                      telefone,
+                      reagendado: false,
+                    });
+                    const heartbeatLote = setInterval(() => {
+                      void renovarLeaseLoteInbound(lote.id, ownerLote).catch((error) => {
+                        console.error('[Debounce] Falha ao renovar lease do lote duravel:', error);
+                      });
+                    }, Math.max(10_000, Number(process.env.WEBHOOK_WORKER_LEASE_SECONDS || 300) * 1_000 / 3));
+                    try {
+                      if (!(await processarAposDebounce())) throw new Error('Lote duravel nao ficou pronto para conclusao');
+                      if (!(await concluirLoteInbound(lote.id, ownerLote))) throw new Error('Lease do lote perdido antes da conclusao');
+                    } catch (error) {
+                      await falharLoteInbound(lote.id, error, ownerLote);
+                      throw error;
+                    } finally {
+                      clearInterval(heartbeatLote);
+                      filasDebounce.delete(contatoProspeccao.id);
+                    }
+                    break;
+                  }
+
+                  const estado = await obterEstadoLoteInbound(registroLote.loteId);
+                  if (!estado || estado.status === 'CONCLUIDO' || estado.status === 'CANCELADO') break;
+                  await new Promise((resolve) => setTimeout(resolve, 100));
                 }
 
                 // IMPORTANTÍSSIMO: Continue aqui impede que caia no fluxo de Lead Inbound
@@ -1887,6 +1936,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
           }
         } catch (msgError) {
           console.error('[Webhook] Erro msg:', msgError);
+          throw msgError;
         }
       }
     }
