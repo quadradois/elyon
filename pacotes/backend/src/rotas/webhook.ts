@@ -432,7 +432,7 @@ async function buscarConfiguracaoAgentePorInstancia(instanceName: string, tenant
  * 
  * MELHORIA: Busca usando SQL para normalizar telefones no banco
  */
-async function buscarContatoProspeccao(telefone: string) {
+async function buscarContatoProspeccao(telefone: string, tenantIdConfiavel: string) {
   // Normalizar telefone de entrada (remover DDI e formatação)
   const telNormalizado = normalizarTelefone(telefone);
 
@@ -480,6 +480,7 @@ async function buscarContatoProspeccao(telefone: string) {
       LEFT JOIN empreendimentos_conhecimento e ON camp."empreendimentoId" = e.id
       LEFT JOIN leads l ON c."leadId" = l.id
       WHERE c."statusProspeccao" IN ('CONTATANDO', 'RESPONDEU', 'INTERESSADO', 'LEAD', 'MORNO_FUTURO')
+        AND camp."tenantId" = ${tenantIdConfiavel}
         AND (
           RIGHT(REGEXP_REPLACE(COALESCE(c.telefone, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitos}
           OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone2, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitos}
@@ -519,6 +520,7 @@ async function buscarContatoProspeccao(telefone: string) {
         LEFT JOIN empreendimentos_conhecimento e ON camp."empreendimentoId" = e.id
         LEFT JOIN leads l ON c."leadId" = l.id
         WHERE c."statusProspeccao" IN ('CONTATANDO', 'RESPONDEU', 'INTERESSADO', 'LEAD', 'MORNO_FUTURO')
+          AND camp."tenantId" = ${tenantIdConfiavel}
           AND (
             RIGHT(REGEXP_REPLACE(COALESCE(c.telefone, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitosVar}
             OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone2, ''), '[^0-9]', '', 'g'), 8) = ${ultimosDigitosVar}
@@ -574,6 +576,7 @@ async function buscarContatoProspeccao(telefone: string) {
     console.log('[Webhook] Tentando fallback com busca simples...');
     const contato = await prisma.lead.findFirst({
       where: {
+        tenantId: tenantIdConfiavel,
         OR: [
           { telefone: { contains: ultimosDigitos } },
           { telefone2: { contains: ultimosDigitos } },
@@ -1215,6 +1218,14 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
       return responderErro(res, 400, 'Instância não especificada');
     }
 
+    const sessaoConfiavel = await prisma.sessaoWhatsapp.findUnique({
+      where: { instanceName },
+      select: { tenantId: true },
+    });
+    if (!sessaoConfiavel) {
+      return responderErro(res, 400, 'Instância não reconhecida');
+    }
+
     const agora = new Date().toISOString();
     console.log(`--- WEBHOOK RECEBIDO [${agora}] ---`);
     console.log('Event:', event || type);
@@ -1306,7 +1317,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
               // ====================================
               // 1. VERIFICAR SE É RESPOSTA DE PROSPECÇÃO ATIVA
               // ====================================
-              const contatoProspeccao = await buscarContatoProspeccao(telefone);
+              const contatoProspeccao = await buscarContatoProspeccao(telefone, sessaoConfiavel.tenantId);
 
               if (contatoProspeccao) {
                 console.log(`[Webhook] Prospecção ativa: contatoId=${contatoProspeccao.id}`);

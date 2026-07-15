@@ -1,9 +1,6 @@
 import os from 'os';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/db';
-import { processarWebhookEvolution } from '../rotas/webhook';
-import { processarWebhookManus } from '../rotas/webhook-manus';
-import { processarWebhookAsaas } from '../rotas/rotas-billing';
 
 export type ProvedorInbox = 'ASAAS' | 'EVOLUTION' | 'MANUS';
 
@@ -171,9 +168,19 @@ export async function processarEvento(evento: EventoInbox): Promise<ResultadoPro
   const req = criarRequest(evento);
   const { res, resultado } = criarResponse();
 
-  if (evento.provedor === 'EVOLUTION') await processarWebhookEvolution(req, res);
-  else if (evento.provedor === 'MANUS') await processarWebhookManus(req, res);
-  else if (evento.provedor === 'ASAAS') await processarWebhookAsaas(req, res);
+  // Carregamento tardio mantém a inbox/lease reutilizável sem inicializar todo o
+  // grafo de adapters externos. Em produção, o mesmo handler é chamado sem mudar
+  // payload, ordem ou resultado.
+  if (evento.provedor === 'EVOLUTION') {
+    const { processarWebhookEvolution } = await import('../rotas/webhook');
+    await processarWebhookEvolution(req, res);
+  } else if (evento.provedor === 'MANUS') {
+    const { processarWebhookManus } = await import('../rotas/webhook-manus');
+    await processarWebhookManus(req, res);
+  } else if (evento.provedor === 'ASAAS') {
+    const { processarWebhookAsaas } = await import('../rotas/rotas-billing');
+    await processarWebhookAsaas(req, res);
+  }
   else throw new Error(`Provedor de webhook nao suportado: ${evento.provedor}`);
 
   return resultado;
