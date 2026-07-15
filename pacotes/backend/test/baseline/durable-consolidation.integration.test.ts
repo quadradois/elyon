@@ -6,6 +6,7 @@ import {
   obterEstadoLoteInbound,
   registrarFragmentoInbound,
   reivindicarLoteInbound,
+  validarFencingLoteInbound,
 } from '../../src/servicos/consolidacao-mensagens-inbound';
 import { OutboundBaselineHarness } from './support/outbound-baseline-harness';
 
@@ -80,5 +81,38 @@ describe('B04 consolidacao duravel de mensagens inbound', () => {
     await falharLoteInbound(a.loteId, new Error('agente indisponivel'), 'owner');
     expect(await obterEstadoLoteInbound(a.loteId)).toEqual(expect.objectContaining({ status: 'FALHO' }));
     expect(await reivindicarLoteInbound(a.loteId, fixture.tenantA, fixture.leadA, 'retry')).not.toBeNull();
+  });
+
+  it('fence invalida agente lento apos takeover e permite exatamente um efeito critico', async () => {
+    const fixture = await harness.seed();
+    const { loteId } = await registrarFragmentoInbound({
+      tenantId: fixture.tenantA, leadId: fixture.leadA,
+      webhookEventoId: `fence-${fixture.runId}`, conteudo: 'agente lento', tipo: 'TEXTO',
+      recebidoEm: new Date(), janelaMs: 10,
+    });
+    await prisma.loteMensagemInbound.update({ where: { id: loteId }, data: { fechaEm: new Date(Date.now() - 1) } });
+    const antigo = await reivindicarLoteInbound(loteId, fixture.tenantA, fixture.leadA, 'worker-lento');
+    expect(antigo).not.toBeNull();
+
+    let liberarAgente!: () => void;
+    const agenteLento = new Promise<void>((resolve) => { liberarAgente = resolve; });
+    const efeitos = { envios: 0, mutacoes: 0 };
+    const tentativaAntiga = (async () => {
+      await agenteLento;
+      await validarFencingLoteInbound(loteId, 'worker-lento', antigo!.fencingToken);
+      efeitos.mutacoes += 1;
+      efeitos.envios += 1;
+    })();
+
+    await prisma.loteMensagemInbound.update({ where: { id: loteId }, data: { leaseAte: new Date(Date.now() - 1) } });
+    const novo = await reivindicarLoteInbound(loteId, fixture.tenantA, fixture.leadA, 'worker-takeover');
+    expect(novo!.fencingToken).toBeGreaterThan(antigo!.fencingToken);
+    await validarFencingLoteInbound(loteId, 'worker-takeover', novo!.fencingToken);
+    efeitos.mutacoes += 1;
+    efeitos.envios += 1;
+    liberarAgente();
+    await expect(tentativaAntiga).rejects.toThrow('LOTE_LEASE_PERDIDO');
+    expect(efeitos).toEqual({ envios: 1, mutacoes: 1 });
+    await concluirLoteInbound(loteId, 'worker-takeover', novo!.fencingToken);
   });
 });

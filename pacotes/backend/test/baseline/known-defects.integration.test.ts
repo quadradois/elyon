@@ -24,7 +24,7 @@ describe('probes executáveis de falhas conhecidas', () => {
   it('XF-B05 briefing/histórico chegam, mas fatos RAG não são repassados ao orquestrador', async () => {
     const f = await harness.seed();
     await harness.acceptInbound(f, `context-${f.runId}`, 'quero informações completas');
-    await harness.runWorkerOnce('context-worker');
+    await harness.runWorkerAndBatch('context-worker');
     const call = captured.orchestrator[0];
     expect(JSON.stringify(call.messages)).toContain('HISTORICO_SINTETICO');
     expect(JSON.stringify(call.config)).toContain('BRIEFING_SINTETICO_CONFIAVEL');

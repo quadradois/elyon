@@ -377,6 +377,7 @@ export function wrapToolExecute<TArgs = any>(
     return async (args: TArgs, runContext?: any): Promise<string> => {
         const inicio = Date.now();
         const argsLog = redactSensitiveFields(args as any);
+        const assertFencing = runContext?.context?.assertFencing as (() => Promise<void>) | undefined;
 
         // ── 1. PRE-VALIDATION ──
         const validator = PRE_VALIDATORS.find(v => v.toolName === toolName);
@@ -404,7 +405,9 @@ export function wrapToolExecute<TArgs = any>(
         // ── 2. EXECUÇÃO ORIGINAL ──
         let resultStr: string;
         try {
+            await assertFencing?.();
             resultStr = await originalExecute(args, runContext);
+            await assertFencing?.();
         } catch (e: any) {
             const duracao = Date.now() - inicio;
             logger.error({

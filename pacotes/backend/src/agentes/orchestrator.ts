@@ -112,6 +112,7 @@ export interface ContextoConversa {
     comissaoAcordada?: string;
     prazoTrabalho?: number;
     instrucaoTurno?: string;
+    assertFencing?: () => Promise<void>;
     // optional record fetched from leads table; may be included by orchestrator
     leadRecord?: Lead;
 }
@@ -589,6 +590,7 @@ Use isso como desempate estratégico na próxima ação.`;
             prismaClient: prisma as unknown as ElyonContext['prisma'],
             schemaState: schemaFinal,
             leadRecord,
+            assertFencing: contexto.assertFencing,
         });
 
         tFases.preContexto = Date.now() - inicioTurno;

@@ -49,13 +49,13 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
   it('B02/B03/B06/B15 processa recibo real e resolve Lead pelo tenant da sessão', async () => {
     const f = await harness.seed();
     await harness.acceptInbound(f, `trusted-${f.runId}`, 'qualificar com evidências', { maliciousTenantId: f.tenantB });
-    await expect(harness.runWorkerOnce('real-worker')).resolves.toBe('CONCLUIDO');
+    await expect(harness.runWorkerAndBatch('real-worker')).resolves.toBe('CONCLUIDO');
     expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, direcao: 'ENTRADA' } })).toBe(1);
     expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadB } })).toBe(0);
     expect((await prisma.lead.findUniqueOrThrow({ where: { id: f.leadB } })).statusProspeccao).toBe('CONTATANDO');
 
     await harness.acceptInbound(f, `foreign-${f.runId}`, 'qualificar com evidências', { instanceName: f.instanceB, maliciousTenantId: f.tenantA });
-    await expect(harness.runWorkerOnce('foreign-worker')).resolves.toBe('CONCLUIDO');
+    await expect(harness.runWorkerAndBatch('foreign-worker')).resolves.toBe('CONCLUIDO');
     expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, messageId: `foreign-${f.runId}` } })).toBe(0);
   });
 
@@ -63,10 +63,10 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
     const f = await harness.seed();
     await harness.acceptInbound(f, `b04-1-${f.runId}`, 'primeiro fragmento');
     await harness.acceptInbound(f, `b04-2-${f.runId}`, 'segundo fragmento');
-    await Promise.all([
-      harness.runWorkerOnce('b04-worker-a'),
-      harness.runWorkerOnce('b04-worker-b'),
-    ]);
+    // Um unico loop serial ingere ambos os recibos antes de executar o claimer.
+    await harness.runWorkerOnce('b04-single-loop');
+    await harness.runWorkerOnce('b04-single-loop');
+    await harness.runBatchOnce('b04-single-loop');
     expect(captured.orchestrator).toHaveLength(1);
     expect(JSON.stringify(captured.orchestrator[0].messages)).toContain('primeiro fragmento');
     expect(JSON.stringify(captured.orchestrator[0].messages)).toContain('segundo fragmento');
@@ -81,13 +81,9 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
   ])('B04 bloqueia resposta se modo/outreach mudar durante a janela (%s/%s)', async (modoAtendimento, statusProspeccao) => {
     const f = await harness.seed();
     await harness.acceptInbound(f, `guard-${modoAtendimento}-${f.runId}`, 'mensagem antes da intervencao');
-    const processing = harness.runWorkerOnce(`guard-worker-${modoAtendimento}`);
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      if (await prisma.loteMensagemInbound.count({ where: { leadId: f.leadA, status: 'ABERTO' } })) break;
-      await new Promise((resolve) => setTimeout(resolve, 25));
-    }
+    await harness.runWorkerOnce(`guard-worker-${modoAtendimento}`);
     await prisma.lead.update({ where: { id: f.leadA }, data: { modoAtendimento, statusProspeccao } });
-    await expect(processing).resolves.toBe('CONCLUIDO');
+    await harness.runBatchOnce(`guard-worker-${modoAtendimento}`);
     expect(captured.orchestrator).toHaveLength(0);
     expect(captured.sent).toHaveLength(0);
     expect(await prisma.loteMensagemInbound.count({ where: { leadId: f.leadA, status: 'CANCELADO' } })).toBe(1);
@@ -104,7 +100,7 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
   it('B07/B17 exige policy/evidências e não promove o estágio comercial', async () => {
     const f = await harness.seed();
     await harness.acceptInbound(f, `policy-${f.runId}`, 'qualificar com evidências');
-    await harness.runWorkerOnce('policy-worker');
+    await harness.runWorkerAndBatch('policy-worker');
     const lead = await prisma.lead.findUniqueOrThrow({ where: { id: f.leadA } });
     expect(lead.schemaState).toEqual({ qualificationPolicyVersion: 'spin-candidate-v1', evidence: { situation: true, motivation: true } });
     expect(lead.status).toBe('NOVO');
@@ -114,14 +110,14 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
   it('B09 recusa intenção de agenda sem dia, hora e timezone', async () => {
     const f = await harness.seed();
     await harness.acceptInbound(f, `schedule-${f.runId}`, 'quero agendar uma visita');
-    await harness.runWorkerOnce('schedule-worker');
+    await harness.runWorkerAndBatch('schedule-worker');
     expect(await prisma.atividade.count({ where: { leadId: f.leadA, tipo: 'AVALIACAO' } })).toBe(0);
   });
 
   it('B10 aplica opt-out e o seletor real bloqueia novo disparo', async () => {
     const f = await harness.seed();
     await harness.acceptInbound(f, `optout-${f.runId}`, 'opt-out agora');
-    await harness.runWorkerOnce('optout-worker');
+    await harness.runWorkerAndBatch('optout-worker');
     expect((await prisma.lead.findUniqueOrThrow({ where: { id: f.leadA } })).statusProspeccao).toBe('OPTOUT');
     expect(await disparoCampanhaService.buscarContatosParaDisparo(f.campaignA, 10)).toHaveLength(0);
     expect(captured.sent).toHaveLength(1);
@@ -131,7 +127,7 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
     const f = await harness.seed();
     await prisma.lead.update({ where: { id: f.leadA }, data: { modoAtendimento: 'HUMANO' } });
     await harness.acceptInbound(f, `human-${f.runId}`, 'qualificar com evidências');
-    await harness.runWorkerOnce('human-worker');
+    await harness.runWorkerAndBatch('human-worker');
     expect(captured.orchestrator).toHaveLength(0);
     expect(captured.sent).toHaveLength(0);
     expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, direcao: 'ENTRADA' } })).toBe(1);
@@ -140,7 +136,7 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
   it('B12 replay mantém contagens e efeitos únicos', async () => {
     const f = await harness.seed(); const eventId = `replay-${f.runId}`;
     expect((await harness.acceptInbound(f, eventId, 'qualificar com evidências')).duplicado).toBe(false);
-    await harness.runWorkerOnce('replay-worker');
+    await harness.runWorkerAndBatch('replay-worker');
     expect((await harness.acceptInbound(f, eventId, 'qualificar com evidências')).duplicado).toBe(true);
     expect(await prisma.webhookEvento.count({ where: { eventoId: eventId } })).toBe(1);
     expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, messageId: eventId } })).toBe(1);
@@ -158,7 +154,8 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
   it('B14 falha no meio do comando reverte todas as mutações da transação', async () => {
     const f = await harness.seed(); captured.failMidCommand = true;
     await harness.acceptInbound(f, `rollback-${f.runId}`, 'falhar comando');
-    await expect(harness.runWorkerOnce('rollback-worker')).resolves.toBe('RETRY');
+    await expect(harness.runWorkerOnce('rollback-worker')).resolves.toBe('CONCLUIDO');
+    await harness.runBatchOnce('rollback-worker:batch');
     expect((await prisma.lead.findUniqueOrThrow({ where: { id: f.leadA } })).observacoes).toBeNull();
     expect(await prisma.atividade.count({ where: { leadId: f.leadA, titulo: 'TOOL_EXEC:FAIL' } })).toBe(0);
     expect(await prisma.loteMensagemInbound.count({ where: { leadId: f.leadA, status: 'FALHO' } })).toBe(1);

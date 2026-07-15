@@ -637,16 +637,33 @@ model LoteMensagemInbound {
   fechaEm      DateTime
   leaseAte     DateTime?
   leaseOwner   String?
+  fencingToken Int                        @default(0)
   tentativas   Int                        @default(0)
   ultimoErro   String?                    @db.Text
   criadoEm     DateTime                   @default(now())
   atualizadoEm DateTime                   @updatedAt
   processadoEm DateTime?
   fragmentos   FragmentoMensagemInbound[]
+  efeitos      EfeitoLoteInbound[]
 
   @@index([tenantId, leadId, status, fechaEm])
   @@index([status, fechaEm, leaseAte])
   @@map("lotes_mensagens_inbound")
+}
+
+model EfeitoLoteInbound {
+  id           String                 @id @default(uuid())
+  loteId       String
+  lote         LoteMensagemInbound    @relation(fields: [loteId], references: [id], onDelete: Cascade)
+  tipo         String
+  status       String                 @default("RESERVADO")
+  fencingToken Int
+  criadoEm     DateTime               @default(now())
+  concluidoEm  DateTime?
+
+  @@unique([loteId, tipo])
+  @@index([status, criadoEm])
+  @@map("efeitos_lotes_inbound")
 }
 
 model FragmentoMensagemInbound {

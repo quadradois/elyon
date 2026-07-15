@@ -107,4 +107,6 @@ export interface ElyonContext {
 
     // Banco de dados (injeção de dependência)
     prisma: PrismaClient;
+    /** Fence duravel do lote inbound; tools devem validar antes de efeitos. */
+    assertFencing?: () => Promise<void>;
 }

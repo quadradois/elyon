@@ -4,6 +4,7 @@ import { RedisClientType } from 'redis';
 import { registrarEventoWebhook } from '../../../src/servicos/webhook-seguranca';
 import { reivindicarProximoEvento } from '../../../src/servicos/webhook-inbox';
 import { executarEventoWebhook } from '../../../src/servicos/webhook-worker-executor';
+import { executarProximoLoteInbound } from '../../../src/servicos/processador-lotes-inbound';
 
 export interface BaselineFixture {
   runId: string;
@@ -68,6 +69,20 @@ export class OutboundBaselineHarness {
     const event = await reivindicarProximoEvento(owner);
     if (!event) throw new Error('evento esperado não foi reivindicado');
     return executarEventoWebhook(event, owner);
+  }
+
+  async runBatchOnce(owner: string): Promise<boolean> {
+    await this.db.loteMensagemInbound.updateMany({
+      where: { tenantId: { in: [...this.tenantIds] }, status: { in: ['ABERTO', 'FALHO'] } },
+      data: { fechaEm: new Date(Date.now() - 1) },
+    });
+    return executarProximoLoteInbound(owner);
+  }
+
+  async runWorkerAndBatch(owner: string): Promise<'CONCLUIDO' | 'RETRY' | 'MORTO'> {
+    const result = await this.runWorkerOnce(owner);
+    if (result === 'CONCLUIDO') await this.runBatchOnce(`${owner}:batch`);
+    return result;
   }
 
   async expireLease(eventId: string): Promise<void> {

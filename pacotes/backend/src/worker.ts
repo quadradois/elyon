@@ -13,6 +13,8 @@ import { schedulerReconciliacaoWhatsapp } from './servicos/scheduler-reconciliac
 import { installSecureConsoleBridge, logger } from './lib/logger';
 import { validarConfiguracaoCriptografia } from './lib/crypto';
 import { validarConfiguracaoWebhooks } from './servicos/webhook-seguranca';
+import { executarProximoLoteInbound } from './servicos/processador-lotes-inbound';
+import { renderizarMetricasWorker } from './observabilidade/metricas-worker';
 
 const registry = new Registry();
 collectDefaultMetrics({ prefix: 'elyon_worker_', register: registry });
@@ -81,7 +83,8 @@ async function loop(): Promise<void> {
       ultimoLoopEm = Date.now();
       ultimoLoop.set(Math.floor(ultimoLoopEm / 1_000));
       if (evento) await executarEvento(evento);
-      else await esperar(pollMs);
+      const processouLote = await executarProximoLoteInbound();
+      if (!evento && !processouLote) await esperar(pollMs);
     } catch (erro) {
       bancoPronto = false;
       ultimoLoopEm = Date.now();
@@ -116,7 +119,7 @@ const servidorSaude = http.createServer(async (req, res) => {
       logger.warn({ err: erro }, '[WORKER] Falha ao atualizar metricas da inbox');
     }
     res.writeHead(200, { 'content-type': registry.contentType });
-    res.end(await registry.metrics());
+    res.end(await renderizarMetricasWorker(registry));
     return;
   }
   res.writeHead(404).end();

@@ -21,6 +21,7 @@ export interface LoteInboundReivindicado {
   status: StatusLoteInbound;
   fechaEm: Date;
   tentativas: number;
+  fencingToken: number;
   fragmentos: FragmentoInbound[];
 }
 
@@ -118,7 +119,7 @@ export async function reivindicarLoteInbound(
   owner = LOTE_INBOUND_OWNER,
   leaseMs = duracaoLeaseLoteInboundMs(),
 ): Promise<LoteInboundReivindicado | null> {
-  const [claimed] = await prisma.$queryRaw<Array<{ id: string; statusAnterior: string; tentativas: number; fechaEm: Date }>>`
+  const [claimed] = await prisma.$queryRaw<Array<{ id: string; statusAnterior: string; tentativas: number; fechaEm: Date; fencingToken: number }>>`
     WITH candidato AS (
       SELECT id, status AS "statusAnterior"
       FROM lotes_mensagens_inbound
@@ -130,10 +131,11 @@ export async function reivindicarLoteInbound(
     UPDATE lotes_mensagens_inbound lote
     SET status = 'PROCESSANDO', "leaseOwner" = ${owner},
         "leaseAte" = CURRENT_TIMESTAMP + (${leaseMs}::int * INTERVAL '1 millisecond'),
-        tentativas = lote.tentativas + 1, "atualizadoEm" = CURRENT_TIMESTAMP
+        tentativas = lote.tentativas + 1, "fencingToken" = lote."fencingToken" + 1,
+        "atualizadoEm" = CURRENT_TIMESTAMP
     FROM candidato
     WHERE lote.id = candidato.id
-    RETURNING lote.id, candidato."statusAnterior", lote.tentativas, lote."fechaEm"
+    RETURNING lote.id, candidato."statusAnterior", lote.tentativas, lote."fechaEm", lote."fencingToken"
   `;
   if (!claimed) return null;
   if (claimed.statusAnterior === 'PROCESSANDO') lotesInboundEventos.inc({ resultado: 'expirado' });
@@ -142,28 +144,101 @@ export async function reivindicarLoteInbound(
     where: { loteId }, orderBy: [{ recebidoEm: 'asc' }, { id: 'asc' }],
     select: { id: true, webhookEventoId: true, messageId: true, conteudo: true, tipo: true, metadata: true, recebidoEm: true },
   });
-  return { id: loteId, tenantId, leadId, status: 'PROCESSANDO', fechaEm: claimed.fechaEm, tentativas: claimed.tentativas, fragmentos };
+  return { id: loteId, tenantId, leadId, status: 'PROCESSANDO', fechaEm: claimed.fechaEm, tentativas: claimed.tentativas, fencingToken: claimed.fencingToken, fragmentos };
+}
+
+export async function reivindicarProximoLoteInbound(
+  owner = LOTE_INBOUND_OWNER,
+  leaseMs = duracaoLeaseLoteInboundMs(),
+): Promise<LoteInboundReivindicado | null> {
+  const candidato = await prisma.$queryRaw<Array<{ id: string; tenantId: string; leadId: string }>>`
+    SELECT id, "tenantId", "leadId"
+    FROM lotes_mensagens_inbound
+    WHERE ((status IN ('ABERTO', 'FALHO') AND "fechaEm" <= CURRENT_TIMESTAMP)
+      OR (status = 'PROCESSANDO' AND "leaseAte" < CURRENT_TIMESTAMP))
+    ORDER BY "fechaEm" ASC, "criadoEm" ASC
+    LIMIT 1
+  `;
+  const lote = candidato[0];
+  return lote ? reivindicarLoteInbound(lote.id, lote.tenantId, lote.leadId, owner, leaseMs) : null;
 }
 
 export async function renovarLeaseLoteInbound(
   loteId: string,
   owner = LOTE_INBOUND_OWNER,
   leaseMs = duracaoLeaseLoteInboundMs(),
+  fencingToken?: number,
 ): Promise<boolean> {
   const updated = await prisma.loteMensagemInbound.updateMany({
-    where: { id: loteId, status: 'PROCESSANDO', leaseOwner: owner },
+    where: { id: loteId, status: 'PROCESSANDO', leaseOwner: owner, ...(fencingToken === undefined ? {} : { fencingToken }) },
     data: { leaseAte: new Date(Date.now() + leaseMs) },
   });
   return updated.count === 1;
+}
+
+export async function validarFencingLoteInbound(loteId: string, owner: string, fencingToken: number): Promise<void> {
+  const lote = await prisma.loteMensagemInbound.findFirst({
+    where: { id: loteId, status: 'PROCESSANDO', leaseOwner: owner, fencingToken, leaseAte: { gt: new Date() } },
+    select: { id: true },
+  });
+  if (!lote) throw new Error('LOTE_LEASE_PERDIDO');
+}
+
+export async function obterLoteReivindicado(loteId: string, owner: string, fencingToken: number): Promise<LoteInboundReivindicado> {
+  await validarFencingLoteInbound(loteId, owner, fencingToken);
+  const lote = await prisma.loteMensagemInbound.findUniqueOrThrow({
+    where: { id: loteId },
+    include: { fragmentos: { orderBy: [{ recebidoEm: 'asc' }, { id: 'asc' }] } },
+  });
+  return {
+    id: lote.id,
+    tenantId: lote.tenantId,
+    leadId: lote.leadId,
+    status: 'PROCESSANDO',
+    fechaEm: lote.fechaEm,
+    tentativas: lote.tentativas,
+    fencingToken: lote.fencingToken,
+    fragmentos: lote.fragmentos,
+  } as LoteInboundReivindicado;
+}
+
+export async function reservarEfeitoLoteInbound(
+  loteId: string, owner: string, fencingToken: number, tipo: string,
+): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const lote = await tx.loteMensagemInbound.findFirst({
+      where: { id: loteId, status: 'PROCESSANDO', leaseOwner: owner, fencingToken, leaseAte: { gt: new Date() } },
+      select: { id: true },
+    });
+    if (!lote) throw new Error('LOTE_LEASE_PERDIDO');
+    const existente = await tx.efeitoLoteInbound.findUnique({ where: { loteId_tipo: { loteId, tipo } } });
+    if (existente) return false;
+    await tx.efeitoLoteInbound.create({ data: { loteId, tipo, fencingToken } });
+    return true;
+  }, { isolationLevel: 'Serializable' });
+}
+
+export async function concluirEfeitoLoteInbound(
+  loteId: string, fencingToken: number, tipo: string,
+): Promise<boolean> {
+  const result = await prisma.efeitoLoteInbound.updateMany({
+    where: { loteId, tipo, fencingToken, status: 'RESERVADO' },
+    data: { status: 'CONCLUIDO', concluidoEm: new Date() },
+  });
+  return result.count === 1;
+}
+
+export async function liberarEfeitoLoteInbound(loteId: string, fencingToken: number, tipo: string): Promise<void> {
+  await prisma.efeitoLoteInbound.deleteMany({ where: { loteId, tipo, fencingToken, status: 'RESERVADO' } });
 }
 
 export async function obterEstadoLoteInbound(loteId: string): Promise<{ status: StatusLoteInbound; fechaEm: Date; leaseAte: Date | null } | null> {
   return prisma.loteMensagemInbound.findUnique({ where: { id: loteId }, select: { status: true, fechaEm: true, leaseAte: true } }) as Promise<{ status: StatusLoteInbound; fechaEm: Date; leaseAte: Date | null } | null>;
 }
 
-export async function concluirLoteInbound(loteId: string, owner = LOTE_INBOUND_OWNER): Promise<boolean> {
+export async function concluirLoteInbound(loteId: string, owner = LOTE_INBOUND_OWNER, fencingToken?: number): Promise<boolean> {
   const updated = await prisma.loteMensagemInbound.updateMany({
-    where: { id: loteId, status: 'PROCESSANDO', leaseOwner: owner },
+    where: { id: loteId, status: 'PROCESSANDO', leaseOwner: owner, ...(fencingToken === undefined ? {} : { fencingToken }) },
     data: { status: 'CONCLUIDO', processadoEm: new Date(), leaseOwner: null, leaseAte: null, ultimoErro: null },
   });
   if (updated.count) lotesInboundEventos.inc({ resultado: 'consolidado' });
@@ -171,9 +246,9 @@ export async function concluirLoteInbound(loteId: string, owner = LOTE_INBOUND_O
   return updated.count === 1;
 }
 
-export async function falharLoteInbound(loteId: string, error: unknown, owner = LOTE_INBOUND_OWNER): Promise<boolean> {
+export async function falharLoteInbound(loteId: string, error: unknown, owner = LOTE_INBOUND_OWNER, fencingToken?: number): Promise<boolean> {
   const updated = await prisma.loteMensagemInbound.updateMany({
-    where: { id: loteId, status: 'PROCESSANDO', leaseOwner: owner },
+    where: { id: loteId, status: 'PROCESSANDO', leaseOwner: owner, ...(fencingToken === undefined ? {} : { fencingToken }) },
     data: { status: 'FALHO', fechaEm: new Date(), leaseOwner: null, leaseAte: null, ultimoErro: erroSanitizado(error) },
   });
   if (updated.count) lotesInboundEventos.inc({ resultado: 'falho' });
@@ -181,9 +256,9 @@ export async function falharLoteInbound(loteId: string, error: unknown, owner = 
   return updated.count === 1;
 }
 
-export async function cancelarLoteInbound(loteId: string, reasonCode: string, owner = LOTE_INBOUND_OWNER): Promise<boolean> {
+export async function cancelarLoteInbound(loteId: string, reasonCode: string, owner = LOTE_INBOUND_OWNER, fencingToken?: number): Promise<boolean> {
   const updated = await prisma.loteMensagemInbound.updateMany({
-    where: { id: loteId, status: 'PROCESSANDO', leaseOwner: owner },
+    where: { id: loteId, status: 'PROCESSANDO', leaseOwner: owner, ...(fencingToken === undefined ? {} : { fencingToken }) },
     data: { status: 'CANCELADO', processadoEm: new Date(), leaseOwner: null, leaseAte: null, ultimoErro: reasonCode },
   });
   if (updated.count) lotesInboundEventos.inc({ resultado: 'cancelado' });
