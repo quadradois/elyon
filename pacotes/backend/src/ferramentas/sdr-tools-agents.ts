@@ -57,6 +57,11 @@ function resolverTenantIdDoContexto(runContext?: any): string | undefined {
     return typeof tenantId === 'string' && tenantId.trim().length > 0 ? tenantId : undefined;
 }
 
+function resolverExecucaoDuravelDoContexto(runContext?: any): string | undefined {
+    const executionId = runContext?.context?.durableExecutionId;
+    return typeof executionId === 'string' && executionId.trim().length > 0 ? executionId : undefined;
+}
+
 async function validarOwnershipLeadPorTenant(params: {
     leadId: string;
     tenantId?: string;
@@ -399,7 +404,6 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
         timezoneIana: z.string().describe('Timezone IANA confiavel'),
         evidenciaPedido: z.string().describe('Trecho do pedido explicito do Lead'),
         policyVersion: z.literal('followup-v1').default('followup-v1'),
-        requestId: z.string().describe('ID estavel desta requisicao para replay idempotente'),
         followupId: z.string().optional().describe('ID do follow-up ativo quando a acao for reagendamento explicito'),
         dataRecontato: z.string().describe('Data e hora confirmadas: "DD/MM/YYYY HH:mm"'),
         mensagemEnvio: z.string().describe('Mensagem de follow-up a enviar, sem inventar fatos'),
@@ -407,6 +411,8 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
     }),
 
     execute: wrapToolExecute('agendar_followup', async (args, runContext?: any) => {
+        const durableExecutionId = resolverExecucaoDuravelDoContexto(runContext);
+        if (!durableExecutionId) return JSON.stringify({ success: false, error: 'TRUSTED_REQUEST_ID_REQUIRED', reasonCode: 'TRUSTED_REQUEST_ID_REQUIRED' });
         const ownership = await validarOwnershipLeadPorTenant({
             leadId: args.leadId,
             tenantId: resolverTenantIdDoContexto(runContext),
@@ -424,7 +430,7 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
             mensagemEnvio: args.mensagemEnvio,
             evidenciaPedido: args.evidenciaPedido,
             origemPedido: 'TOOL_AGENDAR_FOLLOWUP',
-            requestId: args.requestId,
+            requestIdentity: { source: 'INBOUND_BATCH', id: durableExecutionId },
             policyVersion: args.policyVersion,
             followupId: args.followupId
         });

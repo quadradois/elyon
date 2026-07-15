@@ -6,7 +6,7 @@ CREATE TABLE "followups_outbound" (
   "policyVersion" TEXT NOT NULL, "status" TEXT NOT NULL DEFAULT 'PENDENTE',
   "tentativas" INTEGER NOT NULL DEFAULT 0, "proximoRetryEm" TIMESTAMP(3),
   "leaseOwner" TEXT, "leaseAte" TIMESTAMP(3), "fencingToken" INTEGER NOT NULL DEFAULT 0,
-  "chaveRequisicao" TEXT NOT NULL, "chaveEquivalencia" TEXT NOT NULL, "origemPedido" TEXT NOT NULL, "evidenciaPedido" TEXT NOT NULL,
+  "chaveRequisicao" TEXT NOT NULL, "requestFingerprint" TEXT NOT NULL, "chaveEquivalencia" TEXT NOT NULL, "origemPedido" TEXT NOT NULL, "evidenciaPedido" TEXT NOT NULL,
   "reasonCode" TEXT, "ultimoErro" TEXT, "criadoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "atualizadoEm" TIMESTAMP(3) NOT NULL, "executadoEm" TIMESTAMP(3), "canceladoEm" TIMESTAMP(3),
   CONSTRAINT "followups_outbound_pkey" PRIMARY KEY ("id"),

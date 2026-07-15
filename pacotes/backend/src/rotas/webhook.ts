@@ -1693,6 +1693,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                           ...contextoOrq,
                           contatoId: contatoProspeccao.id,
                           leadId: contatoProspeccao.id,
+                          durableExecutionId: processamentoAgendado ? `inbound-batch:${lote.id}` : undefined,
                           statusLead: contatoProspeccao.lead?.status || undefined,
                           empreendimento: empreendimentoContexto,
                           tipoAutorizacao: tipoAutorizacaoContexto,

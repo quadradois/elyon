@@ -2323,9 +2323,10 @@ router.post('/:id/followup', async (req, res) => {
     if (!tenantId) return responderErro(res, 401, 'Não autorizado');
 
     const { mensagem, dataEnvio, timezoneIana, motivo, followupId, requestId } = req.body;
-    if (!mensagem?.trim() || !dataEnvio || !timezoneIana || !motivo?.trim() || !requestId?.trim()) return responderErro(res, 400, 'mensagem, dataEnvio, timezoneIana, motivo e requestId são obrigatórios');
+    if (!mensagem?.trim() || !dataEnvio || !timezoneIana || !motivo?.trim() || typeof requestId !== 'string' || !requestId.trim()) return responderErro(res, 400, 'mensagem, dataEnvio, timezoneIana, motivo e requestId são obrigatórios');
     const params = { tenantId, leadId: req.params.id, expressaoOriginal: dataEnvio,
-      timezoneIana, motivo, mensagemEnvio: mensagem, evidenciaPedido: 'OPERADOR_AUTENTICADO_CHAT_PANEL', origemPedido: 'API_LEADS_FOLLOWUP', requestId };
+      timezoneIana, motivo, mensagemEnvio: mensagem, evidenciaPedido: 'OPERADOR_AUTENTICADO_CHAT_PANEL', origemPedido: 'API_LEADS_FOLLOWUP',
+      requestIdentity: { source: 'MANUAL_API' as const, id: requestId } };
     const result = followupId
       ? await reagendarFollowupOutbound({ ...params, followupId })
       : await criarFollowupOutbound(params);

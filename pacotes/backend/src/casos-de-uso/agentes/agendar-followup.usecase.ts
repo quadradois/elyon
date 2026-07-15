@@ -1,8 +1,10 @@
 import { criarFollowupOutbound, reagendarFollowupOutbound } from '../../servicos/followup-outbound';
+import type { FollowupRequestIdentity } from '../../servicos/followup-outbound';
 
 export interface AgendarFollowupInput {
   tenantId: string; leadId: string; dataRecontato: string; timezoneIana: string;
-  motivo: string; mensagemEnvio: string; evidenciaPedido: string; origemPedido: string; requestId: string; policyVersion?: string;
+  motivo: string; mensagemEnvio: string; evidenciaPedido: string; origemPedido: string;
+  requestIdentity: FollowupRequestIdentity; policyVersion?: string;
   followupId?: string;
 }
 
@@ -12,7 +14,7 @@ export class AgendarFollowupUseCase {
       const params = { tenantId: input.tenantId, leadId: input.leadId,
         expressaoOriginal: input.dataRecontato, timezoneIana: input.timezoneIana, motivo: input.motivo,
         mensagemEnvio: input.mensagemEnvio, evidenciaPedido: input.evidenciaPedido,
-        origemPedido: input.origemPedido, requestId: input.requestId, policyVersion: input.policyVersion };
+        origemPedido: input.origemPedido, requestIdentity: input.requestIdentity, policyVersion: input.policyVersion };
       const result = input.followupId
         ? await reagendarFollowupOutbound({ ...params, followupId: input.followupId })
         : await criarFollowupOutbound(params);

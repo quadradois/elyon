@@ -73,6 +73,8 @@ export interface ElyonContext {
     tenantId: string;
     contatoId?: string;
     leadId?: string;
+    /** Identidade duravel da execucao, derivada pelo backend; nunca fornecida pelo modelo. */
+    durableExecutionId?: string;
     telefone: string;
     ultimaInteracao?: string;
     // toda a ficha CADASTRAL do lead (quando disponível)

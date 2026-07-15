@@ -1,6 +1,6 @@
 import { prisma } from '../../src/lib/db';
 import { closeRedisClient, getRedisClient } from '../../src/lib/redis';
-import { criarFollowupOutbound, processarFollowupReivindicado, reivindicarProximoFollowup } from '../../src/servicos/followup-outbound';
+import { criarFollowupOutbound, processarFollowupReivindicado, reagendarFollowupOutbound, reivindicarProximoFollowup } from '../../src/servicos/followup-outbound';
 import { OutboundBaselineHarness } from './support/outbound-baseline-harness';
 import express from 'express';
 import request from 'supertest';
@@ -16,7 +16,8 @@ describe('B08 follow-up outbound duravel', () => {
   const input = (f: any, overrides: Record<string, unknown> = {}) => ({ tenantId: f.tenantA, leadId: f.leadA,
     expressaoOriginal: '15/01/2027 09:00', timezoneIana: 'America/Sao_Paulo', motivo: 'Lead pediu retorno apos decisao familiar',
     mensagemEnvio: 'Mensagem customizada do follow-up',
-    evidenciaPedido: 'pode me chamar em janeiro as nove', origemPedido: 'BASELINE_B08', requestId: `request-${f.runId}`, agora: new Date('2026-07-15T12:00:00Z'), ...overrides });
+    evidenciaPedido: 'pode me chamar em janeiro as nove', origemPedido: 'BASELINE_B08',
+    requestIdentity: { source: 'BASELINE' as const, id: `request-${f.runId}` }, agora: new Date('2026-07-15T12:00:00Z'), ...overrides });
   const seedEvidence = (leadId: string) => prisma.mensagemProspeccao.create({ data: { leadId, direcao: 'ENTRADA', conteudo: 'pode me chamar em janeiro as nove' } });
   const apiApp = (tenantId: string) => {
     const app = express();
@@ -31,8 +32,8 @@ describe('B08 follow-up outbound duravel', () => {
     await seedEvidence(f.leadA);
     const mensagens = ['Mensagem A preservada', 'Mensagem B concorrente'];
     const [a, b] = await Promise.all([
-      criarFollowupOutbound(input(f, { mensagemEnvio: mensagens[0], requestId: `request-a-${f.runId}` })),
-      criarFollowupOutbound(input(f, { mensagemEnvio: mensagens[1], requestId: `request-b-${f.runId}` })),
+      criarFollowupOutbound(input(f, { mensagemEnvio: mensagens[0], requestIdentity: { source: 'BASELINE', id: `request-a-${f.runId}` } })),
+      criarFollowupOutbound(input(f, { mensagemEnvio: mensagens[1], requestIdentity: { source: 'BASELINE', id: `request-b-${f.runId}` } })),
     ]);
     expect(a.success && b.success).toBe(true);
     if (!a.success || !b.success) throw new Error('criacao concorrente inesperadamente recusada');
@@ -42,6 +43,42 @@ describe('B08 follow-up outbound duravel', () => {
     const saved = await prisma.followupOutbound.findFirstOrThrow({ where: { leadId: f.leadA } });
     expect(saved).toMatchObject({ status: 'PENDENTE', timezoneIana: 'America/Sao_Paulo', policyVersion: 'followup-v1', tentativas: 0 });
     expect(mensagens).toContain(saved.mensagemEnvio);
+  });
+
+  it('mesma identidade confiavel e mesmo fingerprint retorna replay idempotente', async () => {
+    const f = await harness.seed(); await seedEvidence(f.leadA);
+    const first = await criarFollowupOutbound(input(f));
+    const replay = await criarFollowupOutbound(input(f));
+    expect(first.success).toBe(true);
+    expect(replay).toMatchObject({ success: true, deduplicado: true, reasonCode: 'FOLLOWUP_REQUEST_REPLAY' });
+    if (!first.success || !replay.success) throw new Error('replay de criacao recusado');
+    expect(replay.followup.id).toBe(first.followup.id);
+    expect(await prisma.followupOutbound.count({ where: { leadId: f.leadA } })).toBe(1);
+  });
+
+  it('mesma identidade confiavel com data divergente retorna conflito sem mutacao', async () => {
+    const f = await harness.seed(); await seedEvidence(f.leadA);
+    const first = await criarFollowupOutbound(input(f));
+    expect(first.success).toBe(true);
+    const conflict = await criarFollowupOutbound(input(f, { expressaoOriginal: '20/01/2027 10:00' }));
+    expect(conflict).toEqual({ success: false, reasonCode: 'REQUEST_ID_CONFLICT' });
+    expect(await prisma.followupOutbound.count({ where: { leadId: f.leadA } })).toBe(1);
+    expect(await prisma.followupOutbound.findFirstOrThrow({ where: { leadId: f.leadA } })).toMatchObject({
+      id: first.success ? first.followup.id : '', status: 'PENDENTE', expressaoOriginal: '15/01/2027 09:00',
+    });
+  });
+
+  it('identidade de criacao reutilizada em reagendamento falha sem cancelar ou criar', async () => {
+    const f = await harness.seed(); await seedEvidence(f.leadA);
+    const requestIdentity = { source: 'BASELINE' as const, id: `same-operation-${f.runId}` };
+    const first = await criarFollowupOutbound(input(f, { requestIdentity }));
+    if (!first.success) throw new Error(first.reasonCode);
+    const conflict = await reagendarFollowupOutbound(input(f, {
+      requestIdentity, followupId: first.followup.id, expressaoOriginal: '20/01/2027 10:00',
+    }) as any);
+    expect(conflict).toEqual({ success: false, reasonCode: 'REQUEST_ID_CONFLICT' });
+    expect(await prisma.followupOutbound.count({ where: { leadId: f.leadA } })).toBe(1);
+    expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: first.followup.id } })).toMatchObject({ status: 'PENDENTE', canceladoEm: null });
   });
 
   it('persiste o payload real do ChatPanel pela API sem descartar a mensagem customizada', async () => {
@@ -121,18 +158,21 @@ describe('B08 follow-up outbound duravel', () => {
     expect(await prisma.followupOutbound.count({ where: { leadId: f.leadA, status: 'PENDENTE' } })).toBe(1);
   });
 
-  it('caminho real do use case da tool liga followupId ao PostgreSQL', async () => {
+  it('reexecucao do modelo apos commit do reagendamento usa identidade duravel e retorna replay', async () => {
     const f = await harness.seed(); await seedEvidence(f.leadA);
     const useCase = new AgendarFollowupUseCase();
-    const base = { tenantId: f.tenantA, leadId: f.leadA, dataRecontato: '15/01/2027 09:00', timezoneIana: 'America/Sao_Paulo', motivo: 'Lead pediu retorno apos decisao familiar', mensagemEnvio: 'Primeira mensagem da tool', evidenciaPedido: 'pode me chamar em janeiro as nove', origemPedido: 'TOOL_AGENDAR_FOLLOWUP', requestId: `tool-create-${f.runId}` };
+    const base = { tenantId: f.tenantA, leadId: f.leadA, dataRecontato: '15/01/2027 09:00', timezoneIana: 'America/Sao_Paulo', motivo: 'Lead pediu retorno apos decisao familiar', mensagemEnvio: 'Primeira mensagem da tool', evidenciaPedido: 'pode me chamar em janeiro as nove', origemPedido: 'TOOL_AGENDAR_FOLLOWUP', requestIdentity: { source: 'INBOUND_BATCH' as const, id: `batch-create-${f.runId}` } };
     const first = await useCase.execute(base);
     expect(first.success).toBe(true);
     if (!first.success || !first.followupId) throw new Error('follow-up inicial da tool nao criado');
-    const next = await useCase.execute({ ...base, requestId: `tool-reschedule-${f.runId}`, followupId: first.followupId, dataRecontato: '20/01/2027 10:00', mensagemEnvio: 'Mensagem reagendada pela tool' });
+    const next = await useCase.execute({ ...base, requestIdentity: { source: 'INBOUND_BATCH', id: `batch-reschedule-${f.runId}` }, followupId: first.followupId, dataRecontato: '20/01/2027 10:00', mensagemEnvio: 'Mensagem reagendada pela tool' });
     expect(next.success).toBe(true);
     if (!next.success || !next.followupId) throw new Error('reagendamento da tool nao criado');
+    const replayAfterCrash = await useCase.execute({ ...base, requestIdentity: { source: 'INBOUND_BATCH', id: `batch-reschedule-${f.runId}` }, followupId: first.followupId, dataRecontato: '20/01/2027 10:00', mensagemEnvio: 'Mensagem reagendada pela tool' });
+    expect(replayAfterCrash).toMatchObject({ success: true, followupId: next.followupId, deduplicado: true, reasonCode: 'FOLLOWUP_REQUEST_REPLAY' });
     expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: first.followupId } })).toMatchObject({ status: 'CANCELADO', reasonCode: 'REAGENDAMENTO' });
     expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: next.followupId } })).toMatchObject({ status: 'PENDENTE', mensagemEnvio: 'Mensagem reagendada pela tool' });
+    expect(await prisma.followupOutbound.count({ where: { leadId: f.leadA } })).toBe(2);
   });
 
   it.each([
@@ -211,7 +251,10 @@ describe('B08 follow-up outbound duravel', () => {
   it('isola tenants com telefone igual', async () => {
     const f = await harness.seed();
     await Promise.all([seedEvidence(f.leadA), seedEvidence(f.leadB)]);
-    await Promise.all([criarFollowupOutbound(input(f)), criarFollowupOutbound(input(f, { tenantId: f.tenantB, leadId: f.leadB }))]);
+    await Promise.all([
+      criarFollowupOutbound(input(f, { requestIdentity: { source: 'BASELINE', id: `tenant-a-${f.runId}` } })),
+      criarFollowupOutbound(input(f, { tenantId: f.tenantB, leadId: f.leadB, requestIdentity: { source: 'BASELINE', id: `tenant-b-${f.runId}` } })),
+    ]);
     expect(await prisma.followupOutbound.count()).toBe(2);
     expect(await prisma.followupOutbound.count({ where: { tenantId: f.tenantA, leadId: f.leadB } })).toBe(0);
   });

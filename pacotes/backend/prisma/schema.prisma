@@ -706,6 +706,7 @@ model FollowupOutbound {
   leaseAte           DateTime?
   fencingToken       Int      @default(0)
   chaveRequisicao    String   @unique
+  requestFingerprint String
   chaveEquivalencia  String
   origemPedido       String
   evidenciaPedido    String   @db.Text
