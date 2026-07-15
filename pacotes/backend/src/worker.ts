@@ -18,6 +18,8 @@ import { renderizarMetricasWorker } from './observabilidade/metricas-worker';
 import { executarProximoFollowupOutbound } from './servicos/processador-followups-outbound';
 import { executarProximoEfeitoAgenda } from './servicos/efeitos-agenda-outbox';
 import { executarProximoNoShowAgenda } from './servicos/processador-no-show-agenda';
+import { resolverAgendaPilotConfig, type AgendaPilotConfig } from './servicos/agenda-pilot-config';
+import { registrarAgendaPilotConfig } from './observabilidade/agenda-comercial-metrics';
 
 const registry = new Registry();
 collectDefaultMetrics({ prefix: 'elyon_worker_', register: registry });
@@ -47,8 +49,7 @@ const filaPorStatus = new Gauge({
 
 const porta = Number(process.env.WEBHOOK_WORKER_PORT || 3001);
 const pollMs = Math.max(100, Math.min(10_000, Number(process.env.WEBHOOK_WORKER_POLL_MS || 1_000)));
-const efeitosAgendaHabilitados = process.env.AGENDA_EFFECTS_ENABLED === 'true';
-const noShowAgendaHabilitado = process.env.AGENDA_NO_SHOW_ENABLED === 'true';
+let agendaPilotConfig: AgendaPilotConfig;
 let encerrando = false;
 let bancoPronto = false;
 let ultimoLoopEm = 0;
@@ -90,8 +91,12 @@ async function loop(): Promise<void> {
       if (evento) await executarEvento(evento);
       const processouLote = await executarProximoLoteInbound();
       const processouFollowup = await executarProximoFollowupOutbound();
-      const processouEfeitoAgenda = efeitosAgendaHabilitados ? await executarProximoEfeitoAgenda() : false;
-      const processouNoShow = noShowAgendaHabilitado ? await executarProximoNoShowAgenda() : false;
+      const processouEfeitoAgenda = agendaPilotConfig.effects.enabled
+        ? await executarProximoEfeitoAgenda(agendaPilotConfig.scope)
+        : false;
+      const processouNoShow = agendaPilotConfig.noShow.enabled
+        ? await executarProximoNoShowAgenda(agendaPilotConfig.scope)
+        : false;
       if (!evento && !processouLote && !processouFollowup && !processouEfeitoAgenda && !processouNoShow) await esperar(pollMs);
     } catch (erro) {
       bancoPronto = false;
@@ -148,6 +153,23 @@ async function iniciar(): Promise<void> {
   installSecureConsoleBridge();
   validarConfiguracaoCriptografia();
   validarConfiguracaoWebhooks();
+  agendaPilotConfig = await resolverAgendaPilotConfig();
+  registrarAgendaPilotConfig(agendaPilotConfig);
+  for (const [recurso, gate] of [
+    ['effects', agendaPilotConfig.effects],
+    ['no_show', agendaPilotConfig.noShow],
+  ] as const) {
+    const contexto = {
+      recurso,
+      requested: gate.requested,
+      enabled: gate.enabled,
+      reasonCode: gate.reason,
+      tenantScopeCount: agendaPilotConfig.scope ? 1 : 0,
+      cutoffConfigured: Boolean(agendaPilotConfig.scope?.startedAtUtc),
+    };
+    if (gate.requested && !gate.enabled) logger.error(contexto, '[AGENDA_PILOT] Ativacao recusada fail-closed');
+    else logger.info(contexto, '[AGENDA_PILOT] Gate configurado');
+  }
   schedulerSincronizacaoMapa.iniciar();
   schedulerLimpezaCache.iniciar();
   schedulerReconciliacaoWhatsapp.iniciar();
