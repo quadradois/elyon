@@ -81,13 +81,55 @@ Métricas: distribuições de `StatusLead`, `statusProspeccao`, `modoAtendimento
 modo humano; follow-ups/agendas inválidos; candidatos à quarentena e cobertura agregada
 da policy candidata.
 
-### Resultado disponível nesta PR
+## Baseline agregada real
 
-Somente datasets sintéticos foram executados. Eles provam formato, SQL/schema drift e
-read-only, mas seus
-números não representam produção. Não houve sessão read-only aprovada nem cópia
-anonimizada disponibilizada ao agente; portanto, o tamanho real da quarentena permanece
-**não medido** e a PR deve continuar draft até decisão do reviewer sobre essa evidência.
+- Fonte: `approved-read-only-session`.
+- Data/hora UTC: `2026-07-15T01:02:39.051Z`.
+- SHA da `main` analisada: `a5d603345e98b7ad1973301cdef131769d4ebd29`.
+- Contrato da fonte: `source=authorized-read-only`.
+- Proteção de escrita: `readOnlyWriteRejected=true`.
+- SHA-256 do artefato validado: `7c694ee3b34614209ab3bbc1891e302344a56adc60b1a437a343aee95d7e80e4`.
+
+Distribuições agregadas observadas:
+
+| Dimensão | Bucket | Contagem |
+|---|---|---:|
+| `statusLead` | nenhum registro | 0 |
+| `statusProspeccao` | nenhum registro | 0 |
+| `modoAtendimento` | nenhum registro | 0 |
+| `faseSPIN` | `__NULL__` | 1 |
+
+Contradições agregadas:
+
+| Métrica | Contagem |
+|---|---:|
+| opt-out com atividade posterior | 0 |
+| atividade de IA durante modo humano/pausado | 0 |
+| follow-up inválido | 0 |
+| agendamento inválido | 0 |
+
+Candidatos à quarentena:
+
+| Métrica | Contagem |
+|---|---:|
+| outreach nulo ambíguo | 0 |
+| outreach desconhecido | 0 |
+| qualificado legado sem evidência de policy | 0 |
+| negociação sem evidência determinística | 0 |
+| morno futuro sem follow-up válido | 0 |
+
+O total estimado da quarentena nesta fonte é **0**. A soma é adequada para esta
+amostra porque todos os buckets candidatos são zero; ela não demonstra sobreposição
+entre categorias. A fonte possuía população candidata de qualificação igual a zero:
+`hasSituation=0`, `hasMotivation=0`, `hasProblemEvidence=0`, `hasImplication=0` e
+`hasCandidatePolicyEvidence=0`. Portanto, a execução valida o estado atual da fonte,
+mas não permite inferir cobertura efetiva da policy em Leads existentes.
+
+O JSON passou por validação estrutural e revisão adicional. Ele contém somente
+contagens numéricas de baixa cardinalidade e metadados do contrato; não contém PII,
+host, banco, usuário, credencial, URL de conexão, UUID, telefone, nome, mensagem,
+endereço, resultado por tenant ou registro individual. O artefato bruto não foi
+versionado.
 
 ## Comandos e timeouts
 
