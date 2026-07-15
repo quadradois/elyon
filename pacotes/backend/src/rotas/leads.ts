@@ -15,6 +15,7 @@ import {
 } from '../agentes/governanca-qualificacao';
 import { priorizarLeads, calcularQualificacao, calcularUrgencia } from '../servicos/servico-priorizacao-leads';
 import { withTenantDb } from '../lib/tenant-db';
+import { criarFollowupOutbound } from '../servicos/followup-outbound';
 
 const router = Router();
 
@@ -2299,41 +2300,17 @@ router.post('/:id/followup', async (req, res) => {
     const tenantId = getTenantId(req);
     if (!tenantId) return responderErro(res, 401, 'Não autorizado');
 
-    const { mensagem, dataEnvio } = req.body;
-    if (!mensagem || !dataEnvio) {
-      return responderErro(res, 400, 'mensagem e dataEnvio são obrigatórios');
-    }
-
-    const dataRecontato = new Date(dataEnvio);
-    if (isNaN(dataRecontato.getTime())) {
-      return responderErro(res, 400, 'dataEnvio inválida. Use formato ISO (YYYY-MM-DDTHH:mm)');
-    }
-
-    const lead = await withTenantDb(tenantId, async (tx) => {
-      const encontrado = await tx.lead.findFirst({
-        where: { id: req.params.id },
-        select: { id: true },
-      });
-      if (encontrado) {
-        // Prefixo [MSG] distingue mensagem customizada de keyword automática no job
-        await tx.lead.update({
-          where: { id: encontrado.id },
-          data: {
-            statusProspeccao: 'MORNO_FUTURO',
-            dataRecontato,
-            motivoRecontato: `[MSG] ${mensagem}`,
-          },
-        });
-      }
-      return encontrado;
-    });
-
-    if (!lead) return responderErro(res, 404, 'Lead não encontrado');
+    const { dataEnvio, timezoneIana, motivo, evidenciaPedido } = req.body;
+    if (!dataEnvio || !timezoneIana || !motivo || !evidenciaPedido) return responderErro(res, 400, 'dataEnvio, timezoneIana, motivo e evidenciaPedido são obrigatórios');
+    const result = await criarFollowupOutbound({ tenantId, leadId: req.params.id, expressaoOriginal: dataEnvio,
+      timezoneIana, motivo, evidenciaPedido, origemPedido: 'API_LEADS_FOLLOWUP' });
+    if (!result.success) return responderErro(res, 422, result.reasonCode);
 
     res.json({
       sucesso: true,
-      dataRecontato: dataRecontato.toISOString(),
-      mensagem: `Follow-up agendado para ${dataRecontato.toLocaleString('pt-BR')}`,
+      followupId: result.followup.id,
+      dataRecontato: result.followup.agendadoParaUtc.toISOString(),
+      deduplicado: result.deduplicado,
     });
   } catch {
     responderErro(res, 500, 'Erro interno');

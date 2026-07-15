@@ -395,14 +395,17 @@ export const agendarFollowupTool = tool({
 Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
 
     parameters: z.object({
-        contatoId: z.string().describe('ID do contato'),
+        leadId: z.string().describe('Lead.id canonico recebido do contexto'),
+        timezoneIana: z.string().describe('Timezone IANA confiavel'),
+        evidenciaPedido: z.string().describe('Trecho do pedido explicito do Lead'),
+        policyVersion: z.literal('followup-v1').default('followup-v1'),
         dataRecontato: z.string().describe('Data: "DD/MM/YYYY"'),
         motivo: z.string().describe('Por que não quer agora')
     }),
 
     execute: wrapToolExecute('agendar_followup', async (args, runContext?: any) => {
         const ownership = await validarOwnershipLeadPorTenant({
-            leadId: args.contatoId,
+            leadId: args.leadId,
             tenantId: resolverTenantIdDoContexto(runContext),
             toolName: 'agendar_followup'
         });
@@ -410,9 +413,14 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
 
         const useCase = new AgendarFollowupUseCase();
         const result = await useCase.execute({
-            leadId: args.contatoId,
+            tenantId: resolverTenantIdDoContexto(runContext)!,
+            leadId: args.leadId,
             dataRecontato: args.dataRecontato,
-            motivo: args.motivo
+            timezoneIana: args.timezoneIana,
+            motivo: args.motivo,
+            evidenciaPedido: args.evidenciaPedido,
+            origemPedido: 'TOOL_AGENDAR_FOLLOWUP',
+            policyVersion: args.policyVersion
         });
         return JSON.stringify(result);
     })

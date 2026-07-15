@@ -1,53 +1,22 @@
-import { prisma } from '../../lib/db';
+import { criarFollowupOutbound } from '../../servicos/followup-outbound';
 
 export interface AgendarFollowupInput {
-    leadId: string;
-    dataRecontato: string;
-    motivo: string;
-}
-
-export interface AgendarFollowupOutput {
-    success: boolean;
-    message?: string;
-    dataRecontato?: string;
-    error?: string;
+  tenantId: string; leadId: string; dataRecontato: string; timezoneIana: string;
+  motivo: string; evidenciaPedido: string; origemPedido: string; policyVersion?: string;
 }
 
 export class AgendarFollowupUseCase {
-    async execute(input: AgendarFollowupInput): Promise<AgendarFollowupOutput> {
-        try {
-            console.log(`[UseCase] agendar_followup - Lead ${input.leadId}`);
-
-            const [dia, mes, ano] = input.dataRecontato.split('/').map(Number);
-            const dataAgendamento = new Date(ano, mes - 1, dia, 9, 0);
-
-            if (isNaN(dataAgendamento.getTime())) {
-                return { success: false, error: 'Data inválida. Use DD/MM/YYYY' };
-            }
-
-            await prisma.lead.update({
-                where: { id: input.leadId },
-                data: {
-                    statusProspeccao: 'MORNO_FUTURO',
-                    dataRecontato: dataAgendamento,
-                    motivoRecontato: input.motivo,
-                    observacoes: `Futuro: ${input.motivo}`
-                }
-            });
-
-            console.log(`[UseCase] agendar_followup - Recontato em ${input.dataRecontato}`);
-
-            return {
-                success: true,
-                message: `Recontato agendado para ${input.dataRecontato}`,
-                dataRecontato: dataAgendamento.toISOString()
-            };
-        } catch (error: any) {
-            console.error('[UseCase] agendar_followup - Erro:', error);
-            return {
-                success: false,
-                error: error.message || 'Erro ao agendar follow-up'
-            };
-        }
+  async execute(input: AgendarFollowupInput) {
+    try {
+      const result = await criarFollowupOutbound({ tenantId: input.tenantId, leadId: input.leadId,
+        expressaoOriginal: input.dataRecontato, timezoneIana: input.timezoneIana, motivo: input.motivo,
+        evidenciaPedido: input.evidenciaPedido, origemPedido: input.origemPedido, policyVersion: input.policyVersion });
+      if (!result.success) return { success: false, error: result.reasonCode, reasonCode: result.reasonCode };
+      return { success: true, message: result.deduplicado ? 'Follow-up ja existente' : 'Follow-up agendado',
+        followupId: result.followup.id, dataRecontato: result.followup.agendadoParaUtc.toISOString(), deduplicado: result.deduplicado };
+    } catch (error) {
+      const reasonCode = error instanceof Error ? error.message.split(':')[0] : 'FOLLOWUP_CREATE_FAILED';
+      return { success: false, error: reasonCode, reasonCode };
     }
+  }
 }

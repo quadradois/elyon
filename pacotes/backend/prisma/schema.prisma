@@ -103,6 +103,7 @@ model Tenant {
   clientes           Cliente[]
   integracoes        ConfiguracaoIntegracao[]
   lotesInbound       LoteMensagemInbound[]
+  followupsOutbound  FollowupOutbound[]
 
   criadoEm                    DateTime                     @default(now())
   atualizadoEm                DateTime                     @updatedAt
@@ -685,6 +686,56 @@ model FragmentoMensagemInbound {
   @@map("fragmentos_mensagens_inbound")
 }
 
+model FollowupOutbound {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leadId             String
+  lead               Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agendadoParaUtc    DateTime
+  timezoneIana       String
+  expressaoOriginal  String
+  motivo             String
+  motivoNormalizado  String
+  policyVersion      String
+  status             String   @default("PENDENTE")
+  tentativas         Int      @default(0)
+  proximoRetryEm     DateTime?
+  leaseOwner         String?
+  leaseAte           DateTime?
+  fencingToken       Int      @default(0)
+  chaveIdempotencia  String   @unique
+  origemPedido       String
+  evidenciaPedido    String   @db.Text
+  reasonCode         String?
+  ultimoErro         String?  @db.Text
+  criadoEm           DateTime @default(now())
+  atualizadoEm       DateTime @updatedAt
+  executadoEm        DateTime?
+  canceladoEm        DateTime?
+  efeito             EfeitoFollowupOutbound?
+
+  @@index([tenantId, leadId, status, agendadoParaUtc])
+  @@index([status, agendadoParaUtc, proximoRetryEm, leaseAte])
+  @@map("followups_outbound")
+}
+
+model EfeitoFollowupOutbound {
+  id                 String           @id @default(uuid())
+  followupId         String           @unique
+  followup           FollowupOutbound @relation(fields: [followupId], references: [id], onDelete: Cascade)
+  status             String           @default("RESERVADO")
+  fencingToken       Int
+  chaveIdempotencia  String           @unique
+  resultado          String?          @db.Text
+  criadoEm           DateTime         @default(now())
+  atualizadoEm       DateTime         @updatedAt
+  concluidoEm        DateTime?
+
+  @@index([status, criadoEm])
+  @@map("efeitos_followups_outbound")
+}
+
 // ====================================
 // LEADS
 // ====================================
@@ -717,6 +768,7 @@ model Lead {
   cliente            Cliente?
   mensagens          MensagemProspeccao[]
   lotesInbound       LoteMensagemInbound[]
+  followupsOutbound  FollowupOutbound[]
   criadoEm           DateTime              @default(now())
   atualizadoEm       DateTime              @updatedAt
   deletadoEm         DateTime?

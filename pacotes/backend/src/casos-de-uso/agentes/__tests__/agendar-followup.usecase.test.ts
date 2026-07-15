@@ -1,92 +1,17 @@
-const mockPrisma = {
-  lead: {
-    update: jest.fn(),
-  },
-};
-
-jest.mock('../../../lib/db', () => ({
-  prisma: mockPrisma,
-}));
-
+const criarFollowupOutbound = jest.fn();
+jest.mock('../../../servicos/followup-outbound', () => ({ criarFollowupOutbound: (...args: unknown[]) => criarFollowupOutbound(...args) }));
 import { AgendarFollowupUseCase } from '../agendar-followup.usecase';
 
 describe('AgendarFollowupUseCase', () => {
-  const useCase = new AgendarFollowupUseCase();
-
-  beforeEach(() => {
-    jest.clearAllMocks();
+  beforeEach(() => jest.clearAllMocks());
+  it('propaga contrato estruturado e retorna o agregado duravel', async () => {
+    criarFollowupOutbound.mockResolvedValue({ success: true, deduplicado: false, followup: { id: 'f1', agendadoParaUtc: new Date('2027-01-01T12:00:00Z') } });
+    const result = await new AgendarFollowupUseCase().execute({ tenantId: 't1', leadId: 'l1', dataRecontato: '01/01/2027 09:00', timezoneIana: 'America/Sao_Paulo', motivo: 'Retorno pedido', evidenciaPedido: 'pode me chamar dia 1', origemPedido: 'TOOL', policyVersion: 'followup-v1' });
+    expect(result).toMatchObject({ success: true, followupId: 'f1', deduplicado: false });
+    expect(criarFollowupOutbound).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 't1', leadId: 'l1', timezoneIana: 'America/Sao_Paulo', evidenciaPedido: 'pode me chamar dia 1' }));
   });
-
-  it('agenda recontato com sucesso em data válida', async () => {
-    mockPrisma.lead.update.mockResolvedValue({});
-
-    const result = await useCase.execute({
-      leadId: 'lead-1',
-      dataRecontato: '20/03/2026',
-      motivo: 'Cliente pediu retorno no fim do mês',
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.message).toContain('20/03/2026');
-    expect(result.dataRecontato).toBeDefined();
-
-    expect(mockPrisma.lead.update).toHaveBeenCalledWith({
-      where: { id: 'lead-1' },
-      data: expect.objectContaining({
-        statusProspeccao: 'MORNO_FUTURO',
-        motivoRecontato: 'Cliente pediu retorno no fim do mês',
-        observacoes: 'Futuro: Cliente pediu retorno no fim do mês',
-      }),
-    });
-
-    const dataArg = mockPrisma.lead.update.mock.calls[0][0].data.dataRecontato;
-    expect(dataArg).toBeInstanceOf(Date);
-    expect(dataArg.getHours()).toBe(9);
-    expect(dataArg.getMinutes()).toBe(0);
-  });
-
-  it('retorna erro para data inválida', async () => {
-    const result = await useCase.execute({
-      leadId: 'lead-2',
-      dataRecontato: 'data-invalida',
-      motivo: 'Teste',
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error: 'Data inválida. Use DD/MM/YYYY',
-    });
-    expect(mockPrisma.lead.update).not.toHaveBeenCalled();
-  });
-
-  it('retorna erro quando prisma update falha', async () => {
-    mockPrisma.lead.update.mockRejectedValue(new Error('Falha de banco'));
-
-    const result = await useCase.execute({
-      leadId: 'lead-3',
-      dataRecontato: '10/04/2026',
-      motivo: 'Aguardar decisão familiar',
-    });
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('Falha de banco');
-  });
-
-  it('preserva motivo no campo observacoes', async () => {
-    mockPrisma.lead.update.mockResolvedValue({});
-
-    await useCase.execute({
-      leadId: 'lead-4',
-      dataRecontato: '01/05/2026',
-      motivo: 'Retorno após viagem',
-    });
-
-    expect(mockPrisma.lead.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          observacoes: 'Futuro: Retorno após viagem',
-        }),
-      })
-    );
+  it('preserva reason code de esclarecimento sem persistir', async () => {
+    criarFollowupOutbound.mockResolvedValue({ success: false, reasonCode: 'DATE_AMBIGUOUS' });
+    await expect(new AgendarFollowupUseCase().execute({ tenantId: 't1', leadId: 'l1', dataRecontato: 'depois', timezoneIana: 'America/Sao_Paulo', motivo: 'pensar', evidenciaPedido: 'depois', origemPedido: 'TOOL' })).resolves.toMatchObject({ success: false, reasonCode: 'DATE_AMBIGUOUS' });
   });
 });

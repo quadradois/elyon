@@ -15,6 +15,7 @@ import { validarConfiguracaoCriptografia } from './lib/crypto';
 import { validarConfiguracaoWebhooks } from './servicos/webhook-seguranca';
 import { executarProximoLoteInbound } from './servicos/processador-lotes-inbound';
 import { renderizarMetricasWorker } from './observabilidade/metricas-worker';
+import { executarProximoFollowupOutbound } from './servicos/processador-followups-outbound';
 
 const registry = new Registry();
 collectDefaultMetrics({ prefix: 'elyon_worker_', register: registry });
@@ -84,7 +85,8 @@ async function loop(): Promise<void> {
       ultimoLoop.set(Math.floor(ultimoLoopEm / 1_000));
       if (evento) await executarEvento(evento);
       const processouLote = await executarProximoLoteInbound();
-      if (!evento && !processouLote) await esperar(pollMs);
+      const processouFollowup = await executarProximoFollowupOutbound();
+      if (!evento && !processouLote && !processouFollowup) await esperar(pollMs);
     } catch (erro) {
       bancoPronto = false;
       ultimoLoopEm = Date.now();

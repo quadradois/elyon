@@ -172,20 +172,20 @@ Qual valor você espera pelo seu apartamento?
     expect(updateCallDados.data.urgencia).toBeUndefined();
   });
 
-  it('bloqueia follow-up com data inválida e aceita data futura válida', async () => {
+  it('bloqueia follow-up sem contrato temporal e aceita payload estruturado', async () => {
     const wrapped = wrapToolExecute('agendar_followup', async (args: any) => {
       return JSON.stringify({ success: true, argsRecebidos: args });
     });
 
     const passado = await wrapped({
-      contatoId: 'contato-ivonet-001',
+      leadId: 'lead-ivonet-001',
       dataRecontato: '01/01/2020',
       motivo: 'cliente pediu para falar depois',
     });
     const parsedPassado = JSON.parse(passado);
     expect(parsedPassado.success).toBe(false);
     expect(parsedPassado.bloqueadoPorValidacao).toBe(true);
-    expect(parsedPassado.error).toContain('passado');
+    expect(parsedPassado.error).toContain('timezone');
 
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
@@ -195,9 +195,12 @@ Qual valor você espera pelo seu apartamento?
     const dataFutura = `${dd}/${mm}/${yyyy}`;
 
     const futuro = await wrapped({
-      contatoId: 'contato-ivonet-001',
+      leadId: 'lead-ivonet-001',
       dataRecontato: dataFutura,
+      timezoneIana: 'America/Sao_Paulo',
       motivo: 'lead quer retomar com calma',
+      evidenciaPedido: 'pode me chamar amanha',
+      policyVersion: 'followup-v1',
     });
     const parsedFuturo = JSON.parse(futuro);
     expect(parsedFuturo.success).toBe(true);
