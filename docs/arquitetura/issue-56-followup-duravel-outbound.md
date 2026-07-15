@@ -19,11 +19,19 @@ exigem confirmacao. Conversao usa `date-fns-tz`, nunca offset manual.
 
 ## Idempotencia, concorrencia e efeitos
 
-A equivalencia e SHA-256 de tenant, Lead, UTC, motivo normalizado e policy; o
-texto nao altera a identidade operacional. Em concorrencia, a primeira mensagem
-persistida permanece autoritativa e a outra chamada retorna
-`FOLLOWUP_EQUIVALENTE_EXISTENTE`. Um advisory lock por tenant/Lead elimina a
-janela de concorrencia. Reagendamento exige `followupId` explicito na tool/API,
+A idempotencia de replay usa `chaveRequisicao`, derivada do `requestId` estavel
+do consumidor. A equivalencia ativa usa outra chave SHA-256 de tenant, Lead,
+UTC, motivo normalizado e policy; o texto nao altera a identidade operacional.
+Um indice parcial PostgreSQL torna essa chave unica para `PENDENTE`,
+`REIVINDICADO` e falhas ainda operacionais (retry agendado ou reconciliacao),
+excluindo `RETRY_EXHAUSTED` e demais historicos terminais. Assim, preserva a
+auditoria e permite uma nova operacao legitima equivalente. Em concorrencia, a primeira mensagem persistida
+permanece autoritativa e a outra chamada retorna `FOLLOWUP_EQUIVALENTE_ATIVO`.
+Um advisory lock por tenant/Lead elimina a janela de concorrencia.
+
+O `ChatPanel` consulta `GET /leads/:id/followup/ativo`, carrega ID, data e
+mensagem, e distingue visualmente criar de reagendar. Reagendamento envia um
+novo `requestId` e o `followupId` explicito pela tool/API,
 cancela o ativo com `REAGENDAMENTO` e cria o substituto na mesma transacao.
 `DELIVERY_UNKNOWN`, `DELIVERY_RECONCILIATION_REQUIRED` ou intencao `RESERVADO`
 recusam reagendamento com reason code fail-closed antes de qualquer cancelamento.
@@ -64,7 +72,7 @@ remove nem transforma dados existentes.
 
 A validacao local reproduzivel usou PostgreSQL 15 com pgvector 0.8 e Redis 7.4,
 aplicou as quatro migrations desde banco vazio e executou o caminho real do
-agregado sem chamadas externas. O gate direcionado e composto por 34 cenarios automatizados:
+agregado sem chamadas externas. O gate direcionado e composto por 35 cenarios automatizados:
 
 - 15 cenarios de baseline real: criacao concorrente com mensagens diferentes,
   payload real do
@@ -72,7 +80,8 @@ agregado sem chamadas externas. O gate direcionado e composto por 34 cenarios au
   gates HUMANO, PAUSADO e opt-out, reagendamento atomico, retry comprovadamente
   anterior ao envio com limite, falha ambigua fail-closed, takeover entre envio
   e confirmacao, reagendamento real pela API e pelo use case da tool, tres gates
-  fail-closed de reagendamento ambiguo e isolamento de dois tenants;
+  fail-closed de reagendamento ambiguo, ciclo horario 1 -> horario 2 -> horario 1
+  com replay da mesma requisicao e isolamento de dois tenants;
 - 7 cenarios temporais: data relativa com timezone IANA, timezone invalido, tres
   expressoes ambiguas, passado, horario proibido e instantes DST inexistente ou
   duplicado, incluindo recusa explicita de `DD/MM/YYYY` sem hora;
@@ -80,9 +89,11 @@ agregado sem chamadas externas. O gate direcionado e composto por 34 cenarios au
   canonica, policy/evidencia obrigatorias e ausencia de promocao de texto livre;
 - 1 cenario de scrape das metricas, verificando ausencia de PII em nomes e labels.
 - 2 cenarios frontend que provam o payload de criacao e o `followupId` explicito.
+- 1 teste de interacao renderiza o `ChatPanel`, carrega o ativo e envia o ID ao
+  clicar em `Reagendar`.
 
 Comandos: `npm run build`, testes unitarios direcionados e
 `npm run test:baseline -- followup-outbound.integration.test.ts`. Resultado:
-builds backend/frontend verdes, 17 testes backend direcionados, 2 testes frontend
+builds backend/frontend verdes, 17 testes backend direcionados, 3 testes frontend
 e 15 testes de baseline verdes. O deploy de migrations foi executado duas vezes
 e `prisma migrate diff --exit-code` confirmou drift zero.

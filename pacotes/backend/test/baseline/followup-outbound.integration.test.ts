@@ -16,7 +16,7 @@ describe('B08 follow-up outbound duravel', () => {
   const input = (f: any, overrides: Record<string, unknown> = {}) => ({ tenantId: f.tenantA, leadId: f.leadA,
     expressaoOriginal: '15/01/2027 09:00', timezoneIana: 'America/Sao_Paulo', motivo: 'Lead pediu retorno apos decisao familiar',
     mensagemEnvio: 'Mensagem customizada do follow-up',
-    evidenciaPedido: 'pode me chamar em janeiro as nove', origemPedido: 'BASELINE_B08', agora: new Date('2026-07-15T12:00:00Z'), ...overrides });
+    evidenciaPedido: 'pode me chamar em janeiro as nove', origemPedido: 'BASELINE_B08', requestId: `request-${f.runId}`, agora: new Date('2026-07-15T12:00:00Z'), ...overrides });
   const seedEvidence = (leadId: string) => prisma.mensagemProspeccao.create({ data: { leadId, direcao: 'ENTRADA', conteudo: 'pode me chamar em janeiro as nove' } });
   const apiApp = (tenantId: string) => {
     const app = express();
@@ -31,13 +31,13 @@ describe('B08 follow-up outbound duravel', () => {
     await seedEvidence(f.leadA);
     const mensagens = ['Mensagem A preservada', 'Mensagem B concorrente'];
     const [a, b] = await Promise.all([
-      criarFollowupOutbound(input(f, { mensagemEnvio: mensagens[0] })),
-      criarFollowupOutbound(input(f, { mensagemEnvio: mensagens[1] })),
+      criarFollowupOutbound(input(f, { mensagemEnvio: mensagens[0], requestId: `request-a-${f.runId}` })),
+      criarFollowupOutbound(input(f, { mensagemEnvio: mensagens[1], requestId: `request-b-${f.runId}` })),
     ]);
     expect(a.success && b.success).toBe(true);
     if (!a.success || !b.success) throw new Error('criacao concorrente inesperadamente recusada');
     expect([a.deduplicado, b.deduplicado].sort()).toEqual([false, true]);
-    expect((a.deduplicado ? a : b).reasonCode).toBe('FOLLOWUP_EQUIVALENTE_EXISTENTE');
+    expect((a.deduplicado ? a : b).reasonCode).toBe('FOLLOWUP_EQUIVALENTE_ATIVO');
     expect(await prisma.followupOutbound.count({ where: { tenantId: f.tenantA, leadId: f.leadA } })).toBe(1);
     const saved = await prisma.followupOutbound.findFirstOrThrow({ where: { leadId: f.leadA } });
     expect(saved).toMatchObject({ status: 'PENDENTE', timezoneIana: 'America/Sao_Paulo', policyVersion: 'followup-v1', tentativas: 0 });
@@ -52,9 +52,12 @@ describe('B08 follow-up outbound duravel', () => {
       dataEnvio: '2027-01-15 09:30',
       timezoneIana: 'America/Sao_Paulo',
       motivo: 'Agendamento manual pelo operador autenticado',
+      requestId: `request-api-${f.runId}`,
     };
     const response = await request(app).post(`/api/leads/${f.leadA}/followup`).send(payload);
     expect(response.status).toBe(200);
+    const active = await request(app).get(`/api/leads/${f.leadA}/followup/ativo`);
+    expect(active.body.followup).toMatchObject({ id: response.body.followupId, mensagem: payload.mensagem, dataLocal: '2027-01-15T09:30' });
     expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: response.body.followupId } })).toMatchObject({
       tenantId: f.tenantA,
       leadId: f.leadA,
@@ -96,27 +99,36 @@ describe('B08 follow-up outbound duravel', () => {
     expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: created.followup.id } })).toMatchObject({ status: 'CANCELADO', reasonCode: gate.reason });
   });
 
-  it('API liga followupId ao reagendamento atomico no PostgreSQL', async () => {
+  it('API permite horario 1 -> horario 2 -> horario 1, preserva historico e replay', async () => {
     const f = await harness.seed();
     const app = apiApp(f.tenantA);
-    const firstPayload = { mensagem: 'Primeiro retorno', dataEnvio: '2027-01-15 09:30', timezoneIana: 'America/Sao_Paulo', motivo: 'Agendamento manual pelo operador autenticado' };
+    const firstPayload = { mensagem: 'Primeiro retorno', dataEnvio: '2027-01-15 09:30', timezoneIana: 'America/Sao_Paulo', motivo: 'Agendamento manual pelo operador autenticado', requestId: `cycle-1-${f.runId}` };
     const first = await request(app).post(`/api/leads/${f.leadA}/followup`).send(firstPayload);
     expect(first.status).toBe(200);
-    const next = await request(app).post(`/api/leads/${f.leadA}/followup`).send({ ...firstPayload, followupId: first.body.followupId, mensagem: 'Mensagem substituta confirmada', dataEnvio: '2027-01-20 10:00' });
+    const secondPayload = { ...firstPayload, requestId: `cycle-2-${f.runId}`, followupId: first.body.followupId, mensagem: 'Mensagem do horario 2', dataEnvio: '2027-01-20 10:00' };
+    const next = await request(app).post(`/api/leads/${f.leadA}/followup`).send(secondPayload);
     expect(next.status).toBe(200);
+    const thirdPayload = { ...firstPayload, requestId: `cycle-3-${f.runId}`, followupId: next.body.followupId, mensagem: 'Nova operacao legitima no horario 1' };
+    const back = await request(app).post(`/api/leads/${f.leadA}/followup`).send(thirdPayload);
+    expect(back.status).toBe(200);
+    const replay = await request(app).post(`/api/leads/${f.leadA}/followup`).send(thirdPayload);
+    expect(replay.status).toBe(200);
+    expect(replay.body).toMatchObject({ followupId: back.body.followupId, deduplicado: true, reasonCode: 'FOLLOWUP_REQUEST_REPLAY' });
     expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: first.body.followupId } })).toMatchObject({ status: 'CANCELADO', reasonCode: 'REAGENDAMENTO' });
-    expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: next.body.followupId } })).toMatchObject({ status: 'PENDENTE', mensagemEnvio: 'Mensagem substituta confirmada' });
+    expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: next.body.followupId } })).toMatchObject({ status: 'CANCELADO', reasonCode: 'REAGENDAMENTO' });
+    expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: back.body.followupId } })).toMatchObject({ status: 'PENDENTE', mensagemEnvio: 'Nova operacao legitima no horario 1' });
+    expect(await prisma.followupOutbound.count({ where: { leadId: f.leadA } })).toBe(3);
     expect(await prisma.followupOutbound.count({ where: { leadId: f.leadA, status: 'PENDENTE' } })).toBe(1);
   });
 
   it('caminho real do use case da tool liga followupId ao PostgreSQL', async () => {
     const f = await harness.seed(); await seedEvidence(f.leadA);
     const useCase = new AgendarFollowupUseCase();
-    const base = { tenantId: f.tenantA, leadId: f.leadA, dataRecontato: '15/01/2027 09:00', timezoneIana: 'America/Sao_Paulo', motivo: 'Lead pediu retorno apos decisao familiar', mensagemEnvio: 'Primeira mensagem da tool', evidenciaPedido: 'pode me chamar em janeiro as nove', origemPedido: 'TOOL_AGENDAR_FOLLOWUP' };
+    const base = { tenantId: f.tenantA, leadId: f.leadA, dataRecontato: '15/01/2027 09:00', timezoneIana: 'America/Sao_Paulo', motivo: 'Lead pediu retorno apos decisao familiar', mensagemEnvio: 'Primeira mensagem da tool', evidenciaPedido: 'pode me chamar em janeiro as nove', origemPedido: 'TOOL_AGENDAR_FOLLOWUP', requestId: `tool-create-${f.runId}` };
     const first = await useCase.execute(base);
     expect(first.success).toBe(true);
     if (!first.success || !first.followupId) throw new Error('follow-up inicial da tool nao criado');
-    const next = await useCase.execute({ ...base, followupId: first.followupId, dataRecontato: '20/01/2027 10:00', mensagemEnvio: 'Mensagem reagendada pela tool' });
+    const next = await useCase.execute({ ...base, requestId: `tool-reschedule-${f.runId}`, followupId: first.followupId, dataRecontato: '20/01/2027 10:00', mensagemEnvio: 'Mensagem reagendada pela tool' });
     expect(next.success).toBe(true);
     if (!next.success || !next.followupId) throw new Error('reagendamento da tool nao criado');
     expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: first.followupId } })).toMatchObject({ status: 'CANCELADO', reasonCode: 'REAGENDAMENTO' });
@@ -130,12 +142,12 @@ describe('B08 follow-up outbound duravel', () => {
   ])('reagendamento falha fechado para estado ambiguo $expected', async ({ reasonCode, effect, expected }) => {
     const f = await harness.seed();
     const app = apiApp(f.tenantA);
-    const payload = { mensagem: 'Primeiro retorno', dataEnvio: '2027-01-15 09:30', timezoneIana: 'America/Sao_Paulo', motivo: 'Agendamento manual pelo operador autenticado' };
+    const payload = { mensagem: 'Primeiro retorno', dataEnvio: '2027-01-15 09:30', timezoneIana: 'America/Sao_Paulo', motivo: 'Agendamento manual pelo operador autenticado', requestId: `ambiguous-create-${f.runId}` };
     const first = await request(app).post(`/api/leads/${f.leadA}/followup`).send(payload);
     expect(first.status).toBe(200);
     if (reasonCode) await prisma.followupOutbound.update({ where: { id: first.body.followupId }, data: { status: 'FALHO', reasonCode } });
     if (effect) await prisma.efeitoFollowupOutbound.create({ data: { followupId: first.body.followupId, fencingToken: 1, chaveIdempotencia: `reserved-${f.runId}` } });
-    const response = await request(app).post(`/api/leads/${f.leadA}/followup`).send({ ...payload, followupId: first.body.followupId, dataEnvio: '2027-01-20 10:00' });
+    const response = await request(app).post(`/api/leads/${f.leadA}/followup`).send({ ...payload, requestId: `ambiguous-reschedule-${f.runId}`, followupId: first.body.followupId, dataEnvio: '2027-01-20 10:00' });
     expect(response.status).toBe(422);
     expect(response.body.erro).toBe(expected);
     expect(await prisma.followupOutbound.count({ where: { leadId: f.leadA } })).toBe(1);

@@ -3,10 +3,21 @@ import { createHash } from 'node:crypto';
 import { prisma } from '../lib/db';
 import { followupAtraso, followupEventos } from '../observabilidade/followup-outbound-metrics';
 import { FOLLOWUP_POLICY_VERSION, interpretarFollowupTemporal } from './followup-temporal';
+import type { Prisma } from '@prisma/client';
 
 export type FollowupStatus = 'PENDENTE' | 'REIVINDICADO' | 'EXECUTADO' | 'CANCELADO' | 'EXPIRADO' | 'FALHO';
 export const FOLLOWUP_OWNER = `${os.hostname()}:${process.pid}`;
 const ACTIVE: FollowupStatus[] = ['PENDENTE', 'REIVINDICADO', 'FALHO'];
+
+function equivalenciaAtivaWhere(chaveEquivalencia: string): Prisma.FollowupOutboundWhereInput {
+  return { chaveEquivalencia, OR: [
+    { status: { in: ['PENDENTE', 'REIVINDICADO'] } },
+    { status: 'FALHO', OR: [
+      { proximoRetryEm: { not: null } },
+      { reasonCode: { in: ['DELIVERY_UNKNOWN', 'DELIVERY_RECONCILIATION_REQUIRED'] } },
+    ] },
+  ] };
+}
 
 function normalizarMotivo(value: string): string {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -25,7 +36,7 @@ export function followupMaxTentativas(): number {
 
 export interface CriarFollowupInput {
   tenantId: string; leadId: string; expressaoOriginal: string; timezoneIana: string;
-  motivo: string; mensagemEnvio: string; evidenciaPedido: string; origemPedido: string; policyVersion?: string; agora?: Date;
+  motivo: string; mensagemEnvio: string; evidenciaPedido: string; origemPedido: string; requestId: string; policyVersion?: string; agora?: Date;
 }
 
 export async function criarFollowupOutbound(input: CriarFollowupInput) {
@@ -37,10 +48,12 @@ export async function criarFollowupOutbound(input: CriarFollowupInput) {
   if (!mensagemEnvio) return { success: false as const, reasonCode: 'MENSAGEM_REQUIRED' };
   if (!input.evidenciaPedido?.trim()) return { success: false as const, reasonCode: 'EVIDENCIA_REQUIRED' };
   if (!input.origemPedido?.trim()) return { success: false as const, reasonCode: 'ORIGEM_REQUIRED' };
+  if (!input.requestId?.trim()) return { success: false as const, reasonCode: 'REQUEST_ID_REQUIRED' };
   if (!['TOOL_AGENDAR_FOLLOWUP', 'API_LEADS_FOLLOWUP', 'BASELINE_B08'].includes(input.origemPedido)) return { success: false as const, reasonCode: 'ORIGEM_INVALID' };
   const temporal = interpretarFollowupTemporal({ expressao: input.expressaoOriginal, timezone: input.timezoneIana, agora: input.agora });
   if (!temporal.ok) return { success: false as const, reasonCode: temporal.reasonCode };
-  const chaveIdempotencia = hash([input.tenantId, input.leadId, temporal.utc.toISOString(), motivoNormalizado, policyVersion]);
+  const chaveRequisicao = hash([input.tenantId, input.leadId, input.requestId.trim()]);
+  const chaveEquivalencia = hash([input.tenantId, input.leadId, temporal.utc.toISOString(), motivoNormalizado, policyVersion]);
 
   let result: { followup: any; deduplicado: boolean; reasonCode?: string } | undefined;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -55,12 +68,14 @@ export async function criarFollowupOutbound(input: CriarFollowupInput) {
       const evidence = await tx.mensagemProspeccao.findFirst({ where: { leadId: input.leadId, direcao: 'ENTRADA', conteudo: { contains: input.evidenciaPedido.trim(), mode: 'insensitive' } }, select: { id: true } });
       if (!evidence) throw new Error('EVIDENCIA_NAO_CONFIRMADA');
     }
-    const existing = await tx.followupOutbound.findUnique({ where: { chaveIdempotencia } });
-    if (existing) return { followup: existing, deduplicado: true, reasonCode: 'FOLLOWUP_EQUIVALENTE_EXISTENTE' };
+    const replay = await tx.followupOutbound.findUnique({ where: { chaveRequisicao } });
+    if (replay) return { followup: replay, deduplicado: true, reasonCode: 'FOLLOWUP_REQUEST_REPLAY' };
+    const existing = await tx.followupOutbound.findFirst({ where: equivalenciaAtivaWhere(chaveEquivalencia) });
+    if (existing) return { followup: existing, deduplicado: true, reasonCode: 'FOLLOWUP_EQUIVALENTE_ATIVO' };
     const followup = await tx.followupOutbound.create({ data: {
       tenantId: input.tenantId, leadId: input.leadId, agendadoParaUtc: temporal.utc,
       timezoneIana: temporal.timezone, expressaoOriginal: input.expressaoOriginal,
-      motivo: input.motivo.trim(), motivoNormalizado, mensagemEnvio, policyVersion, chaveIdempotencia,
+      motivo: input.motivo.trim(), motivoNormalizado, mensagemEnvio, policyVersion, chaveRequisicao, chaveEquivalencia,
       origemPedido: input.origemPedido.trim(), evidenciaPedido: input.evidenciaPedido.trim(),
     } });
     await tx.lead.update({ where: { id: input.leadId }, data: { dataRecontato: temporal.utc, motivoRecontato: input.motivo.trim() } });
@@ -93,9 +108,13 @@ export async function reagendarFollowupOutbound(params: CriarFollowupInput & { f
   if (!motivoNormalizado || !mensagemEnvio || !params.evidenciaPedido?.trim() || !params.origemPedido?.trim()) return { success: false as const, reasonCode: 'CONTRACT_INVALID' };
   const policyVersion = params.policyVersion || FOLLOWUP_POLICY_VERSION;
   if (policyVersion !== FOLLOWUP_POLICY_VERSION || !['TOOL_AGENDAR_FOLLOWUP', 'API_LEADS_FOLLOWUP', 'BASELINE_B08'].includes(params.origemPedido)) return { success: false as const, reasonCode: 'CONTRACT_INVALID' };
-  const key = hash([params.tenantId, params.leadId, temporal.utc.toISOString(), motivoNormalizado, policyVersion]);
+  if (!params.requestId?.trim()) return { success: false as const, reasonCode: 'REQUEST_ID_REQUIRED' };
+  const chaveRequisicao = hash([params.tenantId, params.leadId, params.requestId.trim()]);
+  const chaveEquivalencia = hash([params.tenantId, params.leadId, temporal.utc.toISOString(), motivoNormalizado, policyVersion]);
   const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${params.tenantId}:${params.leadId}:followup`}, 0))`;
+    const replay = await tx.followupOutbound.findUnique({ where: { chaveRequisicao } });
+    if (replay) return { followup: replay, deduplicado: true, reasonCode: 'FOLLOWUP_REQUEST_REPLAY' };
     const old = await tx.followupOutbound.findFirst({ where: { id: params.followupId, tenantId: params.tenantId, leadId: params.leadId, status: { in: ACTIVE } }, include: { efeito: true } });
     if (!old) throw new Error('FOLLOWUP_ACTIVE_NOT_FOUND');
     if (old.reasonCode === 'DELIVERY_UNKNOWN') return { blocked: 'FOLLOWUP_DELIVERY_UNKNOWN' as const };
@@ -107,15 +126,15 @@ export async function reagendarFollowupOutbound(params: CriarFollowupInput & { f
       const evidence = await tx.mensagemProspeccao.findFirst({ where: { leadId: params.leadId, direcao: 'ENTRADA', conteudo: { contains: params.evidenciaPedido.trim(), mode: 'insensitive' } }, select: { id: true } });
       if (!evidence) throw new Error('EVIDENCIA_NAO_CONFIRMADA');
     }
-    const existing = await tx.followupOutbound.findUnique({ where: { chaveIdempotencia: key } });
+    const existing = await tx.followupOutbound.findFirst({ where: { ...equivalenciaAtivaWhere(chaveEquivalencia), id: { not: old.id } } });
     if (existing) return { blocked: 'FOLLOWUP_EQUIVALENTE_EXISTENTE' as const };
     await tx.followupOutbound.update({ where: { id: old.id }, data: { status: 'CANCELADO', reasonCode: 'REAGENDAMENTO', canceladoEm: new Date(), leaseOwner: null, leaseAte: null } });
-    const followup = await tx.followupOutbound.create({ data: { tenantId: params.tenantId, leadId: params.leadId, agendadoParaUtc: temporal.utc, timezoneIana: temporal.timezone, expressaoOriginal: params.expressaoOriginal, motivo: params.motivo.trim(), motivoNormalizado, mensagemEnvio, policyVersion, chaveIdempotencia: key, origemPedido: params.origemPedido.trim(), evidenciaPedido: params.evidenciaPedido.trim() } });
-    return { followup, deduplicado: false };
+    const followup = await tx.followupOutbound.create({ data: { tenantId: params.tenantId, leadId: params.leadId, agendadoParaUtc: temporal.utc, timezoneIana: temporal.timezone, expressaoOriginal: params.expressaoOriginal, motivo: params.motivo.trim(), motivoNormalizado, mensagemEnvio, policyVersion, chaveRequisicao, chaveEquivalencia, origemPedido: params.origemPedido.trim(), evidenciaPedido: params.evidenciaPedido.trim() } });
+    return { followup, deduplicado: false, reasonCode: undefined };
   }, { isolationLevel: 'Serializable' });
   if ('blocked' in result) return { success: false as const, reasonCode: result.blocked };
   followupEventos.inc({ resultado: 'reagendado' });
-  return { success: true as const, followup: result.followup, deduplicado: result.deduplicado };
+  return { success: true as const, followup: result.followup, deduplicado: result.deduplicado, reasonCode: result.reasonCode };
 }
 
 export function followupLeaseMs(): number { return Math.max(30_000, Math.min(600_000, Number(process.env.FOLLOWUP_LEASE_MS || 120_000))); }

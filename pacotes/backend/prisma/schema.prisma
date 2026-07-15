@@ -705,7 +705,8 @@ model FollowupOutbound {
   leaseOwner         String?
   leaseAte           DateTime?
   fencingToken       Int      @default(0)
-  chaveIdempotencia  String   @unique
+  chaveRequisicao    String   @unique
+  chaveEquivalencia  String
   origemPedido       String
   evidenciaPedido    String   @db.Text
   reasonCode         String?
@@ -717,6 +718,7 @@ model FollowupOutbound {
   efeito             EfeitoFollowupOutbound?
 
   @@index([tenantId, leadId, status, agendadoParaUtc])
+  @@index([chaveEquivalencia])
   @@index([status, agendadoParaUtc, proximoRetryEm, leaseAte], map: "followups_outbound_claim_idx")
   @@map("followups_outbound")
 }

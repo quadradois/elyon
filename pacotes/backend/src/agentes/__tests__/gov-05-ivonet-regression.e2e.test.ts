@@ -202,6 +202,7 @@ Qual valor você espera pelo seu apartamento?
       mensagemEnvio: 'Posso retomar nosso contato conforme combinado?',
       evidenciaPedido: 'pode me chamar amanha',
       policyVersion: 'followup-v1',
+      requestId: 'request-ivonet-followup-1',
     });
     const parsedFuturo = JSON.parse(futuro);
     expect(parsedFuturo.success).toBe(true);

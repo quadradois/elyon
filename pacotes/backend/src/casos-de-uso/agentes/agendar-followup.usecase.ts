@@ -2,7 +2,7 @@ import { criarFollowupOutbound, reagendarFollowupOutbound } from '../../servicos
 
 export interface AgendarFollowupInput {
   tenantId: string; leadId: string; dataRecontato: string; timezoneIana: string;
-  motivo: string; mensagemEnvio: string; evidenciaPedido: string; origemPedido: string; policyVersion?: string;
+  motivo: string; mensagemEnvio: string; evidenciaPedido: string; origemPedido: string; requestId: string; policyVersion?: string;
   followupId?: string;
 }
 
@@ -12,7 +12,7 @@ export class AgendarFollowupUseCase {
       const params = { tenantId: input.tenantId, leadId: input.leadId,
         expressaoOriginal: input.dataRecontato, timezoneIana: input.timezoneIana, motivo: input.motivo,
         mensagemEnvio: input.mensagemEnvio, evidenciaPedido: input.evidenciaPedido,
-        origemPedido: input.origemPedido, policyVersion: input.policyVersion };
+        origemPedido: input.origemPedido, requestId: input.requestId, policyVersion: input.policyVersion };
       const result = input.followupId
         ? await reagendarFollowupOutbound({ ...params, followupId: input.followupId })
         : await criarFollowupOutbound(params);

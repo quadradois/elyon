@@ -16,6 +16,7 @@ import {
 import { priorizarLeads, calcularQualificacao, calcularUrgencia } from '../servicos/servico-priorizacao-leads';
 import { withTenantDb } from '../lib/tenant-db';
 import { criarFollowupOutbound, reagendarFollowupOutbound } from '../servicos/followup-outbound';
+import { formatInTimeZone } from 'date-fns-tz';
 
 const router = Router();
 
@@ -2295,15 +2296,36 @@ router.post('/:id/retomar-ia', async (req, res) => {
  * Agenda uma mensagem customizada para envio automático na data/hora especificada.
  * O job recontato-automatico.ts dispara a mensagem quando dataRecontato <= agora.
  */
+router.get('/:id/followup/ativo', async (req, res) => {
+  const tenantId = getTenantId(req);
+  if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+  const followup = await prisma.followupOutbound.findFirst({
+    where: { tenantId, leadId: req.params.id, OR: [
+      { status: { in: ['PENDENTE', 'REIVINDICADO'] } },
+      { status: 'FALHO', OR: [
+        { proximoRetryEm: { not: null } },
+        { reasonCode: { in: ['DELIVERY_UNKNOWN', 'DELIVERY_RECONCILIATION_REQUIRED'] } },
+      ] },
+    ] },
+    orderBy: { criadoEm: 'desc' },
+  });
+  if (!followup) return res.json({ followup: null });
+  return res.json({ followup: {
+    id: followup.id, mensagem: followup.mensagemEnvio, timezoneIana: followup.timezoneIana,
+    dataLocal: formatInTimeZone(followup.agendadoParaUtc, followup.timezoneIana, "yyyy-MM-dd'T'HH:mm"),
+    status: followup.status, reasonCode: followup.reasonCode,
+  } });
+});
+
 router.post('/:id/followup', async (req, res) => {
   try {
     const tenantId = getTenantId(req);
     if (!tenantId) return responderErro(res, 401, 'Não autorizado');
 
-    const { mensagem, dataEnvio, timezoneIana, motivo, followupId } = req.body;
-    if (!mensagem?.trim() || !dataEnvio || !timezoneIana || !motivo?.trim()) return responderErro(res, 400, 'mensagem, dataEnvio, timezoneIana e motivo são obrigatórios');
+    const { mensagem, dataEnvio, timezoneIana, motivo, followupId, requestId } = req.body;
+    if (!mensagem?.trim() || !dataEnvio || !timezoneIana || !motivo?.trim() || !requestId?.trim()) return responderErro(res, 400, 'mensagem, dataEnvio, timezoneIana, motivo e requestId são obrigatórios');
     const params = { tenantId, leadId: req.params.id, expressaoOriginal: dataEnvio,
-      timezoneIana, motivo, mensagemEnvio: mensagem, evidenciaPedido: 'OPERADOR_AUTENTICADO_CHAT_PANEL', origemPedido: 'API_LEADS_FOLLOWUP' };
+      timezoneIana, motivo, mensagemEnvio: mensagem, evidenciaPedido: 'OPERADOR_AUTENTICADO_CHAT_PANEL', origemPedido: 'API_LEADS_FOLLOWUP', requestId };
     const result = followupId
       ? await reagendarFollowupOutbound({ ...params, followupId })
       : await criarFollowupOutbound(params);
