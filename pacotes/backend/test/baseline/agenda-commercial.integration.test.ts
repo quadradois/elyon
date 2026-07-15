@@ -9,7 +9,11 @@ import {
   type AgendaCommand,
 } from '../../src/servicos/coerencia-agenda-estado';
 import { executarProximoEfeitoAgenda, reivindicarProximoEfeitoAgenda } from '../../src/servicos/efeitos-agenda-outbox';
-import { executarProximoNoShowAgenda, reivindicarProximoNoShow } from '../../src/servicos/processador-no-show-agenda';
+import {
+  executarProximoNoShowAgenda,
+  processarNoShowReivindicado,
+  reivindicarProximoNoShow,
+} from '../../src/servicos/processador-no-show-agenda';
 
 describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
   let tenantA: string;
@@ -105,7 +109,7 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
   });
 
   it('marca no-show, atualiza o Lead e preserva milestone separado', async () => {
-    const result = await executarComandoAgenda({ ...base(), ocorridoEm: new Date('2027-02-10T16:00:00Z'), requestIdentity: { source: 'WORKER', id: randomUUID() }, operacao: 'NO_SHOW', parteAusente: 'LEAD' });
+    const result = await executarComandoAgenda({ ...base(), ocorridoEm: new Date('2027-02-10T16:00:00Z'), operacao: 'NO_SHOW', parteAusente: 'LEAD' });
     expect(result.reasonCode).toBe('NO_SHOW_RECORDED');
     expect((await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).statusAgendamento).toBe('NAO_COMPARECEU');
     expect((await prisma.lead.findUniqueOrThrow({ where: { id: leadA } })).status).toBe('TENTATIVA_AGENDAMENTO');
@@ -192,7 +196,8 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
       motivo: 'Colisao controlada', reasonCode: 'TEST', ocorridoEm: new Date(), chaveIdempotencia: milestoneKey,
     } });
     const result = await executarComandoAgenda({ ...base(request), operacao: 'REAGENDAR', novoHorario: new Date('2027-02-12T16:00:00Z') });
-    expect(result.reasonCode).toBe('AGENDA_REPLACEMENT_FAILED');
+    expect(result).toMatchObject({ reasonCode: 'COMMAND_TRANSIENT_FAILURE', transient: true });
+    expect(result).not.toHaveProperty('decisionPersisted');
     expect(await prisma.atividade.count({ where: { leadId: leadA } })).toBe(1);
     expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).toMatchObject({ statusAgendamento: 'CONFIRMADO', substituidaPorId: null, versao: 0 });
     expect((await prisma.lead.findUniqueOrThrow({ where: { id: leadA } })).status).toBe('VISITA_AGENDADA');
@@ -306,6 +311,89 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
     expect(claimed).not.toBeNull();
     expect(await executarProximoNoShowAgenda('worker-after-restart', new Date('2027-02-10T17:02:00Z'))).toBe(true);
     expect(await executarProximoNoShowAgenda('worker-third', new Date('2027-02-10T17:03:00Z'))).toBe(false);
+    expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(1);
+  });
+
+  it('owner expirado nao executa depois do takeover e o novo owner decide uma vez', async () => {
+    const claimA = await reivindicarProximoNoShow('worker-a', new Date('2027-02-10T17:00:00Z'));
+    expect(claimA).not.toBeNull();
+    const claimB = await reivindicarProximoNoShow('worker-b', new Date('2027-02-10T17:02:00Z'));
+    expect(claimB).not.toBeNull();
+
+    const stale = await processarNoShowReivindicado(claimA!, 'worker-a', new Date('2027-02-10T17:02:01Z'));
+    expect(stale.reasonCode).toBe('NO_SHOW_LEASE_LOST');
+    expect(await prisma.comandoAgendaLedger.count({ where: { tenantId: tenantA } })).toBe(0);
+    expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(0);
+    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).toMatchObject({
+      statusAgendamento: 'CONFIRMADO', noShowProcessadoEm: null, noShowLeaseOwner: 'worker-b',
+    });
+
+    const winner = await processarNoShowReivindicado(claimB!, 'worker-b', new Date('2027-02-10T17:02:02Z'));
+    expect(winner.reasonCode).toBe('NO_SHOW_RECORDED');
+    expect(await prisma.comandoAgendaLedger.count({ where: { tenantId: tenantA } })).toBe(1);
+    expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(1);
+  });
+
+  it('falha transitoria depois do claim libera lease e permite retry duravel', async () => {
+    const claim = await reivindicarProximoNoShow('worker-transient', new Date('2027-02-10T17:00:00Z'));
+    expect(claim).not.toBeNull();
+    const identity = `no-show:${atividadeA}:${claim!.agendadoPara?.toISOString()}:${AGENDA_COMMERCIAL_POLICY_VERSION}`;
+    const requestKey = createHash('sha256').update(['agenda-command-v1', tenantA, 'WORKER', identity].join('|')).digest('hex');
+    const milestoneKey = createHash('sha256').update(['agenda-milestone-v1', requestKey, 'NO_SHOW'].join('|')).digest('hex');
+    await prisma.milestoneAgenda.create({ data: {
+      tenantId: tenantA, leadId: leadA, atividadeId: atividadeA, tipo: 'TRANSIENT_COLLISION', ator: 'baseline',
+      origem: 'BASELINE_B16', motivo: 'Colisao transitoria controlada', reasonCode: 'TEST',
+      ocorridoEm: new Date(), chaveIdempotencia: milestoneKey,
+    } });
+    const transient = await processarNoShowReivindicado(claim!, 'worker-transient', new Date('2027-02-10T17:00:01Z'));
+    expect(transient).toMatchObject({ reasonCode: 'COMMAND_TRANSIENT_FAILURE', transient: true });
+    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).toMatchObject({
+      statusAgendamento: 'CONFIRMADO', noShowProcessadoEm: null, noShowLeaseOwner: null,
+    });
+    expect(await prisma.comandoAgendaLedger.count({ where: { tenantId: tenantA } })).toBe(0);
+
+    await prisma.milestoneAgenda.delete({ where: { chaveIdempotencia: milestoneKey } });
+    expect(await executarProximoNoShowAgenda('worker-retry', new Date('2027-02-10T17:00:02Z'))).toBe(true);
+    expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(1);
+  });
+
+  it('rejeicao de dominio persistida finaliza o claim sem milestone', async () => {
+    const claim = await reivindicarProximoNoShow('worker-domain-denial', new Date('2027-02-10T17:00:00Z'));
+    expect(claim).not.toBeNull();
+    await prisma.lead.update({ where: { id: leadA }, data: { status: 'NOVO' } });
+    const denied = await processarNoShowReivindicado(claim!, 'worker-domain-denial', new Date('2027-02-10T17:00:01Z'));
+    expect(denied).toMatchObject({ reasonCode: 'STATE_TRANSITION_DENIED', decisionPersisted: true });
+    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).toMatchObject({
+      statusAgendamento: 'CONFIRMADO', noShowReasonCode: 'STATE_TRANSITION_DENIED', noShowLeaseOwner: null,
+    });
+    expect((await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).noShowProcessadoEm).not.toBeNull();
+    expect(await prisma.comandoAgendaLedger.count({ where: { tenantId: tenantA } })).toBe(1);
+    expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(0);
+  });
+
+  it('fechamento fenced com count zero retorna lease perdido e nao marca processado', async () => {
+    const claim = await reivindicarProximoNoShow('worker-close-a', new Date('2027-02-10T17:00:00Z'));
+    expect(claim).not.toBeNull();
+    const result = await processarNoShowReivindicado(claim!, 'worker-close-a', new Date('2027-02-10T17:00:01Z'), {
+      aposComando: async () => {
+        await prisma.atividade.update({
+          where: { id: atividadeA },
+          data: { noShowLeaseOwner: 'worker-close-b', noShowFencingToken: { increment: 1 } },
+        });
+      },
+    });
+    expect(result.reasonCode).toBe('NO_SHOW_LEASE_LOST');
+    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).toMatchObject({
+      noShowProcessadoEm: null, noShowLeaseOwner: 'worker-close-b',
+    });
+    expect(await prisma.comandoAgendaLedger.count({ where: { tenantId: tenantA } })).toBe(1);
+    expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(1);
+    expect(await executarProximoNoShowAgenda('worker-close-recovery', new Date('2027-02-10T17:02:00Z'))).toBe(true);
+    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).toMatchObject({
+      noShowReasonCode: 'NO_SHOW_RECORDED', noShowLeaseOwner: null,
+    });
+    expect((await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).noShowProcessadoEm).not.toBeNull();
+    expect(await prisma.comandoAgendaLedger.count({ where: { tenantId: tenantA } })).toBe(1);
     expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(1);
   });
 });

@@ -1664,7 +1664,7 @@ router.patch('/:id/atividades/:atividadeId', async (req, res) => {
           ? { ...base, operacao: 'CANCELAR' as const }
           : { ...base, operacao: 'NO_SHOW' as const, parteAusente: 'LEAD' as const };
       const result = await executarComandoAgenda(comando);
-      if (!result.success) return responderErro(res, result.reasonCode === 'REQUEST_ID_CONFLICT' ? 409 : 422, result.reasonCode);
+      if (!result.success) return responderErro(res, result.transient ? 503 : result.reasonCode === 'REQUEST_ID_CONFLICT' ? 409 : 422, result.reasonCode);
       const mensagemResultado = acao === 'reagendar' ? 'Atividade reagendada' : acao === 'cancelar' ? 'Atividade cancelada' : 'Marcado como nao compareceu';
       return res.json({ sucesso: true, mensagem: mensagemResultado, result });
     }
@@ -2004,7 +2004,7 @@ router.post('/confirmar/:atividadeId/:token', async (req, res) => {
         ator: 'proprietario', origem: 'LINK_CONFIRMACAO', motivo: motivoCancelamento || 'Cancelamento pelo proprietario',
         policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION, ocorridoEm: new Date(), expectedVersion: atividade.versao,
       });
-      if (!result.success && result.reasonCode !== 'COMMAND_REPLAY') return responderErro(res, 422, result.reasonCode);
+      if (!result.success && result.reasonCode !== 'COMMAND_REPLAY') return responderErro(res, result.transient ? 503 : 422, result.reasonCode);
 
       res.json({
         sucesso: true,

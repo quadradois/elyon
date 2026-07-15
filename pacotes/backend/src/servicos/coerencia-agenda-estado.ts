@@ -18,6 +18,8 @@ export type AgendaReasonCode =
   | 'STALE_EVENT'
   | 'STATE_TRANSITION_DENIED'
   | 'NO_SHOW_NOT_DUE'
+  | 'NO_SHOW_LEASE_LOST'
+  | 'COMMAND_TRANSIENT_FAILURE'
   | 'AGENDA_REPLACEMENT_FAILED'
   | 'INVALID_COMMAND';
 
@@ -37,7 +39,12 @@ type BaseCommand = {
 
 export type CancelarAgendaCommand = BaseCommand & { operacao: 'CANCELAR' };
 export type ReagendarAgendaCommand = BaseCommand & { operacao: 'REAGENDAR'; novoHorario: Date; novoTitulo?: string; novaDescricao?: string };
-export type MarcarNoShowCommand = BaseCommand & { operacao: 'NO_SHOW'; parteAusente: 'LEAD' | 'CORRETOR' };
+export type NoShowLeaseReference = { owner: string; fencingToken: number; leaseAte: Date };
+export type MarcarNoShowCommand = BaseCommand & {
+  operacao: 'NO_SHOW';
+  parteAusente: 'LEAD' | 'CORRETOR';
+  noShowLease?: NoShowLeaseReference;
+};
 export type AgendaCommand = CancelarAgendaCommand | ReagendarAgendaCommand | MarcarNoShowCommand;
 
 export type AgendaCommandResult = {
@@ -47,6 +54,11 @@ export type AgendaCommandResult = {
   atividadeResultanteId?: string;
   leadStatus?: string;
   replay?: boolean;
+  decisionPersisted?: boolean;
+  decisionKey?: string;
+  decisionOutcome?: AgendaReasonCode;
+  decisionExpectedVersion?: number;
+  transient?: boolean;
 };
 
 function hash(parts: string[]): string {
@@ -64,6 +76,11 @@ function validar(command: AgendaCommand): AgendaReasonCode | null {
   if (command.policyVersion !== AGENDA_COMMERCIAL_POLICY_VERSION) return 'INVALID_COMMAND';
   if (!Number.isInteger(command.expectedVersion) || command.expectedVersion < 0) return 'INVALID_COMMAND';
   if (!Number.isFinite(command.ocorridoEm?.getTime())) return 'INVALID_COMMAND';
+  if (command.operacao === 'NO_SHOW' && command.requestIdentity.source === 'WORKER'
+    && (!command.noShowLease?.owner?.trim()
+      || !Number.isInteger(command.noShowLease.fencingToken)
+      || command.noShowLease.fencingToken < 1
+      || !Number.isFinite(command.noShowLease.leaseAte?.getTime()))) return 'INVALID_COMMAND';
   if (command.notificacao && (!command.notificacao.mensagem?.trim()
     || (command.operacao === 'CANCELAR' && command.notificacao.tipo !== 'CANCELAMENTO')
     || (command.operacao === 'REAGENDAR' && command.notificacao.tipo !== 'REAGENDAMENTO')
@@ -72,7 +89,7 @@ function validar(command: AgendaCommand): AgendaReasonCode | null {
   return null;
 }
 
-function chaveRequisicao(command: AgendaCommand): string {
+export function obterChaveRequisicaoAgenda(command: AgendaCommand): string {
   return hash(['agenda-command-v1', command.tenantId, command.requestIdentity.source, command.requestIdentity.id.trim()]);
 }
 
@@ -101,13 +118,20 @@ async function persistirDecisao(
   fp: string,
   result: AgendaCommandResult,
 ): Promise<AgendaCommandResult> {
+  const durableResult: AgendaCommandResult = {
+    ...result,
+    decisionPersisted: true,
+    decisionKey: key,
+    decisionOutcome: result.reasonCode,
+    decisionExpectedVersion: command.expectedVersion,
+  };
   await tx.comandoAgendaLedger.create({ data: {
     chaveRequisicao: key, fingerprint: fp, operacao: command.operacao, tenantId: command.tenantId,
     leadId: command.leadId, atividadeId: command.atividadeId,
     atividadeResultanteId: result.atividadeResultanteId || command.atividadeId,
-    outcome: result.reasonCode, resultado: result as unknown as Prisma.InputJsonValue,
+    outcome: durableResult.reasonCode, resultado: durableResult as unknown as Prisma.InputJsonValue,
   } });
-  return result;
+  return durableResult;
 }
 
 function resultadoFalha(command: AgendaCommand, reasonCode: AgendaReasonCode): AgendaCommandResult {
@@ -115,17 +139,28 @@ function resultadoFalha(command: AgendaCommand, reasonCode: AgendaReasonCode): A
   return { success: false, reasonCode, atividadeId: command.atividadeId };
 }
 
+async function resolverReplay(
+  tx: Prisma.TransactionClient,
+  key: string,
+  fp: string,
+  command: AgendaCommand,
+): Promise<AgendaCommandResult | null> {
+  const replay = await tx.comandoAgendaLedger.findUnique({ where: { chaveRequisicao: key } });
+  if (!replay) return null;
+  if (replay.fingerprint !== fp) return { success: false, reasonCode: 'REQUEST_ID_CONFLICT', atividadeId: command.atividadeId };
+  await tx.comandoAgendaLedger.update({ where: { id: replay.id }, data: { ultimoReplayEm: new Date() } });
+  const original = replay.resultado as AgendaCommandResult;
+  return { ...original, reasonCode: original.success ? 'COMMAND_REPLAY' : original.reasonCode, replay: true };
+}
+
 async function executarNaTransacao(tx: Prisma.TransactionClient, command: AgendaCommand): Promise<AgendaCommandResult> {
-  const key = chaveRequisicao(command);
+  const key = obterChaveRequisicaoAgenda(command);
   const fp = fingerprint(command);
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${command.tenantId}:${command.leadId}:agenda-commercial`}, 0))`;
-
-  const replay = await tx.comandoAgendaLedger.findUnique({ where: { chaveRequisicao: key } });
-  if (replay) {
-    if (replay.fingerprint !== fp) return { success: false, reasonCode: 'REQUEST_ID_CONFLICT', atividadeId: command.atividadeId };
-    await tx.comandoAgendaLedger.update({ where: { id: replay.id }, data: { ultimoReplayEm: new Date() } });
-    const original = replay.resultado as AgendaCommandResult;
-    return { ...original, reasonCode: original.success ? 'COMMAND_REPLAY' : original.reasonCode, replay: true };
+  const workerNoShow = command.operacao === 'NO_SHOW' && command.requestIdentity.source === 'WORKER';
+  if (!workerNoShow) {
+    const replay = await resolverReplay(tx, key, fp, command);
+    if (replay) return replay;
   }
 
   const atividade = await tx.atividade.findFirst({
@@ -133,6 +168,22 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
     include: { lead: { select: { id: true, status: true, tenantId: true } } },
   });
   if (!atividade) return { success: false, reasonCode: 'TENANT_OWNERSHIP_DENIED', atividadeId: command.atividadeId };
+  let transactionNow: Date | undefined;
+  if (workerNoShow) {
+    const [clock] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT CURRENT_TIMESTAMP AS "now"`;
+    transactionNow = clock.now;
+    const lease = command.noShowLease;
+    const leaseValido = lease
+      && atividade.noShowLeaseOwner === lease.owner
+      && atividade.noShowFencingToken === lease.fencingToken
+      && atividade.noShowLeaseAte?.getTime() === lease.leaseAte.getTime()
+      && atividade.noShowLeaseAte > transactionNow;
+    if (!leaseValido) return { success: false, reasonCode: 'NO_SHOW_LEASE_LOST', atividadeId: command.atividadeId };
+  }
+  if (workerNoShow) {
+    const replay = await resolverReplay(tx, key, fp, command);
+    if (replay) return replay;
+  }
   if (atividade.versao !== command.expectedVersion) return persistirDecisao(tx, command, key, fp, { success: false, reasonCode: 'STALE_EVENT', atividadeId: command.atividadeId });
   if (command.ocorridoEm < atividade.estadoAgendaAtualizadoEm) return persistirDecisao(tx, command, key, fp, { success: false, reasonCode: 'STALE_EVENT', atividadeId: command.atividadeId });
   if (atividade.substituidaPorId) return persistirDecisao(tx, command, key, fp, { success: false, reasonCode: 'ACTIVITY_ALREADY_REPLACED', atividadeId: command.atividadeId });
@@ -181,15 +232,28 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
       atividadeResultanteId: substituta.id, leadStatus: 'VISITA_AGENDADA' };
   } else {
     const statusAgenda = command.operacao === 'CANCELAR' ? 'CANCELADO' : 'NAO_COMPARECEU';
+    const noShowFence = command.operacao === 'NO_SHOW' && command.requestIdentity.source === 'WORKER'
+      ? {
+          noShowLeaseOwner: command.noShowLease!.owner,
+          noShowFencingToken: command.noShowLease!.fencingToken,
+          noShowLeaseAte: { gt: transactionNow! },
+        }
+      : {};
     const updated = await tx.atividade.updateMany({
-      where: { id: atividade.id, leadId: command.leadId, versao: command.expectedVersion, substituidaPorId: null, statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] } },
+      where: { id: atividade.id, leadId: command.leadId, versao: command.expectedVersion, substituidaPorId: null,
+        statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] }, ...noShowFence },
       data: { statusAgendamento: statusAgenda, canceladoPor: command.operacao === 'CANCELAR' ? command.ator : atividade.canceladoPor,
         canceladoEm: command.operacao === 'CANCELAR' ? command.ocorridoEm : atividade.canceladoEm,
         motivoCancelamento: command.operacao === 'CANCELAR' ? command.motivo : atividade.motivoCancelamento,
         completadoEm: command.operacao === 'NO_SHOW' ? command.ocorridoEm : atividade.completadoEm,
         versao: { increment: 1 }, estadoAgendaAtualizadoEm: command.ocorridoEm },
     });
-    if (updated.count !== 1) throw new Error('AGENDA_CONCURRENT_WRITE');
+    if (updated.count !== 1) {
+      if (command.operacao === 'NO_SHOW' && command.requestIdentity.source === 'WORKER') {
+        return { success: false, reasonCode: 'NO_SHOW_LEASE_LOST', atividadeId: command.atividadeId };
+      }
+      throw new Error('AGENDA_CONCURRENT_WRITE');
+    }
     const lead = await tx.lead.updateMany({ where: { id: command.leadId, tenantId: command.tenantId, status: 'VISITA_AGENDADA' }, data: { status: 'TENTATIVA_AGENDAMENTO' } });
     if (lead.count !== 1) throw new Error('LEAD_CONCURRENT_WRITE');
     milestoneType = command.operacao === 'CANCELAR' ? 'VISITA_CANCELADA' : 'VISITA_NAO_COMPARECEU';
@@ -204,7 +268,7 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
     parteAusente: command.operacao === 'NO_SHOW' ? command.parteAusente : null,
     ocorridoEm: command.ocorridoEm, chaveIdempotencia: milestoneKey,
   } });
-  await persistirDecisao(tx, command, key, fp, result);
+  result = await persistirDecisao(tx, command, key, fp, result);
   if (command.notificacao) {
     await tx.efeitoAgendaOutbox.create({ data: {
       chaveComando: key,
@@ -231,8 +295,8 @@ export async function executarComandoAgenda(command: AgendaCommand): Promise<Age
       const code = (error as { code?: string }).code;
       if (['P2002', 'P2034'].includes(code || '') && attempt < 3) continue;
       agendaComercialEventos.inc({ resultado: command.operacao === 'REAGENDAR' ? 'agenda_replacement_failed' : 'rollback' });
-      return { success: false, reasonCode: command.operacao === 'REAGENDAR' ? 'AGENDA_REPLACEMENT_FAILED' : 'STATE_TRANSITION_DENIED', atividadeId: command.atividadeId };
+      return { success: false, reasonCode: 'COMMAND_TRANSIENT_FAILURE', atividadeId: command.atividadeId, transient: true };
     }
   }
-  return resultadoFalha(command, 'STATE_TRANSITION_DENIED');
+  return { success: false, reasonCode: 'COMMAND_TRANSIENT_FAILURE', atividadeId: command.atividadeId, transient: true };
 }

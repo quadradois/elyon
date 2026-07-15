@@ -68,6 +68,20 @@ token. A identidade `atividade + horário + policy` é durável. Depois de resta
 o novo owner chama o mesmo `MarcarNoShowCommand`; replay do ledger finaliza o
 claim sem duplicar milestone ou regressão comercial.
 
+Para comandos `WORKER/NO_SHOW`, `leaseOwner`, `fencingToken` e `leaseAte` são
+autoridade operacional, não parte do fingerprint semântico. O comando valida os
+três valores e a vigência pelo relógio do PostgreSQL antes de consultar replay e
+repete o fence no `updateMany` que altera a atividade. Owner stale retorna
+`NO_SHOW_LEASE_LOST` sem ledger, milestone ou mutação de atividade/Lead.
+
+O fechamento consulta a decisão correspondente no ledger e exige
+`updateMany.count === 1` para o mesmo owner e fencing token. Count zero também é
+`NO_SHOW_LEASE_LOST` e não preenche `noShowProcessadoEm`. Somente sucesso, replay
+ou rejeição de domínio persistida encerram o claim. Falha de banco, serialização
+esgotada ou exceção inesperada retorna `COMMAND_TRANSIENT_FAILURE`, não cria
+decisão falsa e libera o lease atual para retry seguro. APIs humanas expõem
+essa classe como HTTP 503, separada das rejeições determinísticas HTTP 422.
+
 ## Tenant safety e observabilidade
 
 Toda atividade é resolvida conjuntamente por `tenantId + leadId + atividadeId`.
@@ -88,6 +102,10 @@ tenant, Lead, atividade, nomes, telefones ou texto livre como labels.
   envio confirmado; reserva abandonada permanece em reconciliação.
 - Caminho worker real: claimer concorrente → `MarcarNoShowCommand` → PostgreSQL,
   incluindo takeover após restart sem duplicação.
+- Takeover completo: A perde o lease, B reivindica, A é recusado sem mutação e B
+  produz exatamente uma decisão e um milestone.
+- Falha transacional real após claim libera o lease; retry posterior conclui uma
+  única decisão. Fechamento com owner/token stale não marca o claim processado.
 - Caminho da tool: execução durável confiável → comando de reagendamento.
 - Frontend: versão esperada e identidade da tentativa atravessam o contrato API.
 - XF-B16 foi removido dos expected-failures e substituído por gate suportado.
@@ -101,7 +119,8 @@ tenant, Lead, atividade, nomes, telefones ou texto livre como labels.
 4. habilitar `AGENDA_NO_SHOW_ENABLED=true` em ambiente piloto com grace period
    explícito;
 5. observar `state_transition_denied`, `stale_event`, `no_show_not_due`,
-   reconciliações, rollback e conflitos;
+   `no_show_lease_lost`, `command_transient_failure`, reconciliações, rollback e
+   conflitos;
 6. expandir somente após confirmar ausência de mutações parciais e PII.
 
 Dados legados não são apagados. Atividades inconsistentes anteriores devem ser
@@ -123,3 +142,5 @@ no ledger e milestones não são apagados.
   envio exigem reconciliação operacional e nunca reenvio automático;
 - eventos sem versão confiável são recusados e precisam ser reenviados pelo
   produtor com a versão vigente.
+- falhas transitórias repetidas mantêm o item elegível e exigem alerta operacional
+  para evitar starvation, sem convertê-las em decisão de domínio.

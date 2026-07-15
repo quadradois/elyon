@@ -383,7 +383,7 @@ Se quiser, já te proponho novos horários para reagendar.`;
             ocorridoEm: new Date(), expectedVersion: body.expectedVersion,
             notificacao: body.avisarCliente ? { tipo: 'CANCELAMENTO', mensagem: mensagemNotificacao } : undefined,
         });
-        if (!result.success) return responderErro(res, result.reasonCode === 'REQUEST_ID_CONFLICT' ? 409 : 422, result.reasonCode);
+        if (!result.success) return responderErro(res, result.transient ? 503 : result.reasonCode === 'REQUEST_ID_CONFLICT' ? 409 : 422, result.reasonCode);
         const atividadeAtualizada = await prisma.atividade.findUniqueOrThrow({ where: { id } });
 
         return res.json({ sucesso: true, mensagem: 'Agendamento cancelado com sucesso', atividade: atividadeAtualizada });
@@ -435,7 +435,7 @@ Pode me confirmar se esse horário funciona para você?`;
             ocorridoEm: new Date(), expectedVersion: body.expectedVersion, novoHorario,
             notificacao: body.avisarCliente ? { tipo: 'REAGENDAMENTO', mensagem: mensagemNotificacao } : undefined,
         });
-        if (!result.success) return responderErro(res, result.reasonCode === 'REQUEST_ID_CONFLICT' ? 409 : 422, result.reasonCode);
+        if (!result.success) return responderErro(res, result.transient ? 503 : result.reasonCode === 'REQUEST_ID_CONFLICT' ? 409 : 422, result.reasonCode);
         const atividadeAtualizada = await prisma.atividade.findUniqueOrThrow({ where: { id: result.atividadeResultanteId } });
 
         return res.json({ sucesso: true, mensagem: 'Agendamento reagendado com sucesso', atividade: atividadeAtualizada });
