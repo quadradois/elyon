@@ -24,10 +24,23 @@ mensagens e só depois executar uma vez o agente; não é necessário manter o
 primeiro recibo ocupado nem depender de dois workers.
 
 Cada claim incrementa `fencingToken`. Heartbeat falso ou rejeitado invalida o
-owner em memória, e token, owner, status e prazo são revalidados antes de tools,
-mutações de resposta, envio externo e conclusão. Um takeover recebe token maior;
-o owner antigo deixa de poder concluir ou iniciar efeitos críticos. A chave
-durável `loteId + fencingToken` identifica a intenção idempotente do turno.
+owner em memória. Tools mutáveis executam por um command executor que bloqueia o
+lote e valida owner, token, status e prazo dentro da mesma transação PostgreSQL
+da escrita. A validação final ocorre antes do commit; lease vencido reverte todas
+as mutações da tool. Um takeover usa token maior e só prossegue depois que a
+transação anterior libera o lote.
+
+Envios externos usam `efeitos_lotes_inbound`. O contrato distingue:
+
+- `NOVA`: intenção criada e ainda não enviada;
+- `RESERVADA`: tentativa anterior não confirmou o resultado; deve ser reconciliada;
+- `CONCLUIDA`: o provider confirmou o envio.
+
+Uma intenção `RESERVADA` nunca equivale a sucesso. O takeover preserva a chave
+idempotente derivada de `loteId + tipo`, reenvia para reconciliação com o header
+`Idempotency-Key` quando suportado pelo adapter e só persiste a resposta local
+depois da confirmação. Assim, crash antes do envio é retomado; crash depois do
+envio usa a mesma chave e não duplica no provider idempotente.
 
 Estados do lote:
 
@@ -55,7 +68,9 @@ agenda e demais provedores sob doubles determinísticos. Os gates cobrem:
 - isolamento entre dois tenants;
 - mudança para `HUMANO`, `PAUSADO` ou opt-out durante a janela;
 - falha do agente mantendo lote `FALHO`, recuperável pelo claimer, e zero resposta enganosa;
-- agente lento, expiração e takeover com exatamente uma mutação e um envio;
+- tool real lenta com expiração durante a transação e zero mutações do owner vencido;
+- crash antes do envio, depois do envio e antes da confirmação, e takeover sem
+  resposta fantasma ou duplicação;
 - scrape de `/metrics` do worker contendo as métricas dos lotes.
 
 Comando local reproduzido com infraestrutura dedicada:
@@ -81,8 +96,9 @@ expirados e ausência de consolidações após o deploy.
 3. publicar um worker com o claimer de lotes habilitado no mesmo processo e
    confirmar `/ready` e `/metrics` antes de receber tráfego;
 4. observar duas janelas completas e comparar recibos concluídos, fragmentos,
-   lotes vencidos/concluídos, takeovers e respostas enviadas;
-5. ampliar workers somente com zero duplicação, fencing saudável e backlog estável;
+   lotes vencidos/concluídos, takeovers, intenções reservadas e respostas enviadas;
+5. reconciliar intenções `RESERVADA` com a mesma chave idempotente e ampliar
+   workers somente com zero duplicação, fencing saudável e backlog estável;
 6. manter tabelas e colunas de fencing durante todo o período de observação.
 
 ## Rollback e limpeza

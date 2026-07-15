@@ -36,6 +36,7 @@ interface ConstruirElyonContextParams {
   schemaState?: SchemaState;
   leadRecord?: Lead | null;
   assertFencing?: () => Promise<void>;
+  withFencedTransaction?: <T>(command: () => Promise<T>) => Promise<T>;
 }
 
 
@@ -46,7 +47,7 @@ export function gerarTextoUltimaInteracao(agenteCache?: string): string | undefi
 }
 
 export function construirElyonContext(params: ConstruirElyonContextParams): ElyonContext {
-  const { config, contexto, agenteCache, prismaClient, schemaState, leadRecord, assertFencing } = params;
+  const { config, contexto, agenteCache, prismaClient, schemaState, leadRecord, assertFencing, withFencedTransaction } = params;
   const textoUltimaInteracao = gerarTextoUltimaInteracao(agenteCache);
 
   return {
@@ -75,5 +76,6 @@ export function construirElyonContext(params: ConstruirElyonContextParams): Elyo
     schemaState,
     leadRecord,
     assertFencing,
+    withFencedTransaction,
   };
 }

@@ -658,7 +658,9 @@ model EfeitoLoteInbound {
   tipo         String
   status       String                 @default("RESERVADO")
   fencingToken Int
+  chaveIdempotencia String             @unique
   criadoEm     DateTime               @default(now())
+  atualizadoEm DateTime               @updatedAt
   concluidoEm  DateTime?
 
   @@unique([loteId, tipo])

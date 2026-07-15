@@ -34,7 +34,9 @@ CREATE TABLE "efeitos_lotes_inbound" (
   "tipo" TEXT NOT NULL,
   "status" TEXT NOT NULL DEFAULT 'RESERVADO',
   "fencingToken" INTEGER NOT NULL,
+  "chaveIdempotencia" TEXT NOT NULL,
   "criadoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "atualizadoEm" TIMESTAMP(3) NOT NULL,
   "concluidoEm" TIMESTAMP(3),
   CONSTRAINT "efeitos_lotes_inbound_pkey" PRIMARY KEY ("id")
 );
@@ -49,6 +51,8 @@ CREATE INDEX "fragmentos_mensagens_inbound_loteId_recebidoEm_id_idx"
   ON "fragmentos_mensagens_inbound"("loteId", "recebidoEm", "id");
 CREATE UNIQUE INDEX "efeitos_lotes_inbound_loteId_tipo_key"
   ON "efeitos_lotes_inbound"("loteId", "tipo");
+CREATE UNIQUE INDEX "efeitos_lotes_inbound_chaveIdempotencia_key"
+  ON "efeitos_lotes_inbound"("chaveIdempotencia");
 CREATE INDEX "efeitos_lotes_inbound_status_criadoEm_idx"
   ON "efeitos_lotes_inbound"("status", "criadoEm");
 

@@ -1,4 +1,5 @@
 import os from 'os';
+import { createHash } from 'node:crypto';
 import { prisma } from '../lib/db';
 import { lotesInboundAbertos, lotesInboundEventos } from './consolidacao-mensagens-inbound-metrics';
 
@@ -202,9 +203,12 @@ export async function obterLoteReivindicado(loteId: string, owner: string, fenci
   } as LoteInboundReivindicado;
 }
 
+export type EstadoIntencaoEfeito = 'NOVA' | 'RESERVADA' | 'CONCLUIDA';
+export interface IntencaoEfeitoInbound { estado: EstadoIntencaoEfeito; chaveIdempotencia: string }
+
 export async function reservarEfeitoLoteInbound(
   loteId: string, owner: string, fencingToken: number, tipo: string,
-): Promise<boolean> {
+): Promise<IntencaoEfeitoInbound> {
   return prisma.$transaction(async (tx) => {
     const lote = await tx.loteMensagemInbound.findFirst({
       where: { id: loteId, status: 'PROCESSANDO', leaseOwner: owner, fencingToken, leaseAte: { gt: new Date() } },
@@ -212,9 +216,20 @@ export async function reservarEfeitoLoteInbound(
     });
     if (!lote) throw new Error('LOTE_LEASE_PERDIDO');
     const existente = await tx.efeitoLoteInbound.findUnique({ where: { loteId_tipo: { loteId, tipo } } });
-    if (existente) return false;
-    await tx.efeitoLoteInbound.create({ data: { loteId, tipo, fencingToken } });
-    return true;
+    if (existente?.status === 'CONCLUIDO') {
+      return { estado: 'CONCLUIDA', chaveIdempotencia: existente.chaveIdempotencia };
+    }
+    if (existente) {
+      // Reconciliação: um novo owner assume a intenção abandonada, preservando
+      // a mesma chave para que o adapter/provedor deduplique um envio incerto.
+      await tx.efeitoLoteInbound.update({
+        where: { id: existente.id }, data: { fencingToken, status: 'RESERVADO' },
+      });
+      return { estado: 'RESERVADA', chaveIdempotencia: existente.chaveIdempotencia };
+    }
+    const chaveIdempotencia = createHash('sha256').update(`elyon:${loteId}:${tipo}`).digest('hex');
+    await tx.efeitoLoteInbound.create({ data: { loteId, tipo, fencingToken, chaveIdempotencia } });
+    return { estado: 'NOVA', chaveIdempotencia };
   }, { isolationLevel: 'Serializable' });
 }
 

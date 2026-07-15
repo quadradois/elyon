@@ -6,6 +6,8 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 // Usar globalThis para evitar múltiplas instâncias em desenvolvimento (hot reload)
 const globalForPrisma = globalThis as unknown as {
@@ -60,10 +62,31 @@ function createPrismaClient() {
   });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+const prismaBase = globalForPrisma.prisma ?? createPrismaClient();
+const prismaContext = new AsyncLocalStorage<Prisma.TransactionClient>();
+
+/** Faz imports existentes de `prisma` participarem da transação fenced. */
+export function executarComPrismaContextual<T>(tx: Prisma.TransactionClient, callback: () => Promise<T>): Promise<T> {
+  return prismaContext.run(tx, callback);
+}
+
+export const prisma = new Proxy(prismaBase, {
+  get(target, property, receiver) {
+    const contextual = prismaContext.getStore() as any;
+    if (contextual && property === '$transaction') {
+      return async (arg: unknown) => {
+        if (typeof arg !== 'function') throw new Error('FENCED_NESTED_BATCH_TRANSACTION_UNSUPPORTED');
+        return (arg as (tx: Prisma.TransactionClient) => Promise<unknown>)(contextual);
+      };
+    }
+    const source = contextual || target;
+    const value = Reflect.get(source as object, property, contextual ? source : receiver);
+    return typeof value === 'function' ? value.bind(source) : value;
+  },
+}) as typeof prismaBase;
 
 if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
+  globalForPrisma.prisma = prismaBase;
 }
 
 export default prisma;

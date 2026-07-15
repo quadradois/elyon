@@ -113,6 +113,7 @@ export interface ContextoConversa {
     prazoTrabalho?: number;
     instrucaoTurno?: string;
     assertFencing?: () => Promise<void>;
+    withFencedTransaction?: <T>(command: () => Promise<T>) => Promise<T>;
     // optional record fetched from leads table; may be included by orchestrator
     leadRecord?: Lead;
 }
@@ -591,6 +592,7 @@ Use isso como desempate estratégico na próxima ação.`;
             schemaState: schemaFinal,
             leadRecord,
             assertFencing: contexto.assertFencing,
+            withFencedTransaction: contexto.withFencedTransaction,
         });
 
         tFases.preContexto = Date.now() - inicioTurno;

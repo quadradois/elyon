@@ -84,6 +84,7 @@ import {
   renovarLeaseLoteInbound,
   validarFencingLoteInbound,
 } from '../servicos/consolidacao-mensagens-inbound';
+import { executarComandoFenced } from '../servicos/executor-comando-fenced';
 
 const router = Router();
 const MODO_OUTBOUND_ONLY = process.env.MODO_OUTBOUND_ONLY !== 'false';
@@ -842,6 +843,7 @@ async function enviarMensagemComRetry(params: {
   telefone: string;
   resposta: string;
   contatoId: string;
+  idempotencyKey?: string;
 }): Promise<boolean> {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_ENVIO_WHATSAPP; tentativa++) {
     try {
@@ -854,7 +856,7 @@ async function enviarMensagemComRetry(params: {
       });
 
       const whatsappService = getWhatsAppService(params.instanceName);
-      await whatsappService.enviarMensagemTexto(params.telefone, params.resposta);
+      await whatsappService.enviarMensagemTexto(params.telefone, params.resposta, params.idempotencyKey);
 
       registrarTelemetriaSaida({
         status: 'sucesso',
@@ -892,6 +894,7 @@ async function enviarMensagemAudioComRetry(params: {
   telefone: string;
   audioBase64: string;
   contatoId: string;
+  idempotencyKey?: string;
 }): Promise<boolean> {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_ENVIO_WHATSAPP; tentativa++) {
     try {
@@ -904,7 +907,7 @@ async function enviarMensagemAudioComRetry(params: {
       });
 
       const whatsappService = getWhatsAppService(params.instanceName);
-      await whatsappService.enviarMensagemAudio(params.telefone, params.audioBase64, true);
+      await whatsappService.enviarMensagemAudio(params.telefone, params.audioBase64, true, params.idempotencyKey);
 
       registrarTelemetriaSaida({
         status: 'sucesso',
@@ -945,6 +948,7 @@ async function enviarDocumentoComRetry(params: {
   fileName?: string;
   mimeType?: string;
   caption?: string;
+  idempotencyKey?: string;
 }): Promise<boolean> {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_ENVIO_WHATSAPP; tentativa++) {
     try {
@@ -961,6 +965,7 @@ async function enviarDocumentoComRetry(params: {
         fileName: params.fileName,
         mimeType: params.mimeType,
         caption: params.caption,
+        idempotencyKey: params.idempotencyKey,
       });
 
       registrarTelemetriaSaida({
@@ -1700,6 +1705,11 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                           prazoTrabalho: prazoTrabalhoContexto,
                           instrucaoTurno: instrucaoTurnoFinal,
                           assertFencing: processamentoAgendado ? assertFencing : undefined,
+                          withFencedTransaction: processamentoAgendado
+                            ? <T>(command: () => Promise<T>) => executarComandoFenced({
+                              loteId: lote.id, owner: ownerLote, fencingToken: lote.fencingToken,
+                            }, command)
+                            : undefined,
                         }
                       );
                       if (processamentoAgendado) await assertFencing();
@@ -1760,10 +1770,11 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       const deveEnviarDocumentoAutorizacao = !!AUTORIZACAO_VENDA_DOC_URL && (leadPediuDocumentoAutorizacao || respostaOfereceuEmail);
                       if (deveEnviarDocumentoAutorizacao) {
                         if (processamentoAgendado) await assertFencing();
-                        const reservadoDocumento = !processamentoAgendado || await reservarEfeitoLoteInbound(
+                        const intencaoDocumento = processamentoAgendado ? await reservarEfeitoLoteInbound(
                           loteIdAgendado!, ownerLoteAgendado!, fencingTokenAgendado, 'DOCUMENTO_AUTORIZACAO',
-                        );
-                        const documentoEnviado = !reservadoDocumento || await enviarDocumentoComRetry({
+                        ) : undefined;
+                        const documentoJaConfirmado = intencaoDocumento?.estado === 'CONCLUIDA';
+                        const documentoEnviado = documentoJaConfirmado || await enviarDocumentoComRetry({
                           instanceName,
                           telefone,
                           contatoId: contatoProspeccao.id,
@@ -1771,10 +1782,11 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                           fileName: AUTORIZACAO_VENDA_DOC_NOME,
                           mimeType: 'application/pdf',
                           caption: AUTORIZACAO_VENDA_DOC_CAPTION,
+                          idempotencyKey: intencaoDocumento?.chaveIdempotencia,
                         });
 
                         if (documentoEnviado) {
-                          if (processamentoAgendado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'DOCUMENTO_AUTORIZACAO');
+                          if (processamentoAgendado && !documentoJaConfirmado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'DOCUMENTO_AUTORIZACAO');
                           if (processamentoAgendado) await assertFencing();
                           await salvarMensagemProspeccao({
                             contatoId: contatoProspeccao.id,
@@ -1788,7 +1800,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                             resposta = `Acabei de te enviar aqui no WhatsApp o documento de autorização para você analisar com calma.\n\n${resposta}`;
                           }
                         } else if (leadPediuDocumentoAutorizacao) {
-                          if (processamentoAgendado && reservadoDocumento) await liberarEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'DOCUMENTO_AUTORIZACAO');
+                          if (processamentoAgendado && !documentoJaConfirmado) await liberarEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'DOCUMENTO_AUTORIZACAO');
                           resposta = `Consigo te mandar o documento por aqui no WhatsApp, mas houve uma instabilidade no envio agora. Se você quiser, já tento novamente em seguida.\n\n${resposta}`;
                         }
                       }
@@ -1831,34 +1843,38 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                           });
                           if (audioBase64) {
                             if (processamentoAgendado) await assertFencing();
-                            const reservadoAudio = !processamentoAgendado || await reservarEfeitoLoteInbound(
+                            const intencaoAudio = processamentoAgendado ? await reservarEfeitoLoteInbound(
                               loteIdAgendado!, ownerLoteAgendado!, fencingTokenAgendado, 'RESPOSTA_AUDIO',
-                            );
-                            envioOk = !reservadoAudio || await enviarMensagemAudioComRetry({
+                            ) : undefined;
+                            const audioJaConfirmado = intencaoAudio?.estado === 'CONCLUIDA';
+                            envioOk = audioJaConfirmado || await enviarMensagemAudioComRetry({
                               instanceName,
                               telefone,
                               audioBase64,
-                              contatoId: contatoProspeccao.id
+                              contatoId: contatoProspeccao.id,
+                              idempotencyKey: intencaoAudio?.chaveIdempotencia,
                             });
-                            if (envioOk && processamentoAgendado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_AUDIO');
-                            if (!envioOk && processamentoAgendado && reservadoAudio) await liberarEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_AUDIO');
+                            if (envioOk && processamentoAgendado && !audioJaConfirmado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_AUDIO');
+                            if (!envioOk && processamentoAgendado && !audioJaConfirmado) await liberarEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_AUDIO');
                             enviadoComoAudio = envioOk;
                           }
                         }
 
                         if (!envioOk) {
                           if (processamentoAgendado) await assertFencing();
-                          const reservadoTexto = !processamentoAgendado || await reservarEfeitoLoteInbound(
+                          const intencaoTexto = processamentoAgendado ? await reservarEfeitoLoteInbound(
                             loteIdAgendado!, ownerLoteAgendado!, fencingTokenAgendado, 'RESPOSTA_TEXTO',
-                          );
-                          envioOk = !reservadoTexto || await enviarMensagemComRetry({
+                          ) : undefined;
+                          const textoJaConfirmado = intencaoTexto?.estado === 'CONCLUIDA';
+                          envioOk = textoJaConfirmado || await enviarMensagemComRetry({
                             instanceName,
                             telefone,
                             resposta,
-                            contatoId: contatoProspeccao.id
+                            contatoId: contatoProspeccao.id,
+                            idempotencyKey: intencaoTexto?.chaveIdempotencia,
                           });
-                          if (envioOk && processamentoAgendado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_TEXTO');
-                          if (!envioOk && processamentoAgendado && reservadoTexto) await liberarEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_TEXTO');
+                          if (envioOk && processamentoAgendado && !textoJaConfirmado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_TEXTO');
+                          if (!envioOk && processamentoAgendado && !textoJaConfirmado) await liberarEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_TEXTO');
                         }
 
                         if (!envioOk) {
