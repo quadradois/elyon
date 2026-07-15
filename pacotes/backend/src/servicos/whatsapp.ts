@@ -220,7 +220,7 @@ export class WhatsAppService {
     }
   }
 
-  async enviarMensagemTexto(numero: string, texto: string): Promise<any> {
+  async enviarMensagemTexto(numero: string, texto: string, idempotencyKey?: string): Promise<any> {
     await this.garantirInstancia();
     const numeroFormatado = this.formatarNumero(numero);
 
@@ -230,7 +230,7 @@ export class WhatsAppService {
       const response = await axios.post(
         `${this.apiUrl}/send/text`,
         { number: numeroFormatado, text: texto, delay: 1200 },
-        { headers: this.headersInstancia() },
+        { headers: { ...this.headersInstancia(), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) } },
       );
       return response.data;
     } catch (error: any) {
@@ -239,7 +239,7 @@ export class WhatsAppService {
     }
   }
 
-  async enviarMensagemAudio(numero: string, audioBase64: string, _ptt: boolean = true): Promise<any> {
+  async enviarMensagemAudio(numero: string, audioBase64: string, _ptt: boolean = true, idempotencyKey?: string): Promise<any> {
     await this.garantirInstancia();
 
     try {
@@ -251,7 +251,7 @@ export class WhatsAppService {
           url: this.normalizarMidia(audioBase64),
           delay: 1200,
         },
-        { headers: this.headersInstancia() },
+        { headers: { ...this.headersInstancia(), ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) } },
       );
       return response.data;
     } catch (error: any) {
@@ -263,7 +263,7 @@ export class WhatsAppService {
   async enviarMensagemDocumento(
     numero: string,
     media: string,
-    options?: { fileName?: string; mimeType?: string; caption?: string },
+    options?: { fileName?: string; mimeType?: string; caption?: string; idempotencyKey?: string },
   ): Promise<any> {
     await this.garantirInstancia();
 
@@ -280,7 +280,7 @@ export class WhatsAppService {
       const response = await axios.post(
         `${this.apiUrl}/send/media`,
         payload,
-        { headers: this.headersInstancia() },
+        { headers: { ...this.headersInstancia(), ...(options?.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}) } },
       );
       return response.data;
     } catch (error: any) {

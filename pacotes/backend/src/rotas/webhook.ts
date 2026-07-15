@@ -60,7 +60,6 @@ import {
   construirInstrucaoTurnoMensagensSequenciais,
   detectarPermissaoAudioNoTexto,
   gerarAssinaturaLote,
-  gerarFallbackSemSilencio,
   normalizarTextoAssinatura,
   normalizarTextoAssinaturaForte,
   preferenciaAudioPorObservacoes,
@@ -73,6 +72,19 @@ import {
 } from '../modulos/webhook/adapters/evolution-go.adapter';
 import { PrepararRespostaWebhookUseCase } from '../modulos/webhook/aplicacao/preparar-resposta.usecase';
 import { DecidirCanalRespostaWebhookUseCase } from '../modulos/webhook/aplicacao/decidir-canal-resposta.usecase';
+import {
+  cancelarLoteInbound,
+  concluirLoteInbound,
+  falharLoteInbound,
+  obterLoteReivindicado,
+  registrarFragmentoInbound,
+  reservarEfeitoLoteInbound,
+  concluirEfeitoLoteInbound,
+  liberarEfeitoLoteInbound,
+  renovarLeaseLoteInbound,
+  validarFencingLoteInbound,
+} from '../servicos/consolidacao-mensagens-inbound';
+import { executarComandoFenced } from '../servicos/executor-comando-fenced';
 
 const router = Router();
 const MODO_OUTBOUND_ONLY = process.env.MODO_OUTBOUND_ONLY !== 'false';
@@ -831,6 +843,7 @@ async function enviarMensagemComRetry(params: {
   telefone: string;
   resposta: string;
   contatoId: string;
+  idempotencyKey?: string;
 }): Promise<boolean> {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_ENVIO_WHATSAPP; tentativa++) {
     try {
@@ -843,7 +856,7 @@ async function enviarMensagemComRetry(params: {
       });
 
       const whatsappService = getWhatsAppService(params.instanceName);
-      await whatsappService.enviarMensagemTexto(params.telefone, params.resposta);
+      await whatsappService.enviarMensagemTexto(params.telefone, params.resposta, params.idempotencyKey);
 
       registrarTelemetriaSaida({
         status: 'sucesso',
@@ -881,6 +894,7 @@ async function enviarMensagemAudioComRetry(params: {
   telefone: string;
   audioBase64: string;
   contatoId: string;
+  idempotencyKey?: string;
 }): Promise<boolean> {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_ENVIO_WHATSAPP; tentativa++) {
     try {
@@ -893,7 +907,7 @@ async function enviarMensagemAudioComRetry(params: {
       });
 
       const whatsappService = getWhatsAppService(params.instanceName);
-      await whatsappService.enviarMensagemAudio(params.telefone, params.audioBase64, true);
+      await whatsappService.enviarMensagemAudio(params.telefone, params.audioBase64, true, params.idempotencyKey);
 
       registrarTelemetriaSaida({
         status: 'sucesso',
@@ -934,6 +948,7 @@ async function enviarDocumentoComRetry(params: {
   fileName?: string;
   mimeType?: string;
   caption?: string;
+  idempotencyKey?: string;
 }): Promise<boolean> {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_ENVIO_WHATSAPP; tentativa++) {
     try {
@@ -950,6 +965,7 @@ async function enviarDocumentoComRetry(params: {
         fileName: params.fileName,
         mimeType: params.mimeType,
         caption: params.caption,
+        idempotencyKey: params.idempotencyKey,
       });
 
       registrarTelemetriaSaida({
@@ -1179,8 +1195,12 @@ function obterMensagensConsolidadas(contatoId: string): { mensagens: MensagemPen
 
 export async function processarWebhookEvolution(req: Request, res: Response): Promise<unknown> {
   let registroId: string | undefined = req.get('x-elyon-inbox-id');
+  const loteIdAgendado = req.get('x-elyon-batch-id');
+  const ownerLoteAgendado = req.get('x-elyon-batch-owner');
+  const fencingTokenAgendado = Number(req.get('x-elyon-batch-fencing-token'));
+  const processamentoAgendado = Boolean(loteIdAgendado && ownerLoteAgendado && Number.isInteger(fencingTokenAgendado));
   try {
-    if (!registroId) {
+    if (!registroId && !processamentoAgendado) {
       const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body));
       const payloadHash = hashPayload(rawBody);
       const { instanceToken: _instanceToken, ...payloadPersistivel } = req.body || {};
@@ -1343,6 +1363,41 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                   continue;
                 }
 
+                const conteudoDuravel = conteudoEntrada || (isMedia ? resumoMidiaIA : '');
+                const eventoTecnicoDuravel = registroId || `evolution:${instanceName}:${messageId || hashPayload(req.body)}`;
+                if (!processamentoAgendado) {
+                  await registrarFragmentoInbound({
+                    tenantId: sessaoConfiavel.tenantId,
+                    leadId: contatoProspeccao.id,
+                    webhookEventoId: eventoTecnicoDuravel,
+                    messageId,
+                    conteudo: conteudoDuravel,
+                    tipo: tipoMensagemEntrada,
+                    metadata: {
+                      urlMidia: isMedia ? metaMidia.url : undefined,
+                      mimeTypeMidia: isMedia ? metaMidia.mimeType : undefined,
+                      nomeArquivoMidia: isMedia ? metaMidia.fileName : undefined,
+                    },
+                    recebidoEm: new Date(),
+                    janelaMs: calcularDebounce(conteudoDuravel),
+                  });
+                  continue;
+                }
+
+                if ((contatoProspeccao as any).modoAtendimento === 'HUMANO'
+                  || (contatoProspeccao as any).modoAtendimento === 'PAUSADO'
+                  || contatoProspeccao.statusProspeccao === 'OPTOUT'
+                  || contatoProspeccao.statusProspeccao === 'OPT_OUT') {
+                  await salvarMensagemProspeccao({
+                    contatoId: contatoProspeccao.id, direcao: 'ENTRADA', conteudo: conteudoDuravel,
+                    tipo: tipoMensagemEntrada, messageId, telefone,
+                  });
+                  const motivo = contatoProspeccao.statusProspeccao === 'OPTOUT' || contatoProspeccao.statusProspeccao === 'OPT_OUT'
+                    ? 'OPT_OUT_BLOCKS_AI' : 'HUMAN_MODE_BLOCKS_AI';
+                  await cancelarLoteInbound(loteIdAgendado!, motivo, ownerLoteAgendado!, fencingTokenAgendado);
+                  continue;
+                }
+
                 const chaveMsgProsp = messageId
                   ? `prosp:${instanceName}:${messageId}`
                   : `prosp:${instanceName}:${telefone}:${(texto || '').slice(0, 120)}:${message.messageTimestamp || ''}`;
@@ -1457,23 +1512,8 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                   }
                   
                   // 🔍 VERIFICAR SE MENSAGENS SÃO MUITO RECENTES (< 2 segundos)
-                  const dadosDebounce = obterMensagensConsolidadas(contatoProspeccao.id);
-                  const mensagensAcumuladas = dadosDebounce?.mensagens || [mensagemPendente];
-                  
-                  const agora = Date.now();
-                  const mensagemMaisRecente = Math.max(...mensagensAcumuladas.map(m => m.timestamp));
-                  const tempoDesdeUltimaMensagem = agora - mensagemMaisRecente;
-                  
-                  if (tempoDesdeUltimaMensagem < 2000) { // Menos de 2 segundos
-                    console.log(`[Debounce] ⏸️ MUITO RECENTE - Aguardando mais ${2000 - tempoDesdeUltimaMensagem}ms`);
-                    
-                    const fila = filasDebounce.get(contatoProspeccao.id);
-                    if (fila && !fila.reagendado) {
-                      fila.reagendado = true;
-                      agendarProcessamentoFilaDebounce(contatoProspeccao.id, processarAposDebounce, 2000 - tempoDesdeUltimaMensagem);
-                    }
-                    return false;
-                  }
+                  // O claim PostgreSQL somente ocorre depois de fechaEm; nao existe
+                  // uma segunda espera baseada no relogio local do processo.
 
                   try {
                     // Consolidar mensagens
@@ -1663,9 +1703,36 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                           tipoAutorizacao: tipoAutorizacaoContexto,
                           comissaoAcordada: comissaoAcordadaContexto,
                           prazoTrabalho: prazoTrabalhoContexto,
-                          instrucaoTurno: instrucaoTurnoFinal
+                          instrucaoTurno: instrucaoTurnoFinal,
+                          assertFencing: processamentoAgendado ? assertFencing : undefined,
+                          withFencedTransaction: processamentoAgendado
+                            ? <T>(command: () => Promise<T>) => executarComandoFenced({
+                              loteId: lote.id, owner: ownerLote, fencingToken: lote.fencingToken,
+                            }, command)
+                            : undefined,
+                          executeExternalEffect: processamentoAgendado
+                            ? async (toolName: string, command: () => Promise<string>) => {
+                              const tipoEfeito = `TOOL_EXTERNAL:${toolName}`;
+                              const intencao = await reservarEfeitoLoteInbound(
+                                lote.id, ownerLote, lote.fencingToken, tipoEfeito,
+                              );
+                              if (intencao.estado === 'CONCLUIDA') {
+                                return intencao.resultado || JSON.stringify({ success: true, reconciled: true });
+                              }
+                              if (intencao.estado === 'RESERVADA') {
+                                throw new Error(`EFEITO_EXTERNO_REQUER_RECONCILIACAO:${toolName}`);
+                              }
+                              const resultadoExterno = await command();
+                              await assertFencing();
+                              if (!(await concluirEfeitoLoteInbound(
+                                lote.id, lote.fencingToken, tipoEfeito, resultadoExterno,
+                              ))) throw new Error('LOTE_LEASE_PERDIDO');
+                              return resultadoExterno;
+                            }
+                            : undefined,
                         }
                       );
+                      if (processamentoAgendado) await assertFencing();
                       console.log('[ORQUESTRADOR] Processamento concluído');
 
                       // Fallback técnico:
@@ -1700,6 +1767,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       }
                       const leadIdAtualizado = leadPosOrquestrador?.id || contatoProspeccao.id || undefined;
                       if (leadIdAtualizado) {
+                        if (processamentoAgendado) await assertFencing();
                         await garantirAtualizacaoLeadBasicaSeElegivel({
                           contatoId: contatoProspeccao.id,
                           leadId: leadIdAtualizado,
@@ -1721,7 +1789,15 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
 
                       const deveEnviarDocumentoAutorizacao = !!AUTORIZACAO_VENDA_DOC_URL && (leadPediuDocumentoAutorizacao || respostaOfereceuEmail);
                       if (deveEnviarDocumentoAutorizacao) {
-                        const documentoEnviado = await enviarDocumentoComRetry({
+                        if (processamentoAgendado) await assertFencing();
+                        const intencaoDocumento = processamentoAgendado ? await reservarEfeitoLoteInbound(
+                          loteIdAgendado!, ownerLoteAgendado!, fencingTokenAgendado, 'DOCUMENTO_AUTORIZACAO',
+                        ) : undefined;
+                        if (intencaoDocumento?.estado === 'RESERVADA') {
+                          throw new Error('EVOLUTION_EFFECT_REQUIRES_RECONCILIATION:DOCUMENTO_AUTORIZACAO');
+                        }
+                        const documentoJaConfirmado = intencaoDocumento?.estado === 'CONCLUIDA';
+                        const documentoEnviado = documentoJaConfirmado || await enviarDocumentoComRetry({
                           instanceName,
                           telefone,
                           contatoId: contatoProspeccao.id,
@@ -1729,9 +1805,12 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                           fileName: AUTORIZACAO_VENDA_DOC_NOME,
                           mimeType: 'application/pdf',
                           caption: AUTORIZACAO_VENDA_DOC_CAPTION,
+                          idempotencyKey: intencaoDocumento?.chaveIdempotencia,
                         });
 
                         if (documentoEnviado) {
+                          if (processamentoAgendado && !documentoJaConfirmado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'DOCUMENTO_AUTORIZACAO');
+                          if (processamentoAgendado) await assertFencing();
                           await salvarMensagemProspeccao({
                             contatoId: contatoProspeccao.id,
                             direcao: 'SAIDA',
@@ -1744,6 +1823,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                             resposta = `Acabei de te enviar aqui no WhatsApp o documento de autorização para você analisar com calma.\n\n${resposta}`;
                           }
                         } else if (leadPediuDocumentoAutorizacao) {
+                          if (processamentoAgendado && !documentoJaConfirmado) await liberarEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'DOCUMENTO_AUTORIZACAO');
                           resposta = `Consigo te mandar o documento por aqui no WhatsApp, mas houve uma instabilidade no envio agora. Se você quiser, já tento novamente em seguida.\n\n${resposta}`;
                         }
                       }
@@ -1764,6 +1844,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
 
                       // Enviar Resposta
                       if (resposta) {
+                        if (processamentoAgendado) await assertFencing();
                         if (!(await deveEnviarResposta({
                           contatoId: contatoProspeccao.id,
                           leadId: contatoProspeccao.leadId || undefined,
@@ -1784,23 +1865,45 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                             perfil: perfilVendaTenant?.perfilVozTenant || 'vendas_alta_energia',
                           });
                           if (audioBase64) {
-                            envioOk = await enviarMensagemAudioComRetry({
+                            if (processamentoAgendado) await assertFencing();
+                            const intencaoAudio = processamentoAgendado ? await reservarEfeitoLoteInbound(
+                              loteIdAgendado!, ownerLoteAgendado!, fencingTokenAgendado, 'RESPOSTA_AUDIO',
+                            ) : undefined;
+                            if (intencaoAudio?.estado === 'RESERVADA') {
+                              throw new Error('EVOLUTION_EFFECT_REQUIRES_RECONCILIATION:RESPOSTA_AUDIO');
+                            }
+                            const audioJaConfirmado = intencaoAudio?.estado === 'CONCLUIDA';
+                            envioOk = audioJaConfirmado || await enviarMensagemAudioComRetry({
                               instanceName,
                               telefone,
                               audioBase64,
-                              contatoId: contatoProspeccao.id
+                              contatoId: contatoProspeccao.id,
+                              idempotencyKey: intencaoAudio?.chaveIdempotencia,
                             });
+                            if (envioOk && processamentoAgendado && !audioJaConfirmado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_AUDIO');
+                            if (!envioOk && processamentoAgendado && !audioJaConfirmado) await liberarEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_AUDIO');
                             enviadoComoAudio = envioOk;
                           }
                         }
 
                         if (!envioOk) {
-                          envioOk = await enviarMensagemComRetry({
+                          if (processamentoAgendado) await assertFencing();
+                          const intencaoTexto = processamentoAgendado ? await reservarEfeitoLoteInbound(
+                            loteIdAgendado!, ownerLoteAgendado!, fencingTokenAgendado, 'RESPOSTA_TEXTO',
+                          ) : undefined;
+                          if (intencaoTexto?.estado === 'RESERVADA') {
+                            throw new Error('EVOLUTION_EFFECT_REQUIRES_RECONCILIATION:RESPOSTA_TEXTO');
+                          }
+                          const textoJaConfirmado = intencaoTexto?.estado === 'CONCLUIDA';
+                          envioOk = textoJaConfirmado || await enviarMensagemComRetry({
                             instanceName,
                             telefone,
                             resposta,
-                            contatoId: contatoProspeccao.id
+                            contatoId: contatoProspeccao.id,
+                            idempotencyKey: intencaoTexto?.chaveIdempotencia,
                           });
+                          if (envioOk && processamentoAgendado && !textoJaConfirmado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_TEXTO');
+                          if (!envioOk && processamentoAgendado && !textoJaConfirmado) await liberarEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_TEXTO');
                         }
 
                         if (!envioOk) {
@@ -1808,7 +1911,9 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                           return false;
                         }
 
+                        if (processamentoAgendado) await assertFencing();
                         await registrarResposta(contatoProspeccao.id);
+                        if (processamentoAgendado) await assertFencing();
                         await salvarMensagemProspeccao({
                           contatoId: contatoProspeccao.id,
                           direcao: 'SAIDA',
@@ -1841,34 +1946,98 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
 
                   } catch (err) {
                     console.error('[Debounce] Erro processamento:', err);
-                    try {
-                      const dadosAtuais = obterMensagensConsolidadas(contatoProspeccao.id);
-                      const textoFallback = dadosAtuais?.textoConsolidado || mensagemPendente.conteudo || '';
-                      const respostaFallback = gerarFallbackSemSilencio(textoFallback);
-                      const envioOk = await enviarMensagemComRetry({
-                        instanceName,
-                        telefone,
-                        resposta: respostaFallback,
-                        contatoId: contatoProspeccao.id
-                      });
-                      if (envioOk) {
-                        await registrarResposta(contatoProspeccao.id);
-                        await salvarMensagemProspeccao({ contatoId: contatoProspeccao.id, direcao: 'SAIDA', conteudo: respostaFallback, tipo: 'TEXTO', telefone });
-                      }
-                    } catch (fallbackErr) {
-                      console.error('[Debounce] Falha no fallback anti-silêncio:', fallbackErr);
-                    }
-                    return true;
+                    throw err;
                   }
                 };
 
-                const adicionado = adicionarAFilaDebounce(contatoProspeccao.id, mensagemPendente, contatoProspeccao, telefone, processarAposDebounce, debounceMs);
-                if (adicionado) console.log(`[Webhook] ⏳ DEBOUNCE: Mensagem aguardando ${debounceMs/1000}s (completa=${mensagemPareceCompleta(conteudoDebounce)})...`);
+                const eventoTecnicoId = registroId || `evolution:${instanceName}:${messageId || hashPayload(req.body)}`;
+                if (!processamentoAgendado) {
+                  await registrarFragmentoInbound({
+                    tenantId: sessaoConfiavel.tenantId,
+                    leadId: contatoProspeccao.id,
+                    webhookEventoId: eventoTecnicoId,
+                    messageId,
+                    conteudo: mensagemPendente.conteudo,
+                    tipo: mensagemPendente.tipo,
+                    metadata: {
+                      urlMidia: mensagemPendente.urlMidia,
+                      mimeTypeMidia: mensagemPendente.mimeTypeMidia,
+                      nomeArquivoMidia: mensagemPendente.nomeArquivoMidia,
+                    },
+                    recebidoEm: new Date(mensagemPendente.timestamp),
+                    janelaMs: debounceMs,
+                  });
+                  // O recibo termina aqui: o claimer duravel processa o lote somente
+                  // depois de fechaEm, inclusive com um unico loop de worker.
+                  continue;
+                }
 
-                // Concluir o recibo somente depois dos efeitos. Se o processo
-                // cair durante o debounce, o lease expira e o worker retoma.
-                while (filasDebounce.has(contatoProspeccao.id)) {
-                  await new Promise((resolve) => setTimeout(resolve, 250));
+                const ownerLote = ownerLoteAgendado!;
+                const lote = await obterLoteReivindicado(loteIdAgendado!, ownerLote, fencingTokenAgendado);
+                if (lote.tenantId !== sessaoConfiavel.tenantId || lote.leadId !== contatoProspeccao.id) {
+                  throw new Error('TENANT_MISMATCH: lote agendado nao pertence a sessao confiavel');
+                }
+                let leaseValido = true;
+                const assertFencing = async (): Promise<void> => {
+                  if (!leaseValido) throw new Error('LOTE_LEASE_PERDIDO');
+                  await validarFencingLoteInbound(lote.id, ownerLote, lote.fencingToken);
+                };
+                {
+                    const leadAtual = await prisma.lead.findFirst({
+                      where: { id: contatoProspeccao.id, tenantId: sessaoConfiavel.tenantId },
+                      select: { modoAtendimento: true, statusProspeccao: true },
+                    });
+                    if (!leadAtual) throw new Error('TENANT_MISMATCH: Lead ausente no momento do claim');
+                    if (leadAtual.modoAtendimento === 'HUMANO' || leadAtual.modoAtendimento === 'PAUSADO') {
+                      await cancelarLoteInbound(lote.id, 'HUMAN_MODE_BLOCKS_AI', ownerLote, lote.fencingToken);
+                      break;
+                    }
+                    if (leadAtual.statusProspeccao === 'OPTOUT' || leadAtual.statusProspeccao === 'OPT_OUT') {
+                      await cancelarLoteInbound(lote.id, 'OPT_OUT_BLOCKS_AI', ownerLote, lote.fencingToken);
+                      break;
+                    }
+
+                    const mensagensPersistidas: MensagemPendente[] = lote.fragmentos.map((fragmento) => {
+                      const metadata = (fragmento.metadata || {}) as Record<string, string | undefined>;
+                      return {
+                        conteudo: fragmento.conteudo,
+                        tipo: fragmento.tipo,
+                        messageId: fragmento.messageId || undefined,
+                        timestamp: fragmento.recebidoEm.getTime(),
+                        urlMidia: metadata.urlMidia,
+                        mimeTypeMidia: metadata.mimeTypeMidia,
+                        nomeArquivoMidia: metadata.nomeArquivoMidia,
+                      };
+                    });
+                    filasDebounce.set(contatoProspeccao.id, {
+                      mensagens: mensagensPersistidas,
+                      timer: null,
+                      contatoData: contatoProspeccao,
+                      telefone,
+                      reagendado: false,
+                    });
+                    const heartbeatLote = setInterval(() => {
+                      void renovarLeaseLoteInbound(lote.id, ownerLote, undefined, lote.fencingToken)
+                        .then((renovado) => {
+                          if (!renovado) leaseValido = false;
+                        })
+                        .catch((error) => {
+                          leaseValido = false;
+                          console.error('[Debounce] Falha ao renovar lease do lote duravel:', error);
+                        });
+                    }, Math.max(10_000, Number(process.env.WEBHOOK_WORKER_LEASE_SECONDS || 300) * 1_000 / 3));
+                    try {
+                      await assertFencing();
+                      if (!(await processarAposDebounce())) throw new Error('Lote duravel nao ficou pronto para conclusao');
+                      await assertFencing();
+                      if (!(await concluirLoteInbound(lote.id, ownerLote, lote.fencingToken))) throw new Error('Lease do lote perdido antes da conclusao');
+                    } catch (error) {
+                      await falharLoteInbound(lote.id, error, ownerLote, lote.fencingToken);
+                      throw error;
+                    } finally {
+                      clearInterval(heartbeatLote);
+                      filasDebounce.delete(contatoProspeccao.id);
+                    }
                 }
 
                 // IMPORTANTÍSSIMO: Continue aqui impede que caia no fluxo de Lead Inbound
@@ -1887,6 +2056,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
           }
         } catch (msgError) {
           console.error('[Webhook] Erro msg:', msgError);
+          throw msgError;
         }
       }
     }
