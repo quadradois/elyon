@@ -64,6 +64,7 @@ import { bancoDeAprendizadosService, calcularRecompensaTurno } from '../servicos
 import { isLearningBankEnabled, isPaolAbEnabled, isPaolShadowEnabled } from './feature-flags';
 import { gerarInstrucaoPaol, paolPolicyService, type PaolDecision, type PaolModoExecucao } from './paol-policy';
 import { RegistrarOptoutUseCase } from '../casos-de-uso/agentes/registrar-optout.usecase';
+import type { RagFact } from './rag-facts-context';
 
 // Re-exports para consumidores existentes (webhook.ts, sdr-tools-agents.ts)
 export { buscarConfiguracaoTenant, buscarContextoConversa } from './orchestrator-queries';
@@ -112,6 +113,7 @@ export interface ContextoConversa {
     comissaoAcordada?: string;
     prazoTrabalho?: number;
     instrucaoTurno?: string;
+    ragFacts?: RagFact[];
     assertFencing?: () => Promise<void>;
     withFencedTransaction?: <T>(command: () => Promise<T>) => Promise<T>;
     executeExternalEffect?: (toolName: string, command: () => Promise<string>) => Promise<string>;

@@ -234,4 +234,23 @@ describe('construirInputSdk', () => {
     expect(result.temporalFactsStats?.expirados).toBeGreaterThan(0);
     expect(result.temporalFactsStats?.taxaExpirados).toBeGreaterThan(0);
   });
+
+  it('mantem historico, briefing e fatos RAG em secoes distintas do input real', () => {
+    const result = construirInputSdk({
+      mensagens: [{ role: 'user', content: 'HISTORICO_EXPLICITO' }],
+      estadoConversaAtual: estadoBase,
+      config: { briefingEmpreendimento: 'BRIEFING_EXPLICITO' },
+      contexto: { leadId: 'lead-123', empreendimento: 'Edificio', ragFacts: [{
+        contractVersion: '1.0', conteudo: 'FATO_RAG_EXPLICITO', origem: 'conversa',
+        recuperadoEm: '2026-01-01T00:00:00.000Z', confianca: 0.9,
+        tenantId: 'tenant-1', leadId: 'lead-123', relevancia: 0.8,
+      }] },
+    });
+    const system = (result.inputSDK[0] as any).content as string;
+    expect(system).toContain('CONHECIMENTO DO EMPREENDIMENTO');
+    expect(system).toContain('BRIEFING_EXPLICITO');
+    expect(system).toContain('FATOS RAG PERSISTIDOS');
+    expect(system).toContain('FATO_RAG_EXPLICITO');
+    expect(JSON.stringify(result.inputSDK[1])).toContain('HISTORICO_EXPLICITO');
+  });
 });

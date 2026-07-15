@@ -52,7 +52,7 @@ fixtures com prefixo/run UUID, deleção por tenant/evento e chaves Redis regist
 | B02 | webhook aceito | sem efeito antes do worker | 1 recibo `PENDENTE` | Automatizado | suportado/gate |
 | B03 | mesmo telefone em dois tenants | apenas Lead do tenant do evento | 0 mensagens no outro tenant | Automatizado | suportado/gate |
 | B04 | mensagens sequenciais | lote PostgreSQL tenant-safe com lease | ordem preservada, 1 execução/resposta, replay e restart cobertos | Automatizado na #54 | suportado/gate |
-| B05 | histórico, briefing e fato RAG | histórico/briefing chegam; fato RAG é montado mas não repassado | probe explícito | Automatizado | expected-failure/probe |
+| B05 | histórico, briefing e fato RAG | contrato `RagFact@1.0`, fronteiras distintas e seleção tenant/Lead-safe | gate suportado | Automatizado | suportado pela Issue #55 |
 | B06 | comando de qualificação | mesmo `Lead.id` | 1 Lead, 1 inbound | Automatizado | suportado/gate |
 | B07 | evidência candidata suficiente | outreach `LEAD`; CRM `NOVO` | policy/evidence em `schemaState` | Automatizado | suportado/gate |
 | B08 | pedido explícito de retorno | — | não exercitado pelo caminho real revisado | Não coberto | pendente/reclassificado |
@@ -150,7 +150,7 @@ relógio controlado; lease expirado é preparado por timestamp explícito.
 ## Riscos, lacunas e limpeza
 
 - O handler Evolution real é exercitado, com somente bordas externas determinísticas.
-- B05 e B16 permanecem lacunas/reclassificações; B04 passou a gate durável na #54.
+- B16 permanece como lacuna/reclassificação; B04 passou a gate durável na #54 e B05 a gate suportado na #55.
 - `schemaState` é usado apenas em fixture sintética; nenhum contrato novo é imposto.
 - A análise real depende de autorização externa e papel de banco read-only.
 - Cleanup por tenant usa cascata do schema e remove inbox/chaves Redis por run ID.

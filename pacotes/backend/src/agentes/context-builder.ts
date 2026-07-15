@@ -1,6 +1,7 @@
 import type { ElyonContext } from './elyon-context';
 import type { SchemaState } from './conversation-state';
 import type { Lead } from '@prisma/client';
+import type { RagFact } from './rag-facts-context';
 
 interface ContextBuilderConfig {
   tenantId: string;
@@ -26,6 +27,7 @@ interface ContextBuilderConversa {
   tipoAutorizacao?: string;
   comissaoAcordada?: string;
   prazoTrabalho?: number;
+  ragFacts?: RagFact[];
 }
 
 interface ConstruirElyonContextParams {
@@ -72,6 +74,7 @@ export function construirElyonContext(params: ConstruirElyonContextParams): Elyo
     tipoAutorizacao: contexto.tipoAutorizacao,
     comissaoAcordada: contexto.comissaoAcordada,
     prazoTrabalho: contexto.prazoTrabalho,
+    ragFacts: contexto.ragFacts,
     ultimaInteracao: textoUltimaInteracao,
     prisma: prismaClient,
     schemaState,

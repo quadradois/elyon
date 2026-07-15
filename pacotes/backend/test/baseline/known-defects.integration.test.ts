@@ -1,7 +1,7 @@
 jest.mock('../../src/servicos/servico-captura-documentos', () => ({ detectarTipoMidia: jest.fn(() => null), capturarDocumentoWhatsapp: jest.fn() }));
 jest.mock('../../src/servicos/servico-analise-midia', () => ({ analisarMidiaParaContexto: jest.fn(async () => null) }));
 jest.mock('../../src/servicos/servico-voz', () => ({ sintetizarFalaTenant: jest.fn(async () => null) }));
-jest.mock('../../src/servicos/rag-conversas', () => ({ ragConversasService: { buscarContextoRelevante: jest.fn(async () => ({ contextoFormatado: 'RAG_FATO_SINTETICO' })) } }));
+jest.mock('../../src/servicos/rag-conversas', () => ({ ragConversasService: { buscarContextoRelevante: jest.fn(async (tenantId: string, leadId: string) => ({ contextoFormatado: 'RAG_FATO_SINTETICO', facts: [{ contractVersion: '1.0', id: 'fact-1', conteudo: 'RAG_FATO_SINTETICO', origem: 'baseline', recuperadoEm: '2026-01-01T00:00:00.000Z', confianca: 0.95, tenantId, leadId, relevancia: 0.9 }] })) } }));
 jest.mock('../../src/casos-de-uso/agentes/qualificar-lead.usecase', () => ({ QualificarLeadUseCase: class { execute = jest.fn(async () => ({ success: false })); } }));
 jest.mock('../../src/casos-de-uso/agentes/converter-para-lead.usecase', () => ({ ConverterParaLeadUseCase: class { execute = jest.fn(async () => ({ success: false })); } }));
 jest.mock('../../src/agentes/orchestrator', () => {
@@ -21,14 +21,16 @@ describe('probes executáveis de falhas conhecidas', () => {
   afterEach(async () => { await harness.cleanup(); resetDoubles(); });
   afterAll(async () => { await closeRedisClient(); await prisma.$disconnect(); });
 
-  it('XF-B05 briefing/histórico chegam, mas fatos RAG não são repassados ao orquestrador', async () => {
+  it('B05 briefing, historico e fatos RAG chegam ao orquestrador em fronteiras distintas', async () => {
     const f = await harness.seed();
     await harness.acceptInbound(f, `context-${f.runId}`, 'quero informações completas');
     await harness.runWorkerAndBatch('context-worker');
     const call = captured.orchestrator[0];
     expect(JSON.stringify(call.messages)).toContain('HISTORICO_SINTETICO');
     expect(JSON.stringify(call.config)).toContain('BRIEFING_SINTETICO_CONFIAVEL');
-    expect(JSON.stringify(call)).not.toContain('RAG_FATO_SINTETICO');
+    expect(JSON.stringify(call.context)).toContain('RAG_FATO_SINTETICO');
+    expect(JSON.stringify(call.messages)).not.toContain('RAG_FATO_SINTETICO');
+    expect(JSON.stringify(call.config)).not.toContain('RAG_FATO_SINTETICO');
   });
 
   it('XF-B16 cancelamento deixa estágio VISITA_AGENDADA incoerente', async () => {

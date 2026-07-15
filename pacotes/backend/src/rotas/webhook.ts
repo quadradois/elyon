@@ -85,6 +85,8 @@ import {
   validarFencingLoteInbound,
 } from '../servicos/consolidacao-mensagens-inbound';
 import { executarComandoFenced } from '../servicos/executor-comando-fenced';
+import { selectRagFacts, withRagTimeout, type RagFact } from '../agentes/rag-facts-context';
+import { recordRagRecovery, recordRagSelection } from '../observabilidade/rag-facts-metrics';
 
 const router = Router();
 const MODO_OUTBOUND_ONLY = process.env.MODO_OUTBOUND_ONLY !== 'false';
@@ -1603,37 +1605,29 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         || contatoProspeccao.nomeEdificio
                         || '';
 
-                    // Montar Contexto RAG
-                    const partesRAG: string[] = [];
-                    if (agenteConfig?.ragPerfilTexto) partesRAG.push(`### PERFIL DA IMOBILIÁRIA ###\n${agenteConfig.ragPerfilTexto}`);
-
-                    const empreendimentoData = contatoProspeccao.campanhaOrigem?.empreendimento as any;
-                    if (empreendimentoData?.briefingCompleto) {
-                      partesRAG.push(`### CONHECIMENTO DO EMPREENDIMENTO: ${empreendimentoData.nome} ###\n${empreendimentoData.briefingCompleto}`);
-                    } else if (contatoProspeccao.campanhaOrigem?.briefingCompleto) {
-                      partesRAG.push(`### CONHECIMENTO DO EMPREENDIMENTO ###\n${contatoProspeccao.campanhaOrigem.briefingCompleto}`);
-                    }
+                    // Fatos RAG permanecem separados de perfil, briefing e historico.
+                    let fatosRagSelecionados: RagFact[] = [];
 
                     // 🧠 RAG DE CONVERSAS (Memória de longo prazo)
                     // Só busca se tiver texto suficiente na mensagem atual
                     if (tenantId && mensagemPendente.conteudo.length > 5) {
                       try {
-                        const ragResult = await ragConversasService.buscarContextoRelevante(
+                        const ragResult = await withRagTimeout(ragConversasService.buscarContextoRelevante(
                           tenantId,
+                          contatoProspeccao.id,
                           mensagemPendente.conteudo,
                           ['objecao_superada', 'script_eficaz', 'pergunta_frequente']
-                        );
+                        ), 2500);
 
-                        if (ragResult.contextoFormatado) {
-                          partesRAG.push(ragResult.contextoFormatado);
-                          console.log('[Webhook] 🧠 Contexto RAG injetado com sucesso');
-                        }
-                      } catch (ragError) {
-                        console.error('[Webhook] Erro ao buscar RAG:', ragError);
+                        const selecao = selectRagFacts({ candidates: ragResult.facts || [], tenantId, leadId: contatoProspeccao.id });
+                        fatosRagSelecionados = selecao.facts;
+                        recordRagSelection(selecao);
+                        recordRagRecovery(ragResult.degraded ? 'degraded' : selecao.facts.length ? 'success' : 'empty');
+                      } catch {
+                        recordRagRecovery('degraded');
+                        console.error('[Webhook] Falha degradada ao recuperar fatos RAG');
                       }
                     }
-
-                      const contextoRAG = partesRAG.length > 0 ? partesRAG.join('\n\n') : undefined;
 
                       // Governança de config:
                       // - Preferir USAR_ORQUESTRADOR (nome atual)
@@ -1697,12 +1691,13 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         {
                           ...contextoOrq,
                           contatoId: contatoProspeccao.id,
-                          leadId: contatoProspeccao.leadId || undefined,
+                          leadId: contatoProspeccao.id,
                           statusLead: contatoProspeccao.lead?.status || undefined,
                           empreendimento: empreendimentoContexto,
                           tipoAutorizacao: tipoAutorizacaoContexto,
                           comissaoAcordada: comissaoAcordadaContexto,
                           prazoTrabalho: prazoTrabalhoContexto,
+                          ragFacts: fatosRagSelecionados,
                           instrucaoTurno: instrucaoTurnoFinal,
                           assertFencing: processamentoAgendado ? assertFencing : undefined,
                           withFencedTransaction: processamentoAgendado
