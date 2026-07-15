@@ -697,6 +697,7 @@ model FollowupOutbound {
   expressaoOriginal  String
   motivo             String
   motivoNormalizado  String
+  mensagemEnvio      String   @db.Text
   policyVersion      String
   status             String   @default("PENDENTE")
   tentativas         Int      @default(0)
@@ -716,7 +717,7 @@ model FollowupOutbound {
   efeito             EfeitoFollowupOutbound?
 
   @@index([tenantId, leadId, status, agendadoParaUtc])
-  @@index([status, agendadoParaUtc, proximoRetryEm, leaseAte])
+  @@index([status, agendadoParaUtc, proximoRetryEm, leaseAte], map: "followups_outbound_claim_idx")
   @@map("followups_outbound")
 }
 

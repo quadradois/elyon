@@ -32,10 +32,10 @@ export function interpretarFollowupTemporal(params: {
 
   let local: string | undefined;
   const iso = expression.match(/^(\d{4}-\d{2}-\d{2})[ t](\d{2}):(\d{2})$/);
-  const br = expression.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
+  const br = expression.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
   const tomorrow = expression.match(/^amanh[ãa]\s+(?:(?:às?|as)\s*)?(\d{1,2}):(\d{2})$/);
   if (iso) local = `${iso[1]}T${iso[2]}:${iso[3]}`;
-  else if (br) local = `${br[3]}-${br[2]}-${br[1]}T${br[4] || '09'}:${br[5] || '00'}`;
+  else if (br) local = `${br[3]}-${br[2]}-${br[1]}T${br[4]}:${br[5]}`;
   else if (tomorrow) {
     const ref = localDeReferencia(addDays(agora, 1), params.timezone);
     local = `${ref.date}T${tomorrow[1].padStart(2, '0')}:${tomorrow[2]}`;

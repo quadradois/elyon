@@ -185,20 +185,21 @@ Qual valor você espera pelo seu apartamento?
     const parsedPassado = JSON.parse(passado);
     expect(parsedPassado.success).toBe(false);
     expect(parsedPassado.bloqueadoPorValidacao).toBe(true);
-    expect(parsedPassado.error).toContain('timezone');
+    expect(parsedPassado.error).toContain('data e hora');
 
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
     const dd = String(amanha.getDate()).padStart(2, '0');
     const mm = String(amanha.getMonth() + 1).padStart(2, '0');
     const yyyy = amanha.getFullYear();
-    const dataFutura = `${dd}/${mm}/${yyyy}`;
+    const dataFutura = `${dd}/${mm}/${yyyy} 09:00`;
 
     const futuro = await wrapped({
       leadId: 'lead-ivonet-001',
       dataRecontato: dataFutura,
       timezoneIana: 'America/Sao_Paulo',
       motivo: 'lead quer retomar com calma',
+      mensagemEnvio: 'Posso retomar nosso contato conforme combinado?',
       evidenciaPedido: 'pode me chamar amanha',
       policyVersion: 'followup-v1',
     });

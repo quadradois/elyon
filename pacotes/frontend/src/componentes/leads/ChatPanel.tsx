@@ -15,6 +15,7 @@ import {
   Clock, ExternalLink,
 } from 'lucide-react';
 import { api } from '../../servicos/api';
+import { agendarFollowupManual } from '../../servicos/apiFollowup';
 import { toast } from 'sonner';
 
 // ─── Tipos ────────────────────────────────────────
@@ -276,10 +277,7 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, leadTemperatura, lea
     }
     setAgendando(true);
     try {
-      await api.post(`/leads/${leadId}/followup`, {
-        mensagem: followupMensagem.trim(),
-        dataEnvio: new Date(followupData).toISOString(),
-      });
+      await agendarFollowupManual(leadId, { mensagem: followupMensagem, dataLocal: followupData });
       toast.success('Follow-up agendado! ✅');
       setFollowupMensagem('');
       setFollowupData('');

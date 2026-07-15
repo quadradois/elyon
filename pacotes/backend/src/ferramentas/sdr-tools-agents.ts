@@ -399,7 +399,8 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
         timezoneIana: z.string().describe('Timezone IANA confiavel'),
         evidenciaPedido: z.string().describe('Trecho do pedido explicito do Lead'),
         policyVersion: z.literal('followup-v1').default('followup-v1'),
-        dataRecontato: z.string().describe('Data: "DD/MM/YYYY"'),
+        dataRecontato: z.string().describe('Data e hora confirmadas: "DD/MM/YYYY HH:mm"'),
+        mensagemEnvio: z.string().describe('Mensagem de follow-up a enviar, sem inventar fatos'),
         motivo: z.string().describe('Por que não quer agora')
     }),
 
@@ -418,6 +419,7 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
             dataRecontato: args.dataRecontato,
             timezoneIana: args.timezoneIana,
             motivo: args.motivo,
+            mensagemEnvio: args.mensagemEnvio,
             evidenciaPedido: args.evidenciaPedido,
             origemPedido: 'TOOL_AGENDAR_FOLLOWUP',
             policyVersion: args.policyVersion

@@ -9,6 +9,9 @@ describe('policy temporal de follow-up', () => {
   it.each(['me chama depois', 'fala comigo semana que vem', 'amanha'])('exige esclarecimento para %s', (expressao) => {
     expect(interpretarFollowupTemporal({ expressao, timezone: 'America/Sao_Paulo', agora: now })).toEqual({ ok: false, reasonCode: 'DATE_AMBIGUOUS' });
   });
+  it('recusa DD/MM/YYYY sem horario e nao inventa 09:00', () => {
+    expect(interpretarFollowupTemporal({ expressao: '16/07/2026', timezone: 'America/Sao_Paulo', agora: now })).toEqual({ ok: false, reasonCode: 'DATE_AMBIGUOUS' });
+  });
   it('recusa passado e horario fora da policy', () => {
     expect(interpretarFollowupTemporal({ expressao: '2026-07-14 09:00', timezone: 'America/Sao_Paulo', agora: now })).toEqual({ ok: false, reasonCode: 'DATE_PAST' });
     expect(interpretarFollowupTemporal({ expressao: '2026-07-16 23:00', timezone: 'America/Sao_Paulo', agora: now })).toEqual({ ok: false, reasonCode: 'OUTSIDE_ALLOWED_HOURS' });

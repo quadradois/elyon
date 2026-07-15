@@ -6,13 +6,13 @@
 `Lead.id`. PostgreSQL e a fonte de verdade. Estados: `PENDENTE`, `REIVINDICADO`,
 `EXECUTADO`, `CANCELADO`, `EXPIRADO` e `FALHO`. O registro preserva UTC,
 timezone IANA, expressao original, motivo, evidencia, origem, policy, tentativas,
-retry, lease, fencing, idempotencia e reason codes. Os campos legados do Lead
+corpo exato da mensagem, retry, lease, fencing, idempotencia e reason codes. Os campos legados do Lead
 permanecem apenas como espelho de compatibilidade durante o rollout.
 
 ## Policy temporal
 
 `followup-v1` aceita data local explicita ou `amanha HH:mm` somente com timezone
-IANA valido. Horarios permitidos: 08:00 inclusive ate 20:00 exclusivo. Segundos
+IANA valido. Data sem hora e recusada; nenhum horario e inventado. Horarios permitidos: 08:00 inclusive ate 20:00 exclusivo. Segundos
 e milissegundos sao zerados. Datas passadas, timezone desconhecido, expressoes
 insuficientes e instantes inexistentes/duplicados por DST falham fechados e
 exigem confirmacao. Conversao usa `date-fns-tz`, nunca offset manual.
@@ -31,7 +31,9 @@ confirmacao fenced grava mensagem e `EXECUTADO`. Intencao `RESERVADO` apos crash
 fica fail-closed para reconciliacao, sem reenvio automatico.
 
 Falha comprovadamente anterior ao envio remove a reserva e agenda retry com
-backoff deterministico. Falha ambigua usa `DELIVERY_UNKNOWN`, sem retry automatico.
+backoff exponencial deterministico baseado em `tentativas`. O limite default e
+3, configuravel por `FOLLOWUP_MAX_ATTEMPTS` entre 1 e 10; o esgotamento usa
+`RETRY_EXHAUSTED` sem novo claim. Falha ambigua usa `DELIVERY_UNKNOWN`, sem retry automatico.
 O worker e o cron legado compartilham o mesmo claimer duravel.
 
 ## Observabilidade e seguranca
@@ -57,19 +59,24 @@ remove nem transforma dados existentes.
 
 A validacao local reproduzivel usou PostgreSQL 15 com pgvector 0.8 e Redis 7.4,
 aplicou as quatro migrations desde banco vazio e executou o caminho real do
-agregado sem chamadas externas. O gate e composto por 24 cenarios automatizados:
+agregado sem chamadas externas. O gate direcionado e composto por 28 cenarios automatizados:
 
-- 9 cenarios de baseline real: criacao concorrente/replay, restart e takeover,
+- 11 cenarios de baseline real: criacao concorrente/replay, payload real do
+  ChatPanel pela API ate a persistencia, restart e takeover,
   gates HUMANO, PAUSADO e opt-out, reagendamento atomico, retry comprovadamente
-  anterior ao envio, falha ambigua fail-closed, crash apos envio e isolamento de
+  anterior ao envio com limite, falha ambigua fail-closed, takeover entre envio
+  e confirmacao e isolamento de
   dois tenants;
-- 6 cenarios temporais: data relativa com timezone IANA, timezone invalido, tres
+- 7 cenarios temporais: data relativa com timezone IANA, timezone invalido, tres
   expressoes ambiguas, passado, horario proibido e instantes DST inexistente ou
-  duplicado;
+  duplicado, incluindo recusa explicita de `DD/MM/YYYY` sem hora;
 - 8 cenarios de contrato/governanca do use case e da tool, incluindo identidade
   canonica, policy/evidencia obrigatorias e ausencia de promocao de texto livre;
 - 1 cenario de scrape das metricas, verificando ausencia de PII em nomes e labels.
+- 1 cenario frontend que prova o payload enviado pelo ChatPanel.
 
 Comandos: `npm run build`, testes unitarios direcionados e
 `npm run test:baseline -- followup-outbound.integration.test.ts`. Resultado:
-build verde, 15 testes unitarios verdes e 9 testes de baseline verdes.
+builds backend/frontend verdes, 16 testes backend direcionados, 1 teste frontend
+e 11 testes de baseline verdes. O deploy de migrations foi executado duas vezes
+e `prisma migrate diff --exit-code` confirmou drift zero.

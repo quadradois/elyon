@@ -2300,10 +2300,10 @@ router.post('/:id/followup', async (req, res) => {
     const tenantId = getTenantId(req);
     if (!tenantId) return responderErro(res, 401, 'Não autorizado');
 
-    const { dataEnvio, timezoneIana, motivo, evidenciaPedido } = req.body;
-    if (!dataEnvio || !timezoneIana || !motivo || !evidenciaPedido) return responderErro(res, 400, 'dataEnvio, timezoneIana, motivo e evidenciaPedido são obrigatórios');
+    const { mensagem, dataEnvio, timezoneIana, motivo } = req.body;
+    if (!mensagem?.trim() || !dataEnvio || !timezoneIana || !motivo?.trim()) return responderErro(res, 400, 'mensagem, dataEnvio, timezoneIana e motivo são obrigatórios');
     const result = await criarFollowupOutbound({ tenantId, leadId: req.params.id, expressaoOriginal: dataEnvio,
-      timezoneIana, motivo, evidenciaPedido, origemPedido: 'API_LEADS_FOLLOWUP' });
+      timezoneIana, motivo, mensagemEnvio: mensagem, evidenciaPedido: 'OPERADOR_AUTENTICADO_CHAT_PANEL', origemPedido: 'API_LEADS_FOLLOWUP' });
     if (!result.success) return responderErro(res, 422, result.reasonCode);
 
     res.json({

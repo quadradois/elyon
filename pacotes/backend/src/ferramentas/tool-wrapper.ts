@@ -190,8 +190,10 @@ const validarFollowup: ToolPreValidator = {
         }
 
         const motivoEstruturado = typeof args.motivo === 'string' ? args.motivo.trim() : '';
+        if (!/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/.test(dataRecontato.trim()) && !/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$/.test(dataRecontato.trim()) && !/^amanh[ãa]\s+(?:(?:às?|as)\s*)?\d{1,2}:\d{2}$/i.test(dataRecontato.trim())) return 'BLOQUEADO: informe data e hora completas; nao invente horario.';
         if (!args.leadId || typeof args.leadId !== 'string' || args.leadId.length < 10) return 'BLOQUEADO: leadId canonico ausente.';
         if (motivoEstruturado.length < 5) return 'BLOQUEADO: motivo explicito insuficiente.';
+        if (!args.mensagemEnvio || typeof args.mensagemEnvio !== 'string' || args.mensagemEnvio.trim().length < 3) return 'BLOQUEADO: mensagem de follow-up obrigatoria.';
         if (!args.timezoneIana || typeof args.timezoneIana !== 'string') return 'BLOQUEADO: timezone IANA confiavel obrigatorio.';
         if (!args.evidenciaPedido || typeof args.evidenciaPedido !== 'string' || args.evidenciaPedido.trim().length < 3) return 'BLOQUEADO: evidencia do pedido obrigatoria.';
         if (args.policyVersion !== 'followup-v1') return 'BLOQUEADO: policyVersion invalida.';

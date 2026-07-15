@@ -2,6 +2,9 @@ import { prisma } from '../../src/lib/db';
 import { closeRedisClient, getRedisClient } from '../../src/lib/redis';
 import { criarFollowupOutbound, processarFollowupReivindicado, reagendarFollowupOutbound, reivindicarProximoFollowup } from '../../src/servicos/followup-outbound';
 import { OutboundBaselineHarness } from './support/outbound-baseline-harness';
+import express from 'express';
+import request from 'supertest';
+import rotasLeads from '../../src/rotas/leads';
 
 describe('B08 follow-up outbound duravel', () => {
   let harness: OutboundBaselineHarness;
@@ -11,6 +14,7 @@ describe('B08 follow-up outbound duravel', () => {
 
   const input = (f: any, overrides: Record<string, unknown> = {}) => ({ tenantId: f.tenantA, leadId: f.leadA,
     expressaoOriginal: '15/01/2027 09:00', timezoneIana: 'America/Sao_Paulo', motivo: 'Lead pediu retorno apos decisao familiar',
+    mensagemEnvio: 'Mensagem customizada do follow-up',
     evidenciaPedido: 'pode me chamar em janeiro as nove', origemPedido: 'BASELINE_B08', agora: new Date('2026-07-15T12:00:00Z'), ...overrides });
   const seedEvidence = (leadId: string) => prisma.mensagemProspeccao.create({ data: { leadId, direcao: 'ENTRADA', conteudo: 'pode me chamar em janeiro as nove' } });
 
@@ -22,6 +26,31 @@ describe('B08 follow-up outbound duravel', () => {
     expect(await prisma.followupOutbound.count({ where: { tenantId: f.tenantA, leadId: f.leadA } })).toBe(1);
     const saved = await prisma.followupOutbound.findFirstOrThrow({ where: { leadId: f.leadA } });
     expect(saved).toMatchObject({ status: 'PENDENTE', timezoneIana: 'America/Sao_Paulo', policyVersion: 'followup-v1', tentativas: 0 });
+  });
+
+  it('persiste o payload real do ChatPanel pela API sem descartar a mensagem customizada', async () => {
+    const f = await harness.seed();
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => { req.tenantId = f.tenantA; next(); });
+    app.use('/api/leads', rotasLeads);
+    const payload = {
+      mensagem: 'Retorno personalizado combinado.',
+      dataEnvio: '2027-01-15 09:30',
+      timezoneIana: 'America/Sao_Paulo',
+      motivo: 'Agendamento manual pelo operador autenticado',
+    };
+    const response = await request(app).post(`/api/leads/${f.leadA}/followup`).send(payload);
+    expect(response.status).toBe(200);
+    expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: response.body.followupId } })).toMatchObject({
+      tenantId: f.tenantA,
+      leadId: f.leadA,
+      mensagemEnvio: payload.mensagem,
+      expressaoOriginal: payload.dataEnvio,
+      timezoneIana: payload.timezoneIana,
+      origemPedido: 'API_LEADS_FOLLOWUP',
+      evidenciaPedido: 'OPERADOR_AUTENTICADO_CHAT_PANEL',
+    });
   });
 
   it('restart/claim, takeover e envio confirmado produzem um unico efeito', async () => {
@@ -39,7 +68,7 @@ describe('B08 follow-up outbound duravel', () => {
     expect(await processarFollowupReivindicado(takeover!, 'new-owner', { send: async () => { sends++; return { providerId: 'provider-1' }; } })).toBe('EXECUTADO');
     expect(sends).toBe(1);
     expect(await prisma.efeitoFollowupOutbound.count({ where: { followupId: takeover!.id, status: 'CONCLUIDO' } })).toBe(1);
-    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, conteudo: 'Follow-up outbound confirmado' } })).toBe(1);
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, conteudo: 'Mensagem customizada do follow-up' } })).toBe(1);
   });
 
   it.each([{ modoAtendimento: 'HUMANO', reason: 'BLOCKED_HUMAN_MODE' }, { modoAtendimento: 'PAUSADO', reason: 'BLOCKED_PAUSED_MODE' }, { statusProspeccao: 'OPTOUT', reason: 'BLOCKED_OPT_OUT' }])('gate $reason cancela sem envio', async (gate) => {
@@ -62,15 +91,36 @@ describe('B08 follow-up outbound duravel', () => {
     expect(await prisma.followupOutbound.count({ where: { leadId: f.leadA, status: 'PENDENTE' } })).toBe(1);
   });
 
-  it('falha comprovadamente antes do envio mantem retry; resultado ambiguo fica fail-closed', async () => {
+  it('retry usa tentativas no backoff e encerra ao atingir o limite', async () => {
+    const previous = process.env.FOLLOWUP_MAX_ATTEMPTS;
+    process.env.FOLLOWUP_MAX_ATTEMPTS = '3';
     const f = await harness.seed(); await seedEvidence(f.leadA); const created = await criarFollowupOutbound(input(f)); if (!created.success) throw new Error(created.reasonCode);
     await prisma.followupOutbound.update({ where: { id: created.followup.id }, data: { agendadoParaUtc: new Date(Date.now() - 1000) } });
-    let claimed = await reivindicarProximoFollowup('retry-owner');
     const transient = Object.assign(new Error('PROVIDER_UNAVAILABLE'), { definitiveNoSend: true });
-    expect(await processarFollowupReivindicado(claimed!, 'retry-owner', { send: async () => { throw transient; } })).toBe('FALHO');
-    expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: created.followup.id } })).toMatchObject({ status: 'FALHO', reasonCode: 'DELIVERY_TRANSIENT' });
-    await prisma.followupOutbound.update({ where: { id: created.followup.id }, data: { proximoRetryEm: new Date(Date.now() - 1) } });
-    claimed = await reivindicarProximoFollowup('ambiguous-owner');
+    try {
+      for (const [attempt, expectedBackoff] of [[1, 30_000], [2, 60_000], [3, null]] as const) {
+        const claimed = await reivindicarProximoFollowup(`retry-owner-${attempt}`);
+        expect(claimed?.tentativas).toBe(attempt);
+        const failureAt = new Date();
+        expect(await processarFollowupReivindicado(claimed!, `retry-owner-${attempt}`, { send: async () => { throw transient; } }, failureAt)).toBe('FALHO');
+        const saved = await prisma.followupOutbound.findUniqueOrThrow({ where: { id: created.followup.id } });
+        if (expectedBackoff === null) expect(saved).toMatchObject({ status: 'FALHO', reasonCode: 'RETRY_EXHAUSTED', proximoRetryEm: null });
+        else {
+          expect(saved.reasonCode).toBe('DELIVERY_TRANSIENT');
+          expect(saved.proximoRetryEm?.getTime()).toBe(failureAt.getTime() + expectedBackoff);
+          await prisma.followupOutbound.update({ where: { id: saved.id }, data: { proximoRetryEm: new Date(Date.now() - 1) } });
+        }
+      }
+      expect(await reivindicarProximoFollowup('must-not-retry-exhausted')).toBeNull();
+    } finally {
+      if (previous === undefined) delete process.env.FOLLOWUP_MAX_ATTEMPTS; else process.env.FOLLOWUP_MAX_ATTEMPTS = previous;
+    }
+  });
+
+  it('resultado ambiguo fica fail-closed sem novo claim', async () => {
+    const f = await harness.seed(); await seedEvidence(f.leadA); const created = await criarFollowupOutbound(input(f)); if (!created.success) throw new Error(created.reasonCode);
+    await prisma.followupOutbound.update({ where: { id: created.followup.id }, data: { agendadoParaUtc: new Date(Date.now() - 1000) } });
+    const claimed = await reivindicarProximoFollowup('ambiguous-owner');
     await processarFollowupReivindicado(claimed!, 'ambiguous-owner', { send: async () => { throw new Error('PROVIDER_TIMEOUT'); } });
     expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: created.followup.id } })).toMatchObject({ status: 'FALHO', reasonCode: 'DELIVERY_UNKNOWN', proximoRetryEm: null });
     expect(await reivindicarProximoFollowup('must-not-retry-ambiguous')).toBeNull();
@@ -79,16 +129,20 @@ describe('B08 follow-up outbound duravel', () => {
   it('crash apos envio antes da confirmacao fica fail-closed sem resposta fantasma ou reenvio', async () => {
     const f = await harness.seed(); await seedEvidence(f.leadA); const created = await criarFollowupOutbound(input(f)); if (!created.success) throw new Error(created.reasonCode);
     await prisma.followupOutbound.update({ where: { id: created.followup.id }, data: { agendadoParaUtc: new Date(Date.now() - 1000) } });
-    const first = await reivindicarProximoFollowup('crash-owner'); let sends = 0;
+    const first = await reivindicarProximoFollowup('crash-owner'); let sends = 0; let takeover: Awaited<ReturnType<typeof reivindicarProximoFollowup>> = null;
     await processarFollowupReivindicado(first!, 'crash-owner', { send: async () => {
-      sends++; await prisma.followupOutbound.update({ where: { id: first!.id }, data: { leaseAte: new Date(Date.now() - 1000) } }); return { providerId: 'sent-before-crash' };
+      sends++;
+      await prisma.followupOutbound.update({ where: { id: first!.id }, data: { leaseAte: new Date(Date.now() - 1000) } });
+      takeover = await reivindicarProximoFollowup('takeover-owner');
+      return { providerId: 'sent-before-crash' };
     } });
     expect(sends).toBe(1);
-    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, conteudo: 'Follow-up outbound confirmado' } })).toBe(0);
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, conteudo: 'Mensagem customizada do follow-up' } })).toBe(0);
     expect(await prisma.efeitoFollowupOutbound.findUniqueOrThrow({ where: { followupId: first!.id } })).toMatchObject({ status: 'RESERVADO' });
-    expect(await reivindicarProximoFollowup('reconcile-owner')).toBeNull();
+    expect(takeover).not.toBeNull();
+    expect(await processarFollowupReivindicado(takeover!, 'takeover-owner', { send: async () => { sends++; return {}; } })).toBe('FALHO');
     expect(sends).toBe(1);
-    expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: first!.id } })).toMatchObject({ status: 'FALHO', reasonCode: 'DELIVERY_UNKNOWN', proximoRetryEm: null });
+    expect(await prisma.followupOutbound.findUniqueOrThrow({ where: { id: first!.id } })).toMatchObject({ status: 'FALHO', reasonCode: 'DELIVERY_RECONCILIATION_REQUIRED', proximoRetryEm: null });
   });
 
   it('isola tenants com telefone igual', async () => {
