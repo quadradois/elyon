@@ -15,6 +15,7 @@ import { OpenAI } from 'openai';
 import { logger } from '../lib/logger';
 import { MODELO_PADRAO_PRINCIPAL } from './byok-resolver';
 import type { SchemaState } from './conversation-state';
+import type { RagFact } from './rag-facts-context';
 
 // ====================================
 // CONFIGURAÇÃO BYOK (Bring Your Own Key)
@@ -96,6 +97,7 @@ export interface ElyonContext {
     ragPerfilTexto?: string;
     briefingEmpreendimento?: string;
     knowledgeBase?: string;
+    ragFacts?: RagFact[];
 
     // estado persistido de coleta (schema)
     schemaState?: SchemaState;

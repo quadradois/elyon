@@ -19,6 +19,7 @@ import { prisma } from '../lib/db';
 import { embeddingService } from './embeddings';
 import { openaiService } from './openai';
 import { resolverChaveAgentes, resolverChaveEmbeddings } from '../agentes/byok-resolver';
+import { RAG_FACTS_CONTRACT_VERSION, type RagFact } from '../agentes/rag-facts-context';
 
 export interface ChunkConversa {
   texto: string;
@@ -40,6 +41,8 @@ export interface ResultadoBuscaRAG {
     metadados: any;
   }>;
   contextoFormatado: string;
+  facts: RagFact[];
+  degraded?: boolean;
 }
 
 class RAGConversasService {
@@ -232,6 +235,7 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
    */
   async buscarContextoRelevante(
     tenantId: string,
+    leadId: string,
     mensagemAtual: string,
     tiposDesejados?: string[]
   ): Promise<ResultadoBuscaRAG> {
@@ -253,12 +257,12 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
       let querySql = `
         SELECT *, 1 - (embedding::vector <=> $1::vector) AS similaridade 
         FROM conversas_embeddings 
-        WHERE "tenantId" = $2
+        WHERE "tenantId" = $2 AND "leadId" = $3
       `;
-      const params: any[] = [vetorString, tenantId];
+      const params: any[] = [vetorString, tenantId, leadId];
 
       if (tiposDesejados && tiposDesejados.length > 0) {
-        querySql += ` AND "tipoConteudo" = ANY($3)`;
+        querySql += ` AND "tipoConteudo" = ANY($${params.length + 1})`;
         params.push(tiposDesejados);
       }
 
@@ -275,13 +279,13 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
         // Ignorar erro se pgvector não estiver instalado (Erro 42704)
         if (dbError.message && dbError.message.includes('type "vector" does not exist')) {
           console.warn('[RAG] ⚠️ Extensão pgvector não instalada. RAG de histórico desativado temporariamente.');
-          return { chunks: [], contextoFormatado: '' };
+          return { chunks: [], contextoFormatado: '', facts: [], degraded: true };
         }
         throw dbError; // Repassar outros erros
       }
 
       if (chunksRelevantes.length === 0) {
-        return { chunks: [], contextoFormatado: '' };
+        return { chunks: [], contextoFormatado: '', facts: [] };
       }
 
       // 5. Atualizar contador de uso
@@ -304,12 +308,25 @@ IMPORTANTE: Seja seletivo. Extraia APENAS insights realmente úteis e de alta qu
           similaridade: c.similaridade,
           metadados: c.metadados
         })),
-        contextoFormatado
+        contextoFormatado,
+        facts: chunksRelevantes.map((c: any) => ({
+          contractVersion: RAG_FACTS_CONTRACT_VERSION,
+          id: c.id,
+          conteudo: c.textoOriginal,
+          origem: c.tipoConteudo,
+          recuperadoEm: new Date().toISOString(),
+          ocorridoEm: c.criadoEm ? new Date(c.criadoEm).toISOString() : undefined,
+          confianca: Math.max(0, Math.min(1, Number(c.scoreQualidade || 0) / 100)),
+          tenantId: c.tenantId,
+          leadId: c.leadId,
+          expiresAt: c.metadados?.expiresAt,
+          relevancia: Number(c.similaridade || 0),
+        }))
       };
 
     } catch (error) {
       console.error('[RAG] ❌ Erro na busca:', error);
-      return { chunks: [], contextoFormatado: '' };
+      return { chunks: [], contextoFormatado: '', facts: [], degraded: true };
     }
   }
 

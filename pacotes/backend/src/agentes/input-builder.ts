@@ -7,6 +7,7 @@ import { instrucaoGovernancaCurta } from './roteiro-governanca';
 import { sanitizeHistoryForToolProtocol } from './history-tool-sanitizer';
 import { buildTemporalFactsContext, type TemporalFactsStats } from './temporal-facts';
 import { isTemporalFactsEnabled } from './feature-flags';
+import { formatRagFactsForPrompt, type RagFact } from './rag-facts-context';
 
 export interface MensagemConversa {
   role: 'user' | 'assistant';
@@ -28,6 +29,7 @@ interface InputBuilderContexto {
   doresIdentificadas?: string[];
   empreendimento?: string;
   leadRecord?: Lead | null;
+  ragFacts?: RagFact[];
 }
 
 interface ConstruirInputSdkParams {
@@ -107,6 +109,7 @@ function construirInputPrimeiroTurno(params: {
 }): AgentInputItem[] {
   const { mensagens, estadoConversaAtual, schemaState, config, contexto, secaoFatosTemporais } = params;
   const resumoJanelaLead = construirResumoJanelaMensagensLead(mensagens);
+  const secaoFatosRag = formatRagFactsForPrompt(contexto.ragFacts || []);
 
   let secaoMetodoTrabalho: string;
   if (config.ragPerfilTexto) {
@@ -189,7 +192,7 @@ function construirInputPrimeiroTurno(params: {
 - Dores/Objeções Anteriores: ${contexto.doresIdentificadas?.join(', ') || 'Nenhuma objeção mapeada ainda'}${leadResumoStr ? `
 ${leadResumoStr}` : ''}
 
-${secaoMetodoTrabalho}${secaoBriefing}${schemaResumo}
+${secaoMetodoTrabalho}${secaoBriefing}${schemaResumo}${secaoFatosRag ? `\n\n${secaoFatosRag}` : ''}
 
 ESTADO RESUMIDO (NÃO REPETIR PERGUNTAS JÁ RESPONDIDAS):
 - Intenção: ${estadoConversaAtual.intencao || 'não confirmada'}
@@ -243,6 +246,7 @@ export function construirInputSdk(params: ConstruirInputSdkParams): ConstruirInp
       })
     : null;
   const secaoFatosTemporais = temporalFactsContext?.secaoPrompt || '';
+  const secaoFatosRag = formatRagFactsForPrompt(contexto.ragFacts || []);
 
   if (cachedHistory && cachedHistory.length > 0) {
     const cachedHistorySanitizado = sanitizeHistoryForToolProtocol(cachedHistory, 'Input Builder');
@@ -291,6 +295,8 @@ export function construirInputSdk(params: ConstruirInputSdkParams): ConstruirInp
       resumoJanelaLead ? '' : undefined,
       secaoFatosTemporais || undefined,
       secaoFatosTemporais ? '' : undefined,
+      secaoFatosRag || undefined,
+      secaoFatosRag ? '' : undefined,
       ...guardrails,
       '',
       `GOVERNANÇA: ${instrucaoGovernancaCurta()} Siga esse roteiro para decidir fase e tool. Não force tool call por checklist.`,
