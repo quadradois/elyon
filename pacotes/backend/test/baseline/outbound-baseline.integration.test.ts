@@ -59,6 +59,14 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
     expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, messageId: `foreign-${f.runId}` } })).toBe(0);
   });
 
+  it('SEC-52 rejeita permanentemente instância Evolution sem sessão reconhecida', async () => {
+    const f = await harness.seed();
+    await harness.acceptInbound(f, `unknown-${f.runId}`, 'qualificar com evidências', { instanceName: `unknown-${f.runId}` });
+    await expect(harness.runWorkerOnce('unknown-instance-worker')).resolves.toBe('MORTO');
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: { in: [f.leadA, f.leadB] }, messageId: `unknown-${f.runId}` } })).toBe(0);
+    expect(await prisma.webhookEvento.findFirst({ where: { eventoId: `unknown-${f.runId}` } })).toEqual(expect.objectContaining({ status: 'MORTO' }));
+  });
+
   it('B07/B17 exige policy/evidências e não promove o estágio comercial', async () => {
     const f = await harness.seed();
     await harness.acceptInbound(f, `policy-${f.runId}`, 'qualificar com evidências');

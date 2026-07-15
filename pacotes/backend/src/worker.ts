@@ -59,6 +59,14 @@ async function executarEvento(evento: EventoInbox): Promise<void> {
       falhar: async (item, erro, permanente, owner) => (await import('./servicos/webhook-inbox')).falharTentativa(item, erro, permanente, owner),
       renovar: async (item, owner) => (await import('./servicos/webhook-inbox')).renovarLease(item, owner),
       registrarResultado: (item, resultado) => processados.inc({ provedor: item.provedor, resultado }),
+      registrarErroHeartbeat: (item, erro) => logger.error(
+        { err: erro, eventoId: item.id, provedor: item.provedor },
+        '[WORKER] Falha ao renovar lease',
+      ),
+      registrarErroProcessamento: (item, erro) => logger.error(
+        { err: erro, eventoId: item.id, provedor: item.provedor },
+        '[WORKER] Falha no webhook',
+      ),
     });
   } finally {
     emProcessamento.dec();

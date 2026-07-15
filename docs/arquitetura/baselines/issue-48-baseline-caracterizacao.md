@@ -8,6 +8,8 @@ Decisões de entrada: ADR-0002 e ADR-0003 aceitos
 
 Owner: backend/arquitetura
 
+Correção de segurança associada: [#52](https://github.com/quadradois/elyon/issues/52)
+
 ## Objetivo e limites
 
 Esta baseline congela comportamentos observáveis antes da Onda 1. Ela não corrige
@@ -111,6 +113,28 @@ relógio controlado; lease expirado é preparado por timestamp explícito.
 - A análise real depende de autorização externa e papel de banco read-only.
 - Cleanup por tenant usa cascata do schema e remove inbox/chaves Redis por run ID.
 - Em interrupção abrupta, o banco/Redis efêmeros do job são destruídos pelo CI.
+
+## Segurança: compatibilidade, rollout e rollback (#52)
+
+A limitação da resolução ao tenant de `SessaoWhatsapp.instanceName` é uma mudança real
+de segurança em produção, não um seam semanticamente neutro. Instâncias registradas
+permanecem compatíveis com o mesmo payload. Instâncias desconhecidas passam a receber
+rejeição permanente e não disparam busca global por telefone.
+
+Rollout:
+
+1. inventariar sessões ativas e confirmar correspondência de `instanceName` antes do deploy;
+2. publicar mantendo logs estruturados de heartbeat/processamento e métricas do worker;
+3. acompanhar eventos `MORTO` por instância desconhecida e validar sessões legítimas;
+4. confirmar que telefone idêntico em tenants distintos nunca cruza a sessão confiável.
+
+Rollback:
+
+- se uma sessão legítima for rejeitada, pausar o consumidor afetado e corrigir seu
+  cadastro em `SessaoWhatsapp` antes de reprocessar;
+- reverter a proteção restaura compatibilidade anterior, mas reabre o risco cross-tenant
+  e só deve ser usado como contenção temporária aprovada;
+- `tenantId` fornecido no payload nunca deve ser usado como mitigação ou autoridade.
 
 ## Recomendações para derivação da Onda 1
 
