@@ -85,7 +85,7 @@ import {
   validarFencingLoteInbound,
 } from '../servicos/consolidacao-mensagens-inbound';
 import { executarComandoFenced } from '../servicos/executor-comando-fenced';
-import { selectRagFacts, withRagTimeout, type RagFact } from '../agentes/rag-facts-context';
+import { normalizeRagQuery, selectRagFacts, withRagTimeout, type RagFact } from '../agentes/rag-facts-context';
 import { recordRagRecovery, recordRagSelection } from '../observabilidade/rag-facts-metrics';
 
 const router = Router();
@@ -1610,12 +1610,13 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
 
                     // 🧠 RAG DE CONVERSAS (Memória de longo prazo)
                     // Só busca se tiver texto suficiente na mensagem atual
-                    if (tenantId && mensagemPendente.conteudo.length > 5) {
+                    const queryRag = normalizeRagQuery(textoConsolidado);
+                    if (tenantId && queryRag.length > 5) {
                       try {
                         const ragResult = await withRagTimeout(ragConversasService.buscarContextoRelevante(
                           tenantId,
                           contatoProspeccao.id,
-                          mensagemPendente.conteudo,
+                          queryRag,
                           ['objecao_superada', 'script_eficaz', 'pergunta_frequente']
                         ), 2500);
 

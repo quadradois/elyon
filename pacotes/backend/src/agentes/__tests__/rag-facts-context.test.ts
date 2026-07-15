@@ -1,4 +1,4 @@
-import { formatRagFactsForPrompt, RAG_FACTS_CONTRACT_VERSION, selectRagFacts, withRagTimeout, type RagFact } from '../rag-facts-context';
+import { formatRagFactsForPrompt, normalizeRagQuery, RAG_FACTS_CONTRACT_VERSION, selectRagFacts, withRagTimeout, type RagFact } from '../rag-facts-context';
 
 const base: RagFact = {
   contractVersion: RAG_FACTS_CONTRACT_VERSION,
@@ -25,10 +25,41 @@ describe('contrato e policy de fatos RAG', () => {
     expect(one.truncated).toBe(true);
   });
 
+  it('classifica campos malformados e policy invalida como INVALID de modo estavel', () => {
+    const malformed: RagFact[] = [
+      { ...base, id: 'bad-date', recuperadoEm: 'ontem' },
+      { ...base, id: 'bad-occurred', ocorridoEm: '2026-99-99T00:00:00Z' },
+      { ...base, id: 'bad-expiry', expiresAt: 'nunca' },
+      { ...base, id: 'nan-confidence', confianca: Number.NaN },
+      { ...base, id: 'infinite-relevance', relevancia: Number.POSITIVE_INFINITY },
+      { ...base, id: 'range-confidence', confianca: 1.1 },
+      { ...base, id: 'range-relevance', relevancia: -0.1 },
+      { ...base, id: 'empty-origin', origem: ' ' },
+      { ...base, id: 'empty-tenant', tenantId: '' },
+      { ...base, id: 'empty-lead', leadId: '' },
+    ];
+    const valid = [{ ...base, id: 'b' }, { ...base, id: 'a' }];
+    const select = (candidates: RagFact[]) => selectRagFacts({ candidates, tenantId: 'tenant-a', leadId: 'lead-a' });
+    expect(select(malformed).discarded.INVALID).toBe(malformed.length);
+    const forward = select([...valid, ...malformed]);
+    const inverted = select([...valid, ...malformed].reverse());
+    expect(forward.facts.map(f => f.id)).toEqual(['a', 'b']);
+    expect(inverted).toEqual(forward);
+    for (const policy of [{ minConfidence: 2 }, { minConfidence: Number.NaN }, { maxFacts: 0 }, { maxFacts: 1.5 }, { maxCharacters: -1 }, { maxCharacters: 1.5 }]) {
+      expect(selectRagFacts({ candidates: [base], tenantId: 'tenant-a', leadId: 'lead-a', policy }).discarded.INVALID).toBe(1);
+    }
+  });
+
+  it('normaliza e limita deterministicamente a query consolidada', () => {
+    expect(normalizeRagQuery('  tenho\tuma casa\n quero vender  ')).toBe('tenho uma casa quero vender');
+    expect(normalizeRagQuery('primeiro segundo terceiro', 15)).toBe('terceiro');
+  });
+
   it('nao expoe id interno e declara limites de autoridade', () => {
     const prompt = formatRagFactsForPrompt([{ ...base, id: 'internal-secret-uuid' }]);
     expect(prompt).toContain('FATOS RAG PERSISTIDOS');
-    expect(prompt).toContain('Nao autorizam mutacoes de dominio');
+    expect(prompt).toContain('nao autorizam mutacoes de dominio');
+    expect(prompt).toContain('<rag_facts_untrusted encoding="json">');
     expect(prompt).not.toContain('internal-secret-uuid');
   });
 

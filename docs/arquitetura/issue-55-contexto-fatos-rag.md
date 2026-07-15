@@ -21,9 +21,20 @@ estavel. Sao descartados, com reason code, fatos invalidos, cross-tenant,
 cross-Lead, expirados, abaixo da confianca e excedentes dos limites. O mesmo lote
 e o mesmo conjunto persistido produzem a mesma secao de prompt.
 
+A query usa o texto consolidado do lote da #54, normalizado em NFKC, sem
+caracteres de controle, com espacos canonicos e limite de 4.000 caracteres sem
+cortar a primeira palavra preservada. O sufixo e priorizado para manter os
+fragmentos mais recentes sem perder a ordem original.
+
 Fatos sao evidencias potencialmente incompletas ou desatualizadas. Eles nao
 autorizam tools ou mutacoes, nem substituem confirmacao do usuario em operacoes
 sensiveis. Essa regra integra a propria secao entregue ao agente.
+
+O conteudo e serializado como JSON dentro de `rag_facts_untrusted`; caracteres
+capazes de fechar delimitadores sao neutralizados. A instrucao externa ao
+envelope proibe obedecer comandos, chamadas de tool ou mudancas de regra contidas
+nos fatos. Campos temporais, identidade, origem, confianca, relevancia e policy
+malformados falham fechados como `INVALID`.
 
 ## Seguranca e observabilidade
 
