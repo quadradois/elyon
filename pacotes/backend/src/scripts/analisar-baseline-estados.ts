@@ -8,6 +8,7 @@ interface AggregateBaseline {
   contradictions: CountMap;
   quarantineCandidates: CountMap;
   qualificationCoverage: CountMap;
+  readOnlyWriteRejected: boolean;
 }
 
 const KNOWN_OUTREACH = new Set(['AGUARDANDO', 'CONTATANDO', 'RESPONDEU', 'SEM_INTERESSE', 'INTERESSADO', 'LEAD', 'OPTOUT', 'OPT_OUT', 'FALHA', 'MORNO_FUTURO', 'FRIO', 'NAO_RESPONDEU']);
@@ -34,6 +35,7 @@ function syntheticBaseline(): AggregateBaseline {
     contradictions: { optOutWithLaterActivity: 1, aiActivityDuringHumanMode: 1, invalidFollowUp: 2, invalidAppointment: 1 },
     quarantineCandidates: { ambiguousNullOutreach: 1, unknownOutreach: 1, legacyQualifiedWithoutPolicyEvidence: 1, negotiationWithoutDeterministicEvidence: 1, warmFutureWithoutValidFollowUp: 1 },
     qualificationCoverage: { candidatePopulation: 4, hasSituation: 3, hasMotivation: 2, hasProblemEvidence: 2, hasImplication: 1, hasCandidatePolicyEvidence: 1 },
+    readOnlyWriteRejected: true,
   };
 }
 
@@ -53,7 +55,7 @@ async function scalar(db: Prisma.TransactionClient, sql: Prisma.Sql): Promise<nu
 }
 
 async function authorizedBaseline(db: PrismaClient): Promise<AggregateBaseline> {
-  return db.$transaction(async (tx) => {
+  const baseline: AggregateBaseline = await db.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
     const [statusLead, outreach, modes, spin] = await Promise.all([
       grouped(tx, 'leads', 'status'), grouped(tx, 'leads', 'statusProspeccao'),
@@ -87,9 +89,20 @@ async function authorizedBaseline(db: PrismaClient): Promise<AggregateBaseline> 
         statusProspeccao: normalizedDistribution(outreach, KNOWN_OUTREACH),
         modoAtendimento: normalizedDistribution(modes, KNOWN_MODES),
         faseSPIN: normalizedDistribution(spin, KNOWN_SPIN),
-      }, contradictions, quarantineCandidates, qualificationCoverage,
+      }, contradictions, quarantineCandidates, qualificationCoverage, readOnlyWriteRejected: false,
     };
   }, { timeout: 60_000 });
+  let writeRejected = false;
+  try {
+    await db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
+      await tx.$executeRaw`INSERT INTO webhook_eventos (id, provedor, "eventoId", tipo, "payloadHash", status, tentativas, "maxTentativas", "proximaTentativaEm", "recebidoEm", "atualizadoEm") VALUES (gen_random_uuid()::text, 'EVOLUTION', 'read-only-probe', 'PROBE', 'probe', 'PENDENTE', 0, 1, NOW(), NOW(), NOW())`;
+    });
+  } catch {
+    writeRejected = true;
+  }
+  if (!writeRejected) throw new Error('transação read-only aceitou escrita de verificação');
+  return { ...baseline, readOnlyWriteRejected: true };
 }
 
 async function main(): Promise<void> {

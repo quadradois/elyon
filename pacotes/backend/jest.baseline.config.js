@@ -6,5 +6,6 @@ module.exports = {
   testMatch: ['**/*.integration.test.ts'],
   testTimeout: 45000,
   maxWorkers: 1,
+  setupFiles: ['<rootDir>/test/baseline/baseline.setup.ts'],
   transform: { '^.+\\.tsx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.integration.json' }] },
 };

@@ -1,102 +1,123 @@
+jest.mock('../../src/servicos/servico-captura-documentos', () => ({ detectarTipoMidia: jest.fn(() => null), capturarDocumentoWhatsapp: jest.fn() }));
+jest.mock('../../src/servicos/servico-analise-midia', () => ({ analisarMidiaParaContexto: jest.fn(async () => null) }));
+jest.mock('../../src/servicos/servico-voz', () => ({ sintetizarFalaTenant: jest.fn(async () => null) }));
+jest.mock('../../src/servicos/rag-conversas', () => ({ ragConversasService: { buscarContextoRelevante: jest.fn(async () => ({ contextoFormatado: 'RAG_FATO_SINTETICO' })) } }));
+jest.mock('../../src/casos-de-uso/agentes/qualificar-lead.usecase', () => ({ QualificarLeadUseCase: class { execute = jest.fn(async () => ({ success: false })); } }));
+jest.mock('../../src/casos-de-uso/agentes/converter-para-lead.usecase', () => ({ ConverterParaLeadUseCase: class { execute = jest.fn(async () => ({ success: false })); } }));
+jest.mock('../../src/agentes/orchestrator', () => {
+  const doubles = require('./support/deterministic-doubles');
+  return {
+    processarMensagemOrquestrada: doubles.deterministicOrchestrator,
+    buscarConfiguracaoTenant: jest.fn(async (tenantId: string) => ({ tenantId })),
+    buscarContextoConversa: jest.fn(async () => ({ qualificationPolicyVersion: 'spin-candidate-v1' })),
+  };
+});
+jest.mock('../../src/servicos/whatsapp', () => {
+  const { captured } = require('./support/deterministic-doubles');
+  return { getWhatsAppService: jest.fn(() => ({
+    enviarIndicadorDigitando: jest.fn(async () => undefined),
+    enviarMensagemTexto: jest.fn(async (phone: string, body: string) => { captured.sent.push({ phone, body }); return { key: { id: `det-${captured.sent.length}` } }; }),
+    enviarMensagemAudio: jest.fn(async () => ({ key: { id: 'det-audio' } })),
+    enviarMidia: jest.fn(async () => ({ key: { id: 'det-media' } })),
+  })) };
+});
+
 import { prisma } from '../../src/lib/db';
 import { closeRedisClient, getRedisClient } from '../../src/lib/redis';
 import { reivindicarProximoEvento } from '../../src/servicos/webhook-inbox';
+import { disparoCampanhaService } from '../../src/servicos/disparo-campanha';
+import { captured, resetDoubles } from './support/deterministic-doubles';
 import { OutboundBaselineHarness } from './support/outbound-baseline-harness';
 
-describe('baseline executável do fluxo outbound', () => {
+describe('baseline do caminho real inbox → executor → handler Evolution', () => {
   let harness: OutboundBaselineHarness;
-
-  beforeAll(async () => {
-    OutboundBaselineHarness.assertDedicatedInfrastructure();
-    harness = new OutboundBaselineHarness(prisma, await getRedisClient());
-  });
-  afterEach(async () => harness.cleanup());
+  beforeAll(async () => { OutboundBaselineHarness.assertDedicatedInfrastructure(); harness = new OutboundBaselineHarness(prisma, await getRedisClient()); });
+  afterEach(async () => { await harness.cleanup(); resetDoubles(); });
   afterAll(async () => { await closeRedisClient(); await prisma.$disconnect(); });
 
-  it('B01/B02/B03/B05/B06 percorre disparo, inbox, worker e qualificação no mesmo Lead', async () => {
-    const fixture = await harness.seed();
-    const messageId = await harness.dispatchOnce(fixture);
-    expect(await prisma.mensagemProspeccao.count({ where: { leadId: fixture.leadA, direcao: 'SAIDA', messageId } })).toBe(1);
-    expect(harness.doubles.evolution.sent).toHaveLength(1);
-
-    const accepted = await harness.acceptInbound(fixture, `evt-${fixture.runId}`, 'Meu imóvel vazio precisa vender');
-    expect(accepted).toEqual({ duplicate: false, receiptId: expect.any(String) });
-    expect(await prisma.webhookEvento.findUnique({ where: { provedor_eventoId: { provedor: 'EVOLUTION', eventoId: `evt-${fixture.runId}` } } })).toEqual(expect.objectContaining({ status: 'PENDENTE' }));
-
-    await harness.runWorkerOnce(fixture, 'baseline-worker');
-    expect(await prisma.lead.count({ where: { id: fixture.leadA, tenantId: fixture.tenantA } })).toBe(1);
-    expect(await prisma.lead.findUnique({ where: { id: fixture.leadA } })).toEqual(expect.objectContaining({ statusProspeccao: 'LEAD', manifestouInteresse: true }));
-    expect(await prisma.mensagemProspeccao.count({ where: { leadId: fixture.leadA, direcao: 'ENTRADA' } })).toBe(1);
-    expect((await prisma.lead.findUniqueOrThrow({ where: { id: fixture.leadA } })).status).toBe('NOVO');
+  it('B01 usa seletor e serviço reais para persistir o primeiro disparo uma vez', async () => {
+    const f = await harness.seed();
+    await prisma.lead.update({ where: { id: f.leadA }, data: { statusProspeccao: 'AGUARDANDO' } });
+    const [eligible] = await disparoCampanhaService.buscarContatosParaDisparo(f.campaignA, 10);
+    expect(eligible.id).toBe(f.leadA);
+    const campaign = await prisma.campanha.findUniqueOrThrow({ where: { id: f.campaignA } });
+    await expect(disparoCampanhaService.enviarMensagem(eligible, campaign)).resolves.toEqual(expect.objectContaining({ sucesso: true }));
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, direcao: 'SAIDA' } })).toBe(2);
+    expect((await prisma.lead.findUniqueOrThrow({ where: { id: f.leadA } })).tentativasContato).toBe(1);
   });
 
-  it('B10/B12 mantém opt-out e replay idempotentes por contagem', async () => {
-    const fixture = await harness.seed();
-    const eventId = `optout-${fixture.runId}`;
-    await harness.acceptInbound(fixture, eventId, 'Não quero mais, desejo sair');
-    await harness.runWorkerOnce(fixture, 'baseline-optout');
-    expect((await prisma.lead.findUniqueOrThrow({ where: { id: fixture.leadA } })).statusProspeccao).toBe('OPTOUT');
+  it('B02/B03/B06/B15 processa recibo real e resolve Lead pelo tenant da sessão', async () => {
+    const f = await harness.seed();
+    await harness.acceptInbound(f, `trusted-${f.runId}`, 'qualificar com evidências', { maliciousTenantId: f.tenantB });
+    await expect(harness.runWorkerOnce('real-worker')).resolves.toBe('CONCLUIDO');
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, direcao: 'ENTRADA' } })).toBe(1);
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadB } })).toBe(0);
+    expect((await prisma.lead.findUniqueOrThrow({ where: { id: f.leadB } })).statusProspeccao).toBe('CONTATANDO');
 
-    expect((await harness.acceptInbound(fixture, eventId, 'Não quero mais, desejo sair')).duplicate).toBe(true);
+    await harness.acceptInbound(f, `foreign-${f.runId}`, 'qualificar com evidências', { instanceName: f.instanceB, maliciousTenantId: f.tenantA });
+    await expect(harness.runWorkerOnce('foreign-worker')).resolves.toBe('CONCLUIDO');
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, messageId: `foreign-${f.runId}` } })).toBe(0);
+  });
+
+  it('B07/B17 exige policy/evidências e não promove o estágio comercial', async () => {
+    const f = await harness.seed();
+    await harness.acceptInbound(f, `policy-${f.runId}`, 'qualificar com evidências');
+    await harness.runWorkerOnce('policy-worker');
+    const lead = await prisma.lead.findUniqueOrThrow({ where: { id: f.leadA } });
+    expect(lead.schemaState).toEqual({ qualificationPolicyVersion: 'spin-candidate-v1', evidence: { situation: true, motivation: true } });
+    expect(lead.status).toBe('NOVO');
+    expect(await prisma.atividade.count({ where: { leadId: f.leadA, titulo: 'TOOL_EXEC:QUALIFY' } })).toBe(1);
+  });
+
+  it('B09 recusa intenção de agenda sem dia, hora e timezone', async () => {
+    const f = await harness.seed();
+    await harness.acceptInbound(f, `schedule-${f.runId}`, 'quero agendar uma visita');
+    await harness.runWorkerOnce('schedule-worker');
+    expect(await prisma.atividade.count({ where: { leadId: f.leadA, tipo: 'AVALIACAO' } })).toBe(0);
+  });
+
+  it('B10 aplica opt-out e o seletor real bloqueia novo disparo', async () => {
+    const f = await harness.seed();
+    await harness.acceptInbound(f, `optout-${f.runId}`, 'opt-out agora');
+    await harness.runWorkerOnce('optout-worker');
+    expect((await prisma.lead.findUniqueOrThrow({ where: { id: f.leadA } })).statusProspeccao).toBe('OPTOUT');
+    expect(await disparoCampanhaService.buscarContatosParaDisparo(f.campaignA, 10)).toHaveLength(0);
+    expect(captured.sent).toHaveLength(1);
+  });
+
+  it('B11 persiste inbound, mas bloqueia orquestrador e resposta em modo HUMANO', async () => {
+    const f = await harness.seed();
+    await prisma.lead.update({ where: { id: f.leadA }, data: { modoAtendimento: 'HUMANO' } });
+    await harness.acceptInbound(f, `human-${f.runId}`, 'qualificar com evidências');
+    await harness.runWorkerOnce('human-worker');
+    expect(captured.orchestrator).toHaveLength(0);
+    expect(captured.sent).toHaveLength(0);
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, direcao: 'ENTRADA' } })).toBe(1);
+  });
+
+  it('B12 replay mantém contagens e efeitos únicos', async () => {
+    const f = await harness.seed(); const eventId = `replay-${f.runId}`;
+    expect((await harness.acceptInbound(f, eventId, 'qualificar com evidências')).duplicado).toBe(false);
+    await harness.runWorkerOnce('replay-worker');
+    expect((await harness.acceptInbound(f, eventId, 'qualificar com evidências')).duplicado).toBe(true);
     expect(await prisma.webhookEvento.count({ where: { eventoId: eventId } })).toBe(1);
-    expect(await prisma.mensagemProspeccao.count({ where: { leadId: fixture.leadA, direcao: 'ENTRADA' } })).toBe(1);
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, messageId: eventId } })).toBe(1);
   });
 
-  it('B11 bloqueia efeitos de IA em modo HUMANO', async () => {
-    const fixture = await harness.seed();
-    await prisma.lead.update({ where: { id: fixture.leadA }, data: { modoAtendimento: 'HUMANO' } });
-    await harness.acceptInbound(fixture, `human-${fixture.runId}`, 'Meu imóvel vazio precisa vender');
-    await harness.runWorkerOnce(fixture, 'baseline-human');
-    expect(harness.doubles.llmCalls).toHaveLength(0);
-    expect(await prisma.mensagemProspeccao.count({ where: { leadId: fixture.leadA, direcao: 'ENTRADA' } })).toBe(0);
-  });
-
-  it('B13 recupera lease expirado após restart', async () => {
-    const fixture = await harness.seed();
-    const eventId = `restart-${fixture.runId}`;
-    await harness.acceptInbound(fixture, eventId, 'fale comigo depois');
-    expect(await reivindicarProximoEvento('worker-before-crash')).not.toBeNull();
+  it('B13 executor real retoma lease expirado após restart', async () => {
+    const f = await harness.seed(); const eventId = `restart-${f.runId}`;
+    await harness.acceptInbound(f, eventId, 'quero informações');
+    expect(await reivindicarProximoEvento('worker-crashed')).not.toBeNull();
     await harness.expireLease(eventId);
-    await harness.runWorkerOnce(fixture, 'worker-after-restart');
+    await harness.runWorkerOnce('worker-restarted');
     expect(await prisma.webhookEvento.findFirst({ where: { eventoId: eventId } })).toEqual(expect.objectContaining({ status: 'CONCLUIDO', tentativas: 2 }));
-    expect(await prisma.lead.findUnique({ where: { id: fixture.leadA } })).toEqual(expect.objectContaining({ statusProspeccao: 'MORNO_FUTURO', motivoRecontato: 'pedido explícito sintético' }));
   });
 
-  it('B14 registra retry sem mutação parcial quando comando falha', async () => {
-    const fixture = await harness.seed();
-    const eventId = `failure-${fixture.runId}`;
-    await harness.acceptInbound(fixture, eventId, 'Meu imóvel vazio precisa vender');
-    await harness.runWorkerOnce(fixture, 'baseline-failure', { fail: true });
-    expect(await prisma.webhookEvento.findFirst({ where: { eventoId: eventId } })).toEqual(expect.objectContaining({ status: 'RETRY', tentativas: 1 }));
-    expect(await prisma.mensagemProspeccao.count({ where: { leadId: fixture.leadA, direcao: 'ENTRADA' } })).toBe(0);
-    expect((await prisma.lead.findUniqueOrThrow({ where: { id: fixture.leadA } })).statusProspeccao).toBe('AGUARDANDO');
-  });
-
-  it('B15 rejeita resolução cross-tenant mesmo com telefone igual', async () => {
-    const fixture = await harness.seed();
-    await harness.acceptInbound(fixture, `tenant-${fixture.runId}`, 'Meu imóvel vazio precisa vender');
-    await harness.runWorkerOnce(fixture, 'baseline-tenant');
-    expect((await prisma.lead.findUniqueOrThrow({ where: { id: fixture.leadB } })).statusProspeccao).toBe('AGUARDANDO');
-    expect(await prisma.mensagemProspeccao.count({ where: { leadId: fixture.leadB } })).toBe(0);
-  });
-
-  it('B08/B09 persiste follow-up válido e agenda somente com data explícita', async () => {
-    const fixture = await harness.seed();
-    await harness.acceptInbound(fixture, `follow-${fixture.runId}`, 'fale comigo depois');
-    await harness.runWorkerOnce(fixture, 'baseline-follow');
-    const lead = await prisma.lead.findUniqueOrThrow({ where: { id: fixture.leadA } });
-    expect(lead.dataRecontato).toBeInstanceOf(Date);
-    expect(lead.motivoRecontato).toBeTruthy();
-    expect(await prisma.atividade.count({ where: { leadId: fixture.leadA, tipo: 'AVALIACAO' } })).toBe(0);
-  });
-
-  it('B01/B12 permite somente um claim concorrente e um primeiro disparo', async () => {
-    const fixture = await harness.seed();
-    await harness.dispatchOnce(fixture);
-    await expect(harness.dispatchOnce(fixture)).rejects.toThrow();
-    await harness.acceptInbound(fixture, `concurrent-${fixture.runId}`, 'fale comigo depois');
-    const claims = await Promise.all([reivindicarProximoEvento('claim-a'), reivindicarProximoEvento('claim-b')]);
-    expect(claims.filter(Boolean)).toHaveLength(1);
-    expect(harness.doubles.evolution.sent).toHaveLength(1);
+  it('B14 falha no meio do comando reverte todas as mutações da transação', async () => {
+    const f = await harness.seed(); captured.failMidCommand = true;
+    await harness.acceptInbound(f, `rollback-${f.runId}`, 'falhar comando');
+    await harness.runWorkerOnce('rollback-worker');
+    expect((await prisma.lead.findUniqueOrThrow({ where: { id: f.leadA } })).observacoes).toBeNull();
+    expect(await prisma.atividade.count({ where: { leadId: f.leadA, titulo: 'TOOL_EXEC:FAIL' } })).toBe(0);
   });
 });

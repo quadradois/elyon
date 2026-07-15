@@ -18,18 +18,19 @@ determinísticos sem rede.
 
 O caminho exercitado é:
 
-`Lead → campanha → disparo determinístico → recibo WebhookEvento → claim/lease do worker → resolução tenant-safe → agente determinístico → comando transacional → persistência → replay/restart`.
+`Lead → campanha → serviço real de disparo → recibo WebhookEvento → claim/lease → executor real do worker → processarEvento → handler Evolution real → resolução pela sessão confiável → agente/tool determinísticos → persistência → replay/restart`.
 
-O handler Evolution de produção permanece acoplado a um grafo amplo de serviços.
-Para não introduzir uma alteração comportamental na #48, o harness reutiliza a inbox,
-o lease, o retry e os modelos reais, mas injeta o agente/comandos dentro do teste.
-Essa fronteira é uma evidência, não um mock permissivo: os cenários que dependem do
-debounce ou da coerência agenda/CRM atuais aparecem como probes de falha conhecida.
+O executor foi extraído do `worker.ts` para um serviço reutilizável; o worker e a suíte
+chamam a mesma função. O teste atravessa `processarEvento` e o handler Evolution reais.
+Somente LLM/orquestrador, WhatsApp/Evolution, voz, mídia e tools são determinísticos.
+O tenant é derivado de `SessaoWhatsapp.instanceName`; `tenantId` presente no payload é
+ignorado como autoridade. A busca do Lead é limitada ao tenant confiável.
 
 ## Arquitetura do harness
 
-- `test/baseline/support/outbound-baseline-harness.ts`: relógio controlado, fixtures
-  para dois tenants, doubles e orquestração determinística.
+- `test/baseline/support/outbound-baseline-harness.ts`: fixtures para dois tenants e
+  eventos no formato Evolution, sem reimplementar o worker.
+- `src/servicos/webhook-worker-executor.ts`: executor compartilhado pelo worker e teste.
 - `test/baseline/outbound-baseline.integration.test.ts`: comportamentos suportados;
   falha do teste bloqueia regressão.
 - `test/baseline/known-defects.integration.test.ts`: probes verdes que demonstram
@@ -48,17 +49,17 @@ fixtures com prefixo/run UUID, deleção por tenant/evento e chaves Redis regist
 | B01 | Lead elegível; dois disparos/claims | `AGUARDANDO → CONTATANDO` | 1 envio, 1 mensagem, 1 claim | Automatizado | suportado/gate |
 | B02 | webhook aceito | sem efeito antes do worker | 1 recibo `PENDENTE` | Automatizado | suportado/gate |
 | B03 | mesmo telefone em dois tenants | apenas Lead do tenant do evento | 0 mensagens no outro tenant | Automatizado | suportado/gate |
-| B04 | duas mensagens sequenciais | dois eventos independentes | 2 chamadas, sem consolidação durável | Automatizado | expected-failure/probe |
-| B05 | histórico e evidência sintéticos | contexto determinístico | decisão reproduzível | Automatizado | suportado/gate |
+| B04 | mensagens sequenciais | debounce real atravessado por mensagem | consolidação multi-evento ainda sem asserção estável | Não completo | pendente/reclassificado |
+| B05 | histórico, briefing e fato RAG | histórico/briefing chegam; fato RAG é montado mas não repassado | probe explícito | Automatizado | expected-failure/probe |
 | B06 | comando de qualificação | mesmo `Lead.id` | 1 Lead, 1 inbound | Automatizado | suportado/gate |
 | B07 | evidência candidata suficiente | outreach `LEAD`; CRM `NOVO` | policy/evidence em `schemaState` | Automatizado | suportado/gate |
-| B08 | pedido explícito de retorno | `AGUARDANDO → MORNO_FUTURO` | data UTC e motivo presentes | Automatizado | suportado/gate |
-| B09 | texto sem dia/hora | CRM inalterado | 0 atividades de avaliação | Automatizado | suportado/gate |
-| B10 | opt-out e replay | qualquer → `OPTOUT` | 1 recibo, 1 inbound | Automatizado | suportado/gate |
+| B08 | pedido explícito de retorno | — | não exercitado pelo caminho real revisado | Não coberto | pendente/reclassificado |
+| B09 | intenção de agenda sem dia/hora/timezone | CRM inalterado | 0 atividades de avaliação | Automatizado | suportado/gate |
+| B10 | opt-out seguido de seleção para disparo | `CONTATANDO → OPTOUT` | seletor real retorna 0 elegíveis | Automatizado | suportado/gate |
 | B11 | modo `HUMANO` | estado preservado | 0 LLM, 0 resposta IA | Automatizado | suportado/gate |
 | B12 | mesmo evento duas vezes | recibo único | contagens permanecem 1 | Automatizado | suportado/gate |
 | B13 | lease expirado | `PROCESSANDO → CONCLUIDO` | tentativas = 2 | Automatizado | suportado/gate |
-| B14 | comando falha | `PENDENTE → RETRY` | 0 inbound, 0 mutação Lead | Automatizado | suportado/gate |
+| B14 | tool falha após duas escritas na transação | recibo concluído com fallback | 0 observação e 0 atividade parcial | Automatizado | suportado/gate |
 | B15 | tentativa cross-tenant | Lead estrangeiro inalterado | 0 efeitos estrangeiros | Automatizado | suportado/gate |
 | B16 | visita cancelada | CRM permanece `VISITA_AGENDADA` | agenda `CANCELADO` | Automatizado | expected-failure/probe |
 | B17 | policy candidata | evidência sem promoção CRM | `status=NOVO` | Automatizado | suportado/gate |
@@ -69,7 +70,9 @@ O modo autorizado executa todas as consultas em uma transação PostgreSQL `READ
 Sem `BASELINE_ANALYSIS_AUTHORIZED=true`, falha fechado antes de consultar o banco.
 O resultado contém somente contagens de baixa cardinalidade. Valores desconhecidos são
 somados em `__UNKNOWN__`; UUIDs, nomes, telefones, mensagens, endereços e valores livres
-nunca são emitidos.
+nunca são emitidos. O CI semeia agregados sintéticos, executa o SQL autorizado contra
+o schema migrado, valida o contrato JSON e abre uma segunda transação read-only que
+tenta um `INSERT`; sucesso do job exige que PostgreSQL rejeite essa escrita.
 
 Métricas: distribuições de `StatusLead`, `statusProspeccao`, `modoAtendimento` e
 `faseSPIN`; nulos/desconhecidos; opt-out com atividade posterior; atividade IA durante
@@ -78,7 +81,8 @@ da policy candidata.
 
 ### Resultado disponível nesta PR
 
-Somente o dataset sintético foi executado. Ele prova o formato e as proteções, mas seus
+Somente datasets sintéticos foram executados. Eles provam formato, SQL/schema drift e
+read-only, mas seus
 números não representam produção. Não houve sessão read-only aprovada nem cópia
 anonimizada disponibilizada ao agente; portanto, o tamanho real da quarentena permanece
 **não medido** e a PR deve continuar draft até decisão do reviewer sobre essa evidência.
@@ -101,8 +105,8 @@ relógio controlado; lease expirado é preparado por timestamp explícito.
 
 ## Riscos, lacunas e limpeza
 
-- O executor determinístico é uma porta de teste, não o handler Evolution completo.
-- B04 e B16 demonstram lacunas atuais e não devem ser reinterpretados como sucesso.
+- O handler Evolution real é exercitado, com somente bordas externas determinísticas.
+- B04, B05 e B16 são lacunas/reclassificações e não devem ser interpretados como sucesso.
 - `schemaState` é usado apenas em fixture sintética; nenhum contrato novo é imposto.
 - A análise real depende de autorização externa e papel de banco read-only.
 - Cleanup por tenant usa cascata do schema e remove inbox/chaves Redis por run ID.

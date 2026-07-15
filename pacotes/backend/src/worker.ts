@@ -3,13 +3,10 @@ import http from 'http';
 import { Counter, Gauge, Registry, collectDefaultMetrics } from 'prom-client';
 import { prisma } from './lib/db';
 import {
-  concluirTentativa,
   EventoInbox,
-  falharTentativa,
-  processarEvento,
   reivindicarProximoEvento,
-  renovarLease,
 } from './servicos/webhook-inbox';
+import { executarEventoWebhook } from './servicos/webhook-worker-executor';
 import { schedulerSincronizacaoMapa } from './servicos/scheduler-sincronizacao-mapa';
 import { schedulerLimpezaCache } from './servicos/scheduler-limpeza-cache';
 import { schedulerReconciliacaoWhatsapp } from './servicos/scheduler-reconciliacao-whatsapp';
@@ -55,34 +52,15 @@ function esperar(ms: number): Promise<void> {
 
 async function executarEvento(evento: EventoInbox): Promise<void> {
   emProcessamento.inc();
-  const heartbeatMs = Math.max(10_000, Number(process.env.WEBHOOK_WORKER_LEASE_SECONDS || 300) * 1_000 / 3);
-  const heartbeat = setInterval(() => {
-    void renovarLease(evento).catch((erro) => logger.error({ err: erro, eventoId: evento.id }, '[WORKER] Falha ao renovar lease'));
-  }, heartbeatMs);
   try {
-    if (!evento.payload) throw new Error('Evento sem payload persistido');
-    const resultado = await processarEvento(evento);
-    if (resultado.statusCode >= 500) {
-      const status = await falharTentativa(evento, `Handler retornou HTTP ${resultado.statusCode}`);
-      processados.inc({ provedor: evento.provedor, resultado: status.toLowerCase() });
-      return;
-    }
-    if (resultado.statusCode >= 400) {
-      await falharTentativa(evento, `Payload rejeitado com HTTP ${resultado.statusCode}`, true);
-      processados.inc({ provedor: evento.provedor, resultado: 'morto' });
-      return;
-    }
-
-    if (!(await concluirTentativa(evento))) {
-      throw new Error('Lease perdido antes da conclusao do evento');
-    }
-    processados.inc({ provedor: evento.provedor, resultado: 'concluido' });
-  } catch (erro) {
-    const status = await falharTentativa(evento, erro);
-    processados.inc({ provedor: evento.provedor, resultado: status.toLowerCase() });
-    logger.error({ err: erro, eventoId: evento.id, provedor: evento.provedor }, '[WORKER] Falha no webhook');
+    await executarEventoWebhook(evento, undefined, {
+      processar: async (item) => (await import('./servicos/webhook-inbox')).processarEvento(item),
+      concluir: async (item, owner) => (await import('./servicos/webhook-inbox')).concluirTentativa(item, owner),
+      falhar: async (item, erro, permanente, owner) => (await import('./servicos/webhook-inbox')).falharTentativa(item, erro, permanente, owner),
+      renovar: async (item, owner) => (await import('./servicos/webhook-inbox')).renovarLease(item, owner),
+      registrarResultado: (item, resultado) => processados.inc({ provedor: item.provedor, resultado }),
+    });
   } finally {
-    clearInterval(heartbeat);
     emProcessamento.dec();
   }
 }

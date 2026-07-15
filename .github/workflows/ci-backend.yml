@@ -225,13 +225,21 @@ jobs:
       - name: Prisma generate
         working-directory: pacotes/backend
         run: npx prisma generate
+      - name: Build do backend e verificadores
+        run: npm run build --workspace @elyon/backend
       - name: Preparar banco efemero
         working-directory: pacotes/backend
         run: sh ./scripts/prisma-migrate-deploy.sh
       - name: Executar baseline completa
         run: timeout 8m npm run test:baseline
       - name: Validar analisador sintetico sem PII
-        run: timeout 1m npm run baseline:analyze:synthetic --workspace @elyon/backend > baseline-synthetic.json
+        run: timeout 1m npm run --silent baseline:analyze:synthetic --workspace @elyon/backend > baseline-synthetic.json
+      - name: Semear baseline agregada sintetica
+        run: npm run baseline:analyze:prepare --workspace @elyon/backend -- apply
+      - name: Executar analisador autorizado e provar read-only
+        run: BASELINE_ANALYSIS_AUTHORIZED=true timeout 1m npm run --silent baseline:analyze:readonly --workspace @elyon/backend > baseline-authorized.json
+      - name: Validar contrato JSON agregado
+        run: npm run baseline:analyze:validate --workspace @elyon/backend -- ../../baseline-authorized.json
       - name: Provar fail-closed sem autorizacao
         run: |
           if timeout 1m npm run baseline:analyze:readonly --workspace @elyon/backend; then
@@ -242,8 +250,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: baseline-synthetic-aggregates
-          path: baseline-synthetic.json
+          path: |
+            baseline-synthetic.json
+            baseline-authorized.json
           retention-days: 7
+      - name: Limpar seed agregado
+        if: always()
+        run: npm run baseline:analyze:prepare --workspace @elyon/backend -- cleanup
 
   migrations:
     name: Migrations - banco vazio
