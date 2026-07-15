@@ -40,9 +40,9 @@ export async function criarFollowupOutbound(input: CriarFollowupInput) {
   if (!['TOOL_AGENDAR_FOLLOWUP', 'API_LEADS_FOLLOWUP', 'BASELINE_B08'].includes(input.origemPedido)) return { success: false as const, reasonCode: 'ORIGEM_INVALID' };
   const temporal = interpretarFollowupTemporal({ expressao: input.expressaoOriginal, timezone: input.timezoneIana, agora: input.agora });
   if (!temporal.ok) return { success: false as const, reasonCode: temporal.reasonCode };
-  const chaveIdempotencia = hash([input.tenantId, input.leadId, temporal.utc.toISOString(), motivoNormalizado, mensagemEnvio, policyVersion]);
+  const chaveIdempotencia = hash([input.tenantId, input.leadId, temporal.utc.toISOString(), motivoNormalizado, policyVersion]);
 
-  let result: { followup: any; deduplicado: boolean } | undefined;
+  let result: { followup: any; deduplicado: boolean; reasonCode?: string } | undefined;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       result = await prisma.$transaction(async (tx) => {
@@ -56,7 +56,7 @@ export async function criarFollowupOutbound(input: CriarFollowupInput) {
       if (!evidence) throw new Error('EVIDENCIA_NAO_CONFIRMADA');
     }
     const existing = await tx.followupOutbound.findUnique({ where: { chaveIdempotencia } });
-    if (existing) return { followup: existing, deduplicado: true };
+    if (existing) return { followup: existing, deduplicado: true, reasonCode: 'FOLLOWUP_EQUIVALENTE_EXISTENTE' };
     const followup = await tx.followupOutbound.create({ data: {
       tenantId: input.tenantId, leadId: input.leadId, agendadoParaUtc: temporal.utc,
       timezoneIana: temporal.timezone, expressaoOriginal: input.expressaoOriginal,
@@ -64,7 +64,7 @@ export async function criarFollowupOutbound(input: CriarFollowupInput) {
       origemPedido: input.origemPedido.trim(), evidenciaPedido: input.evidenciaPedido.trim(),
     } });
     await tx.lead.update({ where: { id: input.leadId }, data: { dataRecontato: temporal.utc, motivoRecontato: input.motivo.trim() } });
-    return { followup, deduplicado: false };
+    return { followup, deduplicado: false, reasonCode: undefined };
       }, { isolationLevel: 'Serializable' });
       break;
     } catch (error) {
@@ -93,11 +93,14 @@ export async function reagendarFollowupOutbound(params: CriarFollowupInput & { f
   if (!motivoNormalizado || !mensagemEnvio || !params.evidenciaPedido?.trim() || !params.origemPedido?.trim()) return { success: false as const, reasonCode: 'CONTRACT_INVALID' };
   const policyVersion = params.policyVersion || FOLLOWUP_POLICY_VERSION;
   if (policyVersion !== FOLLOWUP_POLICY_VERSION || !['TOOL_AGENDAR_FOLLOWUP', 'API_LEADS_FOLLOWUP', 'BASELINE_B08'].includes(params.origemPedido)) return { success: false as const, reasonCode: 'CONTRACT_INVALID' };
-  const key = hash([params.tenantId, params.leadId, temporal.utc.toISOString(), motivoNormalizado, mensagemEnvio, policyVersion]);
-  const created = await prisma.$transaction(async (tx) => {
+  const key = hash([params.tenantId, params.leadId, temporal.utc.toISOString(), motivoNormalizado, policyVersion]);
+  const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${params.tenantId}:${params.leadId}:followup`}, 0))`;
-    const old = await tx.followupOutbound.findFirst({ where: { id: params.followupId, tenantId: params.tenantId, leadId: params.leadId, status: { in: ACTIVE } } });
+    const old = await tx.followupOutbound.findFirst({ where: { id: params.followupId, tenantId: params.tenantId, leadId: params.leadId, status: { in: ACTIVE } }, include: { efeito: true } });
     if (!old) throw new Error('FOLLOWUP_ACTIVE_NOT_FOUND');
+    if (old.reasonCode === 'DELIVERY_UNKNOWN') return { blocked: 'FOLLOWUP_DELIVERY_UNKNOWN' as const };
+    if (old.reasonCode === 'DELIVERY_RECONCILIATION_REQUIRED') return { blocked: 'FOLLOWUP_RECONCILIATION_REQUIRED' as const };
+    if (old.efeito?.status === 'RESERVADO') return { blocked: 'FOLLOWUP_EFFECT_RESERVED' as const };
     if (params.origemPedido === 'API_LEADS_FOLLOWUP') {
       if (params.evidenciaPedido !== 'OPERADOR_AUTENTICADO_CHAT_PANEL') throw new Error('EVIDENCIA_NAO_CONFIRMADA');
     } else {
@@ -105,12 +108,14 @@ export async function reagendarFollowupOutbound(params: CriarFollowupInput & { f
       if (!evidence) throw new Error('EVIDENCIA_NAO_CONFIRMADA');
     }
     const existing = await tx.followupOutbound.findUnique({ where: { chaveIdempotencia: key } });
-    if (existing) return existing;
+    if (existing) return { blocked: 'FOLLOWUP_EQUIVALENTE_EXISTENTE' as const };
     await tx.followupOutbound.update({ where: { id: old.id }, data: { status: 'CANCELADO', reasonCode: 'REAGENDAMENTO', canceladoEm: new Date(), leaseOwner: null, leaseAte: null } });
-    return tx.followupOutbound.create({ data: { tenantId: params.tenantId, leadId: params.leadId, agendadoParaUtc: temporal.utc, timezoneIana: temporal.timezone, expressaoOriginal: params.expressaoOriginal, motivo: params.motivo.trim(), motivoNormalizado, mensagemEnvio, policyVersion, chaveIdempotencia: key, origemPedido: params.origemPedido.trim(), evidenciaPedido: params.evidenciaPedido.trim() } });
+    const followup = await tx.followupOutbound.create({ data: { tenantId: params.tenantId, leadId: params.leadId, agendadoParaUtc: temporal.utc, timezoneIana: temporal.timezone, expressaoOriginal: params.expressaoOriginal, motivo: params.motivo.trim(), motivoNormalizado, mensagemEnvio, policyVersion, chaveIdempotencia: key, origemPedido: params.origemPedido.trim(), evidenciaPedido: params.evidenciaPedido.trim() } });
+    return { followup, deduplicado: false };
   }, { isolationLevel: 'Serializable' });
+  if ('blocked' in result) return { success: false as const, reasonCode: result.blocked };
   followupEventos.inc({ resultado: 'reagendado' });
-  return { success: true as const, followup: created };
+  return { success: true as const, followup: result.followup, deduplicado: result.deduplicado };
 }
 
 export function followupLeaseMs(): number { return Math.max(30_000, Math.min(600_000, Number(process.env.FOLLOWUP_LEASE_MS || 120_000))); }

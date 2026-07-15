@@ -19,4 +19,13 @@ describe('contrato manual de follow-up', () => {
       motivo: 'Agendamento manual pelo operador autenticado',
     });
   });
+
+  it('envia followupId somente quando o operador pede reagendamento explicito', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { sucesso: true } });
+    await agendarFollowupManual('lead-123', {
+      mensagem: 'Novo texto confirmado.', dataLocal: '2027-01-20T10:00',
+      timezoneIana: 'America/Sao_Paulo', followupId: 'followup-ativo-123',
+    });
+    expect(post).toHaveBeenCalledWith('/leads/lead-123/followup', expect.objectContaining({ followupId: 'followup-ativo-123' }));
+  });
 });

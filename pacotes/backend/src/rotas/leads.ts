@@ -15,7 +15,7 @@ import {
 } from '../agentes/governanca-qualificacao';
 import { priorizarLeads, calcularQualificacao, calcularUrgencia } from '../servicos/servico-priorizacao-leads';
 import { withTenantDb } from '../lib/tenant-db';
-import { criarFollowupOutbound } from '../servicos/followup-outbound';
+import { criarFollowupOutbound, reagendarFollowupOutbound } from '../servicos/followup-outbound';
 
 const router = Router();
 
@@ -2300,17 +2300,21 @@ router.post('/:id/followup', async (req, res) => {
     const tenantId = getTenantId(req);
     if (!tenantId) return responderErro(res, 401, 'Não autorizado');
 
-    const { mensagem, dataEnvio, timezoneIana, motivo } = req.body;
+    const { mensagem, dataEnvio, timezoneIana, motivo, followupId } = req.body;
     if (!mensagem?.trim() || !dataEnvio || !timezoneIana || !motivo?.trim()) return responderErro(res, 400, 'mensagem, dataEnvio, timezoneIana e motivo são obrigatórios');
-    const result = await criarFollowupOutbound({ tenantId, leadId: req.params.id, expressaoOriginal: dataEnvio,
-      timezoneIana, motivo, mensagemEnvio: mensagem, evidenciaPedido: 'OPERADOR_AUTENTICADO_CHAT_PANEL', origemPedido: 'API_LEADS_FOLLOWUP' });
-    if (!result.success) return responderErro(res, 422, result.reasonCode);
+    const params = { tenantId, leadId: req.params.id, expressaoOriginal: dataEnvio,
+      timezoneIana, motivo, mensagemEnvio: mensagem, evidenciaPedido: 'OPERADOR_AUTENTICADO_CHAT_PANEL', origemPedido: 'API_LEADS_FOLLOWUP' };
+    const result = followupId
+      ? await reagendarFollowupOutbound({ ...params, followupId })
+      : await criarFollowupOutbound(params);
+    if (!result.success) return responderErro(res, 422, result.reasonCode || 'FOLLOWUP_REJECTED');
 
     res.json({
       sucesso: true,
       followupId: result.followup.id,
       dataRecontato: result.followup.agendadoParaUtc.toISOString(),
       deduplicado: result.deduplicado,
+      reasonCode: 'reasonCode' in result ? result.reasonCode : undefined,
     });
   } catch {
     responderErro(res, 500, 'Erro interno');
