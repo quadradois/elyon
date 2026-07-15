@@ -110,4 +110,5 @@ export interface ElyonContext {
     /** Fence duravel do lote inbound; tools devem validar antes de efeitos. */
     assertFencing?: () => Promise<void>;
     withFencedTransaction?: <T>(command: () => Promise<T>) => Promise<T>;
+    executeExternalEffect?: (toolName: string, command: () => Promise<string>) => Promise<string>;
 }

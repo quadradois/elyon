@@ -204,7 +204,11 @@ export async function obterLoteReivindicado(loteId: string, owner: string, fenci
 }
 
 export type EstadoIntencaoEfeito = 'NOVA' | 'RESERVADA' | 'CONCLUIDA';
-export interface IntencaoEfeitoInbound { estado: EstadoIntencaoEfeito; chaveIdempotencia: string }
+export interface IntencaoEfeitoInbound { estado: EstadoIntencaoEfeito; chaveIdempotencia: string; resultado?: string | null }
+
+export function deveDespacharIntencaoEfeito(intencao: IntencaoEfeitoInbound): boolean {
+  return intencao.estado === 'NOVA';
+}
 
 export async function reservarEfeitoLoteInbound(
   loteId: string, owner: string, fencingToken: number, tipo: string,
@@ -217,7 +221,7 @@ export async function reservarEfeitoLoteInbound(
     if (!lote) throw new Error('LOTE_LEASE_PERDIDO');
     const existente = await tx.efeitoLoteInbound.findUnique({ where: { loteId_tipo: { loteId, tipo } } });
     if (existente?.status === 'CONCLUIDO') {
-      return { estado: 'CONCLUIDA', chaveIdempotencia: existente.chaveIdempotencia };
+      return { estado: 'CONCLUIDA', chaveIdempotencia: existente.chaveIdempotencia, resultado: existente.resultado };
     }
     if (existente) {
       // Reconciliação: um novo owner assume a intenção abandonada, preservando
@@ -234,11 +238,11 @@ export async function reservarEfeitoLoteInbound(
 }
 
 export async function concluirEfeitoLoteInbound(
-  loteId: string, fencingToken: number, tipo: string,
+  loteId: string, fencingToken: number, tipo: string, resultado?: string,
 ): Promise<boolean> {
   const result = await prisma.efeitoLoteInbound.updateMany({
     where: { loteId, tipo, fencingToken, status: 'RESERVADO' },
-    data: { status: 'CONCLUIDO', concluidoEm: new Date() },
+    data: { status: 'CONCLUIDO', concluidoEm: new Date(), resultado },
   });
   return result.count === 1;
 }

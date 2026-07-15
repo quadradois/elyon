@@ -24,11 +24,12 @@ mensagens e só depois executar uma vez o agente; não é necessário manter o
 primeiro recibo ocupado nem depender de dois workers.
 
 Cada claim incrementa `fencingToken`. Heartbeat falso ou rejeitado invalida o
-owner em memória. Tools mutáveis executam por um command executor que bloqueia o
-lote e valida owner, token, status e prazo dentro da mesma transação PostgreSQL
-da escrita. A validação final ocorre antes do commit; lease vencido reverte todas
-as mutações da tool. Um takeover usa token maior e só prossegue depois que a
-transação anterior libera o lote.
+owner em memória. As tools possuem classificação fechada. `POSTGRES_MUTATION`
+executa pelo command executor que bloqueia o lote e valida owner, token, status
+e prazo dentro da mesma transação da escrita. `READ_ONLY` não abre essa
+transação. `EXTERNAL_EFFECT` executa fora da transação PostgreSQL, por intenção
+própria; reservas anteriores ficam fail-closed para reconciliação. Classificação
+ausente é erro. Lease vencido reverte todas as escritas da tool antes do commit.
 
 Envios externos usam `efeitos_lotes_inbound`. O contrato distingue:
 
@@ -36,11 +37,12 @@ Envios externos usam `efeitos_lotes_inbound`. O contrato distingue:
 - `RESERVADA`: tentativa anterior não confirmou o resultado; deve ser reconciliada;
 - `CONCLUIDA`: o provider confirmou o envio.
 
-Uma intenção `RESERVADA` nunca equivale a sucesso. O takeover preserva a chave
-idempotente derivada de `loteId + tipo`, reenvia para reconciliação com o header
-`Idempotency-Key` quando suportado pelo adapter e só persiste a resposta local
-depois da confirmação. Assim, crash antes do envio é retomado; crash depois do
-envio usa a mesma chave e não duplica no provider idempotente.
+Uma intenção `RESERVADA` nunca equivale a sucesso. O adapter Evolution encaminha
+`Idempotency-Key`, mas esta baseline não possui evidência contratual de que o
+provider o honre nem consulta confiável por ID/status. Portanto, o takeover não
+reenvia automaticamente: mantém o lote recuperável, não persiste resposta local
+e exige reconciliação operacional. Apenas `NOVA` pode chamar o adapter e apenas
+`CONCLUIDA` representa confirmação.
 
 Estados do lote:
 
@@ -69,8 +71,11 @@ agenda e demais provedores sob doubles determinísticos. Os gates cobrem:
 - mudança para `HUMANO`, `PAUSADO` ou opt-out durante a janela;
 - falha do agente mantendo lote `FALHO`, recuperável pelo claimer, e zero resposta enganosa;
 - tool real lenta com expiração durante a transação e zero mutações do owner vencido;
+- classificação provando read-only sem transação, PostgreSQL sob fence e efeito
+  externo fora da transação;
 - crash antes do envio, depois do envio e antes da confirmação, e takeover sem
   resposta fantasma ou duplicação;
+- teste atravessando o adapter Evolution e provando que `RESERVADA` não reenvia;
 - scrape de `/metrics` do worker contendo as métricas dos lotes.
 
 Comando local reproduzido com infraestrutura dedicada:
@@ -97,7 +102,8 @@ expirados e ausência de consolidações após o deploy.
    confirmar `/ready` e `/metrics` antes de receber tráfego;
 4. observar duas janelas completas e comparar recibos concluídos, fragmentos,
    lotes vencidos/concluídos, takeovers, intenções reservadas e respostas enviadas;
-5. reconciliar intenções `RESERVADA` com a mesma chave idempotente e ampliar
+5. reconciliar manualmente intenções `RESERVADA` por evidência do provider; não
+   reenviar apenas pela presença do header idempotente, e ampliar
    workers somente com zero duplicação, fencing saudável e backlog estável;
 6. manter tabelas e colunas de fencing durante todo o período de observação.
 

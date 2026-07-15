@@ -363,6 +363,31 @@ const RESULT_ENRICHERS: ToolResultEnricher[] = [
 // WRAPPER PRINCIPAL
 // ====================================
 
+export type TipoEfeitoTool = 'READ_ONLY' | 'POSTGRES_MUTATION' | 'EXTERNAL_EFFECT';
+
+const TIPOS_EFEITO_TOOL: Record<string, TipoEfeitoTool> = {
+    consultar_preco_mercado: 'READ_ONLY',
+    qualificar_lead: 'POSTGRES_MUTATION',
+    registrar_optout: 'POSTGRES_MUTATION',
+    converter_para_lead: 'POSTGRES_MUTATION',
+    agendar_followup: 'POSTGRES_MUTATION',
+    encaminhar_corretor: 'POSTGRES_MUTATION',
+    mover_para_fase: 'POSTGRES_MUTATION',
+    gerar_link_contrato: 'POSTGRES_MUTATION',
+    atualizar_dados_lead: 'POSTGRES_MUTATION',
+    salvar_dados_imovel: 'POSTGRES_MUTATION',
+    registrar_indicacao: 'POSTGRES_MUTATION',
+    enviar_link_agendamento: 'POSTGRES_MUTATION',
+    enviar_para_crm: 'EXTERNAL_EFFECT',
+    agendar_reuniao_closer: 'EXTERNAL_EFFECT',
+};
+
+export function classificarEfeitoTool(toolName: string, override?: TipoEfeitoTool): TipoEfeitoTool {
+    const tipo = override || TIPOS_EFEITO_TOOL[toolName];
+    if (!tipo) throw new Error(`TOOL_EFFECT_CLASSIFICATION_MISSING:${toolName}`);
+    return tipo;
+}
+
 /**
  * Envolve a função execute de uma tool com pre-validation, result enrichment e audit log.
  * 
@@ -372,13 +397,16 @@ const RESULT_ENRICHERS: ToolResultEnricher[] = [
  */
 export function wrapToolExecute<TArgs = any>(
     toolName: string,
-    originalExecute: (args: TArgs, runContext?: any) => Promise<string>
+    originalExecute: (args: TArgs, runContext?: any) => Promise<string>,
+    effectTypeOverride?: TipoEfeitoTool,
 ): (args: TArgs, runContext?: any) => Promise<string> {
     return async (args: TArgs, runContext?: any): Promise<string> => {
         const inicio = Date.now();
         const argsLog = redactSensitiveFields(args as any);
         const assertFencing = runContext?.context?.assertFencing as (() => Promise<void>) | undefined;
         const withFencedTransaction = runContext?.context?.withFencedTransaction as (<T>(command: () => Promise<T>) => Promise<T>) | undefined;
+        const executeExternalEffect = runContext?.context?.executeExternalEffect as ((toolName: string, command: () => Promise<string>) => Promise<string>) | undefined;
+        const effectType = classificarEfeitoTool(toolName, effectTypeOverride);
 
         // ── 1. PRE-VALIDATION ──
         const validator = PRE_VALIDATORS.find(v => v.toolName === toolName);
@@ -406,11 +434,16 @@ export function wrapToolExecute<TArgs = any>(
         // ── 2. EXECUÇÃO ORIGINAL ──
         let resultStr: string;
         try {
-            if (!withFencedTransaction) await assertFencing?.();
-            resultStr = withFencedTransaction
-                ? await withFencedTransaction(() => originalExecute(args, runContext))
-                : await originalExecute(args, runContext);
-            if (!withFencedTransaction) await assertFencing?.();
+            if (effectType !== 'POSTGRES_MUTATION') await assertFencing?.();
+            if (effectType === 'POSTGRES_MUTATION' && withFencedTransaction) {
+                resultStr = await withFencedTransaction(() => originalExecute(args, runContext));
+            } else if (effectType === 'EXTERNAL_EFFECT' && executeExternalEffect) {
+                // Reserva/execução externa ocorre deliberadamente fora da transação PostgreSQL.
+                resultStr = await executeExternalEffect(toolName, () => originalExecute(args, runContext));
+            } else {
+                resultStr = await originalExecute(args, runContext);
+            }
+            if (effectType !== 'POSTGRES_MUTATION') await assertFencing?.();
         } catch (e: any) {
             const duracao = Date.now() - inicio;
             logger.error({

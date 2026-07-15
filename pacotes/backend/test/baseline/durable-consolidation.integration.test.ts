@@ -9,9 +9,12 @@ import {
   validarFencingLoteInbound,
   reservarEfeitoLoteInbound,
   concluirEfeitoLoteInbound,
+  deveDespacharIntencaoEfeito,
 } from '../../src/servicos/consolidacao-mensagens-inbound';
 import { executarComandoFenced } from '../../src/servicos/executor-comando-fenced';
 import { wrapToolExecute } from '../../src/ferramentas/tool-wrapper';
+import axios from 'axios';
+import { WhatsAppService } from '../../src/servicos/whatsapp';
 import { OutboundBaselineHarness } from './support/outbound-baseline-harness';
 
 describe('B04 consolidacao duravel de mensagens inbound', () => {
@@ -135,7 +138,7 @@ describe('B04 consolidacao duravel de mensagens inbound', () => {
       await new Promise((resolve) => setTimeout(resolve, 250));
       await prisma.lead.update({ where: { id: fixture.leadA }, data: { observacoes: 'OWNER_VENCIDO' } });
       return JSON.stringify({ success: true });
-    });
+    }, 'POSTGRES_MUTATION');
     const runContext = { context: {
       assertFencing: () => validarFencingLoteInbound(loteId, 'tool-owner', antigo!.fencingToken),
       withFencedTransaction: <T>(command: () => Promise<T>) => executarComandoFenced({
@@ -164,7 +167,7 @@ describe('B04 consolidacao duravel de mensagens inbound', () => {
     return { fixture, loteId, primeiro: primeiro! };
   }
 
-  it('reconcilia crash apos reserva e antes do envio sem resposta fantasma', async () => {
+  it('crash apos reserva e antes do envio fica fail-closed sem resposta fantasma', async () => {
     const { fixture, loteId, primeiro } = await prepararIntencao('before-send');
     const nova = await reservarEfeitoLoteInbound(loteId, 'owner-before-send-1', primeiro.fencingToken, 'RESPOSTA_TEXTO');
     expect(nova.estado).toBe('NOVA');
@@ -174,23 +177,30 @@ describe('B04 consolidacao duravel de mensagens inbound', () => {
     const segundo = await reivindicarLoteInbound(loteId, fixture.tenantA, fixture.leadA, 'owner-before-send-2');
     const reconciliada = await reservarEfeitoLoteInbound(loteId, 'owner-before-send-2', segundo!.fencingToken, 'RESPOSTA_TEXTO');
     expect(reconciliada).toEqual({ estado: 'RESERVADA', chaveIdempotencia: nova.chaveIdempotencia });
-    const envios = new Set<string>(); envios.add(reconciliada.chaveIdempotencia);
-    await concluirEfeitoLoteInbound(loteId, segundo!.fencingToken, 'RESPOSTA_TEXTO');
-    expect(envios.size).toBe(1);
+    expect(deveDespacharIntencaoEfeito(reconciliada)).toBe(false);
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: fixture.leadA, direcao: 'SAIDA' } })).toBe(1);
   });
 
-  it('reconcilia crash apos envio antes da confirmacao usando a mesma chave idempotente', async () => {
+  it('adapter Evolution fica fail-closed apos envio sem confirmacao idempotente comprovada', async () => {
     const { loteId, primeiro } = await prepararIntencao('after-send');
     const nova = await reservarEfeitoLoteInbound(loteId, 'owner-after-send-1', primeiro.fencingToken, 'RESPOSTA_TEXTO');
-    const chamadasFisicas = new Set<string>(); chamadasFisicas.add(nova.chaveIdempotencia); // provedor aceitou; processo caiu
+    const post = jest.spyOn(axios, 'post').mockResolvedValue({ data: { key: { id: 'evolution-message-id' } } });
+    const whatsapp = new WhatsAppService('contract-instance') as any;
+    whatsapp.garantirInstancia = jest.fn(async () => undefined);
+    whatsapp._token = 'test-token';
+    process.env.EVOLUTION_API_URL = 'http://evolution-contract.test';
+    await whatsapp.enviarMensagemTexto('5500000000001', 'resposta', nova.chaveIdempotencia);
+    expect(post).toHaveBeenCalledTimes(1); // provider respondeu; processo cai antes de CONCLUIDA
+    expect(post.mock.calls[0][2]).toEqual(expect.objectContaining({
+      headers: expect.objectContaining({ 'Idempotency-Key': nova.chaveIdempotencia }),
+    }));
     await prisma.loteMensagemInbound.update({ where: { id: loteId }, data: { leaseAte: new Date(Date.now() - 1) } });
     const segundo = await reivindicarLoteInbound(loteId, primeiro.tenantId, primeiro.leadId, 'owner-after-send-2');
     const reconciliada = await reservarEfeitoLoteInbound(loteId, 'owner-after-send-2', segundo!.fencingToken, 'RESPOSTA_TEXTO');
-    chamadasFisicas.add(reconciliada.chaveIdempotencia); // retry deduplicado no adapter/provedor
     expect(reconciliada.estado).toBe('RESERVADA');
-    expect(chamadasFisicas.size).toBe(1);
-    await concluirEfeitoLoteInbound(loteId, segundo!.fencingToken, 'RESPOSTA_TEXTO');
-    expect((await reservarEfeitoLoteInbound(loteId, 'owner-after-send-2', segundo!.fencingToken, 'RESPOSTA_TEXTO')).estado).toBe('CONCLUIDA');
+    expect(deveDespacharIntencaoEfeito(reconciliada)).toBe(false); // suporte do provider nao comprovado: nao reenvia
+    expect(post).toHaveBeenCalledTimes(1);
+    post.mockRestore();
   });
 
   it('takeover de intencao concluida nao duplica envio nem cria resposta fantasma', async () => {

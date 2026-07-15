@@ -114,6 +114,7 @@ export interface ContextoConversa {
     instrucaoTurno?: string;
     assertFencing?: () => Promise<void>;
     withFencedTransaction?: <T>(command: () => Promise<T>) => Promise<T>;
+    executeExternalEffect?: (toolName: string, command: () => Promise<string>) => Promise<string>;
     // optional record fetched from leads table; may be included by orchestrator
     leadRecord?: Lead;
 }
@@ -593,6 +594,7 @@ Use isso como desempate estratégico na próxima ação.`;
             leadRecord,
             assertFencing: contexto.assertFencing,
             withFencedTransaction: contexto.withFencedTransaction,
+            executeExternalEffect: contexto.executeExternalEffect,
         });
 
         tFases.preContexto = Date.now() - inicioTurno;

@@ -38,6 +38,7 @@ CREATE TABLE "efeitos_lotes_inbound" (
   "criadoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "atualizadoEm" TIMESTAMP(3) NOT NULL,
   "concluidoEm" TIMESTAMP(3),
+  "resultado" TEXT,
   CONSTRAINT "efeitos_lotes_inbound_pkey" PRIMARY KEY ("id")
 );
 

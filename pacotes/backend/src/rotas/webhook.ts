@@ -1710,6 +1710,26 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                               loteId: lote.id, owner: ownerLote, fencingToken: lote.fencingToken,
                             }, command)
                             : undefined,
+                          executeExternalEffect: processamentoAgendado
+                            ? async (toolName: string, command: () => Promise<string>) => {
+                              const tipoEfeito = `TOOL_EXTERNAL:${toolName}`;
+                              const intencao = await reservarEfeitoLoteInbound(
+                                lote.id, ownerLote, lote.fencingToken, tipoEfeito,
+                              );
+                              if (intencao.estado === 'CONCLUIDA') {
+                                return intencao.resultado || JSON.stringify({ success: true, reconciled: true });
+                              }
+                              if (intencao.estado === 'RESERVADA') {
+                                throw new Error(`EFEITO_EXTERNO_REQUER_RECONCILIACAO:${toolName}`);
+                              }
+                              const resultadoExterno = await command();
+                              await assertFencing();
+                              if (!(await concluirEfeitoLoteInbound(
+                                lote.id, lote.fencingToken, tipoEfeito, resultadoExterno,
+                              ))) throw new Error('LOTE_LEASE_PERDIDO');
+                              return resultadoExterno;
+                            }
+                            : undefined,
                         }
                       );
                       if (processamentoAgendado) await assertFencing();
@@ -1773,6 +1793,9 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         const intencaoDocumento = processamentoAgendado ? await reservarEfeitoLoteInbound(
                           loteIdAgendado!, ownerLoteAgendado!, fencingTokenAgendado, 'DOCUMENTO_AUTORIZACAO',
                         ) : undefined;
+                        if (intencaoDocumento?.estado === 'RESERVADA') {
+                          throw new Error('EVOLUTION_EFFECT_REQUIRES_RECONCILIATION:DOCUMENTO_AUTORIZACAO');
+                        }
                         const documentoJaConfirmado = intencaoDocumento?.estado === 'CONCLUIDA';
                         const documentoEnviado = documentoJaConfirmado || await enviarDocumentoComRetry({
                           instanceName,
@@ -1846,6 +1869,9 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                             const intencaoAudio = processamentoAgendado ? await reservarEfeitoLoteInbound(
                               loteIdAgendado!, ownerLoteAgendado!, fencingTokenAgendado, 'RESPOSTA_AUDIO',
                             ) : undefined;
+                            if (intencaoAudio?.estado === 'RESERVADA') {
+                              throw new Error('EVOLUTION_EFFECT_REQUIRES_RECONCILIATION:RESPOSTA_AUDIO');
+                            }
                             const audioJaConfirmado = intencaoAudio?.estado === 'CONCLUIDA';
                             envioOk = audioJaConfirmado || await enviarMensagemAudioComRetry({
                               instanceName,
@@ -1865,6 +1891,9 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                           const intencaoTexto = processamentoAgendado ? await reservarEfeitoLoteInbound(
                             loteIdAgendado!, ownerLoteAgendado!, fencingTokenAgendado, 'RESPOSTA_TEXTO',
                           ) : undefined;
+                          if (intencaoTexto?.estado === 'RESERVADA') {
+                            throw new Error('EVOLUTION_EFFECT_REQUIRES_RECONCILIATION:RESPOSTA_TEXTO');
+                          }
                           const textoJaConfirmado = intencaoTexto?.estado === 'CONCLUIDA';
                           envioOk = textoJaConfirmado || await enviarMensagemComRetry({
                             instanceName,

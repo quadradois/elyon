@@ -662,6 +662,7 @@ model EfeitoLoteInbound {
   criadoEm     DateTime               @default(now())
   atualizadoEm DateTime               @updatedAt
   concluidoEm  DateTime?
+  resultado    String?                @db.Text
 
   @@unique([loteId, tipo])
   @@index([status, criadoEm])
