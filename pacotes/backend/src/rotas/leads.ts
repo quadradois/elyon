@@ -1676,7 +1676,9 @@ router.patch('/:id/atividades/:atividadeId', async (req, res) => {
       case 'completar':
         dadosAtualizacao = {
           completadoEm: new Date(),
-          statusAgendamento: 'REALIZADO'
+          statusAgendamento: 'REALIZADO',
+          versao: { increment: 1 },
+          estadoAgendaAtualizadoEm: new Date()
         };
         mensagem = 'Atividade marcada como realizada';
         break;
@@ -1984,7 +1986,9 @@ router.post('/confirmar/:atividadeId/:token', async (req, res) => {
         data: {
           statusAgendamento: 'CONFIRMADO',
           confirmadoPor: 'proprietario',
-          confirmadoEm: new Date()
+          confirmadoEm: new Date(),
+          versao: { increment: 1 },
+          estadoAgendaAtualizadoEm: new Date()
         }
       });
 
@@ -2136,7 +2140,9 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
         where: { id: atividadeId },
         data: {
           statusConfirmacaoCorretor: 'CONFIRMADO',
-          confirmadoCorretorEm: agora
+          confirmadoCorretorEm: agora,
+          versao: { increment: 1 },
+          estadoAgendaAtualizadoEm: agora
         } as any
       });
 
@@ -2163,7 +2169,9 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
       where: { id: atividadeId },
       data: {
         statusConfirmacaoCorretor: 'RECUSADO',
-        motivoCancelamento: motivoRecusa || (atividade as any).motivoCancelamento || 'Recusa/Ausência do corretor'
+        motivoCancelamento: motivoRecusa || (atividade as any).motivoCancelamento || 'Recusa/Ausência do corretor',
+        versao: { increment: 1 },
+        estadoAgendaAtualizadoEm: agora
       } as any
     });
 

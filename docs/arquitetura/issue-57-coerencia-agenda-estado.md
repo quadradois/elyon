@@ -19,6 +19,13 @@ Cada requisição aceita persiste fingerprint, operação, resultado e atividade
 resultante em `comandos_agenda_ledger`. Mesma chave e fingerprint retorna replay;
 payload divergente retorna `REQUEST_ID_CONFLICT` antes de mutações.
 
+Após ownership válido, rejeições determinísticas como `STALE_EVENT`,
+`STATE_TRANSITION_DENIED`, `NO_SHOW_NOT_DUE` e atividade já substituída também
+são decisões terminais persistidas. Seu replay nunca é reavaliado contra um
+estado posterior. Tentativas cross-tenant ou sem ownership confiável são a
+exceção deliberada: são recusadas sem ledger para não confirmar a existência do
+recurso.
+
 ## Matriz de transições
 
 | Estado atual | Operação | Precondição | Agenda resultante | Estado comercial | Milestone |
@@ -43,10 +50,23 @@ Atividade já substituída retorna `ACTIVITY_ALREADY_REPLACED`; versão obsoleta
 evento sobre estado comercial mais avançado retorna `STALE_EVENT`. Em disputa,
 somente o primeiro comando compatível grava agenda, estado, milestone e ledger.
 
+`estadoAgendaAtualizadoEm` cerca também a ordem temporal: evento anterior à
+última confirmação, aprovação ou mutação autoritativa é stale mesmo com versão
+aparentemente atual. Essas mutações incrementam `versao`. No-show é aceito
+somente após `agendadoPara + AGENDA_NO_SHOW_GRACE_MINUTES` (30 minutos por
+default, limitado entre 1 minuto e 24 horas).
+
 O reagendamento cria a substituta, encerra a original, mantém o Lead e grava
-histórico na mesma transação. Integrações externas continuam fora da transação;
-o adapter de tool permanece submetido ao contrato durável de intenção e
-reconciliação já existente.
+histórico na mesma transação. Quando `avisarCliente=true`, essa transação cria
+uma única linha em `efeitos_agenda_outbox`, associada à chave do comando. O
+worker é o único dispatcher. Apenas `NOVA` pode ser reservada; `CONCLUIDA` não é
+reenviada e `RESERVADA` abandonada ou confirmação perdida vira
+`RECONCILIACAO/DELIVERY_UNKNOWN`, sem retry automático.
+
+O claimer de no-show usa PostgreSQL, `FOR UPDATE SKIP LOCKED`, lease e fencing
+token. A identidade `atividade + horário + policy` é durável. Depois de restart,
+o novo owner chama o mesmo `MarcarNoShowCommand`; replay do ledger finaliza o
+claim sem duplicar milestone ou regressão comercial.
 
 ## Tenant safety e observabilidade
 
@@ -54,8 +74,9 @@ Toda atividade é resolvida conjuntamente por `tenantId + leadId + atividadeId`.
 Falhas de ownership retornam `TENANT_OWNERSHIP_DENIED` sem indicar qual identidade
 existe. A métrica `elyon_agenda_commercial_commands_total{resultado}` agrega
 cancelamento, reagendamento, no-show, replay, conflito, stale event, negação e
-rollback. Não usa tenant, Lead, atividade, nomes, telefones ou texto livre como
-labels.
+rollback. `elyon_agenda_commercial_effects_total` e
+`elyon_agenda_no_show_worker_total` observam dispatcher e claimer. Nenhuma usa
+tenant, Lead, atividade, nomes, telefones ou texto livre como labels.
 
 ## Evidências
 
@@ -63,6 +84,10 @@ labels.
   no-show, replay, conflito, stale event, cross-tenant, outro Lead, default-deny,
   rollback e concorrência.
 - Caminho humano real: API de agenda → comando → PostgreSQL.
+- Replays de cancelamento e reagendamento com aviso: uma intenção e no máximo um
+  envio confirmado; reserva abandonada permanece em reconciliação.
+- Caminho worker real: claimer concorrente → `MarcarNoShowCommand` → PostgreSQL,
+  incluindo takeover após restart sem duplicação.
 - Caminho da tool: execução durável confiável → comando de reagendamento.
 - Frontend: versão esperada e identidade da tentativa atravessam o contrato API.
 - XF-B16 foi removido dos expected-failures e substituído por gate suportado.
@@ -70,10 +95,14 @@ labels.
 ## Rollout
 
 1. aplicar migration expand-only;
-2. publicar backend e worker com métricas ainda sem tráfego novo;
-3. habilitar os caminhos humanos e tool para tenant piloto;
-4. observar `state_transition_denied`, `stale_event`, `rollback` e conflitos;
-5. expandir somente após confirmar ausência de mutações parciais e PII.
+2. publicar backend e worker mantendo `AGENDA_EFFECTS_ENABLED=false` e
+   `AGENDA_NO_SHOW_ENABLED=false` até todas as réplicas estarem no schema novo;
+3. habilitar primeiro `AGENDA_EFFECTS_ENABLED=true` e observar reconciliações;
+4. habilitar `AGENDA_NO_SHOW_ENABLED=true` em ambiente piloto com grace period
+   explícito;
+5. observar `state_transition_denied`, `stale_event`, `no_show_not_due`,
+   reconciliações, rollback e conflitos;
+6. expandir somente após confirmar ausência de mutações parciais e PII.
 
 Dados legados não são apagados. Atividades inconsistentes anteriores devem ser
 inventariadas e tratadas por limpeza explícita posterior, nunca por default de
@@ -81,16 +110,16 @@ migration.
 
 ## Rollback
 
-Reverter o tráfego para os handlers anteriores apenas se o rollout for
-interrompido, mantendo as tabelas e colunas novas para auditoria. A migration é
-expand-only e não exige drop. Comandos já confirmados permanecem no ledger e
-milestones não são apagados. Qualquer integração externa ambígua continua
-fail-closed para reconciliação operacional.
+Desabilitar claimer e dispatcher antes de reverter a aplicação, mantendo outbox,
+ledger e colunas novas para auditoria. Não reativar envio direto nos handlers:
+intenções `NOVA` ficam pendentes e `RESERVADA` fica fail-closed para reconciliação.
+A migration é expand-only e não exige drop. Comandos já confirmados permanecem
+no ledger e milestones não são apagados.
 
 ## Riscos residuais
 
 - registros históricos anteriores à migration podem continuar sem milestone;
-- sincronização externa depende do contrato de intenção do adapter e pode exigir
-  reconciliação;
+- o Evolution não oferece confirmação transacional com PostgreSQL; quedas após
+  envio exigem reconciliação operacional e nunca reenvio automático;
 - eventos sem versão confiável são recusados e precisam ser reenviados pelo
   produtor com a versão vigente.

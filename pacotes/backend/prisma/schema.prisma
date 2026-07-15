@@ -1328,8 +1328,14 @@ model Atividade {
   completadoEm DateTime?
   criadoPor    String?
   criadoEm     DateTime      @default(now())
-  versao       Int           @default(0)
-  substituidaPorId String?       @unique
+    versao       Int           @default(0)
+    substituidaPorId String?       @unique
+    estadoAgendaAtualizadoEm DateTime @default(now())
+    noShowLeaseOwner         String?
+    noShowLeaseAte           DateTime?
+    noShowFencingToken       Int      @default(0)
+    noShowProcessadoEm       DateTime?
+    noShowReasonCode         String?
 
   // ====================================
   // CONFIRMAÇÃO DE AGENDAMENTO
@@ -1366,7 +1372,8 @@ model Atividade {
   @@index([lembreteCorretorEnviadoEm])
   @@index([corretorOriginalId])
   @@index([corretorAtualId])
-  @@index([leadId, versao])
+    @@index([leadId, versao])
+    @@index([statusAgendamento, agendadoPara, noShowProcessadoEm], map: "atividades_no_show_claim_idx")
   @@map("atividades")
 }
 
@@ -1409,6 +1416,32 @@ model ComandoAgendaLedger {
   @@index([tenantId, leadId, criadoEm])
   @@index([atividadeResultanteId, criadoEm])
   @@map("comandos_agenda_ledger")
+}
+
+model EfeitoAgendaOutbox {
+  id                 String    @id @default(uuid())
+  chaveComando       String    @unique
+  chaveIdempotencia  String    @unique
+  tenantId           String
+  leadId             String
+  atividadeId        String
+  tipo               String
+  mensagem           String    @db.Text
+  status             String    @default("NOVA")
+  fencingToken       Int       @default(0)
+  leaseOwner         String?
+  leaseAte           DateTime?
+  tentativas         Int       @default(0)
+  resultado          String?   @db.Text
+  reasonCode         String?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+  concluidoEm        DateTime?
+  reconciliacaoEm    DateTime?
+
+  @@index([status, criadoEm])
+  @@index([tenantId, leadId, criadoEm])
+  @@map("efeitos_agenda_outbox")
 }
 
 enum TipoAtividade {

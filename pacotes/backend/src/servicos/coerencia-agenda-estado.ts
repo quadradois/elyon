@@ -17,6 +17,7 @@ export type AgendaReasonCode =
   | 'ACTIVITY_ALREADY_REPLACED'
   | 'STALE_EVENT'
   | 'STATE_TRANSITION_DENIED'
+  | 'NO_SHOW_NOT_DUE'
   | 'AGENDA_REPLACEMENT_FAILED'
   | 'INVALID_COMMAND';
 
@@ -31,6 +32,7 @@ type BaseCommand = {
   policyVersion: string;
   ocorridoEm: Date;
   expectedVersion: number;
+  notificacao?: { tipo: 'CANCELAMENTO' | 'REAGENDAMENTO'; mensagem: string };
 };
 
 export type CancelarAgendaCommand = BaseCommand & { operacao: 'CANCELAR' };
@@ -62,6 +64,10 @@ function validar(command: AgendaCommand): AgendaReasonCode | null {
   if (command.policyVersion !== AGENDA_COMMERCIAL_POLICY_VERSION) return 'INVALID_COMMAND';
   if (!Number.isInteger(command.expectedVersion) || command.expectedVersion < 0) return 'INVALID_COMMAND';
   if (!Number.isFinite(command.ocorridoEm?.getTime())) return 'INVALID_COMMAND';
+  if (command.notificacao && (!command.notificacao.mensagem?.trim()
+    || (command.operacao === 'CANCELAR' && command.notificacao.tipo !== 'CANCELAMENTO')
+    || (command.operacao === 'REAGENDAR' && command.notificacao.tipo !== 'REAGENDAMENTO')
+    || command.operacao === 'NO_SHOW')) return 'INVALID_COMMAND';
   if (command.operacao === 'REAGENDAR' && (!Number.isFinite(command.novoHorario?.getTime()) || command.novoHorario <= command.ocorridoEm)) return 'INVALID_COMMAND';
   return null;
 }
@@ -78,8 +84,30 @@ function fingerprint(command: AgendaCommand): string {
     command.operacao === 'REAGENDAR' ? hash(['agenda-description-v1', command.novaDescricao || '']) : '',
     command.operacao === 'NO_SHOW' ? command.parteAusente : '',
     normalizar(command.motivo), command.policyVersion, normalizar(command.ator), normalizar(command.origem),
-    String(command.expectedVersion),
+    String(command.expectedVersion), command.notificacao?.tipo || '',
+    command.notificacao ? hash(['agenda-notification-v1', command.notificacao.mensagem]) : '',
   ]);
+}
+
+export function obterNoShowGraceMinutes(): number {
+  const parsed = Number(process.env.AGENDA_NO_SHOW_GRACE_MINUTES || 30);
+  return Number.isFinite(parsed) ? Math.max(1, Math.min(24 * 60, Math.trunc(parsed))) : 30;
+}
+
+async function persistirDecisao(
+  tx: Prisma.TransactionClient,
+  command: AgendaCommand,
+  key: string,
+  fp: string,
+  result: AgendaCommandResult,
+): Promise<AgendaCommandResult> {
+  await tx.comandoAgendaLedger.create({ data: {
+    chaveRequisicao: key, fingerprint: fp, operacao: command.operacao, tenantId: command.tenantId,
+    leadId: command.leadId, atividadeId: command.atividadeId,
+    atividadeResultanteId: result.atividadeResultanteId || command.atividadeId,
+    outcome: result.reasonCode, resultado: result as unknown as Prisma.InputJsonValue,
+  } });
+  return result;
 }
 
 function resultadoFalha(command: AgendaCommand, reasonCode: AgendaReasonCode): AgendaCommandResult {
@@ -96,7 +124,8 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
   if (replay) {
     if (replay.fingerprint !== fp) return { success: false, reasonCode: 'REQUEST_ID_CONFLICT', atividadeId: command.atividadeId };
     await tx.comandoAgendaLedger.update({ where: { id: replay.id }, data: { ultimoReplayEm: new Date() } });
-    return { ...(replay.resultado as AgendaCommandResult), reasonCode: 'COMMAND_REPLAY', replay: true };
+    const original = replay.resultado as AgendaCommandResult;
+    return { ...original, reasonCode: original.success ? 'COMMAND_REPLAY' : original.reasonCode, replay: true };
   }
 
   const atividade = await tx.atividade.findFirst({
@@ -104,14 +133,19 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
     include: { lead: { select: { id: true, status: true, tenantId: true } } },
   });
   if (!atividade) return { success: false, reasonCode: 'TENANT_OWNERSHIP_DENIED', atividadeId: command.atividadeId };
-  if (atividade.versao !== command.expectedVersion) return { success: false, reasonCode: 'STALE_EVENT', atividadeId: command.atividadeId };
-  if (atividade.substituidaPorId) return { success: false, reasonCode: 'ACTIVITY_ALREADY_REPLACED', atividadeId: command.atividadeId };
+  if (atividade.versao !== command.expectedVersion) return persistirDecisao(tx, command, key, fp, { success: false, reasonCode: 'STALE_EVENT', atividadeId: command.atividadeId });
+  if (command.ocorridoEm < atividade.estadoAgendaAtualizadoEm) return persistirDecisao(tx, command, key, fp, { success: false, reasonCode: 'STALE_EVENT', atividadeId: command.atividadeId });
+  if (atividade.substituidaPorId) return persistirDecisao(tx, command, key, fp, { success: false, reasonCode: 'ACTIVITY_ALREADY_REPLACED', atividadeId: command.atividadeId });
   if (!atividade.agendadoPara || !['AVALIACAO', 'REUNIAO'].includes(atividade.tipo)) {
-    return { success: false, reasonCode: 'STATE_TRANSITION_DENIED', atividadeId: command.atividadeId };
+    return persistirDecisao(tx, command, key, fp, { success: false, reasonCode: 'STATE_TRANSITION_DENIED', atividadeId: command.atividadeId });
+  }
+  if (command.operacao === 'NO_SHOW') {
+    const elegivelEm = new Date(atividade.agendadoPara.getTime() + obterNoShowGraceMinutes() * 60_000);
+    if (command.ocorridoEm < elegivelEm) return persistirDecisao(tx, command, key, fp, { success: false, reasonCode: 'NO_SHOW_NOT_DUE', atividadeId: command.atividadeId });
   }
   if (!['PENDENTE', 'CONFIRMADO'].includes(atividade.statusAgendamento || '') || atividade.lead.status !== 'VISITA_AGENDADA') {
     const stale = ['AVALIACAO_EM_ANDAMENTO', 'DOCUMENTACAO', 'ONBOARDING', 'CAPTADO'].includes(atividade.lead.status);
-    return { success: false, reasonCode: stale ? 'STALE_EVENT' : 'STATE_TRANSITION_DENIED', atividadeId: command.atividadeId };
+    return persistirDecisao(tx, command, key, fp, { success: false, reasonCode: stale ? 'STALE_EVENT' : 'STATE_TRANSITION_DENIED', atividadeId: command.atividadeId });
   }
 
   const milestoneKey = hash(['agenda-milestone-v1', key, command.operacao]);
@@ -133,12 +167,13 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
       tokenConfirmacao: randomUUID(),
       statusConfirmacaoCorretor: atividade.tipo === 'REUNIAO' ? 'PENDENTE' : null,
       tokenConfirmacaoCorretor: atividade.tipo === 'REUNIAO' ? randomUUID() : null,
+      estadoAgendaAtualizadoEm: command.ocorridoEm,
     } });
     replacementId = substituta.id;
     const encerrada = await tx.atividade.updateMany({
       where: { id: atividade.id, leadId: command.leadId, versao: command.expectedVersion, substituidaPorId: null, statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] } },
       data: { statusAgendamento: 'CANCELADO', canceladoPor: command.ator, canceladoEm: command.ocorridoEm,
-        motivoCancelamento: command.motivo, substituidaPorId: substituta.id, versao: { increment: 1 } },
+        motivoCancelamento: command.motivo, substituidaPorId: substituta.id, versao: { increment: 1 }, estadoAgendaAtualizadoEm: command.ocorridoEm },
     });
     if (encerrada.count !== 1) throw new Error('AGENDA_CONCURRENT_WRITE');
     milestoneType = 'VISITA_REAGENDADA';
@@ -151,7 +186,8 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
       data: { statusAgendamento: statusAgenda, canceladoPor: command.operacao === 'CANCELAR' ? command.ator : atividade.canceladoPor,
         canceladoEm: command.operacao === 'CANCELAR' ? command.ocorridoEm : atividade.canceladoEm,
         motivoCancelamento: command.operacao === 'CANCELAR' ? command.motivo : atividade.motivoCancelamento,
-        completadoEm: command.operacao === 'NO_SHOW' ? command.ocorridoEm : atividade.completadoEm, versao: { increment: 1 } },
+        completadoEm: command.operacao === 'NO_SHOW' ? command.ocorridoEm : atividade.completadoEm,
+        versao: { increment: 1 }, estadoAgendaAtualizadoEm: command.ocorridoEm },
     });
     if (updated.count !== 1) throw new Error('AGENDA_CONCURRENT_WRITE');
     const lead = await tx.lead.updateMany({ where: { id: command.leadId, tenantId: command.tenantId, status: 'VISITA_AGENDADA' }, data: { status: 'TENTATIVA_AGENDAMENTO' } });
@@ -168,12 +204,18 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
     parteAusente: command.operacao === 'NO_SHOW' ? command.parteAusente : null,
     ocorridoEm: command.ocorridoEm, chaveIdempotencia: milestoneKey,
   } });
-  await tx.comandoAgendaLedger.create({ data: {
-    chaveRequisicao: key, fingerprint: fp, operacao: command.operacao, tenantId: command.tenantId,
-    leadId: command.leadId, atividadeId: command.atividadeId,
-    atividadeResultanteId: result.atividadeResultanteId || command.atividadeId,
-    outcome: result.reasonCode, resultado: result as unknown as Prisma.InputJsonValue,
-  } });
+  await persistirDecisao(tx, command, key, fp, result);
+  if (command.notificacao) {
+    await tx.efeitoAgendaOutbox.create({ data: {
+      chaveComando: key,
+      chaveIdempotencia: hash(['agenda-effect-v1', key, command.notificacao.tipo]),
+      tenantId: command.tenantId,
+      leadId: command.leadId,
+      atividadeId: result.atividadeResultanteId || command.atividadeId,
+      tipo: command.notificacao.tipo,
+      mensagem: command.notificacao.mensagem,
+    } });
+  }
   return result;
 }
 
