@@ -261,8 +261,8 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
     await executarComandoAgenda({ ...command, ocorridoEm: new Date('2027-02-03T12:00:00Z') });
     expect(await prisma.efeitoAgendaOutbox.count({ where: { tenantId: tenantA } })).toBe(1);
     const sends: string[] = [];
-    expect(await executarProximoEfeitoAgenda('baseline-effect', { send: async (_instance, _phone, _message, key) => { sends.push(key); return { providerId: 'provider-1' }; } })).toBe(true);
-    expect(await executarProximoEfeitoAgenda('baseline-effect', { send: async () => { throw new Error('nao deve enviar'); } })).toBe(false);
+    expect(await executarProximoEfeitoAgenda([tenantA], 'baseline-effect', { send: async (_instance, _phone, _message, key) => { sends.push(key); return { providerId: 'provider-1' }; } })).toBe(true);
+    expect(await executarProximoEfeitoAgenda([tenantA], 'baseline-effect', { send: async () => { throw new Error('nao deve enviar'); } })).toBe(false);
     expect(sends).toHaveLength(1);
     expect(await prisma.efeitoAgendaOutbox.findFirstOrThrow({ where: { tenantId: tenantA } })).toMatchObject({ status: 'CONCLUIDA' });
   });
@@ -281,43 +281,86 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
     await executarComandoAgenda({
       ...base(), operacao: 'CANCELAR', notificacao: { tipo: 'CANCELAMENTO', mensagem: 'Aviso' },
     });
-    const reserved = await reivindicarProximoEfeitoAgenda('owner-crashed', new Date('2027-02-02T13:00:00Z'));
+    const reserved = await reivindicarProximoEfeitoAgenda([tenantA], 'owner-crashed', new Date('2027-02-02T13:00:00Z'));
     expect(reserved?.status).toBe('RESERVADA');
     const sends: string[] = [];
-    expect(await executarProximoEfeitoAgenda('owner-takeover', { send: async () => { sends.push('sent'); return {}; } }, new Date('2027-02-02T13:03:00Z'))).toBe(false);
+    expect(await executarProximoEfeitoAgenda([tenantA], 'owner-takeover', { send: async () => { sends.push('sent'); return {}; } }, new Date('2027-02-02T13:03:00Z'))).toBe(false);
     expect(sends).toHaveLength(0);
     expect(await prisma.efeitoAgendaOutbox.findFirstOrThrow({ where: { tenantId: tenantA } })).toMatchObject({ status: 'RECONCILIACAO', reasonCode: 'DELIVERY_UNKNOWN' });
   });
 
+  it('dispatcher processa somente o tenant piloto sem starvation por item externo mais antigo', async () => {
+    await prisma.lead.update({ where: { id: leadA }, data: { telefone: '5511999999999' } });
+    await prisma.sessaoWhatsapp.create({
+      data: { tenantId: tenantA, nome: 'Piloto B16', instanceName: `pilot-${randomUUID()}`, status: 'CONECTADO' },
+    });
+    const outside = await prisma.efeitoAgendaOutbox.create({ data: {
+      chaveComando: randomUUID(), chaveIdempotencia: randomUUID(), tenantId: tenantB, leadId: leadB,
+      atividadeId: atividadeA, tipo: 'CANCELAMENTO', mensagem: 'Nao processar', criadoEm: new Date('2027-01-01T00:00:00Z'),
+    } });
+    const inside = await prisma.efeitoAgendaOutbox.create({ data: {
+      chaveComando: randomUUID(), chaveIdempotencia: randomUUID(), tenantId: tenantA, leadId: leadA,
+      atividadeId: atividadeA, tipo: 'CANCELAMENTO', mensagem: 'Processar no piloto', criadoEm: new Date('2027-01-02T00:00:00Z'),
+    } });
+    const sends: string[] = [];
+
+    expect(await executarProximoEfeitoAgenda(
+      [tenantA],
+      'pilot-effect',
+      { send: async (_instance, _phone, message) => { sends.push(message); return { providerId: 'pilot-provider' }; } },
+      new Date('2027-02-02T13:00:00Z'),
+    )).toBe(true);
+
+    expect(sends).toEqual(['Processar no piloto']);
+    expect(await prisma.efeitoAgendaOutbox.findUniqueOrThrow({ where: { id: inside.id } })).toMatchObject({ status: 'CONCLUIDA' });
+    expect(await prisma.efeitoAgendaOutbox.findUniqueOrThrow({ where: { id: outside.id } })).toMatchObject({ status: 'NOVA', leaseOwner: null });
+  });
+
+  it('claimers falham fechados quando nenhum tenant piloto foi aprovado', async () => {
+    expect(await reivindicarProximoEfeitoAgenda([], 'no-scope', new Date('2027-02-10T17:00:00Z'))).toBeNull();
+    expect(await reivindicarProximoNoShow([], 'no-scope', new Date('2027-02-10T17:00:00Z'))).toBeNull();
+    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).toMatchObject({ noShowLeaseOwner: null });
+  });
+
   it('worker real reivindica no-show vencido e atravessa comando ate PostgreSQL', async () => {
     const now = new Date('2027-02-10T17:00:00Z');
-    expect(await executarProximoNoShowAgenda('baseline-no-show', now)).toBe(true);
+    expect(await executarProximoNoShowAgenda([tenantA], 'baseline-no-show', now)).toBe(true);
     expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).toMatchObject({ statusAgendamento: 'NAO_COMPARECEU', noShowReasonCode: 'NO_SHOW_RECORDED' });
     expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA, tipo: 'VISITA_NAO_COMPARECEU' } })).toBe(1);
+  });
+
+  it('claimer de no-show ignora tenant fora do piloto mesmo quando ele vence primeiro', async () => {
+    const outside = await prisma.atividade.create({ data: {
+      leadId: leadB, tipo: 'AVALIACAO', titulo: 'Fora do piloto', agendadoPara: new Date('2027-02-10T14:00:00Z'),
+      statusAgendamento: 'CONFIRMADO', confirmadoPor: 'baseline', confirmadoEm: new Date('2027-02-01T12:00:00Z'),
+    } });
+    const claimed = await reivindicarProximoNoShow([tenantA], 'pilot-no-show', new Date('2027-02-10T17:00:00Z'));
+    expect(claimed?.id).toBe(atividadeA);
+    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: outside.id } })).toMatchObject({ noShowLeaseOwner: null });
   });
 
   it('dois workers concorrentes reivindicam uma atividade vencida somente uma vez', async () => {
     const now = new Date('2027-02-10T17:00:00Z');
     const outcomes = await Promise.all([
-      executarProximoNoShowAgenda('baseline-no-show-a', now),
-      executarProximoNoShowAgenda('baseline-no-show-b', now),
+      executarProximoNoShowAgenda([tenantA], 'baseline-no-show-a', now),
+      executarProximoNoShowAgenda([tenantA], 'baseline-no-show-b', now),
     ]);
     expect(outcomes.filter(Boolean)).toHaveLength(1);
     expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(1);
   });
 
   it('takeover apos restart reaproveita identidade e nao duplica milestone', async () => {
-    const claimed = await reivindicarProximoNoShow('worker-before-restart', new Date('2027-02-10T17:00:00Z'));
+    const claimed = await reivindicarProximoNoShow([tenantA], 'worker-before-restart', new Date('2027-02-10T17:00:00Z'));
     expect(claimed).not.toBeNull();
-    expect(await executarProximoNoShowAgenda('worker-after-restart', new Date('2027-02-10T17:02:00Z'))).toBe(true);
-    expect(await executarProximoNoShowAgenda('worker-third', new Date('2027-02-10T17:03:00Z'))).toBe(false);
+    expect(await executarProximoNoShowAgenda([tenantA], 'worker-after-restart', new Date('2027-02-10T17:02:00Z'))).toBe(true);
+    expect(await executarProximoNoShowAgenda([tenantA], 'worker-third', new Date('2027-02-10T17:03:00Z'))).toBe(false);
     expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(1);
   });
 
   it('owner expirado nao executa depois do takeover e o novo owner decide uma vez', async () => {
-    const claimA = await reivindicarProximoNoShow('worker-a', new Date('2027-02-10T17:00:00Z'));
+    const claimA = await reivindicarProximoNoShow([tenantA], 'worker-a', new Date('2027-02-10T17:00:00Z'));
     expect(claimA).not.toBeNull();
-    const claimB = await reivindicarProximoNoShow('worker-b', new Date('2027-02-10T17:02:00Z'));
+    const claimB = await reivindicarProximoNoShow([tenantA], 'worker-b', new Date('2027-02-10T17:02:00Z'));
     expect(claimB).not.toBeNull();
 
     const stale = await processarNoShowReivindicado(claimA!, 'worker-a', new Date('2027-02-10T17:02:01Z'));
@@ -335,7 +378,7 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
   });
 
   it('falha transitoria depois do claim libera lease e permite retry duravel', async () => {
-    const claim = await reivindicarProximoNoShow('worker-transient', new Date('2027-02-10T17:00:00Z'));
+    const claim = await reivindicarProximoNoShow([tenantA], 'worker-transient', new Date('2027-02-10T17:00:00Z'));
     expect(claim).not.toBeNull();
     const identity = `no-show:${atividadeA}:${claim!.agendadoPara?.toISOString()}:${AGENDA_COMMERCIAL_POLICY_VERSION}`;
     const requestKey = createHash('sha256').update(['agenda-command-v1', tenantA, 'WORKER', identity].join('|')).digest('hex');
@@ -353,12 +396,12 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
     expect(await prisma.comandoAgendaLedger.count({ where: { tenantId: tenantA } })).toBe(0);
 
     await prisma.milestoneAgenda.delete({ where: { chaveIdempotencia: milestoneKey } });
-    expect(await executarProximoNoShowAgenda('worker-retry', new Date('2027-02-10T17:00:02Z'))).toBe(true);
+    expect(await executarProximoNoShowAgenda([tenantA], 'worker-retry', new Date('2027-02-10T17:00:02Z'))).toBe(true);
     expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(1);
   });
 
   it('rejeicao de dominio persistida finaliza o claim sem milestone', async () => {
-    const claim = await reivindicarProximoNoShow('worker-domain-denial', new Date('2027-02-10T17:00:00Z'));
+    const claim = await reivindicarProximoNoShow([tenantA], 'worker-domain-denial', new Date('2027-02-10T17:00:00Z'));
     expect(claim).not.toBeNull();
     await prisma.lead.update({ where: { id: leadA }, data: { status: 'NOVO' } });
     const denied = await processarNoShowReivindicado(claim!, 'worker-domain-denial', new Date('2027-02-10T17:00:01Z'));
@@ -372,7 +415,7 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
   });
 
   it('fechamento fenced com count zero retorna lease perdido e nao marca processado', async () => {
-    const claim = await reivindicarProximoNoShow('worker-close-a', new Date('2027-02-10T17:00:00Z'));
+    const claim = await reivindicarProximoNoShow([tenantA], 'worker-close-a', new Date('2027-02-10T17:00:00Z'));
     expect(claim).not.toBeNull();
     const result = await processarNoShowReivindicado(claim!, 'worker-close-a', new Date('2027-02-10T17:00:01Z'), {
       aposComando: async () => {
@@ -388,7 +431,7 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
     });
     expect(await prisma.comandoAgendaLedger.count({ where: { tenantId: tenantA } })).toBe(1);
     expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(1);
-    expect(await executarProximoNoShowAgenda('worker-close-recovery', new Date('2027-02-10T17:02:00Z'))).toBe(true);
+    expect(await executarProximoNoShowAgenda([tenantA], 'worker-close-recovery', new Date('2027-02-10T17:02:00Z'))).toBe(true);
     expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).toMatchObject({
       noShowReasonCode: 'NO_SHOW_RECORDED', noShowLeaseOwner: null,
     });

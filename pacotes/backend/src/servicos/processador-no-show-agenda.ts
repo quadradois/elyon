@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/db';
 import { agendaNoShowEventos } from '../observabilidade/agenda-comercial-metrics';
 import {
@@ -13,13 +14,19 @@ import {
 const LEASE_MS = 60_000;
 export const NO_SHOW_OWNER = `agenda-no-show:${process.pid}:${randomUUID()}`;
 
-export async function reivindicarProximoNoShow(owner = NO_SHOW_OWNER, now = new Date()) {
+export async function reivindicarProximoNoShow(
+  tenantIds: readonly string[],
+  owner = NO_SHOW_OWNER,
+  now = new Date(),
+) {
+  if (tenantIds.length === 0) return null;
   const graceMinutes = obterNoShowGraceMinutes();
   return prisma.$transaction(async (tx) => {
     const candidates = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT a."id" FROM "atividades" a
       JOIN "leads" l ON l."id" = a."leadId"
       WHERE a."tipo" IN ('AVALIACAO', 'REUNIAO')
+        AND l."tenantId" IN (${Prisma.join([...tenantIds])})
         AND (
           (a."statusAgendamento" IN ('PENDENTE', 'CONFIRMADO') AND l."status" = 'VISITA_AGENDADA')
           OR EXISTS (
@@ -126,8 +133,12 @@ export async function processarNoShowReivindicado(
   return finalizarClaimNoShow(activity, owner, result, now);
 }
 
-export async function executarProximoNoShowAgenda(owner = NO_SHOW_OWNER, now = new Date()): Promise<boolean> {
-  const activity = await reivindicarProximoNoShow(owner, now);
+export async function executarProximoNoShowAgenda(
+  tenantIds: readonly string[],
+  owner = NO_SHOW_OWNER,
+  now = new Date(),
+): Promise<boolean> {
+  const activity = await reivindicarProximoNoShow(tenantIds, owner, now);
   if (!activity) return false;
   const result = await processarNoShowReivindicado(activity, owner, now);
   agendaNoShowEventos.inc({ resultado: result.reasonCode.toLowerCase() });

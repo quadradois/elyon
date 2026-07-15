@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/db';
 import { logger } from '../lib/logger';
 import { agendaEfeitosEventos } from '../observabilidade/agenda-comercial-metrics';
@@ -11,15 +12,21 @@ export interface AgendaEffectSender {
   send(instanceName: string, phone: string, message: string, idempotencyKey: string): Promise<{ providerId?: string }>;
 }
 
-export async function reivindicarProximoEfeitoAgenda(owner = AGENDA_EFFECT_OWNER, now = new Date()) {
+export async function reivindicarProximoEfeitoAgenda(
+  tenantIds: readonly string[],
+  owner = AGENDA_EFFECT_OWNER,
+  now = new Date(),
+) {
+  if (tenantIds.length === 0) return null;
   return prisma.$transaction(async (tx) => {
     await tx.efeitoAgendaOutbox.updateMany({
-      where: { status: 'RESERVADA', leaseAte: { lte: now } },
+      where: { tenantId: { in: [...tenantIds] }, status: 'RESERVADA', leaseAte: { lte: now } },
       data: { status: 'RECONCILIACAO', reasonCode: 'DELIVERY_UNKNOWN', reconciliacaoEm: now, leaseOwner: null, leaseAte: null },
     });
     const candidates = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "efeitos_agenda_outbox"
       WHERE "status" = 'NOVA'
+        AND "tenantId" IN (${Prisma.join([...tenantIds])})
       ORDER BY "criadoEm" ASC, "id" ASC
       FOR UPDATE SKIP LOCKED LIMIT 1
     `;
@@ -42,11 +49,12 @@ const defaultSender: AgendaEffectSender = {
 };
 
 export async function executarProximoEfeitoAgenda(
+  tenantIds: readonly string[],
   owner = AGENDA_EFFECT_OWNER,
   sender: AgendaEffectSender = defaultSender,
   now = new Date(),
 ): Promise<boolean> {
-  const effect = await reivindicarProximoEfeitoAgenda(owner, now);
+  const effect = await reivindicarProximoEfeitoAgenda(tenantIds, owner, now);
   if (!effect) return false;
   try {
     const lead = await prisma.lead.findFirst({
