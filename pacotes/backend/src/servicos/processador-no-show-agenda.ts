@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/db';
 import { agendaNoShowEventos } from '../observabilidade/agenda-comercial-metrics';
+import type { AgendaPilotScope } from './agenda-pilot-config';
 import {
   AGENDA_COMMERCIAL_POLICY_VERSION,
   executarComandoAgenda,
@@ -15,18 +15,21 @@ const LEASE_MS = 60_000;
 export const NO_SHOW_OWNER = `agenda-no-show:${process.pid}:${randomUUID()}`;
 
 export async function reivindicarProximoNoShow(
-  tenantIds: readonly string[],
+  scope: AgendaPilotScope | undefined,
   owner = NO_SHOW_OWNER,
   now = new Date(),
 ) {
-  if (tenantIds.length === 0) return null;
+  if (!scope) return null;
+  const startedAt = new Date(scope.startedAtUtc);
+  if (!Number.isFinite(startedAt.getTime())) return null;
   const graceMinutes = obterNoShowGraceMinutes();
   return prisma.$transaction(async (tx) => {
     const candidates = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT a."id" FROM "atividades" a
       JOIN "leads" l ON l."id" = a."leadId"
+      JOIN "tenants" t ON t."id" = l."tenantId" AND t."status" = 'ATIVO'
       WHERE a."tipo" IN ('AVALIACAO', 'REUNIAO')
-        AND l."tenantId" IN (${Prisma.join([...tenantIds])})
+        AND l."tenantId" = ${scope.tenantId}
         AND (
           (a."statusAgendamento" IN ('PENDENTE', 'CONFIRMADO') AND l."status" = 'VISITA_AGENDADA')
           OR EXISTS (
@@ -36,6 +39,7 @@ export async function reivindicarProximoNoShow(
         )
         AND a."substituidaPorId" IS NULL
         AND a."noShowProcessadoEm" IS NULL
+        AND a."agendadoPara" >= ${startedAt}
         AND a."agendadoPara" + (${graceMinutes} * interval '1 minute') <= ${now}
         AND (a."noShowLeaseAte" IS NULL OR a."noShowLeaseAte" <= ${now})
       ORDER BY a."agendadoPara" ASC, a."id" ASC
@@ -134,11 +138,11 @@ export async function processarNoShowReivindicado(
 }
 
 export async function executarProximoNoShowAgenda(
-  tenantIds: readonly string[],
+  scope: AgendaPilotScope | undefined,
   owner = NO_SHOW_OWNER,
   now = new Date(),
 ): Promise<boolean> {
-  const activity = await reivindicarProximoNoShow(tenantIds, owner, now);
+  const activity = await reivindicarProximoNoShow(scope, owner, now);
   if (!activity) return false;
   const result = await processarNoShowReivindicado(activity, owner, now);
   agendaNoShowEventos.inc({ resultado: result.reasonCode.toLowerCase() });

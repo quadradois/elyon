@@ -22,10 +22,26 @@ exatamente um `AGENDA_PILOT_TENANT_ID`, validado como UUID e obtido somente da
 configuração confiável do processo. Payloads, parâmetros HTTP e texto do modelo
 não participam dessa decisão.
 
+Quando algum recurso é solicitado, `AGENDA_PILOT_STARTED_AT` também é obrigatório
+e deve ser um instante UTC ISO-8601 terminado em `Z`. O worker resolve esse cutoff
+uma única vez no startup e reutiliza o mesmo valor em todos os loops até o próximo
+restart. Um restart com a mesma configuração preserva o watermark; sua alteração
+durante uma janela exige nova aprovação operacional e uma nova janela.
+
+Antes de habilitar o gate, o worker consulta o PostgreSQL e exige que o UUID exista
+e que o tenant esteja `ATIVO`. A mesma condição é repetida dentro do SQL de cada
+claim, impedindo processamento se o tenant for suspenso ou cancelado após o
+startup.
+
 Os claimers do outbox de agenda e de no-show recebem esse escopo e aplicam o
 filtro de `tenantId` dentro da consulta PostgreSQL que usa `FOR UPDATE SKIP
 LOCKED`. Assim, um item mais antigo de outro tenant não é reservado, alterado ou
 capaz de causar starvation no piloto. Escopo vazio retorna sem claim.
+
+Intenções `NOVA` do tenant piloto criadas antes do cutoff são movidas para
+`RECONCILIACAO/PILOT_PRE_CUTOFF`, sem envio. Atividades com `agendadoPara` anterior
+ao cutoff nunca são elegíveis para no-show automático. Portanto, habilitar uma
+flag não drena retroativamente o backlog histórico.
 
 O mecanismo não cria schema, migration nem identidade paralela de tenant.
 
@@ -35,10 +51,12 @@ O mecanismo não cria schema, migration nem identidade paralela de tenant.
 |---|---:|---:|---|
 | flags ausentes ou `false` | off | off | estado publicado inicial |
 | efeito `true`, tenant ausente/inválido | off | off | `TENANT_ID_MISSING` ou `TENANT_ID_INVALID` |
+| recurso solicitado, cutoff ausente/inválido | off | off | `STARTED_AT_MISSING` ou `STARTED_AT_INVALID` |
+| tenant inexistente ou não ativo | off | off | `TENANT_NOT_FOUND` ou `TENANT_INACTIVE` |
 | no-show `true`, efeito `false` | off | off | `EFFECTS_REQUIRED` |
-| ambos `true`, tenant válido, grace ausente/inválido | on | off | `GRACE_PERIOD_MISSING` ou `GRACE_PERIOD_INVALID` |
-| efeito `true`, tenant válido | on | off | primeira etapa possível após aprovação operacional |
-| ambos `true`, tenant válido e grace explícito entre 1 e 1440 | on | on | segunda etapa possível após aprovação da primeira |
+| ambos `true`, tenant ativo, cutoff válido, grace ausente/inválido | on | off | `GRACE_PERIOD_MISSING` ou `GRACE_PERIOD_INVALID` |
+| efeito `true`, tenant ativo e cutoff válido | on | off | primeira etapa possível após aprovação operacional |
+| ambos `true`, tenant ativo, cutoff válido e grace explícito entre 1 e 1440 | on | on | segunda etapa possível após aprovação da primeira |
 
 Uma configuração recusada não derruba inbox, lotes ou follow-ups. Ela impede
 somente os novos processadores de agenda, registra reason code sem identidade e
@@ -49,6 +67,8 @@ mantém o restante do worker observável.
 - `elyon_agenda_pilot_gate{recurso,status,reason_code}` informa a decisão do
   gate com cardinalidade fechada;
 - `elyon_agenda_pilot_tenant_scope_count` informa apenas `0` ou `1`;
+- `elyon_agenda_pilot_cutoff_configured` informa apenas `0` ou `1`, nunca o
+  timestamp;
 - métricas existentes de comandos, efeitos e no-show continuam agregadas;
 - logs registram recurso, estado, reason code e tamanho do escopo, nunca UUID,
   nome, telefone, mensagem ou identidade do tenant.
@@ -61,7 +81,7 @@ credenciais:
 
 1. tenant piloto e UUID verificado contra a fonte administrativa confiável;
 2. responsáveis técnico e comercial e contatos de escalonamento;
-3. início, término e janela sem mudanças concorrentes;
+3. início, término, `AGENDA_PILOT_STARTED_AT` e janela sem mudanças concorrentes;
 4. `AGENDA_NO_SHOW_GRACE_MINUTES` aprovado explicitamente;
 5. snapshot das métricas e backlog imediatamente antes da ativação;
 6. aceite dos critérios de interrupção e execução do ensaio de rollback.
@@ -97,8 +117,8 @@ Executar rollback imediato diante de qualquer um destes sinais:
 
 1. implantar esta mudança com as duas flags `false`;
 2. validar `/ready`, `/metrics`, migrations e os gates com escopo `0`;
-3. aprovar e configurar o UUID do tenant piloto, responsáveis, janela, grace e
-   baseline, ainda com as flags `false`;
+3. aprovar e configurar o UUID do tenant piloto, cutoff UTC, responsáveis,
+   janela, grace e baseline, ainda com as flags `false`;
 4. habilitar somente `AGENDA_EFFECTS_ENABLED=true`, reiniciar o worker e validar
    que o gate mostra `effects=enabled`, `no_show=disabled` e escopo `1`;
 5. cumprir observação e volume da etapa 1;
@@ -117,17 +137,23 @@ Executar rollback imediato diante de qualquer um destes sinais:
 6. não reativar envios diretos e não reenviar automaticamente resultados
    ambíguos.
 
-O rollback não remove colunas ou dados. Intenções `NOVA` permanecem duráveis para
-decisão posterior, e intenções ambíguas continuam fail-closed em reconciliação.
+O rollback não remove colunas ou dados. Intenções posteriores ao cutoff que ainda
+estiverem `NOVA` permanecem duráveis para decisão posterior; itens pré-cutoff e
+intenções ambíguas continuam fail-closed em reconciliação.
 
 ## Evidências automatizadas
 
 - parser recusa tenant ausente, texto arbitrário, múltiplos IDs e UUID inválido;
+- cutoff ausente, inválido ou fora de UTC é recusado antes do SQL;
+- tenant inexistente ou inativo mantém os recursos desabilitados, e a condição
+  `ATIVO` é repetida dentro do claim;
 - no-show não pode preceder efeitos e exige grace period explícito;
 - claim sem escopo retorna vazio;
-- PostgreSQL real ignora item externo mais antigo e processa apenas o tenant
-  piloto;
-- métricas expõem estado e tamanho do escopo sem revelar UUID;
+- PostgreSQL real põe intenção pré-cutoff em reconciliação, ignora atividade
+  histórica e processa somente itens posteriores ao cutoff do tenant piloto;
+- restart com a mesma configuração preserva o cutoff;
+- métricas expõem estado do gate, cutoff configurado e tamanho do escopo sem
+  revelar UUID, timestamp ou PII;
 - testes existentes de fencing, idempotência, takeover e restart permanecem
   gates de regressão.
 

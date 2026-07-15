@@ -18,7 +18,7 @@ import { renderizarMetricasWorker } from './observabilidade/metricas-worker';
 import { executarProximoFollowupOutbound } from './servicos/processador-followups-outbound';
 import { executarProximoEfeitoAgenda } from './servicos/efeitos-agenda-outbox';
 import { executarProximoNoShowAgenda } from './servicos/processador-no-show-agenda';
-import { resolverAgendaPilotConfig } from './servicos/agenda-pilot-config';
+import { resolverAgendaPilotConfig, type AgendaPilotConfig } from './servicos/agenda-pilot-config';
 import { registrarAgendaPilotConfig } from './observabilidade/agenda-comercial-metrics';
 
 const registry = new Registry();
@@ -49,7 +49,7 @@ const filaPorStatus = new Gauge({
 
 const porta = Number(process.env.WEBHOOK_WORKER_PORT || 3001);
 const pollMs = Math.max(100, Math.min(10_000, Number(process.env.WEBHOOK_WORKER_POLL_MS || 1_000)));
-const agendaPilotConfig = resolverAgendaPilotConfig();
+let agendaPilotConfig: AgendaPilotConfig;
 let encerrando = false;
 let bancoPronto = false;
 let ultimoLoopEm = 0;
@@ -92,10 +92,10 @@ async function loop(): Promise<void> {
       const processouLote = await executarProximoLoteInbound();
       const processouFollowup = await executarProximoFollowupOutbound();
       const processouEfeitoAgenda = agendaPilotConfig.effects.enabled
-        ? await executarProximoEfeitoAgenda(agendaPilotConfig.tenantIds)
+        ? await executarProximoEfeitoAgenda(agendaPilotConfig.scope)
         : false;
       const processouNoShow = agendaPilotConfig.noShow.enabled
-        ? await executarProximoNoShowAgenda(agendaPilotConfig.tenantIds)
+        ? await executarProximoNoShowAgenda(agendaPilotConfig.scope)
         : false;
       if (!evento && !processouLote && !processouFollowup && !processouEfeitoAgenda && !processouNoShow) await esperar(pollMs);
     } catch (erro) {
@@ -153,6 +153,7 @@ async function iniciar(): Promise<void> {
   installSecureConsoleBridge();
   validarConfiguracaoCriptografia();
   validarConfiguracaoWebhooks();
+  agendaPilotConfig = await resolverAgendaPilotConfig();
   registrarAgendaPilotConfig(agendaPilotConfig);
   for (const [recurso, gate] of [
     ['effects', agendaPilotConfig.effects],
@@ -163,7 +164,8 @@ async function iniciar(): Promise<void> {
       requested: gate.requested,
       enabled: gate.enabled,
       reasonCode: gate.reason,
-      tenantScopeCount: agendaPilotConfig.tenantIds.length,
+      tenantScopeCount: agendaPilotConfig.scope ? 1 : 0,
+      cutoffConfigured: Boolean(agendaPilotConfig.scope?.startedAtUtc),
     };
     if (gate.requested && !gate.enabled) logger.error(contexto, '[AGENDA_PILOT] Ativacao recusada fail-closed');
     else logger.info(contexto, '[AGENDA_PILOT] Gate configurado');

@@ -14,14 +14,17 @@ describe('agenda commercial metrics', () => {
 
   it('expoe o gate do piloto sem publicar a identidade configurada', async () => {
     const tenantId = '7fa1c55e-3148-4d6c-ae6e-9547374f6e09';
+    const startedAtUtc = '2027-02-10T12:00:00.000Z';
     registrarAgendaPilotConfig({
-      tenantIds: [tenantId],
+      scope: { tenantId, startedAtUtc },
       effects: { requested: true, enabled: true, reason: 'ENABLED' },
       noShow: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
     });
     const output = await metricsRegistry.metrics();
     expect(output).toContain('elyon_agenda_pilot_gate');
     expect(output).toContain('elyon_agenda_pilot_tenant_scope_count 1');
+    expect(output).toContain('elyon_agenda_pilot_cutoff_configured 1');
     expect(output).not.toContain(tenantId);
+    expect(output).not.toContain(startedAtUtc);
   });
 });

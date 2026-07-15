@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/db';
 import { logger } from '../lib/logger';
 import { agendaEfeitosEventos } from '../observabilidade/agenda-comercial-metrics';
+import type { AgendaPilotScope } from './agenda-pilot-config';
 import { getWhatsAppService } from './whatsapp';
 
 const LEASE_MS = 120_000;
@@ -13,21 +13,33 @@ export interface AgendaEffectSender {
 }
 
 export async function reivindicarProximoEfeitoAgenda(
-  tenantIds: readonly string[],
+  scope: AgendaPilotScope | undefined,
   owner = AGENDA_EFFECT_OWNER,
   now = new Date(),
 ) {
-  if (tenantIds.length === 0) return null;
+  if (!scope) return null;
+  const startedAt = new Date(scope.startedAtUtc);
+  if (!Number.isFinite(startedAt.getTime())) return null;
   return prisma.$transaction(async (tx) => {
+    const activeTenant = await tx.tenant.findFirst({
+      where: { id: scope.tenantId, status: 'ATIVO' }, select: { id: true },
+    });
+    if (!activeTenant) return null;
     await tx.efeitoAgendaOutbox.updateMany({
-      where: { tenantId: { in: [...tenantIds] }, status: 'RESERVADA', leaseAte: { lte: now } },
+      where: { tenantId: scope.tenantId, status: 'NOVA', criadoEm: { lt: startedAt } },
+      data: { status: 'RECONCILIACAO', reasonCode: 'PILOT_PRE_CUTOFF', reconciliacaoEm: now },
+    });
+    await tx.efeitoAgendaOutbox.updateMany({
+      where: { tenantId: scope.tenantId, status: 'RESERVADA', leaseAte: { lte: now } },
       data: { status: 'RECONCILIACAO', reasonCode: 'DELIVERY_UNKNOWN', reconciliacaoEm: now, leaseOwner: null, leaseAte: null },
     });
     const candidates = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT "id" FROM "efeitos_agenda_outbox"
-      WHERE "status" = 'NOVA'
-        AND "tenantId" IN (${Prisma.join([...tenantIds])})
-      ORDER BY "criadoEm" ASC, "id" ASC
+      SELECT e."id" FROM "efeitos_agenda_outbox" e
+      JOIN "tenants" t ON t."id" = e."tenantId" AND t."status" = 'ATIVO'
+      WHERE e."status" = 'NOVA'
+        AND e."tenantId" = ${scope.tenantId}
+        AND e."criadoEm" >= ${startedAt}
+      ORDER BY e."criadoEm" ASC, e."id" ASC
       FOR UPDATE SKIP LOCKED LIMIT 1
     `;
     if (!candidates[0]) return null;
@@ -49,12 +61,12 @@ const defaultSender: AgendaEffectSender = {
 };
 
 export async function executarProximoEfeitoAgenda(
-  tenantIds: readonly string[],
+  scope: AgendaPilotScope | undefined,
   owner = AGENDA_EFFECT_OWNER,
   sender: AgendaEffectSender = defaultSender,
   now = new Date(),
 ): Promise<boolean> {
-  const effect = await reivindicarProximoEfeitoAgenda(tenantIds, owner, now);
+  const effect = await reivindicarProximoEfeitoAgenda(scope, owner, now);
   if (!effect) return false;
   try {
     const lead = await prisma.lead.findFirst({

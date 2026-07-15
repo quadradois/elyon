@@ -36,9 +36,16 @@ export const agendaPilotTenantScope = new Gauge({
   registers: [metricsRegistry],
 });
 
+export const agendaPilotCutoffConfigured = new Gauge({
+  name: 'elyon_agenda_pilot_cutoff_configured',
+  help: 'Indica apenas se o cutoff temporal do piloto foi autorizado, sem expor seu valor.',
+  registers: [metricsRegistry],
+});
+
 export function registrarAgendaPilotConfig(config: AgendaPilotConfig): void {
   agendaPilotGate.reset();
-  agendaPilotTenantScope.set(config.tenantIds.length);
+  agendaPilotTenantScope.set(config.scope ? 1 : 0);
+  agendaPilotCutoffConfigured.set(config.scope?.startedAtUtc ? 1 : 0);
   agendaPilotGate.set({
     recurso: 'effects',
     status: config.effects.enabled ? 'enabled' : 'disabled',
