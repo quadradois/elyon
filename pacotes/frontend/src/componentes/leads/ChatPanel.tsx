@@ -15,6 +15,7 @@ import {
   Clock, ExternalLink,
 } from 'lucide-react';
 import { api } from '../../servicos/api';
+import { agendarFollowupManual, FollowupAtivoManual, obterFollowupAtivoManual } from '../../servicos/apiFollowup';
 import { toast } from 'sonner';
 
 // ─── Tipos ────────────────────────────────────────
@@ -181,6 +182,9 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, leadTemperatura, lea
   const [followupMensagem, setFollowupMensagem] = useState('');
   const [followupData, setFollowupData]         = useState('');
   const [agendando, setAgendando]               = useState(false);
+  const [followupAtivo, setFollowupAtivo]       = useState<FollowupAtivoManual | null>(null);
+  const [carregandoFollowup, setCarregandoFollowup] = useState(false);
+  const followupRequestId = useRef(crypto.randomUUID());
 
   // Contrato
   const [contrato, setContrato]     = useState<{ id?: string; status?: string; linkAceite?: string; aceiteEm?: string | null } | null>(null);
@@ -240,6 +244,20 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, leadTemperatura, lea
       .finally(() => setLoadingContrato(false));
   }, [ferramentaAtiva, leadId]);
 
+  useEffect(() => {
+    if (ferramentaAtiva !== 'followup') return;
+    setCarregandoFollowup(true);
+    obterFollowupAtivoManual(leadId)
+      .then(ativo => {
+        setFollowupAtivo(ativo);
+        setFollowupMensagem(ativo?.mensagem || '');
+        setFollowupData(ativo?.dataLocal || '');
+        followupRequestId.current = crypto.randomUUID();
+      })
+      .catch(() => setFollowupAtivo(null))
+      .finally(() => setCarregandoFollowup(false));
+  }, [ferramentaAtiva, leadId]);
+
   // ── Enviar mensagem ──
   const enviarMensagem = useCallback(async (texto?: string) => {
     const msg = texto || novoTexto.trim();
@@ -276,11 +294,11 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, leadTemperatura, lea
     }
     setAgendando(true);
     try {
-      await api.post(`/leads/${leadId}/followup`, {
-        mensagem: followupMensagem.trim(),
-        dataEnvio: new Date(followupData).toISOString(),
-      });
-      toast.success('Follow-up agendado! ✅');
+      await agendarFollowupManual(leadId, { mensagem: followupMensagem, dataLocal: followupData,
+        requestId: followupRequestId.current, followupId: followupAtivo?.id });
+      toast.success(followupAtivo ? 'Follow-up reagendado!' : 'Follow-up agendado!');
+      setFollowupAtivo(null);
+      followupRequestId.current = crypto.randomUUID();
       setFollowupMensagem('');
       setFollowupData('');
       setFerramentaAtiva(null);
@@ -486,8 +504,9 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, leadTemperatura, lea
         {ferramentaAtiva === 'followup' && (
           <div className="px-3 py-3 bg-violet-50 border-b border-violet-100 space-y-2">
             <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wide flex items-center gap-1">
-              <Clock className="w-3 h-3" /> Agendar mensagem automática
+              <Clock className="w-3 h-3" /> {followupAtivo ? 'Reagendar mensagem automática' : 'Agendar nova mensagem automática'}
             </p>
+            {followupAtivo && <p className="text-[10px] text-violet-700">Editando o agendamento ativo. Salvar cancelará o anterior e criará o substituto.</p>}
             <textarea
               value={followupMensagem}
               onChange={e => setFollowupMensagem(e.target.value)}
@@ -505,11 +524,11 @@ export function ChatPanel({ leadId, leadNome, leadTelefone, leadTemperatura, lea
               />
               <button
                 onClick={agendarFollowup}
-                disabled={agendando || !followupMensagem.trim() || !followupData}
+                disabled={agendando || carregandoFollowup || !followupMensagem.trim() || !followupData}
                 className="flex items-center gap-1 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-40"
               >
                 {agendando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                Agendar
+                {followupAtivo ? 'Reagendar' : 'Agendar'}
               </button>
             </div>
           </div>

@@ -24,12 +24,13 @@ jest.mock('../../servicos/crm-service', () => ({
 
 const mockMoverExecute = jest.fn();
 const mockRegistrarOptoutExecute = jest.fn();
+const mockAgendarFollowupExecute = jest.fn();
 
 jest.mock('../../casos-de-uso/agentes', () => ({
   ConverterParaLeadUseCase: jest.fn().mockImplementation(() => ({ execute: jest.fn() })),
   MoverParaFaseUseCase: jest.fn().mockImplementation(() => ({ execute: mockMoverExecute })),
   SalvarDadosImovelUseCase: jest.fn().mockImplementation(() => ({ execute: jest.fn() })),
-  AgendarFollowupUseCase: jest.fn().mockImplementation(() => ({ execute: jest.fn() })),
+  AgendarFollowupUseCase: jest.fn().mockImplementation(() => ({ execute: mockAgendarFollowupExecute })),
   EncaminharCorretorUseCase: jest.fn().mockImplementation(() => ({ execute: jest.fn() })),
   AtualizarDadosLeadUseCase: jest.fn().mockImplementation(() => ({ execute: jest.fn() })),
   QualificarLeadUseCase: jest.fn().mockImplementation(() => ({ execute: jest.fn() })),
@@ -40,6 +41,7 @@ import {
   moverParaFaseTool,
   enviarParaCrmTool,
   registrarOptoutTool,
+  agendarFollowupTool,
 } from '../sdr-tools-agents';
 
 describe('P0-04 ownership cross-tenant', () => {
@@ -101,5 +103,23 @@ describe('P0-04 ownership cross-tenant', () => {
     expect(result.success).toBe(false);
     expect(result.reasonCode).toBe('TENANT_OWNERSHIP_DENIED');
     expect(mockRegistrarOptoutExecute).not.toHaveBeenCalled();
+  });
+
+  it('agendar_followup nao recebe requestId do modelo e deriva identidade da execucao duravel', async () => {
+    expect((agendarFollowupTool as any).parameters.shape).not.toHaveProperty('requestId');
+    mockPrisma.lead.findUnique.mockResolvedValue({ id: 'lead-canonico-123', tenantId: 'tenant-a' });
+    mockAgendarFollowupExecute.mockResolvedValue({ success: true, followupId: 'followup-123' });
+
+    const raw = await (agendarFollowupTool as any).execute({
+      leadId: 'lead-canonico-123', timezoneIana: 'America/Sao_Paulo',
+      evidenciaPedido: 'pode me chamar amanha', policyVersion: 'followup-v1',
+      dataRecontato: '16/07/2026 09:00', mensagemEnvio: 'Retorno combinado', motivo: 'Retorno solicitado',
+    }, { context: { tenantId: 'tenant-a', durableExecutionId: 'inbound-batch:lote-123' } });
+
+    expect(JSON.parse(raw)).toMatchObject({ success: true });
+    expect(mockAgendarFollowupExecute).toHaveBeenCalledWith(expect.objectContaining({
+      requestIdentity: { source: 'INBOUND_BATCH', id: 'inbound-batch:lote-123' },
+    }));
+    expect(mockAgendarFollowupExecute.mock.calls[0][0]).not.toHaveProperty('requestId');
   });
 });

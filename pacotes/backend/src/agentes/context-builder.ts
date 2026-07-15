@@ -20,6 +20,7 @@ interface ContextBuilderConversa {
   telefone: string;
   contatoId?: string;
   leadId?: string;
+  durableExecutionId?: string;
   statusLead?: string;
   doresIdentificadas?: string[];
   empreendimento?: string;
@@ -57,6 +58,7 @@ export function construirElyonContext(params: ConstruirElyonContextParams): Elyo
     tenantId: config.tenantId,
     contatoId: contexto.contatoId,
     leadId: contexto.leadId,
+    durableExecutionId: contexto.durableExecutionId,
     telefone: contexto.telefone,
     statusLead: contexto.statusLead,
     doresIdentificadas: contexto.doresIdentificadas,

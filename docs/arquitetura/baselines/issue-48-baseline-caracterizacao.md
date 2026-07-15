@@ -55,7 +55,7 @@ fixtures com prefixo/run UUID, deleção por tenant/evento e chaves Redis regist
 | B05 | histórico, briefing e fato RAG | contrato `RagFact@1.0`, fronteiras distintas e seleção tenant/Lead-safe | gate suportado | Automatizado | suportado pela Issue #55 |
 | B06 | comando de qualificação | mesmo `Lead.id` | 1 Lead, 1 inbound | Automatizado | suportado/gate |
 | B07 | evidência candidata suficiente | outreach `LEAD`; CRM `NOVO` | policy/evidence em `schemaState` | Automatizado | suportado/gate |
-| B08 | pedido explícito de retorno | — | não exercitado pelo caminho real revisado | Não coberto | pendente/reclassificado |
+| B08 | pedido explícito de retorno | contrato → persistência → claim/fencing → gates → intenção → envio double → confirmação | gate suportado | Automatizado | suportado pela Issue #56 |
 | B09 | intenção de agenda sem dia/hora/timezone | CRM inalterado | 0 atividades de avaliação | Automatizado | suportado/gate |
 | B10 | opt-out seguido de seleção para disparo | `CONTATANDO → OPTOUT` | seletor real retorna 0 elegíveis | Automatizado | suportado/gate |
 | B11 | modo `HUMANO` | estado preservado | 0 LLM, 0 resposta IA | Automatizado | suportado/gate |

@@ -105,6 +105,7 @@ export interface ContextoConversa {
     telefone: string;
     contatoId?: string;
     leadId?: string;
+    durableExecutionId?: string;
     statusLead?: string;
     doresIdentificadas?: string[];
     empreendimento?: string;

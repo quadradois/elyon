@@ -57,6 +57,11 @@ function resolverTenantIdDoContexto(runContext?: any): string | undefined {
     return typeof tenantId === 'string' && tenantId.trim().length > 0 ? tenantId : undefined;
 }
 
+function resolverExecucaoDuravelDoContexto(runContext?: any): string | undefined {
+    const executionId = runContext?.context?.durableExecutionId;
+    return typeof executionId === 'string' && executionId.trim().length > 0 ? executionId : undefined;
+}
+
 async function validarOwnershipLeadPorTenant(params: {
     leadId: string;
     tenantId?: string;
@@ -395,14 +400,21 @@ export const agendarFollowupTool = tool({
 Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
 
     parameters: z.object({
-        contatoId: z.string().describe('ID do contato'),
-        dataRecontato: z.string().describe('Data: "DD/MM/YYYY"'),
+        leadId: z.string().describe('Lead.id canonico recebido do contexto'),
+        timezoneIana: z.string().describe('Timezone IANA confiavel'),
+        evidenciaPedido: z.string().describe('Trecho do pedido explicito do Lead'),
+        policyVersion: z.literal('followup-v1').default('followup-v1'),
+        followupId: z.string().optional().describe('ID do follow-up ativo quando a acao for reagendamento explicito'),
+        dataRecontato: z.string().describe('Data e hora confirmadas: "DD/MM/YYYY HH:mm"'),
+        mensagemEnvio: z.string().describe('Mensagem de follow-up a enviar, sem inventar fatos'),
         motivo: z.string().describe('Por que não quer agora')
     }),
 
     execute: wrapToolExecute('agendar_followup', async (args, runContext?: any) => {
+        const durableExecutionId = resolverExecucaoDuravelDoContexto(runContext);
+        if (!durableExecutionId) return JSON.stringify({ success: false, error: 'TRUSTED_REQUEST_ID_REQUIRED', reasonCode: 'TRUSTED_REQUEST_ID_REQUIRED' });
         const ownership = await validarOwnershipLeadPorTenant({
-            leadId: args.contatoId,
+            leadId: args.leadId,
             tenantId: resolverTenantIdDoContexto(runContext),
             toolName: 'agendar_followup'
         });
@@ -410,9 +422,17 @@ Exemplos: "talvez próximo ano", "vou pensar", "agora não"`,
 
         const useCase = new AgendarFollowupUseCase();
         const result = await useCase.execute({
-            leadId: args.contatoId,
+            tenantId: resolverTenantIdDoContexto(runContext)!,
+            leadId: args.leadId,
             dataRecontato: args.dataRecontato,
-            motivo: args.motivo
+            timezoneIana: args.timezoneIana,
+            motivo: args.motivo,
+            mensagemEnvio: args.mensagemEnvio,
+            evidenciaPedido: args.evidenciaPedido,
+            origemPedido: 'TOOL_AGENDAR_FOLLOWUP',
+            requestIdentity: { source: 'INBOUND_BATCH', id: durableExecutionId },
+            policyVersion: args.policyVersion,
+            followupId: args.followupId
         });
         return JSON.stringify(result);
     })

@@ -224,7 +224,7 @@ export class WhatsAppService {
     await this.garantirInstancia();
     const numeroFormatado = this.formatarNumero(numero);
 
-    console.log(`[WhatsApp] 🚀 Enviando texto para ${numeroFormatado} (instância ${this._instanceName})`);
+    console.log('[WhatsApp] Enviando texto por instancia configurada');
 
     try {
       const response = await axios.post(
@@ -234,7 +234,7 @@ export class WhatsAppService {
       );
       return response.data;
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao enviar texto:', error?.response?.data || error?.message);
+      console.error('[WhatsApp] Falha no envio de texto');
       throw error;
     }
   }

@@ -189,43 +189,17 @@ const validarFollowup: ToolPreValidator = {
             return 'BLOQUEADO: dataRecontato não informada. Pergunte ao lead em qual dia deseja ser recontatado.';
         }
 
-        const regex = /^\d{2}\/\d{2}\/\d{4}$/;
-        if (!regex.test(dataRecontato.trim())) {
-            return `BLOQUEADO: formato de data inválido "${dataRecontato}". Use DD/MM/YYYY.`;
-        }
-
-        if (!args.contatoId || typeof args.contatoId !== 'string' || args.contatoId.length < 10) {
-            return 'BLOQUEADO: contatoId inválido ou ausente.';
-        }
-
-        const motivo = typeof args.motivo === 'string' ? args.motivo.trim() : '';
-        if (motivo.length < 5) {
-            return 'BLOQUEADO: motivo insuficiente. Registre em 1 frase curta por que o lead pediu tempo.';
-        }
-
-        try {
-            const [dia, mes, ano] = dataRecontato.trim().split('/').map(Number);
-            const dataObj = new Date(ano, mes - 1, dia, 9, 0, 0, 0);
-            if (isNaN(dataObj.getTime())) {
-                return `BLOQUEADO: data inválida "${dataRecontato}".`;
-            }
-
-            const hoje = new Date();
-            const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0, 0);
-            if (dataObj < inicioHoje) {
-                return `BLOQUEADO: data "${dataRecontato}" está no passado. Confirme uma data futura com o lead.`;
-            }
-
-            const limite = new Date(inicioHoje);
-            limite.setMonth(limite.getMonth() + 12);
-            if (dataObj > limite) {
-                return `BLOQUEADO: data "${dataRecontato}" está muito distante (>12 meses). Confirme com o lead.`;
-            }
-        } catch {
-            return `BLOQUEADO: erro ao interpretar data "${dataRecontato}". Use DD/MM/YYYY.`;
-        }
-
+        const motivoEstruturado = typeof args.motivo === 'string' ? args.motivo.trim() : '';
+        if (!/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/.test(dataRecontato.trim()) && !/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$/.test(dataRecontato.trim()) && !/^amanh[ãa]\s+(?:(?:às?|as)\s*)?\d{1,2}:\d{2}$/i.test(dataRecontato.trim())) return 'BLOQUEADO: informe data e hora completas; nao invente horario.';
+        if (!args.leadId || typeof args.leadId !== 'string' || args.leadId.length < 10) return 'BLOQUEADO: leadId canonico ausente.';
+        if (args.followupId !== undefined && (typeof args.followupId !== 'string' || args.followupId.length < 10)) return 'BLOQUEADO: followupId invalido para reagendamento.';
+        if (motivoEstruturado.length < 5) return 'BLOQUEADO: motivo explicito insuficiente.';
+        if (!args.mensagemEnvio || typeof args.mensagemEnvio !== 'string' || args.mensagemEnvio.trim().length < 3) return 'BLOQUEADO: mensagem de follow-up obrigatoria.';
+        if (!args.timezoneIana || typeof args.timezoneIana !== 'string') return 'BLOQUEADO: timezone IANA confiavel obrigatorio.';
+        if (!args.evidenciaPedido || typeof args.evidenciaPedido !== 'string' || args.evidenciaPedido.trim().length < 3) return 'BLOQUEADO: evidencia do pedido obrigatoria.';
+        if (args.policyVersion !== 'followup-v1') return 'BLOQUEADO: policyVersion invalida.';
         return null;
+
     }
 };
 
