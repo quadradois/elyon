@@ -145,7 +145,7 @@ router.get('/admin/reconciliacao', verificarSuperAdmin, async (_req, res) => {
     const relatorio = await montarRelatorioReconciliacao();
     return res.json({ sucesso: true, ...relatorio });
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro na reconciliação (dry-run):', error?.message);
+    logger.error('[SessoesWhatsapp] Erro na reconciliação dry-run');
     return responderErro(res, 502, 'Não foi possível consultar o Evolution GO');
   }
 });
@@ -167,10 +167,13 @@ router.post('/admin/reconciliacao', verificarSuperAdmin, async (_req, res) => {
         await deletarInstanciaEvolutionPorId(orfa.id);
         limparCacheWhatsApp(orfa.name);
         removidas.push(orfa.name);
-        console.log(`[Reconciliação] 🧹 Instância órfã removida do Evolution GO: ${orfa.name} (id=${orfa.id})`);
+        logger.info(
+          { remoteIdPresent: true },
+          '[Reconciliação] Instância órfã removida do Evolution Go',
+        );
       } catch (e: any) {
         falhas.push({ name: orfa.name, erro: e?.message || 'erro desconhecido' });
-        console.error(`[Reconciliação] Falha ao remover órfã ${orfa.name}:`, e?.message);
+        logger.error('[Reconciliação] Falha ao remover instância órfã');
       }
     }
 
@@ -182,7 +185,7 @@ router.post('/admin/reconciliacao', verificarSuperAdmin, async (_req, res) => {
       fantasmas: relatorio.fantasmas,
     });
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro na reconciliação (execução):', error?.message);
+    logger.error('[SessoesWhatsapp] Erro na execução da reconciliação');
     return responderErro(res, 502, 'Não foi possível consultar o Evolution GO');
   }
 });
@@ -242,7 +245,7 @@ router.get('/', async (req, res) => {
                 nomeAtualizado = detalhes.profileName;
               }
             } catch (fetchErr) {
-              console.warn(`[SessoesWhatsapp] Erro ao buscar dados da instância ${s.instanceName}:`, fetchErr);
+              logger.warn('[SessoesWhatsapp] Erro ao buscar dados da instância');
             }
           } else if (statusEvolution?.instance?.state === 'connecting') {
             statusReal = StatusConexao.CONECTANDO;
@@ -260,9 +263,12 @@ router.get('/', async (req, res) => {
                 numeroWhatsapp: statusReal === StatusConexao.DESCONECTADO ? null : numeroAtualizado,
                 nomeWhatsapp: statusReal === StatusConexao.DESCONECTADO ? null : nomeAtualizado
               }
-            }).catch(err => console.error('[SessoesWhatsapp] Erro ao atualizar status:', err));
+            }).catch(() => logger.error('[SessoesWhatsapp] Erro ao atualizar status'));
 
-            console.log(`[SessoesWhatsapp] 🔄 Status atualizado: ${s.instanceName} ${s.status} -> ${statusReal}`);
+            logger.info(
+              { previousStatus: s.status, currentStatus: statusReal },
+              '[SessoesWhatsapp] Status atualizado',
+            );
           }
 
           // Buscar configurações extras quando conectado
@@ -289,7 +295,7 @@ router.get('/', async (req, res) => {
           };
         } catch (err) {
           // Se falhar ao verificar Evolution, retorna status do banco
-          console.error(`[SessoesWhatsapp] Erro ao verificar ${s.instanceName}:`, err);
+          logger.error('[SessoesWhatsapp] Erro ao verificar instância');
           return {
             id: s.id,
             nome: s.nome,
@@ -311,7 +317,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro ao listar:', error);
+    logger.error('[SessoesWhatsapp] Erro ao listar sessões');
     return responderErro(res, 500, 'Erro ao listar sessões');
   }
 });
@@ -361,7 +367,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    console.log(`[SessoesWhatsapp] ✅ Sessão criada: ${sessao.nome} (${instanceName})`);
+    logger.info('[SessoesWhatsapp] Sessão criada');
 
     return res.status(201).json({
       sucesso: true,
@@ -374,7 +380,7 @@ router.post('/', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro ao criar:', error);
+    logger.error('[SessoesWhatsapp] Erro ao criar sessão');
 
     if (error.name === 'ZodError') {
       return responderErro(res, 400, 'Dados inválidos', {detalhes: error.errors});
@@ -417,7 +423,7 @@ router.get('/:id', async (req, res) => {
     return res.json({ sucesso: true, sessao });
 
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro ao buscar:', error);
+    logger.error('[SessoesWhatsapp] Erro ao buscar sessão');
     return responderErro(res, 500, 'Erro ao buscar sessão');
   }
 });
@@ -452,10 +458,10 @@ router.delete('/:id', async (req, res) => {
     try {
       const resultado = await getWhatsAppService(sessao.instanceName).deletarInstancia();
       if (resultado === 'inexistente') {
-        console.log(`[SessoesWhatsapp] Instância ${sessao.instanceName} já não existia no Evolution GO`);
+        logger.info('[SessoesWhatsapp] Instância já não existia no Evolution Go');
       }
     } catch (e: any) {
-      console.error('[SessoesWhatsapp] Falha ao deletar instância no Evolution GO, abortando exclusão local:', e?.message);
+      logger.error('[SessoesWhatsapp] Falha ao deletar instância no Evolution Go; exclusão local abortada');
       return responderErro(
         res,
         502,
@@ -469,12 +475,12 @@ router.delete('/:id', async (req, res) => {
     // Deletar do banco (apenas após confirmar remoção no Evolution GO)
     await prisma.sessaoWhatsapp.delete({ where: { id } });
 
-    console.log(`[SessoesWhatsapp] ✅ Sessão deletada (local + Evolution GO): ${sessao.nome}`);
+    logger.info('[SessoesWhatsapp] Sessão deletada localmente e no Evolution Go');
 
     return res.json({ sucesso: true, mensagem: 'Sessão removida' });
 
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro ao deletar:', error);
+    logger.error('[SessoesWhatsapp] Erro ao deletar sessão');
     return responderErro(res, 500, 'Erro ao deletar sessão');
   }
 });
@@ -522,7 +528,7 @@ router.post('/:id/conectar', async (req, res) => {
     // Obter serviço para esta instância
     const service = getWhatsAppService(sessao.instanceName);
 
-    console.log(`[SessoesWhatsapp] 🔄 Conectando: ${sessao.instanceName}`);
+    logger.info({ stage: 'instance/connect' }, '[SessoesWhatsapp] Iniciando conexão');
 
     const resultado = await service.conectarInstancia();
 
@@ -682,7 +688,7 @@ router.get('/:id/status', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro ao verificar status:', error);
+    logger.error('[SessoesWhatsapp] Erro ao verificar status');
     return responderErro(res, 500, 'Erro ao verificar status');
   }
 });
@@ -731,12 +737,12 @@ router.post('/:id/desconectar', async (req, res) => {
     // Limpar cache
     limparCacheWhatsApp(sessao.instanceName);
 
-    console.log(`[SessoesWhatsapp] ✅ Sessão desconectada: ${sessao.nome}`);
+    logger.info('[SessoesWhatsapp] Sessão desconectada');
 
     return res.json({ sucesso: true, mensagem: 'Sessão desconectada' });
 
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro ao desconectar:', error);
+    logger.error('[SessoesWhatsapp] Erro ao desconectar');
     return responderErro(res, 500, 'Erro ao desconectar');
   }
 });
@@ -778,7 +784,7 @@ router.get('/:id/configurar', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro ao buscar configuração:', error);
+    logger.error('[SessoesWhatsapp] Erro ao buscar configuração');
     return responderErro(res, 500, 'Erro ao buscar configuração');
   }
 });
@@ -817,7 +823,7 @@ router.post('/:id/configurar', async (req, res) => {
     return res.json({ sucesso: true, mensagem: 'Configuração atualizada' });
 
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro ao configurar:', error);
+    logger.error('[SessoesWhatsapp] Erro ao configurar sessão');
     return responderErro(res, 500, 'Erro ao atualizar configuração');
   }
 });

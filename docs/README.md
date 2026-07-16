@@ -9,6 +9,7 @@ Este diretorio foi organizado por tema para facilitar manutencao e descoberta.
 - [Backup off-host e restore](operacao/BACKUP_OFFHOST_E_RESTORE.md)
 - [Observabilidade e SLO](operacao/OBSERVABILIDADE_E_SLO.md)
 - [Incidente pré-piloto Evolution Go (2026-07-15)](operacao/INCIDENTE_EVOLUTION_GO_PRE_PILOTO_2026-07-15.md)
+- [Matriz de autenticação Evolution Go](operacao/AUTENTICACAO_EVOLUTION_GO.md)
 - [Rotacao da chave de criptografia](operacoes/ROTACAO_CHAVE_CRIPTOGRAFIA.md)
 
 Somente estes documentos e os arquivos ligados por eles sao normativos para

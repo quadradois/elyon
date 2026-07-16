@@ -6,11 +6,18 @@ import { EvolutionIntegrationError } from '../../servicos/evolution-error';
 const mockFindUnique = jest.fn();
 const mockUpdate = jest.fn();
 const mockUpdateMany = jest.fn();
+const mockDelete = jest.fn();
 const mockConectarInstancia = jest.fn();
+const mockDeletarInstancia = jest.fn();
 
 jest.mock('../../lib/db', () => ({
   prisma: {
-    sessaoWhatsapp: { findUnique: mockFindUnique, update: mockUpdate, updateMany: mockUpdateMany },
+    sessaoWhatsapp: {
+      findUnique: mockFindUnique,
+      update: mockUpdate,
+      updateMany: mockUpdateMany,
+      delete: mockDelete,
+    },
   },
 }));
 jest.mock('../../middleware/middleware-auth', () => ({
@@ -19,7 +26,10 @@ jest.mock('../../middleware/middleware-auth', () => ({
 }));
 jest.mock('../../utils/tenant', () => ({ getTenantId: () => 'tenant-a' }));
 jest.mock('../../servicos/whatsapp', () => ({
-  getWhatsAppService: () => ({ conectarInstancia: mockConectarInstancia }),
+  getWhatsAppService: () => ({
+    conectarInstancia: mockConectarInstancia,
+    deletarInstancia: mockDeletarInstancia,
+  }),
   limparCacheWhatsApp: jest.fn(),
   listarInstanciasEvolution: jest.fn(),
   deletarInstanciaEvolutionPorId: jest.fn(),
@@ -129,5 +139,31 @@ describe('POST /api/sessoes-whatsapp/:id/conectar', () => {
 
     expect(restored).toBe(false);
     expect(persisted).toEqual({ status: 'CONECTANDO', ultimoStatus: markerB });
+  });
+});
+
+describe('DELETE /api/sessoes-whatsapp/:id', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFindUnique.mockResolvedValue({
+      id: 'session-id',
+      tenantId: 'tenant-a',
+      instanceName: 'elyon_test',
+    });
+  });
+
+  it('mantém o registro local quando a exclusão remota falha', async () => {
+    mockDeletarInstancia.mockRejectedValue(new EvolutionIntegrationError({
+      message: 'global config missing',
+      stage: 'configuracao',
+      route: 'instance/delete',
+      reasonCode: 'EVOLUTION_CONFIG_MISSING',
+      httpStatus: 503,
+    }));
+
+    const response = await request(app()).delete('/api/sessoes-whatsapp/session-id');
+
+    expect(response.status).toBe(502);
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 });

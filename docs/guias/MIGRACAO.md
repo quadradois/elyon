@@ -121,8 +121,9 @@ O script de importação realiza automaticamente:
 
 A Evolution Go não faz parte da VPS ou do Compose do ELYON. Após migrar o ELYON:
 
-1. Preserve `EVOLUTION_API_URL`, `EVOLUTION_API_KEY` e os tokens individuais das
-   sessões no banco.
+1. Preserve `EVOLUTION_API_URL`, `EVOLUTION_GLOBAL_API_KEY`,
+   `EVOLUTION_TENANT_API_KEY`, `EVOLUTION_TENANT_ID` e os tokens individuais das
+   sessões no banco. Não reutilize uma chave entre esses papéis.
 2. Atualize `EVOLUTION_WEBHOOK_SOURCE_RANGE` caso o IP público da VPS dedicada
    tenha mudado.
 3. Confirme que `https://api.elyon.ia.br/webhooks` responde `403` fora da origem

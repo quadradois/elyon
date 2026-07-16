@@ -1,7 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { getLogContext, runWithJobLogContext } from '../../lib/log-context';
-import { correlationIdMiddleware } from '../correlation-id';
+import { correlationIdMiddleware, sanitizeHttpLogPath } from '../correlation-id';
 
 describe('correlationIdMiddleware', () => {
   function createApp() {
@@ -39,5 +39,11 @@ describe('correlationIdMiddleware', () => {
     const result = runWithJobLogContext('job-42', () => getLogContext());
     expect(result).toMatchObject({ channel: 'job', jobId: 'job-42' });
     expect(result?.correlationId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('redacts UUID path segments before logging HTTP requests', () => {
+    expect(sanitizeHttpLogPath('/api/sessoes-whatsapp/7add7e92-1f8e-4224-a3ac-efec4b18239d/conectar'))
+      .toBe('/api/sessoes-whatsapp/:id/conectar');
+    expect(sanitizeHttpLogPath('/api/probe')).toBe('/api/probe');
   });
 });

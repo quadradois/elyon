@@ -4,6 +4,12 @@ import { LogChannel, resolveCorrelationId, runWithLogContext } from '../lib/log-
 
 export const CORRELATION_ID_HEADER = 'x-correlation-id';
 
+const UUID_PATH_SEGMENT = /\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}(?=\/|$)/gi;
+
+export function sanitizeHttpLogPath(path: string): string {
+  return path.replace(UUID_PATH_SEGMENT, '/:id');
+}
+
 function resolveChannel(req: Request): LogChannel {
   return req.path.startsWith('/webhooks') || req.path.includes('/webhook/')
     ? 'webhook'
@@ -24,7 +30,7 @@ export function correlationIdMiddleware(req: Request, res: Response, next: NextF
         {
           http: {
             method: req.method,
-            path: req.path,
+            path: sanitizeHttpLogPath(req.path),
             statusCode: res.statusCode,
             durationMs: Math.round(durationMs * 100) / 100,
           },

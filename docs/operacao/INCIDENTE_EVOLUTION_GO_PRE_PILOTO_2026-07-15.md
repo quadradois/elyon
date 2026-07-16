@@ -64,7 +64,8 @@ e lista as rotas abaixo.
 ### Fluxo e payloads
 
 1. `POST /instance/create`
-   - autenticação usada pelo Elyon: header `apikey` com chave global;
+   - contrato confirmado após a tentativa controlada: header `apikey` com a
+     chave do tenant e `X-Tenant-ID` com o tenant da Evolution;
    - body observado no schema: `name`, `token`, `instanceId`, `advancedSettings`,
      `proxy`;
    - o Elyon envia `name`, `token` e `advancedSettings.ignoreGroups=true`.
@@ -90,15 +91,15 @@ autenticação.
 
 ### Matriz de autenticação
 
-| Endpoint | Chave global | Token individual | Evidência |
+| Endpoint | Credencial em `apikey` | Contexto adicional | Evidência |
 | --- | --- | --- | --- |
-| `GET /instance/all` | Obrigatória | Não aceito | Probe direto: global `200`, sem chave `401`; não havia token remoto válido para um terceiro probe. |
-| `POST /instance/create` | Usada/esperada | Não | Código Elyon e separação administrativa do contrato. |
-| `DELETE /instance/delete/{id}` | Usada/esperada | Não | Código Elyon e separação administrativa do contrato. |
-| `POST /instance/connect` | Não | Usado/esperado | Código Elyon; tentativa original não preservou status upstream. |
-| `GET /instance/qr` | Não | Usado/esperado | Código Elyon; endpoint não foi chamado durante a investigação para evitar produzir QR. |
-| `GET /instance/status` | Não | Usado/esperado | Probe com token órfão retornou `401`; não havia instância válida para teste positivo. |
-| `DELETE /instance/logout` | Não | Usado/esperado | Código Elyon. |
+| `GET /instance/all` | Chave global | nenhum | Probe direto: global `200`, sem chave `401`. |
+| `POST /instance/create` | Chave do tenant | `X-Tenant-ID` obrigatório | Chave global produziu HTTP `400`; contrato confirmado pelo suporte. |
+| `DELETE /instance/delete/{id}` | Chave global | nenhum | Código e contrato administrativo da Evolution Go. |
+| `POST /instance/connect` | Token individual | nenhum | Código Elyon e contrato operacional da instância. |
+| `GET /instance/qr` | Token individual | nenhum | Código Elyon; endpoint não foi chamado durante a investigação inicial. |
+| `GET /instance/status` | Token individual | nenhum | Probe com token órfão retornou `401`. |
+| `DELETE /instance/logout` | Token individual | nenhum | Código Elyon. |
 
 **Compatibilidade de tokens antigos:** inconclusiva. A Evolution não possuía
 nenhuma instância, então não havia token antigo válido para teste positivo. O
@@ -114,7 +115,8 @@ curl -sS -H 'apikey: <GLOBAL_KEY>' '<EVOLUTION_URL>/instance/all'
 
 curl -sS -X POST \
   -H 'Content-Type: application/json' \
-  -H 'apikey: <GLOBAL_KEY>' \
+  -H 'apikey: <TENANT_KEY>' \
+  -H 'X-Tenant-ID: <EVOLUTION_TENANT_ID>' \
   -d '{"name":"elyon_<tenant>_<slug>","token":"<INSTANCE_TOKEN>","advancedSettings":{"ignoreGroups":true}}' \
   '<EVOLUTION_URL>/instance/create'
 
@@ -137,7 +139,8 @@ curl -sS -X DELETE -H 'apikey: <GLOBAL_KEY>' \
 ## SOP operacional
 
 1. **Criar:** confirme a inexistência por nome em `/instance/all`; crie com chave
-   global; valide presença de ID/token na resposta; persista ambos atomicamente.
+   e ID do tenant; valide presença de ID/token na resposta; persista ambos
+   atomicamente.
 2. **Conectar:** confirme que a instância remota ainda existe; reconcilie ID/token
    quando necessário; marque localmente `CONECTANDO`; chame `/instance/connect`.
 3. **QR:** somente após connect bem-sucedido, leia `/instance/qr`; nunca registre
@@ -208,6 +211,14 @@ verificado e rollback ensaiado.
   `WHATSAPP_DATABASE_FAILURE` e impede connect, QR e resposta de sucesso;
 - cobre por teste instância nova, existente, órfã, token inválido, Evolution
   indisponível, mudança de contrato, concorrência, retry e rollback do estado.
+
+## Adendo — tentativa controlada de 2026-07-16
+
+A única tentativa autorizada alcançou `POST /instance/create` e foi rejeitada pela
+Evolution Go com HTTP `400`. O Elyon respondeu `502`, restaurou a sessão para
+`DESCONECTADO`, não produziu QR e não criou instância remota. O diagnóstico aceito
+foi o uso indevido da chave global em uma operação que exige chave e contexto do
+tenant. Nenhuma segunda tentativa foi executada.
 
 ### Evidências de validação
 
