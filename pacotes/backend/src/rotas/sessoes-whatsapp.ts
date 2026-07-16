@@ -27,6 +27,8 @@ import {
 import { z } from 'zod';
 import { verificarAutenticacao, verificarSuperAdmin } from '../middleware/middleware-auth';
 import { getTenantId } from '../utils/tenant';
+import { logger } from '../lib/logger';
+import { publicConnectionFailure } from '../servicos/evolution-error';
 
 const router = Router();
 
@@ -467,6 +469,10 @@ router.delete('/:id', async (req, res) => {
  * Conecta sessão (gera QR Code)
  */
 router.post('/:id/conectar', async (req, res) => {
+  let sessaoEmConexaoId: string | undefined;
+  let evolutionInstanceIdPresent = false;
+  let evolutionTokenPresent = false;
+
   try {
     const tenantId = getTenantId(req);
     if (!tenantId) {
@@ -484,6 +490,10 @@ router.post('/:id/conectar', async (req, res) => {
     if (sessao.tenantId !== tenantId) {
       return responderErro(res, 403, 'Acesso negado');
     }
+
+    sessaoEmConexaoId = sessao.id;
+    evolutionInstanceIdPresent = !!sessao.evolutionInstanceId;
+    evolutionTokenPresent = !!sessao.evolutionToken;
 
     // Atualizar status
     await prisma.sessaoWhatsapp.update({
@@ -525,8 +535,41 @@ router.post('/:id/conectar', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro ao conectar:', error);
-    return responderErro(res, 500, 'Erro interno do servidor');
+    if (sessaoEmConexaoId) {
+      try {
+        await prisma.sessaoWhatsapp.update({
+          where: { id: sessaoEmConexaoId },
+          data: { status: 'DESCONECTADO', ultimoStatus: new Date() },
+        });
+      } catch (rollbackError) {
+        logger.error(
+          { err: rollbackError, stage: 'banco', reasonCode: 'WHATSAPP_STATUS_ROLLBACK_FAILED' },
+          '[SessoesWhatsapp] Falha ao restaurar status após erro de conexão',
+        );
+      }
+    }
+
+    const failure = publicConnectionFailure(error);
+    logger.error(
+      {
+        stage: failure.stage,
+        route: failure.route,
+        upstreamStatus: failure.upstreamStatus,
+        reasonCode: failure.reasonCode,
+        instanceAlreadyExisted: failure.instanceAlreadyExisted,
+        remoteIdPresent: evolutionInstanceIdPresent,
+        instanceAuthPresent: evolutionTokenPresent,
+      },
+      '[SessoesWhatsapp] Erro ao conectar',
+    );
+
+    return responderErro(res, failure.httpStatus, 'Falha ao conectar WhatsApp', {
+      reasonCode: failure.reasonCode,
+      correlationId: req.correlationId,
+      stage: failure.stage,
+      ...(failure.upstreamStatus ? { upstreamStatus: failure.upstreamStatus } : {}),
+      ...(failure.route ? { upstreamRoute: failure.route } : {}),
+    });
   }
 });
 
