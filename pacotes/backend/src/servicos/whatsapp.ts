@@ -1,6 +1,12 @@
 import axios from 'axios';
 import crypto from 'crypto';
 import { prisma } from '../lib/db';
+import { logger } from '../lib/logger';
+import {
+  EvolutionIntegrationError,
+  EvolutionStage,
+  toEvolutionIntegrationError,
+} from './evolution-error';
 
 interface EvolutionInstance {
   instanceName: string;
@@ -8,6 +14,14 @@ interface EvolutionInstance {
   status?: string;
   profileName?: string;
   ownerJid?: string;
+}
+
+export interface WhatsAppConnectionResult {
+  qrcode?: string;
+  base64?: string;
+  code?: string;
+  count?: number;
+  status?: string;
 }
 
 /**
@@ -30,6 +44,7 @@ export class WhatsAppService {
   private _instanceId?: string;
   private _token?: string;
   private _credenciaisCarregadas = false;
+  private _connectionInFlight?: Promise<WhatsAppConnectionResult>;
 
   constructor(instanceName: string) {
     this._instanceName = instanceName;
@@ -54,9 +69,33 @@ export class WhatsAppService {
 
   private headersInstancia() {
     if (!this._token) {
-      throw new Error(`Instância ${this._instanceName} sem token do Evolution GO. Crie/conecte a instância primeiro.`);
+      throw new EvolutionIntegrationError({
+        message: 'Token individual da Evolution Go ausente',
+        stage: 'configuracao',
+        reasonCode: 'EVOLUTION_CONFIG_MISSING',
+        httpStatus: 503,
+      });
     }
     return { 'Content-Type': 'application/json', apikey: this._token };
+  }
+
+  private validarConfiguracao(stage: EvolutionStage, exigirChaveGlobal = false): void {
+    if (this.apiUrl && (!exigirChaveGlobal || this.globalKey)) return;
+    throw new EvolutionIntegrationError({
+      message: 'Configuracao da Evolution Go ausente',
+      stage: 'configuracao',
+      route: stage,
+      reasonCode: 'EVOLUTION_CONFIG_MISSING',
+      httpStatus: 503,
+    });
+  }
+
+  private contextoSeguro(instanceAlreadyExisted?: boolean) {
+    return {
+      instanceAlreadyExisted,
+      remoteIdPresent: !!this._instanceId,
+      instanceAuthPresent: !!this._token,
+    };
   }
 
   private get webhookUrl(): string {
@@ -79,25 +118,58 @@ export class WhatsAppService {
   }
 
   /** Garante que a instância existe no Evolution GO (cria se necessário). */
-  private async garantirInstancia(): Promise<void> {
+  private async garantirInstancia(verificarExistenciaRemota = false): Promise<boolean> {
     await this.carregarCredenciais();
-    if (this._instanceId && this._token) return;
+    if (this._instanceId && this._token) {
+      if (!verificarExistenciaRemota) return true;
+      const existente = await this.buscarDetalhesInstancia(true);
+      if (existente?.id) {
+        if (existente.token && (existente.id !== this._instanceId || existente.token !== this._token)) {
+          await this.salvarCredenciais(existente.id, existente.token);
+        }
+        return true;
+      }
+    }
     await this.criarInstancia();
+    return false;
   }
 
   /** Persiste instanceId/token na sessão e atualiza o cache local. */
   private async salvarCredenciais(instanceId: string, token: string): Promise<void> {
+    try {
+      await prisma.sessaoWhatsapp.update({
+        where: { instanceName: this._instanceName },
+        data: { evolutionInstanceId: instanceId, evolutionToken: token },
+      });
+    } catch (error) {
+      const failure = new EvolutionIntegrationError({
+        message: 'Falha ao persistir credenciais da Evolution Go',
+        stage: 'banco',
+        reasonCode: 'WHATSAPP_DATABASE_FAILURE',
+        httpStatus: 500,
+        cause: error,
+      });
+      logger.error(
+        {
+          stage: failure.stage,
+          reasonCode: failure.reasonCode,
+          recoveryRequired: true,
+          remoteIdReceived: !!instanceId,
+          instanceAuthReceived: !!token,
+        },
+        '[WhatsApp] Erro ao persistir credenciais da instância',
+      );
+      throw failure;
+    }
+
     this._instanceId = instanceId;
     this._token = token;
     this._credenciaisCarregadas = true;
-    await prisma.sessaoWhatsapp.update({
-      where: { instanceName: this._instanceName },
-      data: { evolutionInstanceId: instanceId, evolutionToken: token },
-    }).catch((err) => console.error(`[WhatsApp] Erro ao salvar credenciais de ${this._instanceName}:`, err));
   }
 
   async criarInstancia(): Promise<any> {
     await this.carregarCredenciais();
+    this.validarConfiguracao('instance/create', true);
 
     const token = this._token || crypto.randomBytes(32).toString('hex');
 
@@ -118,7 +190,12 @@ export class WhatsAppService {
       const instanceToken = criada?.token || token;
 
       if (!instanceId) {
-        throw new Error(`Resposta inesperada do /instance/create: ${JSON.stringify(response.data)}`);
+        throw toEvolutionIntegrationError(new Error('Resposta sem instance id'), {
+          stage: 'instance/create',
+          route: '/instance/create',
+          instanceAlreadyExisted: false,
+          contractInvalid: true,
+        });
       }
 
       await this.salvarCredenciais(instanceId, instanceToken);
@@ -135,13 +212,40 @@ export class WhatsAppService {
           return existente;
         }
       }
-      console.error('[WhatsApp] Erro ao criar instância:', detalhe);
-      throw error;
+      const falha = toEvolutionIntegrationError(error, {
+        stage: 'instance/create',
+        route: '/instance/create',
+        instanceAlreadyExisted: false,
+      });
+      logger.error(
+        {
+          ...this.contextoSeguro(false),
+          stage: falha.stage,
+          route: falha.route,
+          upstreamStatus: falha.upstreamStatus,
+          reasonCode: falha.reasonCode,
+        },
+        '[WhatsApp] Erro ao criar instância',
+      );
+      throw falha;
     }
   }
 
-  async conectarInstancia(): Promise<{ qrcode?: string; base64?: string; code?: string; count?: number; status?: string }> {
-    await this.garantirInstancia();
+  async conectarInstancia(): Promise<WhatsAppConnectionResult> {
+    if (this._connectionInFlight) return this._connectionInFlight;
+
+    const operation = this.executarConexao();
+    this._connectionInFlight = operation;
+    try {
+      return await operation;
+    } finally {
+      if (this._connectionInFlight === operation) this._connectionInFlight = undefined;
+    }
+  }
+
+  private async executarConexao(): Promise<WhatsAppConnectionResult> {
+    this.validarConfiguracao('instance/connect');
+    const instanceAlreadyExisted = await this.garantirInstancia(true);
 
     // Conecta a instância e (re)configura webhook + eventos assinados.
     try {
@@ -154,8 +258,22 @@ export class WhatsAppService {
         { headers: this.headersInstancia() },
       );
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao conectar instância:', error?.response?.data || error?.message);
-      throw error;
+      const falha = toEvolutionIntegrationError(error, {
+        stage: 'instance/connect',
+        route: '/instance/connect',
+        instanceAlreadyExisted,
+      });
+      logger.error(
+        {
+          ...this.contextoSeguro(instanceAlreadyExisted),
+          stage: falha.stage,
+          route: falha.route,
+          upstreamStatus: falha.upstreamStatus,
+          reasonCode: falha.reasonCode,
+        },
+        '[WhatsApp] Erro ao conectar instância',
+      );
+      throw falha;
     }
 
     // Busca o QR Code (data:image/png;base64,...). Se já logado, retorna status open.
@@ -172,8 +290,22 @@ export class WhatsAppService {
       if (/already logged in/i.test(String(detalhe))) {
         return { status: 'open', count: 0 };
       }
-      console.error('[WhatsApp] Erro ao obter QR Code:', detalhe);
-      throw error;
+      const falha = toEvolutionIntegrationError(error, {
+        stage: 'instance/qr',
+        route: '/instance/qr',
+        instanceAlreadyExisted,
+      });
+      logger.error(
+        {
+          ...this.contextoSeguro(instanceAlreadyExisted),
+          stage: falha.stage,
+          route: falha.route,
+          upstreamStatus: falha.upstreamStatus,
+          reasonCode: falha.reasonCode,
+        },
+        '[WhatsApp] Erro ao obter QR Code',
+      );
+      throw falha;
     }
   }
 
@@ -377,8 +509,9 @@ export class WhatsAppService {
   }
 
   /** Busca os detalhes da instância via /instance/all (chave global). */
-  async buscarDetalhesInstancia(): Promise<any> {
+  async buscarDetalhesInstancia(lancarErro = false): Promise<any> {
     try {
+      this.validarConfiguracao('instance/create', true);
       const response = await axios.get(
         `${this.apiUrl}/instance/all`,
         { headers: this.headersGlobais },
@@ -390,7 +523,14 @@ export class WhatsAppService {
       if (!instancia) return null;
       return { ...instancia, ownerJid: instancia.jid, profileName: instancia.client_name || instancia.name };
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao buscar detalhes da instância:', error?.response?.data || error?.message);
+      if (lancarErro) {
+        throw toEvolutionIntegrationError(error, {
+          stage: 'instance/create',
+          route: '/instance/all',
+          instanceAlreadyExisted: true,
+        });
+      }
+      logger.error('[WhatsApp] Erro ao buscar detalhes da instância');
       return null;
     }
   }

@@ -27,6 +27,8 @@ import {
 import { z } from 'zod';
 import { verificarAutenticacao, verificarSuperAdmin } from '../middleware/middleware-auth';
 import { getTenantId } from '../utils/tenant';
+import { logger } from '../lib/logger';
+import { publicConnectionFailure } from '../servicos/evolution-error';
 
 const router = Router();
 
@@ -72,6 +74,21 @@ interface RelatorioReconciliacao {
   totalSessoesBanco: number;
   orfas: Array<{ id: string; name: string; connected: boolean; createdAt: string | null }>;
   fantasmas: Array<{ instanceName: string; nome: string }>; // sessão no banco sem instância no servidor
+}
+
+export async function restaurarStatusSeTentativaAtual(
+  sessaoId: string,
+  tentativaIniciadaEm: Date,
+): Promise<boolean> {
+  const result = await prisma.sessaoWhatsapp.updateMany({
+    where: {
+      id: sessaoId,
+      status: StatusConexao.CONECTANDO,
+      ultimoStatus: tentativaIniciadaEm,
+    },
+    data: { status: StatusConexao.DESCONECTADO, ultimoStatus: new Date() },
+  });
+  return result.count === 1;
 }
 
 /**
@@ -467,6 +484,11 @@ router.delete('/:id', async (req, res) => {
  * Conecta sessão (gera QR Code)
  */
 router.post('/:id/conectar', async (req, res) => {
+  let sessaoEmConexaoId: string | undefined;
+  let tentativaIniciadaEm: Date | undefined;
+  let evolutionInstanceIdPresent = false;
+  let evolutionTokenPresent = false;
+
   try {
     const tenantId = getTenantId(req);
     if (!tenantId) {
@@ -485,11 +507,17 @@ router.post('/:id/conectar', async (req, res) => {
       return responderErro(res, 403, 'Acesso negado');
     }
 
+    evolutionInstanceIdPresent = !!sessao.evolutionInstanceId;
+    evolutionTokenPresent = !!sessao.evolutionToken;
+
     // Atualizar status
+    const marcadorTentativa = new Date();
     await prisma.sessaoWhatsapp.update({
       where: { id },
-      data: { status: 'CONECTANDO', ultimoStatus: new Date() }
+      data: { status: StatusConexao.CONECTANDO, ultimoStatus: marcadorTentativa }
     });
+    sessaoEmConexaoId = sessao.id;
+    tentativaIniciadaEm = marcadorTentativa;
 
     // Obter serviço para esta instância
     const service = getWhatsAppService(sessao.instanceName);
@@ -525,8 +553,44 @@ router.post('/:id/conectar', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('[SessoesWhatsapp] Erro ao conectar:', error);
-    return responderErro(res, 500, 'Erro interno do servidor');
+    if (sessaoEmConexaoId && tentativaIniciadaEm) {
+      try {
+        const restored = await restaurarStatusSeTentativaAtual(sessaoEmConexaoId, tentativaIniciadaEm);
+        if (!restored) {
+          logger.warn(
+            { reasonCode: 'WHATSAPP_CONNECTION_ATTEMPT_SUPERSEDED' },
+            '[SessoesWhatsapp] Rollback ignorado para tentativa de conexão substituída',
+          );
+        }
+      } catch (rollbackError) {
+        logger.error(
+          { err: rollbackError, stage: 'banco', reasonCode: 'WHATSAPP_STATUS_ROLLBACK_FAILED' },
+          '[SessoesWhatsapp] Falha ao restaurar status após erro de conexão',
+        );
+      }
+    }
+
+    const failure = publicConnectionFailure(error);
+    logger.error(
+      {
+        stage: failure.stage,
+        route: failure.route,
+        upstreamStatus: failure.upstreamStatus,
+        reasonCode: failure.reasonCode,
+        instanceAlreadyExisted: failure.instanceAlreadyExisted,
+        remoteIdPresent: evolutionInstanceIdPresent,
+        instanceAuthPresent: evolutionTokenPresent,
+      },
+      '[SessoesWhatsapp] Erro ao conectar',
+    );
+
+    return responderErro(res, failure.httpStatus, 'Falha ao conectar WhatsApp', {
+      reasonCode: failure.reasonCode,
+      correlationId: req.correlationId,
+      stage: failure.stage,
+      ...(failure.upstreamStatus ? { upstreamStatus: failure.upstreamStatus } : {}),
+      ...(failure.route ? { upstreamRoute: failure.route } : {}),
+    });
   }
 });
 
