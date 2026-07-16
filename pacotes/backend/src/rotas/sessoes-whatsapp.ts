@@ -76,6 +76,21 @@ interface RelatorioReconciliacao {
   fantasmas: Array<{ instanceName: string; nome: string }>; // sessão no banco sem instância no servidor
 }
 
+export async function restaurarStatusSeTentativaAtual(
+  sessaoId: string,
+  tentativaIniciadaEm: Date,
+): Promise<boolean> {
+  const result = await prisma.sessaoWhatsapp.updateMany({
+    where: {
+      id: sessaoId,
+      status: StatusConexao.CONECTANDO,
+      ultimoStatus: tentativaIniciadaEm,
+    },
+    data: { status: StatusConexao.DESCONECTADO, ultimoStatus: new Date() },
+  });
+  return result.count === 1;
+}
+
 /**
  * Cruza as instâncias do Evolution GO (filtradas pelo prefixo do Elyon) com as
  * sessões do banco e identifica divergências:
@@ -470,6 +485,7 @@ router.delete('/:id', async (req, res) => {
  */
 router.post('/:id/conectar', async (req, res) => {
   let sessaoEmConexaoId: string | undefined;
+  let tentativaIniciadaEm: Date | undefined;
   let evolutionInstanceIdPresent = false;
   let evolutionTokenPresent = false;
 
@@ -491,15 +507,17 @@ router.post('/:id/conectar', async (req, res) => {
       return responderErro(res, 403, 'Acesso negado');
     }
 
-    sessaoEmConexaoId = sessao.id;
     evolutionInstanceIdPresent = !!sessao.evolutionInstanceId;
     evolutionTokenPresent = !!sessao.evolutionToken;
 
     // Atualizar status
+    const marcadorTentativa = new Date();
     await prisma.sessaoWhatsapp.update({
       where: { id },
-      data: { status: 'CONECTANDO', ultimoStatus: new Date() }
+      data: { status: StatusConexao.CONECTANDO, ultimoStatus: marcadorTentativa }
     });
+    sessaoEmConexaoId = sessao.id;
+    tentativaIniciadaEm = marcadorTentativa;
 
     // Obter serviço para esta instância
     const service = getWhatsAppService(sessao.instanceName);
@@ -535,12 +553,15 @@ router.post('/:id/conectar', async (req, res) => {
     });
 
   } catch (error: any) {
-    if (sessaoEmConexaoId) {
+    if (sessaoEmConexaoId && tentativaIniciadaEm) {
       try {
-        await prisma.sessaoWhatsapp.update({
-          where: { id: sessaoEmConexaoId },
-          data: { status: 'DESCONECTADO', ultimoStatus: new Date() },
-        });
+        const restored = await restaurarStatusSeTentativaAtual(sessaoEmConexaoId, tentativaIniciadaEm);
+        if (!restored) {
+          logger.warn(
+            { reasonCode: 'WHATSAPP_CONNECTION_ATTEMPT_SUPERSEDED' },
+            '[SessoesWhatsapp] Rollback ignorado para tentativa de conexão substituída',
+          );
+        }
       } catch (rollbackError) {
         logger.error(
           { err: rollbackError, stage: 'banco', reasonCode: 'WHATSAPP_STATUS_ROLLBACK_FAILED' },

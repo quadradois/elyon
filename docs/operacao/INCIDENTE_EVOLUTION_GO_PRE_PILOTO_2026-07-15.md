@@ -202,14 +202,18 @@ verificado e rollback ensaiado.
 - registra campos estruturados e sanitizados nos quatro estágios relevantes;
 - coalesce requisições concorrentes de conexão por instância e libera o lock ao
   final, permitindo retry sem criar uma segunda instância;
+- faz rollback fenced por `id + CONECTANDO + ultimoStatus` e ignora uma tentativa
+  antiga quando outra tentativa já assumiu a transição;
+- trata persistência de ID/token como etapa fail-closed: falha no banco produz
+  `WHATSAPP_DATABASE_FAILURE` e impede connect, QR e resposta de sucesso;
 - cobre por teste instância nova, existente, órfã, token inválido, Evolution
   indisponível, mudança de contrato, concorrência, retry e rollback do estado.
 
 ### Evidências de validação
 
 - build TypeScript: aprovado;
-- testes focados: 13 aprovados;
-- suíte unitária completa: 96 suites e 909 testes aprovados;
+- testes focados: 16 aprovados;
+- suíte unitária completa: 96 suites e 912 testes aprovados;
 - lint dos três arquivos novos TypeScript: aprovado sem erro ou warning;
 - arquivos legados modificados: nenhum erro ESLint novo nas linhas do delta;
 - `git diff --check`: aprovado;

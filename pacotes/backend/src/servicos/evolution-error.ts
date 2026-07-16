@@ -25,7 +25,7 @@ export class EvolutionIntegrationError extends Error {
   readonly route?: string;
   readonly upstreamStatus?: number;
   readonly reasonCode: EvolutionReasonCode;
-  readonly httpStatus: 502 | 503;
+  readonly httpStatus: 500 | 502 | 503;
   readonly instanceAlreadyExisted?: boolean;
 
   constructor(params: {
@@ -34,7 +34,7 @@ export class EvolutionIntegrationError extends Error {
     route?: string;
     upstreamStatus?: number;
     reasonCode: EvolutionReasonCode;
-    httpStatus: 502 | 503;
+    httpStatus: 500 | 502 | 503;
     instanceAlreadyExisted?: boolean;
     cause?: unknown;
   }) {

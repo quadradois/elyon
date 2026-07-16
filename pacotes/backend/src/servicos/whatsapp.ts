@@ -136,13 +136,35 @@ export class WhatsAppService {
 
   /** Persiste instanceId/token na sessão e atualiza o cache local. */
   private async salvarCredenciais(instanceId: string, token: string): Promise<void> {
+    try {
+      await prisma.sessaoWhatsapp.update({
+        where: { instanceName: this._instanceName },
+        data: { evolutionInstanceId: instanceId, evolutionToken: token },
+      });
+    } catch (error) {
+      const failure = new EvolutionIntegrationError({
+        message: 'Falha ao persistir credenciais da Evolution Go',
+        stage: 'banco',
+        reasonCode: 'WHATSAPP_DATABASE_FAILURE',
+        httpStatus: 500,
+        cause: error,
+      });
+      logger.error(
+        {
+          stage: failure.stage,
+          reasonCode: failure.reasonCode,
+          recoveryRequired: true,
+          remoteIdReceived: !!instanceId,
+          instanceAuthReceived: !!token,
+        },
+        '[WhatsApp] Erro ao persistir credenciais da instância',
+      );
+      throw failure;
+    }
+
     this._instanceId = instanceId;
     this._token = token;
     this._credenciaisCarregadas = true;
-    await prisma.sessaoWhatsapp.update({
-      where: { instanceName: this._instanceName },
-      data: { evolutionInstanceId: instanceId, evolutionToken: token },
-    }).catch((err) => console.error(`[WhatsApp] Erro ao salvar credenciais de ${this._instanceName}:`, err));
   }
 
   async criarInstancia(): Promise<any> {

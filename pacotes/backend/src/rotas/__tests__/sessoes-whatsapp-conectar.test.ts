@@ -5,11 +5,12 @@ import { EvolutionIntegrationError } from '../../servicos/evolution-error';
 
 const mockFindUnique = jest.fn();
 const mockUpdate = jest.fn();
+const mockUpdateMany = jest.fn();
 const mockConectarInstancia = jest.fn();
 
 jest.mock('../../lib/db', () => ({
   prisma: {
-    sessaoWhatsapp: { findUnique: mockFindUnique, update: mockUpdate },
+    sessaoWhatsapp: { findUnique: mockFindUnique, update: mockUpdate, updateMany: mockUpdateMany },
   },
 }));
 jest.mock('../../middleware/middleware-auth', () => ({
@@ -27,7 +28,7 @@ jest.mock('../../lib/logger', () => ({
   logger: { error: jest.fn(), info: jest.fn(), warn: jest.fn() },
 }));
 
-import router from '../sessoes-whatsapp';
+import router, { restaurarStatusSeTentativaAtual } from '../sessoes-whatsapp';
 
 function app() {
   const instance = express();
@@ -49,6 +50,7 @@ describe('POST /api/sessoes-whatsapp/:id/conectar', () => {
       status: 'DESCONECTADO',
     });
     mockUpdate.mockResolvedValue({});
+    mockUpdateMany.mockResolvedValue({ count: 1 });
   });
 
   it('responde 502 correlacionável e restaura DESCONECTADO quando o upstream rejeita', async () => {
@@ -82,7 +84,14 @@ describe('POST /api/sessoes-whatsapp/:id/conectar', () => {
     expect(serializedResponse).not.toContain('remote-id');
     expect(serializedResponse).not.toContain('elyon_test');
     expect(mockUpdate).toHaveBeenNthCalledWith(1, expect.objectContaining({ data: expect.objectContaining({ status: 'CONECTANDO' }) }));
-    expect(mockUpdate).toHaveBeenNthCalledWith(2, expect.objectContaining({ data: expect.objectContaining({ status: 'DESCONECTADO' }) }));
+    expect(mockUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: 'session-id',
+        status: 'CONECTANDO',
+        ultimoStatus: expect.any(Date),
+      }),
+      data: expect.objectContaining({ status: 'DESCONECTADO' }),
+    }));
   });
 
   it('responde 503 quando a Evolution está indisponível', async () => {
@@ -100,6 +109,25 @@ describe('POST /api/sessoes-whatsapp/:id/conectar', () => {
     expect(response.status).toBe(503);
     expect(response.body.reasonCode).toBe('EVOLUTION_UNAVAILABLE');
     expect(response.body.correlationId).toBe(response.headers['x-correlation-id']);
-    expect(mockUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'DESCONECTADO' }) }));
+    expect(mockUpdateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'DESCONECTADO' }) }));
+  });
+
+  it('tentativa A não reverte CONECTANDO pertencente à tentativa B que entregou QR', async () => {
+    const markerA = new Date('2026-07-16T00:00:00.000Z');
+    const markerB = new Date('2026-07-16T00:00:00.001Z');
+    const persisted = { status: 'CONECTANDO', ultimoStatus: markerB };
+    mockUpdateMany.mockImplementation(async ({ where, data }) => {
+      const ownsCurrentAttempt = where.status === persisted.status
+        && where.ultimoStatus.getTime() === persisted.ultimoStatus.getTime();
+      if (!ownsCurrentAttempt) return { count: 0 };
+      persisted.status = data.status;
+      persisted.ultimoStatus = data.ultimoStatus;
+      return { count: 1 };
+    });
+
+    const restored = await restaurarStatusSeTentativaAtual('session-id', markerA);
+
+    expect(restored).toBe(false);
+    expect(persisted).toEqual({ status: 'CONECTANDO', ultimoStatus: markerB });
   });
 });

@@ -142,6 +142,38 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
     });
   });
 
+  it('interrompe após create quando as credenciais não podem ser persistidas', async () => {
+    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: null, evolutionToken: null });
+    sessaoWhatsapp.update.mockRejectedValueOnce(new Error('database unavailable'));
+    mockedAxios.post.mockResolvedValueOnce({ data: { data: { id: 'remote-id', token: 'remote-token' } } });
+
+    await expect(new WhatsAppService('elyon_test_persist_create').conectarInstancia()).rejects.toMatchObject({
+      stage: 'banco',
+      reasonCode: 'WHATSAPP_DATABASE_FAILURE',
+      httpStatus: 500,
+    });
+
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    expect(mockedAxios.get).not.toHaveBeenCalledWith('https://evolution.test/instance/qr', expect.anything());
+  });
+
+  it('interrompe após adoption quando o token remoto não pode ser persistido', async () => {
+    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: 'remote-id', evolutionToken: 'stale-token' });
+    sessaoWhatsapp.update.mockRejectedValueOnce(new Error('database unavailable'));
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { data: [{ id: 'remote-id', name: 'elyon_test_persist_adoption', token: 'current-token' }] },
+    });
+
+    await expect(new WhatsAppService('elyon_test_persist_adoption').conectarInstancia()).rejects.toMatchObject({
+      stage: 'banco',
+      reasonCode: 'WHATSAPP_DATABASE_FAILURE',
+      httpStatus: 500,
+    });
+
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+  });
+
   it('classifica falha em /instance/qr depois de connect bem-sucedido', async () => {
     sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: 'remote-id', evolutionToken: 'remote-token' });
     mockedAxios.get
