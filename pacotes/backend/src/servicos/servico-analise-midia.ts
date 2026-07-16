@@ -32,8 +32,8 @@ function montarContextoArquivo(entrada: EntradaAnaliseMidia): string {
 
 async function baixarMidia(mediaUrl: string): Promise<Buffer | null> {
   const headersBase = { 'User-Agent': 'Elyon/1.0' };
-  const headersAutenticados = process.env.EVOLUTION_API_KEY
-    ? { ...headersBase, apikey: process.env.EVOLUTION_API_KEY }
+  const headersAutenticados = process.env.EVOLUTION_GLOBAL_API_KEY
+    ? { ...headersBase, apikey: process.env.EVOLUTION_GLOBAL_API_KEY }
     : headersBase;
   const urls = [mediaUrl];
 

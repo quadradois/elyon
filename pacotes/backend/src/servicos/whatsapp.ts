@@ -31,8 +31,10 @@ export interface WhatsAppConnectionResult {
  * Evolution GO, um instanceId (uuid) + token próprio.
  *
  * Modelo de autenticação do Evolution GO:
- * - chave global (EVOLUTION_API_KEY): gerenciar instâncias
- *   (/instance/create, /instance/all, /instance/delete)
+ * - chave global (EVOLUTION_GLOBAL_API_KEY): listar e excluir instâncias
+ *   (/instance/all, /instance/delete e reconciliação administrativa)
+ * - chave do tenant (EVOLUTION_TENANT_API_KEY + EVOLUTION_TENANT_ID): criar
+ *   instâncias (/instance/create)
  * - token da instância (header apikey): operações da instância
  *   (/instance/connect, /status, /qr, /send/*, /message/*)
  *
@@ -55,8 +57,16 @@ export class WhatsAppService {
     return (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
   }
 
-  private get globalKey(): string {
-    return process.env.EVOLUTION_API_KEY || '';
+  private get globalApiKey(): string {
+    return process.env.EVOLUTION_GLOBAL_API_KEY || '';
+  }
+
+  private get tenantApiKey(): string {
+    return process.env.EVOLUTION_TENANT_API_KEY || '';
+  }
+
+  private get evolutionTenantId(): string {
+    return process.env.EVOLUTION_TENANT_ID || '';
   }
 
   get instanceName(): string {
@@ -64,7 +74,15 @@ export class WhatsAppService {
   }
 
   private get headersGlobais() {
-    return { 'Content-Type': 'application/json', apikey: this.globalKey };
+    return { 'Content-Type': 'application/json', apikey: this.globalApiKey };
+  }
+
+  private get headersTenant() {
+    return {
+      'Content-Type': 'application/json',
+      apikey: this.tenantApiKey,
+      'X-Tenant-ID': this.evolutionTenantId,
+    };
   }
 
   private headersInstancia() {
@@ -79,8 +97,14 @@ export class WhatsAppService {
     return { 'Content-Type': 'application/json', apikey: this._token };
   }
 
-  private validarConfiguracao(stage: EvolutionStage, exigirChaveGlobal = false): void {
-    if (this.apiUrl && (!exigirChaveGlobal || this.globalKey)) return;
+  private validarConfiguracao(
+    stage: EvolutionStage,
+    authScope: 'base' | 'global' | 'tenant' = 'base',
+  ): void {
+    const authConfigurada = authScope === 'base'
+      || (authScope === 'global' && !!this.globalApiKey)
+      || (authScope === 'tenant' && !!this.tenantApiKey && !!this.evolutionTenantId);
+    if (this.apiUrl && authConfigurada) return;
     throw new EvolutionIntegrationError({
       message: 'Configuracao da Evolution Go ausente',
       stage: 'configuracao',
@@ -169,12 +193,12 @@ export class WhatsAppService {
 
   async criarInstancia(): Promise<any> {
     await this.carregarCredenciais();
-    this.validarConfiguracao('instance/create', true);
+    this.validarConfiguracao('instance/create', 'tenant');
 
     const token = this._token || crypto.randomBytes(32).toString('hex');
 
     try {
-      console.log(`[WhatsApp] Criando instância ${this._instanceName} no Evolution GO (${this.apiUrl})...`);
+      logger.info({ stage: 'instance/create' }, '[WhatsApp] Criando instância no Evolution Go');
       const response = await axios.post(
         `${this.apiUrl}/instance/create`,
         {
@@ -182,7 +206,7 @@ export class WhatsAppService {
           token,
           advancedSettings: { ignoreGroups: true },
         },
-        { headers: this.headersGlobais },
+        { headers: this.headersTenant },
       );
 
       const criada = response.data?.data || response.data;
@@ -199,13 +223,19 @@ export class WhatsAppService {
       }
 
       await this.salvarCredenciais(instanceId, instanceToken);
-      console.log(`[WhatsApp] ✅ Instância ${this._instanceName} criada (id=${instanceId})`);
+      logger.info(
+        { stage: 'instance/create', remoteIdPresent: true, instanceAuthPresent: true },
+        '[WhatsApp] Instância criada',
+      );
       return criada;
     } catch (error: any) {
       // Instância já existe no Evolution GO — adota o id/token existentes.
       const detalhe = error?.response?.data?.error || error?.message || '';
       if (axios.isAxiosError(error) && /already exists/i.test(String(detalhe))) {
-        console.log(`[WhatsApp] Instância ${this._instanceName} já existe no Evolution GO, adotando...`);
+        logger.info(
+          { stage: 'instance/create', instanceAlreadyExisted: true },
+          '[WhatsApp] Instância remota existente será reconciliada',
+        );
         const existente = await this.buscarDetalhesInstancia();
         if (existente?.id && existente?.token) {
           await this.salvarCredenciais(existente.id, existente.token);
@@ -387,7 +417,7 @@ export class WhatsAppService {
       );
       return response.data;
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao enviar áudio:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao enviar áudio');
       throw error;
     }
   }
@@ -416,7 +446,7 @@ export class WhatsAppService {
       );
       return response.data;
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao enviar documento:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao enviar documento');
       throw error;
     }
   }
@@ -446,7 +476,7 @@ export class WhatsAppService {
       );
       return response.data;
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao enviar contato:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao enviar contato');
       throw error;
     }
   }
@@ -464,7 +494,7 @@ export class WhatsAppService {
       // Mantém a chave groupsIgnore esperada pelo restante do código.
       return { ...dados, groupsIgnore: dados.ignoreGroups ?? dados.groupsIgnore ?? false };
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao buscar configurações:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao buscar configurações');
       throw error;
     }
   }
@@ -480,7 +510,7 @@ export class WhatsAppService {
       );
       return response.data;
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao atualizar configurações:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao atualizar configurações');
       throw error;
     }
   }
@@ -503,7 +533,7 @@ export class WhatsAppService {
       );
       return response.data;
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao configurar webhook:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao configurar webhook');
       throw error;
     }
   }
@@ -511,7 +541,7 @@ export class WhatsAppService {
   /** Busca os detalhes da instância via /instance/all (chave global). */
   async buscarDetalhesInstancia(lancarErro = false): Promise<any> {
     try {
-      this.validarConfiguracao('instance/create', true);
+      this.validarConfiguracao('instance/create', 'global');
       const response = await axios.get(
         `${this.apiUrl}/instance/all`,
         { headers: this.headersGlobais },
@@ -572,9 +602,9 @@ export class WhatsAppService {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
         return 'inexistente';
       }
-      console.error(
-        `[WhatsApp] Falha ao deletar instância ${this._instanceName} (id=${instanceId}) no Evolution GO:`,
-        error?.response?.data || error?.message,
+      logger.error(
+        { stage: 'instance/delete', remoteIdPresent: true },
+        '[WhatsApp] Falha ao deletar instância no Evolution Go',
       );
       throw error;
     }
@@ -629,8 +659,18 @@ export function limparCacheWhatsApp(instanceName: string): void {
 const apiUrlGlobal = () => (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
 const headersGlobaisModulo = () => ({
   'Content-Type': 'application/json',
-  apikey: process.env.EVOLUTION_API_KEY || '',
+  apikey: process.env.EVOLUTION_GLOBAL_API_KEY || '',
 });
+
+function validarConfiguracaoGlobalModulo(): void {
+  if (apiUrlGlobal() && process.env.EVOLUTION_GLOBAL_API_KEY) return;
+  throw new EvolutionIntegrationError({
+    message: 'Configuracao global da Evolution Go ausente',
+    stage: 'configuracao',
+    reasonCode: 'EVOLUTION_CONFIG_MISSING',
+    httpStatus: 503,
+  });
+}
 
 /**
  * Lista TODAS as instâncias do Evolution GO (chave global).
@@ -638,6 +678,7 @@ const headersGlobaisModulo = () => ({
  * que pertencem ao Elyon (prefixo `elyon_`).
  */
 export async function listarInstanciasEvolution(): Promise<any[]> {
+  validarConfiguracaoGlobalModulo();
   const response = await axios.get(`${apiUrlGlobal()}/instance/all`, {
     headers: headersGlobaisModulo(),
   });
@@ -651,6 +692,7 @@ export async function listarInstanciasEvolution(): Promise<any[]> {
  * Trata 404 como sucesso (já removida).
  */
 export async function deletarInstanciaEvolutionPorId(instanceId: string): Promise<void> {
+  validarConfiguracaoGlobalModulo();
   try {
     await axios.delete(`${apiUrlGlobal()}/instance/delete/${instanceId}`, {
       headers: headersGlobaisModulo(),
