@@ -539,7 +539,10 @@ export class WhatsAppService {
   }
 
   /** Busca os detalhes da instância via /instance/all (chave global). */
-  async buscarDetalhesInstancia(lancarErro = false): Promise<any> {
+  async buscarDetalhesInstancia(
+    lancarErro = false,
+    failureStage: EvolutionStage = 'instance/create',
+  ): Promise<any> {
     try {
       this.validarConfiguracao('instance/create', 'global');
       const response = await axios.get(
@@ -547,15 +550,24 @@ export class WhatsAppService {
         { headers: this.headersGlobais },
       );
       const instancias = response.data?.data || response.data || [];
-      const instancia = Array.isArray(instancias)
-        ? instancias.find((i: any) => i.name === this._instanceName)
-        : null;
+      if (!Array.isArray(instancias)) {
+        if (lancarErro) {
+          throw toEvolutionIntegrationError(new Error('Resposta sem lista de instâncias'), {
+            stage: failureStage,
+            route: '/instance/all',
+            instanceAlreadyExisted: true,
+            contractInvalid: true,
+          });
+        }
+        return null;
+      }
+      const instancia = instancias.find((i: any) => i.name === this._instanceName);
       if (!instancia) return null;
       return { ...instancia, ownerJid: instancia.jid, profileName: instancia.client_name || instancia.name };
     } catch (error: any) {
       if (lancarErro) {
         throw toEvolutionIntegrationError(error, {
-          stage: 'instance/create',
+          stage: failureStage,
           route: '/instance/all',
           instanceAlreadyExisted: true,
         });
@@ -579,6 +591,7 @@ export class WhatsAppService {
    * NÃO apague o registro local e evite criar instâncias órfãs no Evolution GO.
    */
   async deletarInstancia(): Promise<'deletada' | 'inexistente'> {
+    this.validarConfiguracao('instance/delete', 'global');
     await this.carregarCredenciais();
 
     // Se o id não está persistido, tenta resolvê-lo pelo nome no próprio
@@ -586,7 +599,7 @@ export class WhatsAppService {
     // instâncias criadas fora do fluxo normal.
     let instanceId = this._instanceId;
     if (!instanceId) {
-      const detalhes = await this.buscarDetalhesInstancia();
+      const detalhes = await this.buscarDetalhesInstancia(true, 'instance/delete');
       instanceId = detalhes?.id;
     }
     if (!instanceId) return 'inexistente';

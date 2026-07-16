@@ -295,6 +295,82 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
     );
   });
 
+  it.each([
+    ['com ID remoto', { evolutionInstanceId: 'remote-id', evolutionToken: 'remote-token' }],
+    ['sem ID remoto', { evolutionInstanceId: null, evolutionToken: null }],
+  ])('falha fechado no delete sem chave global %s', async (_scenario, credentials) => {
+    delete process.env.EVOLUTION_GLOBAL_API_KEY;
+    sessaoWhatsapp.findUnique.mockResolvedValue(credentials);
+
+    await expect(new WhatsAppService('elyon_test_delete_missing_global').deletarInstancia())
+      .rejects.toMatchObject({
+        stage: 'configuracao',
+        route: 'instance/delete',
+        reasonCode: 'EVOLUTION_CONFIG_MISSING',
+        httpStatus: 503,
+      });
+
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+    expect(mockedAxios.delete).not.toHaveBeenCalled();
+  });
+
+  it('propaga indisponibilidade de /instance/all ao resolver ID para delete', async () => {
+    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: null, evolutionToken: null });
+    mockedAxios.get.mockRejectedValueOnce(axiosFailure(undefined, 'ECONNREFUSED'));
+
+    await expect(new WhatsAppService('elyon_test_delete_all_down').deletarInstancia())
+      .rejects.toMatchObject({
+        stage: 'instance/delete',
+        route: '/instance/all',
+        reasonCode: 'EVOLUTION_UNAVAILABLE',
+        httpStatus: 503,
+      });
+
+    expect(mockedAxios.delete).not.toHaveBeenCalled();
+  });
+
+  it('retorna inexistente somente após /instance/all comprovar ausência remota', async () => {
+    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: null, evolutionToken: null });
+    mockedAxios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+    await expect(new WhatsAppService('elyon_test_delete_absent').deletarInstancia())
+      .resolves.toBe('inexistente');
+
+    expect(mockedAxios.get).toHaveBeenCalledWith(
+      'https://evolution.test/instance/all',
+      expect.objectContaining({ headers: expect.objectContaining({ apikey: 'global-test-key' }) }),
+    );
+    expect(mockedAxios.delete).not.toHaveBeenCalled();
+  });
+
+  it('não confunde resposta inválida de /instance/all com ausência remota', async () => {
+    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: null, evolutionToken: null });
+    mockedAxios.get.mockResolvedValueOnce({ data: { unexpected: true } });
+
+    await expect(new WhatsAppService('elyon_test_delete_invalid_all').deletarInstancia())
+      .rejects.toMatchObject({
+        stage: 'instance/delete',
+        route: '/instance/all',
+        reasonCode: 'EVOLUTION_CONTRACT_INVALID',
+        httpStatus: 502,
+      });
+
+    expect(mockedAxios.delete).not.toHaveBeenCalled();
+  });
+
+  it('trata 404 do delete como sucesso idempotente', async () => {
+    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: 'remote-id', evolutionToken: 'remote-token' });
+    mockedAxios.delete.mockRejectedValueOnce(axiosFailure(404));
+
+    await expect(new WhatsAppService('elyon_test_delete_404').deletarInstancia())
+      .resolves.toBe('inexistente');
+
+    expect(mockedAxios.delete).toHaveBeenCalledWith(
+      'https://evolution.test/instance/delete/remote-id',
+      expect.objectContaining({ headers: expect.objectContaining({ apikey: 'global-test-key' }) }),
+    );
+  });
+
   it('usa a chave global na listagem administrativa de reconciliação', async () => {
     mockedAxios.get.mockResolvedValueOnce({ data: { data: [] } });
 
