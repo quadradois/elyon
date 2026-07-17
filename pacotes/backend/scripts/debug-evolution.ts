@@ -7,10 +7,11 @@ import path from 'path';
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const apiUrl = process.env.EVOLUTION_API_URL;
-const apiKey = process.env.EVOLUTION_GLOBAL_API_KEY;
+const apiKey = process.env.EVOLUTION_TENANT_API_KEY;
+const tenantId = process.env.EVOLUTION_TENANT_ID;
 
-if (!apiUrl || !apiKey) {
-  console.error('ERRO: Variáveis EVOLUTION_API_URL ou EVOLUTION_GLOBAL_API_KEY não encontradas no .env');
+if (!apiUrl || !apiKey || !tenantId) {
+  console.error('ERRO: configuração tenant da Evolution Go ausente');
   process.exit(1);
 }
 
@@ -19,17 +20,19 @@ async function debugFetchInstances() {
     console.log('Buscando instâncias no Evolution Go');
     
     const response = await axios.get(
-      `${apiUrl}/instance/fetchInstances`,
+      `${apiUrl}/instance/all`,
       { 
         headers: { 
           'apikey': apiKey,
+          'X-Tenant-ID': tenantId,
           'Content-Type': 'application/json'
         } 
       }
     );
 
-    if (Array.isArray(response.data)) {
-      console.log(`Encontradas ${response.data.length} instâncias.`);
+    const instances = response.data?.data || response.data;
+    if (Array.isArray(instances)) {
+      console.log(`Encontradas ${instances.length} instâncias.`);
     } else {
       console.log('A resposta não é um array.');
     }

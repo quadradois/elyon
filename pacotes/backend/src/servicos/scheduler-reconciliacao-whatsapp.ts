@@ -31,8 +31,8 @@ class SchedulerReconciliacaoWhatsapp {
     if (this.timer) return;
 
     this.timer = setInterval(() => {
-      runWithJobLogContext('scheduler-whatsapp-reconciliation', () => this.verificarJanelaExecucao()).catch((err) => {
-        console.error('[ReconciliacaoWA] Erro no ciclo de verificação:', err);
+      runWithJobLogContext('scheduler-whatsapp-reconciliation', () => this.verificarJanelaExecucao()).catch(() => {
+        console.error('[ReconciliacaoWA] Erro sanitizado no ciclo de verificação');
       });
     }, CHECK_INTERVAL_MS);
 
@@ -118,16 +118,16 @@ class SchedulerReconciliacaoWhatsapp {
           await deletarInstanciaEvolutionPorId(orfa.id);
           limparCacheWhatsApp(orfa.name);
           removidas++;
-          console.log(`[ReconciliacaoWA] 🧹 Órfã removida: ${orfa.name} (id=${orfa.id})`);
-        } catch (e: any) {
-          console.error(`[ReconciliacaoWA] ❌ Falha ao remover órfã ${orfa.name}:`, e?.message);
+          console.log('[ReconciliacaoWA] Órfã removida com identificadores sanitizados');
+        } catch {
+          console.error('[ReconciliacaoWA] Falha ao remover órfã com identificadores sanitizados');
         }
       }
 
       console.log(`[ReconciliacaoWA] ✅ Reconciliação concluída: ${removidas}/${orfas.length} órfã(s) removida(s).`);
       return removidas;
-    } catch (err) {
-      console.error('[ReconciliacaoWA] ❌ Erro na reconciliação:', err);
+    } catch {
+      console.error('[ReconciliacaoWA] Erro sanitizado na reconciliação');
       return 0;
     }
   }

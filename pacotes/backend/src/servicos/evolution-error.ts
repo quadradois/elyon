@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export type EvolutionStage = 'instance/create' | 'instance/connect' | 'instance/qr' | 'instance/delete' | 'banco' | 'configuracao';
+export type EvolutionStage = 'instance/create' | 'instance/list' | 'instance/connect' | 'instance/qr' | 'instance/delete' | 'banco' | 'configuracao';
 
 export type EvolutionReasonCode =
   | 'EVOLUTION_AUTH_REJECTED'

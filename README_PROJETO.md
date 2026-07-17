@@ -648,7 +648,6 @@ ANTHROPIC_API_KEY="sk-ant-..."
 
 # Evolution Go dedicada
 EVOLUTION_API_URL="https://evolution-go.exemplo.com"
-EVOLUTION_GLOBAL_API_KEY="sua-chave-global"
 EVOLUTION_TENANT_API_KEY="sua-chave-de-tenant"
 EVOLUTION_TENANT_ID="seu-tenant-evolution"
 EVOLUTION_WEBHOOK_SOURCE_RANGE="203.0.113.10/32"
@@ -678,7 +677,10 @@ cd pacotes/frontend && npm run dev # Frontend: http://localhost:5173
 ### 6. Verificar Evolution Go dedicada
 
 ```bash
-curl -H "apikey: $EVOLUTION_GLOBAL_API_KEY" "$EVOLUTION_API_URL/instance/all"
+curl \
+  -H "apikey: $EVOLUTION_TENANT_API_KEY" \
+  -H "X-Tenant-ID: $EVOLUTION_TENANT_ID" \
+  "$EVOLUTION_API_URL/instance/all"
 ```
 
 ---

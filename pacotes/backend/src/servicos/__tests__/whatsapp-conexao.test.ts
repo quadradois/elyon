@@ -2,7 +2,11 @@ import axios from 'axios';
 import { prisma } from '../../lib/db';
 import { logger } from '../../lib/logger';
 import { EvolutionIntegrationError } from '../evolution-error';
-import { listarInstanciasEvolution, WhatsAppService } from '../whatsapp';
+import {
+  deletarInstanciaEvolutionPorId,
+  listarInstanciasEvolution,
+  WhatsAppService,
+} from '../whatsapp';
 
 jest.mock('axios');
 jest.mock('../../lib/db', () => ({
@@ -37,7 +41,7 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.EVOLUTION_API_URL = 'https://evolution.test';
-    process.env.EVOLUTION_GLOBAL_API_KEY = 'global-test-key';
+    process.env.EVOLUTION_GLOBAL_API_KEY = 'forbidden-global-key';
     process.env.EVOLUTION_TENANT_API_KEY = 'tenant-test-key';
     process.env.EVOLUTION_TENANT_ID = 'tenant-test-id';
     delete process.env.EVOLUTION_API_KEY;
@@ -76,6 +80,23 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
     expect(result.qrcode).toBe('qr-placeholder');
   });
 
+  it('nenhuma rota /instance/* usa a Global API Key', async () => {
+    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: null, evolutionToken: null });
+    mockedAxios.post
+      .mockResolvedValueOnce({ data: { data: { id: 'remote-id', token: 'remote-token' } } })
+      .mockResolvedValueOnce({ data: { success: true } });
+    mockedAxios.get.mockResolvedValueOnce({ data: { data: { Qrcode: 'qr-placeholder' } } });
+
+    await new WhatsAppService('elyon_test_no_global').conectarInstancia();
+
+    const requests = JSON.stringify([
+      ...mockedAxios.get.mock.calls,
+      ...mockedAxios.post.mock.calls,
+      ...mockedAxios.delete.mock.calls,
+    ]);
+    expect(requests).not.toContain('forbidden-global-key');
+  });
+
   it('preserva instância remota existente e conecta com seu token atual', async () => {
     sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: 'remote-id', evolutionToken: 'remote-token' });
     mockedAxios.get
@@ -90,7 +111,10 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
       1,
       'https://evolution.test/instance/all',
       expect.objectContaining({
-        headers: expect.objectContaining({ apikey: 'global-test-key' }),
+        headers: expect.objectContaining({
+          apikey: 'tenant-test-key',
+          'X-Tenant-ID': 'tenant-test-id',
+        }),
       }),
     );
     expect(mockedAxios.post).toHaveBeenCalledWith(
@@ -259,8 +283,9 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
   });
 
   it('logs de falha não carregam token, nome da instância ou payload upstream', async () => {
-    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: 'remote-id', evolutionToken: 'secret-instance-token' });
-    mockedAxios.get.mockResolvedValueOnce({ data: { data: [{ id: 'remote-id', name: 'elyon_sensitive_name', token: 'secret-instance-token' }] } });
+    const sensitiveRemoteId = '11111111-2222-3333-4444-555555555555';
+    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: sensitiveRemoteId, evolutionToken: 'secret-instance-token' });
+    mockedAxios.get.mockResolvedValueOnce({ data: { data: [{ id: sensitiveRemoteId, name: 'elyon_sensitive_name', token: 'secret-instance-token' }] } });
     mockedAxios.post.mockRejectedValueOnce(axiosFailure(401));
 
     await expect(new WhatsAppService('elyon_sensitive_name').conectarInstancia()).rejects.toBeDefined();
@@ -270,15 +295,15 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
     for (const logs of [serializedLogs, serializedInfoLogs]) {
       expect(logs).not.toContain('secret-instance-token');
       expect(logs).not.toContain('elyon_sensitive_name');
-      expect(logs).not.toContain('remote-id');
+      expect(logs).not.toContain(sensitiveRemoteId);
       expect(logs).not.toContain('tenant-test-id');
       expect(logs).not.toContain('tenant-test-key');
-      expect(logs).not.toContain('global-test-key');
+      expect(logs).not.toContain('forbidden-global-key');
     }
     expect(serializedLogs).toContain('EVOLUTION_AUTH_REJECTED');
   });
 
-  it('usa a chave global para excluir e nunca envia contexto de tenant', async () => {
+  it('usa o escopo tenant para excluir instância', async () => {
     sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: 'remote-id', evolutionToken: 'remote-token' });
     mockedAxios.delete.mockResolvedValueOnce({ data: { success: true } });
 
@@ -289,20 +314,24 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
       {
         headers: {
           'Content-Type': 'application/json',
-          apikey: 'global-test-key',
+          apikey: 'tenant-test-key',
+          'X-Tenant-ID': 'tenant-test-id',
         },
       },
     );
   });
 
   it.each([
-    ['com ID remoto', { evolutionInstanceId: 'remote-id', evolutionToken: 'remote-token' }],
-    ['sem ID remoto', { evolutionInstanceId: null, evolutionToken: null }],
-  ])('falha fechado no delete sem chave global %s', async (_scenario, credentials) => {
-    delete process.env.EVOLUTION_GLOBAL_API_KEY;
-    sessaoWhatsapp.findUnique.mockResolvedValue(credentials);
+    ['EVOLUTION_TENANT_API_KEY'],
+    ['EVOLUTION_TENANT_ID'],
+  ])('falha fechado no delete quando %s está ausente', async (missingVariable) => {
+    delete process.env[missingVariable];
+    sessaoWhatsapp.findUnique.mockResolvedValue({
+      evolutionInstanceId: 'remote-id',
+      evolutionToken: 'remote-token',
+    });
 
-    await expect(new WhatsAppService('elyon_test_delete_missing_global').deletarInstancia())
+    await expect(new WhatsAppService('elyon_test_delete_missing_tenant').deletarInstancia())
       .rejects.toMatchObject({
         stage: 'configuracao',
         route: 'instance/delete',
@@ -338,7 +367,12 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
 
     expect(mockedAxios.get).toHaveBeenCalledWith(
       'https://evolution.test/instance/all',
-      expect.objectContaining({ headers: expect.objectContaining({ apikey: 'global-test-key' }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          apikey: 'tenant-test-key',
+          'X-Tenant-ID': 'tenant-test-id',
+        }),
+      }),
     );
     expect(mockedAxios.delete).not.toHaveBeenCalled();
   });
@@ -367,11 +401,75 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
 
     expect(mockedAxios.delete).toHaveBeenCalledWith(
       'https://evolution.test/instance/delete/remote-id',
-      expect.objectContaining({ headers: expect.objectContaining({ apikey: 'global-test-key' }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          apikey: 'tenant-test-key',
+          'X-Tenant-ID': 'tenant-test-id',
+        }),
+      }),
     );
   });
 
-  it('usa a chave global na listagem administrativa de reconciliação', async () => {
+  it('delete 500 é idempotente somente após ausência comprovada', async () => {
+    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: 'remote-id', evolutionToken: 'remote-token' });
+    mockedAxios.delete.mockRejectedValueOnce(axiosFailure(500));
+    mockedAxios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+    await expect(new WhatsAppService('elyon_test_delete_500_absent').deletarInstancia())
+      .resolves.toBe('inexistente');
+
+    expect(mockedAxios.get).toHaveBeenCalledWith(
+      'https://evolution.test/instance/all',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          apikey: 'tenant-test-key',
+          'X-Tenant-ID': 'tenant-test-id',
+        }),
+      }),
+    );
+  });
+
+  it('delete 500 permanece erro quando a instância ainda existe', async () => {
+    const sensitiveRemoteId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    sessaoWhatsapp.findUnique.mockResolvedValue({
+      evolutionInstanceId: sensitiveRemoteId,
+      evolutionToken: 'remote-token',
+    });
+    mockedAxios.delete.mockRejectedValueOnce(axiosFailure(500));
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { data: [{ id: sensitiveRemoteId, name: 'elyon_test_delete_500_present' }] },
+    });
+
+    await expect(new WhatsAppService('elyon_test_delete_500_present').deletarInstancia())
+      .rejects.toMatchObject({
+        stage: 'instance/delete',
+        route: '/instance/delete/:id',
+        upstreamStatus: 500,
+        reasonCode: 'EVOLUTION_UPSTREAM_FAILURE',
+      });
+
+    const logs = JSON.stringify(mockLoggerError.mock.calls);
+    expect(logs).not.toContain(sensitiveRemoteId);
+    expect(logs).not.toContain('elyon_test_delete_500_present');
+    expect(logs).not.toContain('tenant-test-id');
+    expect(logs).not.toContain('tenant-test-key');
+  });
+
+  it('falha na verificação após delete 500 permanece fail-closed', async () => {
+    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: 'remote-id', evolutionToken: 'remote-token' });
+    mockedAxios.delete.mockRejectedValueOnce(axiosFailure(500));
+    mockedAxios.get.mockRejectedValueOnce(axiosFailure(undefined, 'ECONNREFUSED'));
+
+    await expect(new WhatsAppService('elyon_test_delete_500_check_failure').deletarInstancia())
+      .rejects.toMatchObject({
+        stage: 'instance/delete',
+        route: '/instance/all',
+        reasonCode: 'EVOLUTION_UNAVAILABLE',
+        httpStatus: 503,
+      });
+  });
+
+  it('usa o escopo tenant na listagem administrativa de reconciliação', async () => {
     mockedAxios.get.mockResolvedValueOnce({ data: { data: [] } });
 
     await expect(listarInstanciasEvolution()).resolves.toEqual([]);
@@ -381,14 +479,18 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
       {
         headers: {
           'Content-Type': 'application/json',
-          apikey: 'global-test-key',
+          apikey: 'tenant-test-key',
+          'X-Tenant-ID': 'tenant-test-id',
         },
       },
     );
   });
 
-  it('falha fechado na reconciliação quando a chave global está ausente', async () => {
-    delete process.env.EVOLUTION_GLOBAL_API_KEY;
+  it.each([
+    ['EVOLUTION_TENANT_API_KEY'],
+    ['EVOLUTION_TENANT_ID'],
+  ])('falha fechado na reconciliação quando %s está ausente', async (missingVariable) => {
+    delete process.env[missingVariable];
     process.env.EVOLUTION_API_KEY = 'legacy-key-must-not-be-used';
 
     await expect(listarInstanciasEvolution()).rejects.toMatchObject({
@@ -398,6 +500,44 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
     });
 
     expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+
+  it('delete de reconciliação confirma ausência após 500 sem usar chave global', async () => {
+    mockedAxios.delete.mockRejectedValueOnce(axiosFailure(500));
+    mockedAxios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+    await expect(deletarInstanciaEvolutionPorId('remote-id')).resolves.toBeUndefined();
+
+    const requests = JSON.stringify([
+      ...mockedAxios.get.mock.calls,
+      ...mockedAxios.delete.mock.calls,
+    ]);
+    expect(requests).not.toContain('forbidden-global-key');
+    expect(requests).not.toContain('legacy-key-must-not-be-used');
+  });
+
+  it('delete de reconciliação permanece erro após 500 quando o ID ainda existe', async () => {
+    mockedAxios.delete.mockRejectedValueOnce(axiosFailure(500));
+    mockedAxios.get.mockResolvedValueOnce({ data: { data: [{ id: 'remote-id' }] } });
+
+    await expect(deletarInstanciaEvolutionPorId('remote-id')).rejects.toMatchObject({
+      stage: 'instance/delete',
+      route: '/instance/delete/:id',
+      upstreamStatus: 500,
+      reasonCode: 'EVOLUTION_UPSTREAM_FAILURE',
+    });
+  });
+
+  it('delete de reconciliação permanece fail-closed se a confirmação pós-500 falhar', async () => {
+    mockedAxios.delete.mockRejectedValueOnce(axiosFailure(500));
+    mockedAxios.get.mockRejectedValueOnce(axiosFailure(undefined, 'ECONNREFUSED'));
+
+    await expect(deletarInstanciaEvolutionPorId('remote-id')).rejects.toMatchObject({
+      stage: 'instance/delete',
+      route: '/instance/all',
+      reasonCode: 'EVOLUTION_UNAVAILABLE',
+      httpStatus: 503,
+    });
   });
 
   it('detecta mudança incompatível no contrato de criação', async () => {

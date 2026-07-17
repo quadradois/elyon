@@ -31,10 +31,8 @@ export interface WhatsAppConnectionResult {
  * Evolution GO, um instanceId (uuid) + token próprio.
  *
  * Modelo de autenticação do Evolution GO:
- * - chave global (EVOLUTION_GLOBAL_API_KEY): listar e excluir instâncias
- *   (/instance/all, /instance/delete e reconciliação administrativa)
- * - chave do tenant (EVOLUTION_TENANT_API_KEY + EVOLUTION_TENANT_ID): criar
- *   instâncias (/instance/create)
+ * - chave do tenant (EVOLUTION_TENANT_API_KEY + EVOLUTION_TENANT_ID): criar,
+ *   listar e excluir instâncias (/instance/*) e executar reconciliação
  * - token da instância (header apikey): operações da instância
  *   (/instance/connect, /status, /qr, /send/*, /message/*)
  *
@@ -57,10 +55,6 @@ export class WhatsAppService {
     return (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
   }
 
-  private get globalApiKey(): string {
-    return process.env.EVOLUTION_GLOBAL_API_KEY || '';
-  }
-
   private get tenantApiKey(): string {
     return process.env.EVOLUTION_TENANT_API_KEY || '';
   }
@@ -71,10 +65,6 @@ export class WhatsAppService {
 
   get instanceName(): string {
     return this._instanceName;
-  }
-
-  private get headersGlobais() {
-    return { 'Content-Type': 'application/json', apikey: this.globalApiKey };
   }
 
   private get headersTenant() {
@@ -99,10 +89,9 @@ export class WhatsAppService {
 
   private validarConfiguracao(
     stage: EvolutionStage,
-    authScope: 'base' | 'global' | 'tenant' = 'base',
+    authScope: 'base' | 'tenant' = 'base',
   ): void {
     const authConfigurada = authScope === 'base'
-      || (authScope === 'global' && !!this.globalApiKey)
       || (authScope === 'tenant' && !!this.tenantApiKey && !!this.evolutionTenantId);
     if (this.apiUrl && authConfigurada) return;
     throw new EvolutionIntegrationError({
@@ -538,16 +527,17 @@ export class WhatsAppService {
     }
   }
 
-  /** Busca os detalhes da instância via /instance/all (chave global). */
+  /** Busca os detalhes da instância via /instance/all (escopo tenant). */
   async buscarDetalhesInstancia(
     lancarErro = false,
     failureStage: EvolutionStage = 'instance/create',
+    remoteId?: string,
   ): Promise<any> {
     try {
-      this.validarConfiguracao('instance/create', 'global');
+      this.validarConfiguracao(failureStage, 'tenant');
       const response = await axios.get(
         `${this.apiUrl}/instance/all`,
-        { headers: this.headersGlobais },
+        { headers: this.headersTenant },
       );
       const instancias = response.data?.data || response.data || [];
       if (!Array.isArray(instancias)) {
@@ -561,7 +551,9 @@ export class WhatsAppService {
         }
         return null;
       }
-      const instancia = instancias.find((i: any) => i.name === this._instanceName);
+      const instancia = remoteId
+        ? instancias.find((i: any) => i.id === remoteId)
+        : instancias.find((i: any) => i.name === this._instanceName);
       if (!instancia) return null;
       return { ...instancia, ownerJid: instancia.jid, profileName: instancia.client_name || instancia.name };
     } catch (error: any) {
@@ -585,13 +577,13 @@ export class WhatsAppService {
   }
 
   /**
-   * Deleta a instância no Evolution GO (chave global).
+   * Deleta a instância no Evolution GO (escopo tenant).
    * Retorna 'deletada' se removida no servidor, ou 'inexistente' se já não
    * existia lá. Lança erro em falhas reais (rede/5xx) para que o chamador
    * NÃO apague o registro local e evite criar instâncias órfãs no Evolution GO.
    */
   async deletarInstancia(): Promise<'deletada' | 'inexistente'> {
-    this.validarConfiguracao('instance/delete', 'global');
+    this.validarConfiguracao('instance/delete', 'tenant');
     await this.carregarCredenciais();
 
     // Se o id não está persistido, tenta resolvê-lo pelo nome no próprio
@@ -607,7 +599,7 @@ export class WhatsAppService {
     try {
       await axios.delete(
         `${this.apiUrl}/instance/delete/${instanceId}`,
-        { headers: this.headersGlobais },
+        { headers: this.headersTenant },
       );
       return 'deletada';
     } catch (error: any) {
@@ -615,11 +607,30 @@ export class WhatsAppService {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
         return 'inexistente';
       }
+      if (axios.isAxiosError(error) && error.response?.status === 500) {
+        const aindaExiste = await this.buscarDetalhesInstancia(
+          true,
+          'instance/delete',
+          instanceId,
+        );
+        if (!aindaExiste) return 'inexistente';
+      }
+      const falha = toEvolutionIntegrationError(error, {
+        stage: 'instance/delete',
+        route: '/instance/delete/:id',
+        instanceAlreadyExisted: true,
+      });
       logger.error(
-        { stage: 'instance/delete', remoteIdPresent: true },
+        {
+          stage: falha.stage,
+          route: falha.route,
+          upstreamStatus: falha.upstreamStatus,
+          reasonCode: falha.reasonCode,
+          remoteIdPresent: true,
+        },
         '[WhatsApp] Falha ao deletar instância no Evolution Go',
       );
-      throw error;
+      throw falha;
     }
   }
 
@@ -669,16 +680,21 @@ export function limparCacheWhatsApp(instanceName: string): void {
 // HELPERS ADMINISTRATIVOS (reconciliação)
 // ============================================
 
-const apiUrlGlobal = () => (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
-const headersGlobaisModulo = () => ({
+const apiUrlEvolution = () => (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
+const headersTenantModulo = () => ({
   'Content-Type': 'application/json',
-  apikey: process.env.EVOLUTION_GLOBAL_API_KEY || '',
+  apikey: process.env.EVOLUTION_TENANT_API_KEY || '',
+  'X-Tenant-ID': process.env.EVOLUTION_TENANT_ID || '',
 });
 
-function validarConfiguracaoGlobalModulo(): void {
-  if (apiUrlGlobal() && process.env.EVOLUTION_GLOBAL_API_KEY) return;
+function validarConfiguracaoTenantModulo(): void {
+  if (
+    apiUrlEvolution()
+    && process.env.EVOLUTION_TENANT_API_KEY
+    && process.env.EVOLUTION_TENANT_ID
+  ) return;
   throw new EvolutionIntegrationError({
-    message: 'Configuracao global da Evolution Go ausente',
+    message: 'Configuracao tenant da Evolution Go ausente',
     stage: 'configuracao',
     reasonCode: 'EVOLUTION_CONFIG_MISSING',
     httpStatus: 503,
@@ -686,32 +702,55 @@ function validarConfiguracaoGlobalModulo(): void {
 }
 
 /**
- * Lista TODAS as instâncias do Evolution GO (chave global).
- * O servidor é compartilhado entre projetos — o chamador deve filtrar pelas
- * que pertencem ao Elyon (prefixo `elyon_`).
+ * Lista as instâncias do tenant Elyon.
  */
-export async function listarInstanciasEvolution(): Promise<any[]> {
-  validarConfiguracaoGlobalModulo();
-  const response = await axios.get(`${apiUrlGlobal()}/instance/all`, {
-    headers: headersGlobaisModulo(),
-  });
-  const dados = response.data?.data || response.data || [];
-  return Array.isArray(dados) ? dados : [];
+export async function listarInstanciasEvolution(
+  failureStage: EvolutionStage = 'instance/list',
+): Promise<any[]> {
+  validarConfiguracaoTenantModulo();
+  try {
+    const response = await axios.get(`${apiUrlEvolution()}/instance/all`, {
+      headers: headersTenantModulo(),
+    });
+    const dados = response.data?.data || response.data || [];
+    if (!Array.isArray(dados)) {
+      throw toEvolutionIntegrationError(new Error('Resposta sem lista de instancias'), {
+        stage: failureStage,
+        route: '/instance/all',
+        contractInvalid: true,
+      });
+    }
+    return dados;
+  } catch (error) {
+    throw toEvolutionIntegrationError(error, {
+      stage: failureStage,
+      route: '/instance/all',
+    });
+  }
 }
 
 /**
- * Deleta uma instância no Evolution GO pelo id (chave global).
+ * Deleta uma instância no Evolution GO pelo id (escopo tenant).
  * Usado na reconciliação para remover órfãs que não têm sessão no Elyon.
- * Trata 404 como sucesso (já removida).
+ * Trata 404 como sucesso. Para o 500 conhecido do deployment, confirma a
+ * ausência do ID por listagem tenant-scoped antes de concluir.
  */
 export async function deletarInstanciaEvolutionPorId(instanceId: string): Promise<void> {
-  validarConfiguracaoGlobalModulo();
+  validarConfiguracaoTenantModulo();
   try {
-    await axios.delete(`${apiUrlGlobal()}/instance/delete/${instanceId}`, {
-      headers: headersGlobaisModulo(),
+    await axios.delete(`${apiUrlEvolution()}/instance/delete/${instanceId}`, {
+      headers: headersTenantModulo(),
     });
   } catch (error: any) {
     if (axios.isAxiosError(error) && error.response?.status === 404) return;
-    throw error;
+    if (axios.isAxiosError(error) && error.response?.status === 500) {
+      const instancias = await listarInstanciasEvolution('instance/delete');
+      if (!instancias.some((instancia: any) => instancia?.id === instanceId)) return;
+    }
+    throw toEvolutionIntegrationError(error, {
+      stage: 'instance/delete',
+      route: '/instance/delete/:id',
+      instanceAlreadyExisted: true,
+    });
   }
 }

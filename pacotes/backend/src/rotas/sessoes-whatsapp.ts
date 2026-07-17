@@ -568,9 +568,9 @@ router.post('/:id/conectar', async (req, res) => {
             '[SessoesWhatsapp] Rollback ignorado para tentativa de conexão substituída',
           );
         }
-      } catch (rollbackError) {
+      } catch {
         logger.error(
-          { err: rollbackError, stage: 'banco', reasonCode: 'WHATSAPP_STATUS_ROLLBACK_FAILED' },
+          { stage: 'banco', reasonCode: 'WHATSAPP_STATUS_ROLLBACK_FAILED' },
           '[SessoesWhatsapp] Falha ao restaurar status após erro de conexão',
         );
       }
@@ -652,8 +652,8 @@ router.get('/:id/status', async (req, res) => {
           if (detalhes?.profileName) {
             nomeWhatsapp = detalhes.profileName;
           }
-        } catch (err) {
-          console.error('Erro ao buscar detalhes extras:', err);
+        } catch {
+          console.error('Erro sanitizado ao buscar detalhes extras');
         }
       }
 

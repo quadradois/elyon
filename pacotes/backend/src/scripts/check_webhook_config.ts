@@ -7,11 +7,11 @@ dotenv.config({ path: './.env' });
 
 async function checkWebhook() {
   const apiUrl = process.env.EVOLUTION_API_URL;
-  const apiKey = process.env.EVOLUTION_GLOBAL_API_KEY;
+  const apiKey = process.env.EVOLUTION_INSTANCE_TOKEN;
   const instanceName = process.env.EVOLUTION_INSTANCE_NAME;
 
   if (!apiUrl || !apiKey || !instanceName) {
-    console.error('Erro: Variáveis de ambiente não encontradas.');
+    console.error('Erro: configuração de instância ausente.');
     return;
   }
 
