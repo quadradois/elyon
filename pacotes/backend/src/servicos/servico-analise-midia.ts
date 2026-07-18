@@ -32,19 +32,13 @@ function montarContextoArquivo(entrada: EntradaAnaliseMidia): string {
 
 async function baixarMidia(mediaUrl: string): Promise<Buffer | null> {
   const headersBase = { 'User-Agent': 'Elyon/1.0' };
-  const headersAutenticados = process.env.EVOLUTION_GLOBAL_API_KEY
-    ? { ...headersBase, apikey: process.env.EVOLUTION_GLOBAL_API_KEY }
-    : headersBase;
   const urls = [mediaUrl];
 
   if (process.env.EVOLUTION_API_URL && mediaUrl.startsWith('/')) {
     urls.unshift(`${process.env.EVOLUTION_API_URL.replace(/\/$/, '')}${mediaUrl}`);
   }
 
-  const tentativas = urls.flatMap((url) => [
-    { url, headers: headersBase },
-    { url, headers: headersAutenticados },
-  ]);
+  const tentativas = urls.map((url) => ({ url, headers: headersBase }));
 
   for (const tentativa of tentativas) {
     try {

@@ -6,6 +6,11 @@
 
 **Classificação:** bloqueador pré-piloto; Issue #62 aberta; Onda 1 bloqueada
 
+> **Contrato superveniente:** `CRM_EVOLUTION_CONTRACT.md`, auditado contra o
+> código implantado em 2026-07-16, substitui as inferências de autenticação
+> deste relatório. O probe histórico com chave global não prova um contrato
+> suportado para `/instance/*`.
+
 ## Veredito executivo
 
 A sessão reportada possui `evolutionInstanceId` e `evolutionToken` no banco Elyon,
@@ -82,8 +87,9 @@ e lista as rotas abaixo.
    - autenticação usada pelo Elyon: token individual;
    - o adaptador lê `data.Connected`, `data.LoggedIn` e `data.Name`.
 5. `DELETE /instance/delete/{instanceId}`
-   - autenticação usada pelo Elyon: chave global;
-   - `404` é tratado como exclusão idempotente.
+   - autenticação exigida: chave do tenant + `X-Tenant-ID`;
+   - ID inexistente pode retornar `500`; o Elyon confirma a ausência por
+     `/instance/all` antes de concluir idempotência.
 
 O Swagger implantado não declara `securityDefinitions` nem segurança por operação;
 portanto ele documenta payload/rotas, mas não é fonte suficiente para a matriz de
@@ -93,9 +99,9 @@ autenticação.
 
 | Endpoint | Credencial em `apikey` | Contexto adicional | Evidência |
 | --- | --- | --- | --- |
-| `GET /instance/all` | Chave global | nenhum | Probe direto: global `200`, sem chave `401`. |
+| `GET /instance/all` | Chave do tenant | `X-Tenant-ID` obrigatório | `CRM_EVOLUTION_CONTRACT.md`, auditado contra o código implantado. |
 | `POST /instance/create` | Chave do tenant | `X-Tenant-ID` obrigatório | Chave global produziu HTTP `400`; contrato confirmado pelo suporte. |
-| `DELETE /instance/delete/{id}` | Chave global | nenhum | Código e contrato administrativo da Evolution Go. |
+| `DELETE /instance/delete/{id}` | Chave do tenant | `X-Tenant-ID` obrigatório | `CRM_EVOLUTION_CONTRACT.md`, auditado contra o código implantado. |
 | `POST /instance/connect` | Token individual | nenhum | Código Elyon e contrato operacional da instância. |
 | `GET /instance/qr` | Token individual | nenhum | Código Elyon; endpoint não foi chamado durante a investigação inicial. |
 | `GET /instance/status` | Token individual | nenhum | Probe com token órfão retornou `401`. |
@@ -110,8 +116,11 @@ dois formatos sem revelar credenciais.
 ### Exemplos curl sanitizados
 
 ```bash
-# Administração — nunca cole a chave em issue ou log
-curl -sS -H 'apikey: <GLOBAL_KEY>' '<EVOLUTION_URL>/instance/all'
+# Administração de instâncias — nunca cole a chave em issue ou log
+curl -sS \
+  -H 'apikey: <TENANT_KEY>' \
+  -H 'X-Tenant-ID: <EVOLUTION_TENANT_ID>' \
+  '<EVOLUTION_URL>/instance/all'
 
 curl -sS -X POST \
   -H 'Content-Type: application/json' \
@@ -132,7 +141,9 @@ curl -sS -H 'apikey: <INSTANCE_TOKEN>' '<EVOLUTION_URL>/instance/qr'
 
 curl -sS -H 'apikey: <INSTANCE_TOKEN>' '<EVOLUTION_URL>/instance/status'
 
-curl -sS -X DELETE -H 'apikey: <GLOBAL_KEY>' \
+curl -sS -X DELETE \
+  -H 'apikey: <TENANT_KEY>' \
+  -H 'X-Tenant-ID: <EVOLUTION_TENANT_ID>' \
   '<EVOLUTION_URL>/instance/delete/<INSTANCE_ID>'
 ```
 
@@ -149,8 +160,9 @@ curl -sS -X DELETE -H 'apikey: <GLOBAL_KEY>' \
    `Connected/LoggedIn` para os estados canônicos Elyon.
 5. **Falha pré-QR:** restaure `DESCONECTADO`; registre estágio, rota, status
    upstream, reason code seguro e correlation ID.
-6. **Excluir:** use ID e chave global; aceite `404` como idempotente; só remova o
-   registro local após sucesso/404 remoto.
+6. **Excluir:** use ID, chave e ID do tenant. Em `500`, confirme a ausência do ID
+   por `/instance/all`; só remova o registro local após sucesso ou ausência
+   remota comprovada.
 
 ## Topologia AS-IS
 
@@ -176,7 +188,7 @@ Documentos Elyon existentes:
   da Evolution API local aposentada;
 - `docs/operacao/WEBHOOKS_SEGUROS.md`: topologia, autenticação inbound e rollback
   do webhook;
-- `docs/guias/MIGRACAO.md`: preservação da URL, chave global e tokens individuais;
+- `docs/guias/MIGRACAO.md`: preservação da URL, credenciais tenant e tokens individuais;
 - `docs/operacao/RUNBOOK_OPERACIONAL.md`: deploy/rollback do Elyon;
 - `docs/operacao/BACKUP_OFFHOST_E_RESTORE.md`: backup e restore do Elyon.
 
@@ -186,7 +198,8 @@ Não foram encontrados no repositório Elyon nem disponibilizados pelo host dedi
 - commit/digest da imagem Evolution implantada;
 - changelog específico do deployment;
 - backup/restore drill e rollback testado da Evolution dedicada;
-- matriz de autenticação oficial e completa por endpoint.
+- confirmação segura do tenant canônico, chave correspondente e commit/versão
+  implantado, sem publicar seus valores.
 
 O changelog público do projeto Evolution Go é referência upstream, não prova do
 artefato implantado. Antes de desbloquear o piloto, o owner da Evolution dedicada
