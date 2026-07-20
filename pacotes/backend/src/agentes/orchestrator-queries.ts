@@ -114,37 +114,176 @@ export async function buscarConfiguracaoTenant(tenantId: string): Promise<Config
 }
 
 // ====================================
+// RESOLVER LEAD ID CANÔNICO (tenant-safe)
+// ====================================
+
+/**
+ * Resolve o Lead.id canônico para um telefone dentro de um tenant.
+ * 
+ * Regras:
+ * 1. Busca Lead por telefone normalizado no tenant, SEM filtrar por statusProspeccao.
+ * 2. Se exatamente 1 Lead → retorna Lead.id.
+ * 3. Se múltiplos Leads → falha fechada (ambiguidade).
+ * 4. Se nenhum Lead → tenta adaptador legado de Contato:
+ *    - Busca Contato por telefone no tenant (statusProspeccao não nulo).
+ *    - Se Contato tem leadId → valida que Lead existe no mesmo tenant → retorna Lead.id.
+ *    - Se Contato não tem leadId → verifica se Contato.id corresponde a Lead real no mesmo tenant → retorna Lead.id.
+ *    - Caso contrário → falha fechada.
+ * 5. É PROIBIDO propagar Contato.id como leadId provisório.
+ * 6. É PROIBIDO criar Lead silenciosamente.
+ */
+export async function resolverLeadIdCanonico(
+    telefone: string,
+    tenantId: string
+): Promise<string | null> {
+    const telNormalizado = telefone.replace(/\D/g, '').slice(-11);
+
+    // 1. Buscar Leads por telefone no tenant (independente de statusProspeccao)
+    const leads = await prisma.lead.findMany({
+        where: {
+            telefone: { contains: telNormalizado },
+            tenantId,
+        },
+        select: { id: true },
+    });
+
+    if (leads.length === 1) {
+        return leads[0].id;
+    }
+
+    if (leads.length > 1) {
+        // Ambiguidade: múltiplos Leads para o mesmo telefone no mesmo tenant
+        logger.warn({
+            telefone: telNormalizado,
+            tenantId,
+            count: leads.length,
+        }, '[ORCHESTRATOR-QUERIES] Ambiguidade: múltiplos Leads para telefone no tenant — falha fechada');
+        return null;
+    }
+
+    // 2. Nenhum Lead encontrado → tentar adaptador legado de Contato
+    // Buscar Contato por telefone (statusProspeccao não nulo = prospecção ativa)
+    const { Prisma } = await import('@prisma/client');
+    const contatos = await prisma.$queryRaw<any[]>(Prisma.sql`
+        SELECT c.id, c."leadId"
+        FROM contatos c
+        LEFT JOIN campanhas camp ON c."campanhaId" = camp.id
+        WHERE c."statusProspeccao" IN ('CONTATANDO', 'RESPONDEU', 'INTERESSADO', 'LEAD', 'MORNO_FUTURO')
+          AND camp."tenantId" = ${tenantId}
+          AND (
+            RIGHT(REGEXP_REPLACE(COALESCE(c.telefone, ''), '[^0-9]', '', 'g'), 8) = ${telNormalizado.slice(-8)}
+            OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone2, ''), '[^0-9]', '', 'g'), 8) = ${telNormalizado.slice(-8)}
+            OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone3, ''), '[^0-9]', '', 'g'), 8) = ${telNormalizado.slice(-8)}
+            OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone4, ''), '[^0-9]', '', 'g'), 8) = ${telNormalizado.slice(-8)}
+            OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone5, ''), '[^0-9]', '', 'g'), 8) = ${telNormalizado.slice(-8)}
+          )
+        LIMIT 2
+    `);
+
+    if (contatos.length === 0) {
+        return null; // Sem Lead, sem Contato → falha fechada (não cria silenciosamente)
+    }
+
+    if (contatos.length > 1) {
+        logger.warn({
+            telefone: telNormalizado,
+            tenantId,
+            count: contatos.length,
+        }, '[ORCHESTRATOR-QUERIES] Ambiguidade: múltiplos Contatos para telefone no tenant — falha fechada');
+        return null;
+    }
+
+    const contato = contatos[0];
+
+    // 3. Contato tem leadId → validar que Lead existe no mesmo tenant
+    if (contato.leadId) {
+        const leadValido = await prisma.lead.findFirst({
+            where: { id: contato.leadId, tenantId },
+            select: { id: true },
+        });
+        if (leadValido) {
+            return leadValido.id;
+        }
+        logger.warn({
+            contatoId: contato.id,
+            leadId: contato.leadId,
+            tenantId,
+        }, '[ORCHESTRATOR-QUERIES] Contato.leadId não corresponde a Lead no mesmo tenant — falha fechada');
+        return null;
+    }
+
+    // 4. Contato sem leadId → verificar se Contato.id corresponde a Lead real no mesmo tenant
+    const leadPorContatoId = await prisma.lead.findFirst({
+        where: { id: contato.id, tenantId },
+        select: { id: true },
+    });
+    if (leadPorContatoId) {
+        return leadPorContatoId.id;
+    }
+
+    // 5. Falha fechada: Contato existe mas não mapeia para Lead canônico
+    logger.warn({
+        contatoId: contato.id,
+        telefone: telNormalizado,
+        tenantId,
+    }, '[ORCHESTRATOR-QUERIES] Contato sem leadId e sem Lead correspondente — falha fechada');
+    return null;
+}
+
+// ====================================
 // BUSCAR CONTEXTO DA CONVERSA
 // ====================================
 
 export async function buscarContextoConversa(
     telefone: string,
-    tenantId: string
+    tenantId: string,
+    leadIdResolvido?: string
 ): Promise<ContextoConversa> {
     try {
-        // Buscar lead existente pelo telefone
-        const lead = await prisma.lead.findFirst({
-            where: {
-                telefone: { contains: telefone.replace(/\D/g, '').slice(-11) },
-                tenantId,
-                statusProspeccao: null
-            },
-            select: {
-                id: true,
-                status: true,
-                doresIdentificadas: true,
-                tipoAutorizacao: true,
-                comissaoAcordada: true,
-                prazoTrabalho: true,
-                campanhaOrigem: {
-                    select: { nomeEmpreendimento: true }
-                }
-            }
-        });
+        // Se leadId já foi resolvido pelo resolvedor canônico, usar ele
+        let leadId: string | undefined = leadIdResolvido;
+        let lead: any = null;
 
-        // Buscar lead de prospecção se não tem lead CRM
+        if (leadId) {
+            lead = await prisma.lead.findUnique({
+                where: { id: leadId },
+                select: {
+                    id: true,
+                    status: true,
+                    doresIdentificadas: true,
+                    tipoAutorizacao: true,
+                    comissaoAcordada: true,
+                    prazoTrabalho: true,
+                    campanhaOrigem: {
+                        select: { nomeEmpreendimento: true }
+                    }
+                }
+            });
+        } else {
+            // Fallback para compatibilidade com callers legados (ex: testes)
+            lead = await prisma.lead.findFirst({
+                where: {
+                    telefone: { contains: telefone.replace(/\D/g, '').slice(-11) },
+                    tenantId,
+                    statusProspeccao: null
+                },
+                select: {
+                    id: true,
+                    status: true,
+                    doresIdentificadas: true,
+                    tipoAutorizacao: true,
+                    comissaoAcordada: true,
+                    prazoTrabalho: true,
+                    campanhaOrigem: {
+                        select: { nomeEmpreendimento: true }
+                    }
+                }
+            });
+        }
+
+        // Buscar lead de prospecção se não tem lead CRM (compatibilidade legada)
         let contatoId: string | undefined;
-        if (!lead) {
+        if (!lead && !leadId) {
             const leadProspeccao = await prisma.lead.findFirst({
                 where: {
                     telefone: { contains: telefone.replace(/\D/g, '').slice(-11) },
@@ -159,7 +298,7 @@ export async function buscarContextoConversa(
         return {
             telefone,
             contatoId,
-            leadId: lead?.id,
+            leadId: lead?.id ?? leadId,
             statusLead: lead?.status,
             doresIdentificadas: lead?.doresIdentificadas || [],
             empreendimento: lead?.campanhaOrigem?.nomeEmpreendimento || undefined,
