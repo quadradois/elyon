@@ -1308,6 +1308,96 @@ model ImovelRancho {
   @@map("imoveis_rancho")
 }
 
+// Controle operacional da importacao GEO 360. As tabelas sao gravadas pelo
+// sincronizador via SQL em lote, mas permanecem declaradas para evitar drift.
+model Geo360SyncRun {
+  id                 String    @id @db.Uuid
+  cidade             String
+  status             String
+  promover           Boolean   @default(false)
+  iniciadoEm         DateTime  @default(now()) @map("iniciado_em") @db.Timestamptz(6)
+  concluidoEm        DateTime? @map("concluido_em") @db.Timestamptz(6)
+  prefixosTotal      Int       @default(0) @map("prefixos_total")
+  prefixosConcluidos Int       @default(0) @map("prefixos_concluidos")
+  encontrados        Int       @default(0)
+  detalhesOk         Int       @default(0) @map("detalhes_ok")
+  erros              Int       @default(0)
+  mensagem           String?
+
+  @@index([cidade, iniciadoEm], map: "geo360_sync_runs_cidade_iniciado_idx")
+  @@map("geo360_sync_runs")
+}
+
+model Geo360PrefixProgress {
+  cidade      String
+  prefixo     String
+  status      String
+  runId       String   @map("run_id") @db.Uuid
+  totalSearch Int      @default(0) @map("total_search")
+  detalhesOk  Int      @default(0) @map("detalhes_ok")
+  semFicha    Int      @default(0) @map("sem_ficha")
+  erros       Int      @default(0)
+  atualizadoEm DateTime @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+
+  @@id([cidade, prefixo])
+  @@map("geo360_prefix_progress")
+}
+
+model Geo360ImovelStage {
+  cidade            String
+  inscricao         String
+  idImobiliario     BigInt?   @map("id_imobiliario")
+  idLote            BigInt?   @map("id_lote")
+  numeroCadastro    BigInt?   @map("numero_cadastro")
+  latitude          Float?
+  longitude         Float?
+  cpfCnpj           String?   @map("cpf_cnpj")
+  nomePessoa        String?   @map("nome_pessoa")
+  tipoPessoa        Int?      @map("tipo_pessoa")
+  endereco          String?
+  bairro            String?
+  cep               String?
+  complemento       String?
+  logradouro        String?
+  areaConstruida    Float?    @map("area_construida")
+  areaTerreno       Float?    @map("area_terreno")
+  tipoEdificacao    Int?      @map("tipo_edificacao")
+  nrLote            String?   @map("nr_lote")
+  idBairro          Int?      @map("id_bairro")
+  idQuadra          Int?      @map("id_quadra")
+  idSetor           Int?      @map("id_setor")
+  raw               Json?
+  detalheVersao     Int       @default(0) @map("detalhe_versao")
+  detalheEm         DateTime? @map("detalhe_em") @db.Timestamptz(6)
+  vistoEm           DateTime  @default(now()) @map("visto_em") @db.Timestamptz(6)
+  runId             String    @map("run_id") @db.Uuid
+  ativo             Boolean   @default(true)
+
+  @@id([cidade, inscricao])
+  @@index([runId], map: "geo360_stage_run_idx")
+  @@index([cidade, idImobiliario], map: "geo360_stage_id_imobiliario_idx")
+  @@map("geo360_imoveis_stage")
+}
+
+model Geo360SyncFailure {
+  cidade         String
+  prefixo        String
+  inscricao      String
+  idImobiliario  BigInt?   @map("id_imobiliario")
+  etapa          String
+  codigo         String?
+  mensagem       String
+  tentativas     Int       @default(1)
+  primeiraEm     DateTime  @default(now()) @map("primeira_em") @db.Timestamptz(6)
+  ultimaEm       DateTime  @default(now()) @map("ultima_em") @db.Timestamptz(6)
+  resolvidoEm    DateTime? @map("resolvido_em") @db.Timestamptz(6)
+  runId          String    @map("run_id") @db.Uuid
+
+  @@id([cidade, inscricao, etapa])
+  @@index([cidade, prefixo, resolvidoEm], map: "geo360_failures_abertas_idx")
+  @@map("geo360_sync_failures")
+}
+
 // ====================================
 // ATIVIDADES
 // ====================================
