@@ -1,0 +1,57 @@
+name: Publicar imagem do backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag imutável da imagem, por exemplo geo360-20260720.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/elyon-backend
+
+jobs:
+  publish:
+    name: Build e publicação no GHCR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Autenticar no GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Gerar metadados OCI
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ inputs.tag }}
+            type=sha,prefix=sha-
+
+      - name: Construir e publicar
+        uses: docker/build-push-action@v6
+        with:
+          context: ./pacotes/backend
+          file: ./pacotes/backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
