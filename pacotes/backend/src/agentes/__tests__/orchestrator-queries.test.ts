@@ -12,6 +12,7 @@ const mockPrisma = {
         findUnique: jest.fn().mockResolvedValue(null),
     },
     lead: {
+        findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn().mockResolvedValue(null),
     },
 };
@@ -28,12 +29,39 @@ jest.mock('../../lib/crypto', () => ({
 // Mock types do orchestrator
 jest.mock('@openai/agents', () => ({}));
 
-import { buscarConfiguracaoTenant, buscarContextoConversa } from '../orchestrator-queries';
+import { buscarConfiguracaoTenant, buscarContextoConversa, resolverLeadIdCanonico } from '../orchestrator-queries';
 
 beforeEach(() => {
     jest.clearAllMocks();
     mockPrisma.tenant.findUnique.mockResolvedValue(null);
+    mockPrisma.lead.findMany.mockResolvedValue([]);
     mockPrisma.lead.findFirst.mockResolvedValue(null);
+});
+
+describe('resolverLeadIdCanonico', () => {
+    it('preserva o Lead do tenant independentemente de statusProspeccao', async () => {
+        mockPrisma.lead.findMany.mockResolvedValue([{ id: 'lead-canonico' }]);
+
+        await expect(resolverLeadIdCanonico('(62) 99999-0001', 'tenant-001'))
+            .resolves.toBe('lead-canonico');
+        expect(mockPrisma.lead.findMany).toHaveBeenCalledWith({
+            where: {
+                telefone: { contains: '62999990001' },
+                tenantId: 'tenant-001',
+            },
+            select: { id: true },
+        });
+    });
+
+    it('falha fechada quando não existe Lead no tenant', async () => {
+        mockPrisma.lead.findMany.mockResolvedValue([]);
+        await expect(resolverLeadIdCanonico('62999990001', 'tenant-001')).resolves.toBeNull();
+    });
+
+    it('falha fechada quando o telefone é ambíguo no tenant', async () => {
+        mockPrisma.lead.findMany.mockResolvedValue([{ id: 'lead-a' }, { id: 'lead-b' }]);
+        await expect(resolverLeadIdCanonico('62999990001', 'tenant-001')).resolves.toBeNull();
+    });
 });
 
 // ====================================
@@ -126,6 +154,20 @@ describe('buscarConfiguracaoTenant', () => {
 // ====================================
 
 describe('buscarContextoConversa', () => {
+    it('valida tenant ao reutilizar o Lead já resolvido', async () => {
+        mockPrisma.lead.findFirst.mockResolvedValue({
+            id: 'lead-001',
+            status: 'QUALIFICADO',
+            doresIdentificadas: [],
+            campanhaOrigem: null,
+        });
+
+        const result = await buscarContextoConversa('62999990001', 'tenant-001', 'lead-001');
+        expect(result.leadId).toBe('lead-001');
+        expect(mockPrisma.lead.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+            where: { id: 'lead-001', tenantId: 'tenant-001' },
+        }));
+    });
     it('retorna contexto com lead existente', async () => {
         mockPrisma.lead.findFirst.mockResolvedValue({
             id: 'lead-001',

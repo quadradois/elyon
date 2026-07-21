@@ -124,13 +124,8 @@ export async function buscarConfiguracaoTenant(tenantId: string): Promise<Config
  * 1. Busca Lead por telefone normalizado no tenant, SEM filtrar por statusProspeccao.
  * 2. Se exatamente 1 Lead → retorna Lead.id.
  * 3. Se múltiplos Leads → falha fechada (ambiguidade).
- * 4. Se nenhum Lead → tenta adaptador legado de Contato:
- *    - Busca Contato por telefone no tenant (statusProspeccao não nulo).
- *    - Se Contato tem leadId → valida que Lead existe no mesmo tenant → retorna Lead.id.
- *    - Se Contato não tem leadId → verifica se Contato.id corresponde a Lead real no mesmo tenant → retorna Lead.id.
- *    - Caso contrário → falha fechada.
- * 5. É PROIBIDO propagar Contato.id como leadId provisório.
- * 6. É PROIBIDO criar Lead silenciosamente.
+ * 4. Se nenhum Lead → falha fechada, sem consultar identidade legada de Contato.
+ * 5. É PROIBIDO criar Lead silenciosamente.
  */
 export async function resolverLeadIdCanonico(
     telefone: string,
@@ -161,72 +156,6 @@ export async function resolverLeadIdCanonico(
         return null;
     }
 
-    // 2. Nenhum Lead encontrado → tentar adaptador legado de Contato
-    // Buscar Contato por telefone (statusProspeccao não nulo = prospecção ativa)
-    const { Prisma } = await import('@prisma/client');
-    const contatos = await prisma.$queryRaw<any[]>(Prisma.sql`
-        SELECT c.id, c."leadId"
-        FROM contatos c
-        LEFT JOIN campanhas camp ON c."campanhaId" = camp.id
-        WHERE c."statusProspeccao" IN ('CONTATANDO', 'RESPONDEU', 'INTERESSADO', 'LEAD', 'MORNO_FUTURO')
-          AND camp."tenantId" = ${tenantId}
-          AND (
-            RIGHT(REGEXP_REPLACE(COALESCE(c.telefone, ''), '[^0-9]', '', 'g'), 8) = ${telNormalizado.slice(-8)}
-            OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone2, ''), '[^0-9]', '', 'g'), 8) = ${telNormalizado.slice(-8)}
-            OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone3, ''), '[^0-9]', '', 'g'), 8) = ${telNormalizado.slice(-8)}
-            OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone4, ''), '[^0-9]', '', 'g'), 8) = ${telNormalizado.slice(-8)}
-            OR RIGHT(REGEXP_REPLACE(COALESCE(c.telefone5, ''), '[^0-9]', '', 'g'), 8) = ${telNormalizado.slice(-8)}
-          )
-        LIMIT 2
-    `);
-
-    if (contatos.length === 0) {
-        return null; // Sem Lead, sem Contato → falha fechada (não cria silenciosamente)
-    }
-
-    if (contatos.length > 1) {
-        logger.warn({
-            telefone: telNormalizado,
-            tenantId,
-            count: contatos.length,
-        }, '[ORCHESTRATOR-QUERIES] Ambiguidade: múltiplos Contatos para telefone no tenant — falha fechada');
-        return null;
-    }
-
-    const contato = contatos[0];
-
-    // 3. Contato tem leadId → validar que Lead existe no mesmo tenant
-    if (contato.leadId) {
-        const leadValido = await prisma.lead.findFirst({
-            where: { id: contato.leadId, tenantId },
-            select: { id: true },
-        });
-        if (leadValido) {
-            return leadValido.id;
-        }
-        logger.warn({
-            contatoId: contato.id,
-            leadId: contato.leadId,
-            tenantId,
-        }, '[ORCHESTRATOR-QUERIES] Contato.leadId não corresponde a Lead no mesmo tenant — falha fechada');
-        return null;
-    }
-
-    // 4. Contato sem leadId → verificar se Contato.id corresponde a Lead real no mesmo tenant
-    const leadPorContatoId = await prisma.lead.findFirst({
-        where: { id: contato.id, tenantId },
-        select: { id: true },
-    });
-    if (leadPorContatoId) {
-        return leadPorContatoId.id;
-    }
-
-    // 5. Falha fechada: Contato existe mas não mapeia para Lead canônico
-    logger.warn({
-        contatoId: contato.id,
-        telefone: telNormalizado,
-        tenantId,
-    }, '[ORCHESTRATOR-QUERIES] Contato sem leadId e sem Lead correspondente — falha fechada');
     return null;
 }
 
@@ -245,8 +174,8 @@ export async function buscarContextoConversa(
         let lead: any = null;
 
         if (leadId) {
-            lead = await prisma.lead.findUnique({
-                where: { id: leadId },
+            lead = await prisma.lead.findFirst({
+                where: { id: leadId, tenantId },
                 select: {
                     id: true,
                     status: true,

@@ -1409,8 +1409,8 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
               }
 
               // Verificar modo de atendimento no Lead
-              const modoAtendimento = (leadDados as any).modoAtendimento || 'IA';
-              if (modoAtendimento === 'HUMANO' || modoAtendimento === 'PAUSADO'
+              const modoAtendimentoAtual = (leadDados as any).modoAtendimento || 'IA';
+              if (modoAtendimentoAtual === 'HUMANO' || modoAtendimentoAtual === 'PAUSADO'
                 || leadDados.statusProspeccao === 'OPTOUT' || leadDados.statusProspeccao === 'OPT_OUT') {
                 await salvarMensagemProspeccao({
                   contatoId: leadIdCanonico, direcao: 'ENTRADA', conteudo: conteudoDuravel,
@@ -1573,17 +1573,17 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       // ── Captura automática de documentos WhatsApp ──
                       // Fire-and-forget: não bloqueia o fluxo principal
                       const deveCapturarNoAcervo = isImage || isDocument || isVideo || (isAudio && CAPTURA_DOCS_INCLUIR_AUDIO);
-                      if (deveCapturarNoAcervo && leadDados.leadId) {
+                      if (deveCapturarNoAcervo) {
                         const tenantIdCaptura = leadDados.campanhaOrigem?.tenantId || '';
                         capturarDocumentoWhatsapp({
                           message,
                           messageType,
-                          leadId: leadDados.leadId,
+                          leadId: leadIdCanonico,
                           tenantId: tenantIdCaptura,
                         }).catch(err =>
                           console.error('[Webhook] Falha silenciosa na captura de doc:', err)
                         );
-                      } else if (isAudio && leadDados.leadId && !CAPTURA_DOCS_INCLUIR_AUDIO) {
+                      } else if (isAudio && !CAPTURA_DOCS_INCLUIR_AUDIO) {
                         console.log('[Webhook] 🎙️ Áudio recebido (não capturado em DocumentoLead por configuração).');
                       }
 
@@ -1716,7 +1716,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                           contatoId: leadIdCanonico,
                           leadId: leadIdCanonico,
                           durableExecutionId: processamentoAgendado ? `inbound-batch:${lote.id}` : undefined,
-                          statusLead: leadDados.lead?.status || undefined,
+                          statusLead: leadDados.status || undefined,
                           empreendimento: empreendimentoContexto,
                           tipoAutorizacao: tipoAutorizacaoContexto,
                           comissaoAcordada: comissaoAcordadaContexto,
@@ -1866,7 +1866,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         if (processamentoAgendado) await assertFencing();
                         if (!(await deveEnviarResposta({
                           contatoId: leadIdCanonico,
-                          leadId: leadDados.leadId || undefined,
+                          leadId: leadIdCanonico,
                           resposta
                         }))) {
                           registrarIgnorado(telefone, 'resposta_duplicada_janela_curta', leadIdCanonico);
@@ -2061,7 +2061,6 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
 
                 // IMPORTANTÍSSIMO: Continue aqui impede que caia no fluxo de Lead Inbound
                 continue;
-              }
 
               // ====================================
               // 2. FLUXO NORMAL: LEAD INBOUND (Se não for prospecção)
