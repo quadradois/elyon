@@ -75,6 +75,8 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
       where: { id: f.leadA },
       data: { status: 'CAPTADO', statusProspeccao: null },
     });
+    // Simula uma nova interacao depois da janela curta de cooldown.
+    await harness.redis.del(`cooldown:resposta:${f.leadA}`);
 
     await harness.acceptInbound(f, `continuity-2-${f.runId}`, 'próximo inbound');
     await harness.runWorkerAndBatch('continuity-worker-2');
