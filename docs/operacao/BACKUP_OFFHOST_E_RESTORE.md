@@ -6,7 +6,9 @@
 - **Destino:** Cloudflare R2 por API S3, em repositório Restic criptografado.
 - **RPO provisório:** 1 hora.
 - **RTO provisório:** 4 horas.
-- **Retenção:** 48 snapshots horários, 30 diários e 6 mensais.
+- **Retenção remota:** 48 snapshots horários, 30 diários e 6 mensais.
+- **Retenção local:** dois dumps horários mais recentes; configurável por
+  `ELYON_OFFHOST_LOCAL_KEEP`.
 - **Revisão:** trimestral e após mudança relevante de banco ou storage.
 
 As credenciais ficam somente em `/root/backup_r2.env`, modo `0600`. O arquivo
@@ -27,7 +29,8 @@ journalctl -u elyon-offhost-backup.service --since=-2h
 
 Cada execução cria um `pg_dump` consistente, testa o gzip, calcula SHA-256 e
 envia dump e checksum ao Restic com a tag `elyon-db-hourly`. A limpeza local
-preserva dois dias; a retenção remota é aplicada pelo Restic. Às 03:05 UTC também
+preserva somente os dois dumps mais recentes; a retenção histórica é aplicada
+pelo Restic no R2. Às 03:05 UTC também
 executa `prune` e uma leitura amostral de integridade do repositório.
 
 Para disparo controlado fora da agenda:

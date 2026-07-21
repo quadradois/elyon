@@ -6,6 +6,7 @@ ROOT_DIR=${ELYON_ROOT_DIR:-/root/elyon}
 BACKUP_DIR=${ELYON_OFFHOST_BACKUP_DIR:-$ROOT_DIR/backups/offhost}
 STATUS_DIR=${ELYON_BACKUP_STATUS_DIR:-$ROOT_DIR/backups/status}
 STATUS_FILE=$STATUS_DIR/offhost.env
+LOCAL_BACKUP_KEEP=${ELYON_OFFHOST_LOCAL_KEEP:-2}
 STARTED_AT=$(date +%s)
 LAST_SUCCESS=0
 DUMP_BYTES=0
@@ -57,6 +58,8 @@ for command_name in docker gzip restic sha256sum; do
 done
 : "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY ausente}"
 : "${RESTIC_PASSWORD:?RESTIC_PASSWORD ausente}"
+[[ "$LOCAL_BACKUP_KEEP" =~ ^[1-9][0-9]*$ ]] \
+  || { echo 'ELYON_OFFHOST_LOCAL_KEEP deve ser inteiro positivo.' >&2; exit 1; }
 
 install -d -m 0750 "$BACKUP_DIR"
 install -d -m 0755 "$STATUS_DIR"
@@ -90,7 +93,14 @@ if [[ $(date -u +%H) == 03 ]]; then
   restic check --read-data-subset=1/100
 fi
 
-find "$BACKUP_DIR" -maxdepth 1 -type f -name 'elyon-*.sql.gz*' -mtime +2 -delete
+# O R2/Restic mantém a retenção histórica. Localmente, conservamos apenas os
+# dumps mais recentes para não duplicar dezenas de gigabytes na VPS.
+mapfile -t local_dumps < <(
+  find "$BACKUP_DIR" -maxdepth 1 -type f -name 'elyon-*.sql.gz' -printf '%f\n' | sort -r
+)
+for old_dump in "${local_dumps[@]:$LOCAL_BACKUP_KEEP}"; do
+  rm -f -- "$BACKUP_DIR/$old_dump" "$BACKUP_DIR/$old_dump.sha256"
+done
 LAST_SUCCESS=$(date +%s)
 write_status 1 "$snapshot_id"
 logger -t elyon-offhost-backup -- \
