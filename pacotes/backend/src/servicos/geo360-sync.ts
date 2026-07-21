@@ -354,7 +354,9 @@ async function reutilizarStageExistente(
   return new Set(existentes.map((row) => String(row.id_imobiliario)));
 }
 
-async function promoverPrefixo(runId: string, cidade: CidadeGeo360, prefixo: string) {
+async function promoverItens(runId: string, cidade: CidadeGeo360, items: SearchItem[]) {
+  if (!items.length) return;
+  const ids = items.map((item) => String(item.id_imobiliario));
   await prisma.$executeRawUnsafe(`
     INSERT INTO imoveis_rancho (
       id,cidade,inscricao_cartografica,id_lote,numero_cadastro,cpf_cnpj,nome_pessoa,
@@ -366,7 +368,9 @@ async function promoverPrefixo(runId: string, cidade: CidadeGeo360, prefixo: str
       bairro,cep,latitude,longitude,now(),now(),complemento,logradouro,area_construida,
       area_terreno,tipo_edificacao,nr_lote,id_bairro,id_quadra,id_setor,raw,detalhe_versao,detalhe_em
     FROM geo360_imoveis_stage
-    WHERE run_id=$1::uuid AND cidade=$2 AND inscricao LIKE $3
+    WHERE run_id=$1::uuid AND cidade=$2 AND id_imobiliario IN (
+      SELECT value::bigint FROM jsonb_array_elements_text($3::jsonb) AS t(value)
+    )
     ON CONFLICT (inscricao_cartografica) DO UPDATE SET
       cidade=EXCLUDED.cidade,id_lote=EXCLUDED.id_lote,numero_cadastro=EXCLUDED.numero_cadastro,
       cpf_cnpj=EXCLUDED.cpf_cnpj,nome_pessoa=EXCLUDED.nome_pessoa,tipo_pessoa=EXCLUDED.tipo_pessoa,
@@ -378,7 +382,7 @@ async function promoverPrefixo(runId: string, cidade: CidadeGeo360, prefixo: str
       id_bairro=EXCLUDED.id_bairro,id_quadra=EXCLUDED.id_quadra,id_setor=EXCLUDED.id_setor,
       raw=EXCLUDED.raw,versao_enriquecimento=EXCLUDED.versao_enriquecimento,
       detalhe_em=EXCLUDED.detalhe_em`,
-  runId, cidade, `${prefixo}%`);
+  runId, cidade, JSON.stringify(ids));
 }
 
 export async function sincronizarGeo360(opcoes: OpcoesGeo360Sync) {
@@ -455,7 +459,7 @@ export async function sincronizarGeo360(opcoes: OpcoesGeo360Sync) {
         await sleep(pausaMs);
       }
       const completo = okPrefixo + semFicha + errosPrefixo === items.length && errosPrefixo === 0;
-      if (completo && opcoes.promover) await promoverPrefixo(runId, opcoes.cidade, prefixo);
+      if (completo && opcoes.promover) await promoverItens(runId, opcoes.cidade, items);
       await prisma.$executeRawUnsafe(`
         INSERT INTO geo360_prefix_progress
           (cidade,prefixo,status,run_id,total_search,detalhes_ok,sem_ficha,erros,atualizado_em)
