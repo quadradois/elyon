@@ -73,7 +73,7 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
     await harness.runWorkerAndBatch('continuity-worker-1');
     await prisma.lead.update({
       where: { id: f.leadA },
-      data: { status: 'QUALIFICADO', statusProspeccao: null },
+      data: { status: 'CAPTADO', statusProspeccao: null },
     });
 
     await harness.acceptInbound(f, `continuity-2-${f.runId}`, 'próximo inbound');
