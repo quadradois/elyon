@@ -67,7 +67,7 @@ import { RegistrarOptoutUseCase } from '../casos-de-uso/agentes/registrar-optout
 import type { RagFact } from './rag-facts-context';
 
 // Re-exports para consumidores existentes (webhook.ts, sdr-tools-agents.ts)
-export { buscarConfiguracaoTenant, buscarContextoConversa } from './orchestrator-queries';
+export { buscarConfiguracaoTenant, buscarContextoConversa, resolverLeadIdCanonico } from './orchestrator-queries';
 
 // Ativar Tracing para o Dashboard OpenAI (platform.openai.com/traces)
 if (process.env.OPENAI_API_KEY) {

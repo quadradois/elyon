@@ -9,7 +9,19 @@ jest.mock('../../src/casos-de-uso/agentes/qualificar-lead.usecase', () => ({ Qua
 jest.mock('../../src/casos-de-uso/agentes/converter-para-lead.usecase', () => ({ ConverterParaLeadUseCase: class { execute = jest.fn(async () => ({ success: false })); } }));
 jest.mock('../../src/agentes/orchestrator', () => {
   const doubles = require('./support/deterministic-doubles');
-  return { processarMensagemOrquestrada: doubles.deterministicOrchestrator, buscarConfiguracaoTenant: jest.fn(async (tenantId: string) => ({ tenantId })), buscarContextoConversa: jest.fn(async () => ({})) };
+  return {
+    processarMensagemOrquestrada: doubles.deterministicOrchestrator,
+    buscarConfiguracaoTenant: jest.fn(async (tenantId: string) => ({ tenantId })),
+    buscarContextoConversa: jest.fn(async () => ({})),
+    resolverLeadIdCanonico: jest.fn(async (telefone: string, tenantId: string) => {
+      const { prisma } = require('../../src/lib/db');
+      const leads = await prisma.lead.findMany({
+        where: { telefone: { contains: telefone.replace(/\D/g, '').slice(-11) }, tenantId },
+        select: { id: true },
+      });
+      return leads.length === 1 ? leads[0].id : null;
+    }),
+  };
 });
 jest.mock('../../src/servicos/whatsapp', () => ({ getWhatsAppService: jest.fn(() => ({ enviarIndicadorDigitando: jest.fn(async () => undefined), enviarMensagemTexto: jest.fn(async () => ({ key: { id: 'det' } })) })) }));
 
