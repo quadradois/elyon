@@ -1298,7 +1298,6 @@ model ImovelRancho {
   ocupacaoGeo360        String?   @map("ocupacao_geo360")
   tipoEdificacaoGeo360  String?   @map("tipo_edificacao_geo360")
   areaConstruidaGeo360  Float?    @map("area_construida_geo360")
-  loteGeo360            Geo360Lote? @relation(fields: [cidade, idLote], references: [cidade, idLote])
 
   // Classificação/enriquecimento via MapaServer + scraper (backfill Goiânia)
   propriedadMapa     Int?      @map("propriedad_mapa") // cru do MapaServer: 1=particular, 2/3/4=público, 0/5/-1=indefinido
@@ -1340,7 +1339,6 @@ model Geo360Lote {
   criadoEm             DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
   atualizadoEm         DateTime  @updatedAt @map("atualizado_em") @db.Timestamptz(6)
 
-  imoveis ImovelRancho[]
   midias  Geo360MidiaLote[]
 
   @@id([cidade, idLote])

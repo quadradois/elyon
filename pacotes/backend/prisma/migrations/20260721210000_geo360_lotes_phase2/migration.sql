@@ -20,7 +20,7 @@ CREATE TABLE "geo360_lotes" (
     "unidades_sincronizadas_em" TIMESTAMPTZ,
     "midias_sincronizadas_em" TIMESTAMPTZ,
     "criado_em" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "atualizado_em" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "atualizado_em" TIMESTAMPTZ NOT NULL,
     CONSTRAINT "geo360_lotes_pkey" PRIMARY KEY ("cidade", "id_lote")
 );
 
@@ -42,15 +42,15 @@ CREATE TABLE "geo360_midias_lote" (
     "nome_camada" TEXT,
     "raw" JSONB,
     "sincronizado_em" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "atualizado_em" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "atualizado_em" TIMESTAMPTZ NOT NULL,
     CONSTRAINT "geo360_midias_lote_pkey" PRIMARY KEY ("cidade", "id_midia"),
     CONSTRAINT "geo360_midias_lote_lote_fkey" FOREIGN KEY ("cidade", "id_lote")
-      REFERENCES "geo360_lotes"("cidade", "id_lote") ON DELETE CASCADE
+      REFERENCES "geo360_lotes"("cidade", "id_lote") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE INDEX "geo360_lotes_cidade_status_idx" ON "geo360_lotes"("cidade", "status");
 CREATE INDEX "geo360_lotes_nome_condominio_idx" ON "geo360_lotes"("nome_condominio");
 CREATE INDEX "geo360_lotes_bairro_idx" ON "geo360_lotes"("bairro");
-CREATE INDEX "geo360_midias_lote_lote_principal_idx"
+CREATE INDEX "geo360_midias_lote_cidade_id_lote_principal_idx"
   ON "geo360_midias_lote"("cidade", "id_lote", "principal");
 CREATE INDEX "imoveis_rancho_cidade_id_lote_idx" ON "imoveis_rancho"("cidade", "id_lote");
