@@ -101,7 +101,7 @@ incremental (só processa o que falta).
 
 | Campo na API (`busca_imoveis_all`) | Destino | Observação |
 |---|---|---|
-| `inscricao_cartografica___imobiliario` | **inscricao (IPTU)** | **CHAVE ÚNICA** (14 dígitos) |
+| `inscricao_cartografica___imobiliario` | **inscricao (IPTU)** | **CHAVE ÚNICA** (14 dígitos em Goiânia; 17 em Aparecida) |
 | `cpf_cnpj` | cpf_cnpj | 11 díg = CPF, 14 = CNPJ |
 | `nome___pessoa` | nome | proprietário |
 | `tipo___pessoa` | tipo_pessoa | 1=física, 2=jurídica |
@@ -205,6 +205,7 @@ A estrutura é a mesma, mas **valide o retorno de cada cidade** — há diferen�
 - **Geometria:** o `geom` pode vir como **WKT** (`POLYGON((...))`) numa cidade e **WKB hexadecimal**
   noutra — detecte o formato antes de extrair o centróide.
 - **Setores:** a lista e a faixa de prefixos diferem por cidade — rode a descoberta por cidade.
+- **Inscrição:** Goiânia usa 14 dígitos; Aparecida de Goiânia usa 17 dígitos. Preserve zeros à esquerda.
 - O **e-mail/token** observado serve para as duas, mas confirme o tenant retornado.
 
 ---
