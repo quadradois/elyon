@@ -14,6 +14,8 @@ async function main() {
     throw new Error('Use --cidade=goiania ou --cidade=aparecidadegoiania');
   }
   const idLote = valor('id-lote');
+  const idLotes = idLote ? idLote.split(',').map(Number).filter(Number.isSafeInteger) : undefined;
+  if (idLote && !idLotes?.length) throw new Error('--id-lote deve conter ao menos um ID numérico válido');
   const deadlineMinutos = Number(valor('deadline-minutos') || 0);
   const incluirMidias = process.argv.includes('--com-midias')
     ? true
@@ -22,7 +24,7 @@ async function main() {
       : cidade === 'goiania';
   const resultado = await sincronizarLotesGeo360({
     cidade,
-    idLotes: idLote ? idLote.split(',').map(Number).filter(Number.isSafeInteger) : undefined,
+    idLotes,
     somenteMultiplasUnidades: !process.argv.includes('--todos-os-lotes'),
     incluirMidias,
     limite: Number(valor('limite') || 1000),
