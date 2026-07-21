@@ -101,7 +101,7 @@ incremental (só processa o que falta).
 
 | Campo na API (`busca_imoveis_all`) | Destino | Observação |
 |---|---|---|
-| `inscricao_cartografica___imobiliario` | **inscricao (IPTU)** | **CHAVE ÚNICA** (14 dígitos) |
+| `inscricao_cartografica___imobiliario` | **inscricao (IPTU)** | **CHAVE ÚNICA** (14 dígitos em Goiânia; 17 em Aparecida) |
 | `cpf_cnpj` | cpf_cnpj | 11 díg = CPF, 14 = CNPJ |
 | `nome___pessoa` | nome | proprietário |
 | `tipo___pessoa` | tipo_pessoa | 1=física, 2=jurídica |
@@ -182,6 +182,8 @@ Discrepância = a API truncou → erro logado (não confie cegamente). Persiste 
 - Falha de **rede/5xx/429** → **não marque** a versão (reentra depois). Falha **4xx definitiva** (lote
   sem ficha) → marque como processado p/ não revisitar eternamente.
 - `UPSERT` por inscrição (idempotente). Rodar 2x não duplica.
+- Ao promover um setor, selecione os imóveis pelos `id_imobiliario` retornados pelo Search. Não use
+  `inscricao LIKE 'setor%'`: em Aparecida, o código do setor não ocupa o início da inscrição.
 
 ---
 
@@ -205,6 +207,7 @@ A estrutura é a mesma, mas **valide o retorno de cada cidade** — há diferen�
 - **Geometria:** o `geom` pode vir como **WKT** (`POLYGON((...))`) numa cidade e **WKB hexadecimal**
   noutra — detecte o formato antes de extrair o centróide.
 - **Setores:** a lista e a faixa de prefixos diferem por cidade — rode a descoberta por cidade.
+- **Inscrição:** Goiânia usa 14 dígitos; Aparecida de Goiânia usa 17 dígitos. Preserve zeros à esquerda.
 - O **e-mail/token** observado serve para as duas, mas confirme o tenant retornado.
 
 ---
