@@ -152,20 +152,25 @@ export function mapearMidiasLote(payload: Record<string, unknown>[]): MidiaLote[
   return [...unicas.values()].sort((a, b) => a.principal - b.principal || a.idMidia - b.idMidia);
 }
 
-export async function prepararIndiceLotesGeo360(cidade: CidadeGeo360): Promise<number> {
+export async function prepararIndiceLotesGeo360(
+  cidade: CidadeGeo360,
+  idLotes?: number[],
+): Promise<number> {
+  const ids = idLotes?.filter((id) => Number.isSafeInteger(id));
+  const filtroPiloto = ids?.length ? ' AND id_lote = ANY($2::integer[])' : '';
   return prisma.$executeRawUnsafe(`
     INSERT INTO geo360_lotes
       (cidade,id_lote,total_unidades,latitude,longitude,status,atualizado_em)
     SELECT cidade,id_lote,count(*)::integer,min(latitude),min(longitude),'PENDENTE',now()
     FROM imoveis_rancho
-    WHERE cidade=$1 AND id_lote IS NOT NULL
+    WHERE cidade=$1 AND id_lote IS NOT NULL${filtroPiloto}
     GROUP BY cidade,id_lote
     ON CONFLICT (cidade,id_lote) DO UPDATE SET
       total_unidades=EXCLUDED.total_unidades,
       latitude=COALESCE(geo360_lotes.latitude,EXCLUDED.latitude),
       longitude=COALESCE(geo360_lotes.longitude,EXCLUDED.longitude),
       atualizado_em=now()`,
-  cidade);
+  cidade, ...(ids?.length ? [ids] : []));
 }
 
 async function persistirCaracterizacao(
@@ -302,9 +307,18 @@ async function selecionarLotes(opcoes: OpcoesSincronizacaoLotes): Promise<number
 }
 
 export async function sincronizarLotesGeo360(opcoes: OpcoesSincronizacaoLotes) {
-  await prepararIndiceLotesGeo360(opcoes.cidade);
+  const idsSolicitados = opcoes.idLotes
+    ? [...new Set(opcoes.idLotes.filter((id) => Number.isSafeInteger(id)))]
+    : undefined;
+  if (opcoes.idLotes && !idsSolicitados?.length) {
+    return {
+      cidade: opcoes.cidade, selecionados: 0, concluidos: 0,
+      semMidia: 0, errosMidia: 0, erros: 0,
+    };
+  }
+  await prepararIndiceLotesGeo360(opcoes.cidade, idsSolicitados);
   const client = new Geo360Client(opcoes.cidade);
-  const ids = await selecionarLotes(opcoes);
+  const ids = await selecionarLotes({ ...opcoes, idLotes: idsSolicitados });
   const concorrencia = Math.max(1, Math.min(opcoes.concorrencia ?? 3, 10));
   const pausaMs = Math.max(50, opcoes.pausaMs ?? 250);
   let concluidos = 0;

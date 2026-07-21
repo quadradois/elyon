@@ -1,6 +1,29 @@
-import { mapearCaracterizacaoLote, mapearMidiasLote, mapearUnidadesLote } from '../geo360-lotes';
+import { prisma } from '../../lib/db';
+import {
+  mapearCaracterizacaoLote,
+  mapearMidiasLote,
+  mapearUnidadesLote,
+  prepararIndiceLotesGeo360,
+} from '../geo360-lotes';
+
+jest.mock('../../lib/db', () => ({
+  prisma: { $executeRawUnsafe: jest.fn() },
+}));
 
 describe('geo360 lotes helpers', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('restringe a preparação do índice aos lotes explicitamente solicitados', async () => {
+    (prisma.$executeRawUnsafe as jest.Mock).mockResolvedValue(1);
+
+    await prepararIndiceLotesGeo360('goiania', [76693]);
+
+    const [sql, cidade, ids] = (prisma.$executeRawUnsafe as jest.Mock).mock.calls[0];
+    expect(sql).toContain('id_lote = ANY($2::integer[])');
+    expect(cidade).toBe('goiania');
+    expect(ids).toEqual([76693]);
+  });
+
   it('mapeia a resposta pública do Portal ICAD', () => {
     const resultado = mapearCaracterizacaoLote({
       Unidades: {
