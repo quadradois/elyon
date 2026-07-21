@@ -44,7 +44,7 @@ CREATE TABLE "geo360_midias_lote" (
     "sincronizado_em" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "atualizado_em" TIMESTAMPTZ NOT NULL,
     CONSTRAINT "geo360_midias_lote_pkey" PRIMARY KEY ("cidade", "id_midia"),
-    CONSTRAINT "geo360_midias_lote_lote_fkey" FOREIGN KEY ("cidade", "id_lote")
+    CONSTRAINT "geo360_midias_lote_cidade_id_lote_fkey" FOREIGN KEY ("cidade", "id_lote")
       REFERENCES "geo360_lotes"("cidade", "id_lote") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
