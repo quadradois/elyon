@@ -1294,6 +1294,10 @@ model ImovelRancho {
   raw                   Json?
   versaoEnriquecimento  Int       @default(0) @map("versao_enriquecimento")
   detalheEm             DateTime? @map("detalhe_em")
+  enderecoOficialGeo360 String?   @map("endereco_oficial_geo360")
+  ocupacaoGeo360        String?   @map("ocupacao_geo360")
+  tipoEdificacaoGeo360  String?   @map("tipo_edificacao_geo360")
+  areaConstruidaGeo360  Float?    @map("area_construida_geo360")
 
   // Classificação/enriquecimento via MapaServer + scraper (backfill Goiânia)
   propriedadMapa     Int?      @map("propriedad_mapa") // cru do MapaServer: 1=particular, 2/3/4=público, 0/5/-1=indefinido
@@ -1304,8 +1308,66 @@ model ImovelRancho {
   @@index([cpfCnpj])
   @@index([cidade, idSetor, idQuadra])
   @@index([idBairro])
+  @@index([cidade, idLote])
   @@index([statusProprietario])
   @@map("imoveis_rancho")
+}
+
+/// Caracterizacao agregada do lote/empreendimento no portal publico GEO360.
+/// Uma linha atende todas as unidades que compartilham cidade + id_lote.
+model Geo360Lote {
+  cidade               String
+  idLote               Int       @map("id_lote")
+  nomeCondominio       String?   @map("nome_condominio")
+  enderecoOficial      String?   @map("endereco_oficial")
+  bairro               String?
+  ocupacao             String?
+  totalUnidades        Int       @default(0) @map("total_unidades")
+  areaTerreno          Float?    @map("area_terreno")
+  areaTotalConstruida  Float?    @map("area_total_construida")
+  geometriaWkt         String?   @map("geometria_wkt")
+  latitude             Float?
+  longitude            Float?
+  fonteCaracterizacao  String    @default("PORTAL_INFO_LOTE") @map("fonte_caracterizacao")
+  rawCaracterizacao    Json?     @map("raw_caracterizacao")
+  status               String    @default("PENDENTE")
+  tentativas           Int       @default(0)
+  ultimoErro           String?   @map("ultimo_erro")
+  caracterizadoEm      DateTime? @map("caracterizado_em") @db.Timestamptz(6)
+  unidadesSincronizadasEm DateTime? @map("unidades_sincronizadas_em") @db.Timestamptz(6)
+  midiasSincronizadasEm DateTime? @map("midias_sincronizadas_em") @db.Timestamptz(6)
+  criadoEm             DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm         DateTime  @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+
+  midias  Geo360MidiaLote[]
+
+  @@id([cidade, idLote])
+  @@index([cidade, status])
+  @@index([nomeCondominio])
+  @@index([bairro])
+  @@map("geo360_lotes")
+}
+
+/// Metadados de fotos publicas vinculadas ao lote no portal GEO360.
+model Geo360MidiaLote {
+  cidade       String
+  idMidia      BigInt   @map("id_midia")
+  idLote       Int      @map("id_lote")
+  link         String
+  nome         String?
+  principal    Int      @default(0)
+  situacaoFoto Int?     @map("situacao_foto")
+  dataPanorama DateTime? @map("data_panorama") @db.Date
+  nomeCamada   String?  @map("nome_camada")
+  raw          Json?
+  sincronizadoEm DateTime @default(now()) @map("sincronizado_em") @db.Timestamptz(6)
+  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+
+  lote Geo360Lote @relation(fields: [cidade, idLote], references: [cidade, idLote], onDelete: Cascade)
+
+  @@id([cidade, idMidia])
+  @@index([cidade, idLote, principal])
+  @@map("geo360_midias_lote")
 }
 
 // Controle operacional da importacao GEO 360. As tabelas sao gravadas pelo

@@ -7,9 +7,9 @@ describe('geo360 sync helpers', () => {
     expect(normalizarListaGeo360({ data: [] })).toEqual([]);
   });
 
-  it('calcula centroide aproximado de WKT e rejeita formato desconhecido', () => {
+  it('calcula o centroide geométrico de WKT e rejeita formato desconhecido', () => {
     expect(centroideWkt('POLYGON((-49 -16,-47 -16,-47 -14,-49 -14,-49 -16))'))
-      .toEqual([-15.2, -48.2]);
+      .toEqual([-15, -48]);
     expect(centroideWkt('01030000')).toEqual([null, null]);
   });
 

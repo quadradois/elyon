@@ -1,15 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/db';
+import {
+  Geo360Client,
+  type CidadeGeo360,
+  type Geo360SearchItem as SearchItem,
+} from './geo360-client';
 
-export type CidadeGeo360 = 'goiania' | 'aparecidadegoiania';
-
-type SearchItem = {
-  inscricao_cartografica: string | number;
-  id_imobiliario: string | number;
-  id_lote?: string | number | null;
-  numero_cadastro?: string | number | null;
-  geom?: string | null;
-};
+export type { CidadeGeo360 } from './geo360-client';
 
 export type OpcoesGeo360Sync = {
   cidade: CidadeGeo360;
@@ -47,10 +44,6 @@ export type Geo360StageRow = {
   raw: Record<string, unknown>;
 };
 
-const AUTH_URL = process.env.GEO360_AUTH_URL
-  || 'https://plataforma.geo360.com.br/ouv/?q=leitor_aparecidadegoiania@vm2info.com';
-const BASE_URL = process.env.GEO360_BASE_URL || 'https://cadastro.geo360.com.br';
-const TOKEN_TTL_MS = 45 * 60 * 1000;
 const DETAIL_VERSION = 1;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -66,97 +59,65 @@ const normalizarInscricao = (value: unknown, cidade: CidadeGeo360) => {
   return String(value ?? '').replace(/\D/g, '').padStart(tamanho, '0');
 };
 
-export function normalizarListaGeo360<T>(payload: unknown): T[] {
-  if (Array.isArray(payload)) return payload as T[];
-  if (payload && typeof payload === 'object' && Array.isArray((payload as { value?: unknown }).value)) {
-    return (payload as { value: T[] }).value;
-  }
-  return [];
-}
+export { normalizarListaGeo360 } from './geo360-client';
 
 export function centroideWkt(wkt: unknown): [number | null, number | null] {
   if (typeof wkt !== 'string') return [null, null];
   const match = wkt.match(/\(\(([^)]+)\)/);
   if (!match) return [null, null];
-  let longitude = 0;
-  let latitude = 0;
-  let pontos = 0;
-  for (const par of match[1].split(',')) {
-    const [lng, lat] = par.trim().split(/\s+/).map(Number);
-    if (Number.isFinite(lng) && Number.isFinite(lat)) {
-      longitude += lng;
-      latitude += lat;
-      pontos++;
-    }
+  const pontos = match[1].split(',')
+    .map((par) => par.trim().split(/\s+/).map(Number) as [number, number])
+    .filter(([lng, lat]) => Number.isFinite(lng) && Number.isFinite(lat));
+  if (pontos.length < 3) return [null, null];
+  const primeiro = pontos[0];
+  const ultimo = pontos[pontos.length - 1];
+  if (primeiro[0] !== ultimo[0] || primeiro[1] !== ultimo[1]) pontos.push([...primeiro]);
+
+  let areaDobrada = 0;
+  let somaLongitude = 0;
+  let somaLatitude = 0;
+  for (let indice = 0; indice < pontos.length - 1; indice++) {
+    const [lngAtual, latAtual] = pontos[indice];
+    const [lngProximo, latProximo] = pontos[indice + 1];
+    const cruzado = lngAtual * latProximo - lngProximo * latAtual;
+    areaDobrada += cruzado;
+    somaLongitude += (lngAtual + lngProximo) * cruzado;
+    somaLatitude += (latAtual + latProximo) * cruzado;
   }
-  return pontos ? [latitude / pontos, longitude / pontos] : [null, null];
+  if (Math.abs(areaDobrada) < Number.EPSILON) {
+    const semFechamento = pontos.slice(0, -1);
+    const longitude = semFechamento.reduce((total, [lng]) => total + lng, 0) / semFechamento.length;
+    const latitude = semFechamento.reduce((total, [, lat]) => total + lat, 0) / semFechamento.length;
+    return [latitude, longitude];
+  }
+  return [somaLatitude / (3 * areaDobrada), somaLongitude / (3 * areaDobrada)];
 }
 
-class Geo360Client {
-  private token: string | null = null;
-  private tokenObtidoEm = 0;
-
-  private async autenticar() {
-    const response = await fetch(AUTH_URL, { headers: { 'no-token': 'true' } });
-    if (!response.ok) throw new Error(`GEO360_AUTH_HTTP_${response.status}`);
-    const data = await response.json() as { authToken?: string };
-    if (!data.authToken) throw new Error('GEO360_AUTH_TOKEN_AUSENTE');
-    this.token = data.authToken;
-    this.tokenObtidoEm = Date.now();
+async function gravarLotesDescobertos(cidade: CidadeGeo360, items: SearchItem[]) {
+  const lotes = new Map<number, { id_lote: number; geometria_wkt: string | null; latitude: number | null; longitude: number | null }>();
+  for (const item of items) {
+    const idLote = asNumber(item.id_lote);
+    if (idLote === null || !Number.isSafeInteger(idLote) || lotes.has(idLote)) continue;
+    const geometriaWkt = asText(item.geom);
+    const [latitude, longitude] = centroideWkt(geometriaWkt);
+    lotes.set(idLote, { id_lote: idLote, geometria_wkt: geometriaWkt, latitude, longitude });
   }
-
-  private async request(path: string, timeoutMs = 60_000): Promise<unknown> {
-    for (let tentativa = 0; tentativa < 5; tentativa++) {
-      if (!this.token || Date.now() - this.tokenObtidoEm >= TOKEN_TTL_MS) await this.autenticar();
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const response = await fetch(`${BASE_URL}${path}`, {
-          headers: { Authorization: `Bearer ${this.token}` },
-          signal: controller.signal,
-        });
-        if (response.status === 401) {
-          this.token = null;
-          continue;
-        }
-        if (response.status === 429 || response.status >= 500) {
-          await sleep(500 * (2 ** tentativa));
-          continue;
-        }
-        if (!response.ok) throw new Error(`GEO360_HTTP_${response.status}:${path}`);
-        return await response.json();
-      } catch (error) {
-        if (tentativa === 4) throw error;
-        await sleep(500 * (2 ** tentativa));
-      } finally {
-        clearTimeout(timeout);
-      }
-    }
-    throw new Error(`GEO360_RETRIES_EXCEDIDOS:${path}`);
-  }
-
-  async setores(cidade: CidadeGeo360): Promise<string[]> {
-    const payload = await this.request(`/${cidade}/setor/`);
-    return [...new Set(normalizarListaGeo360<Record<string, unknown>>(payload)
-      .map((item) => asText(item.setor ?? item.codigo))
-      .filter((item): item is string => Boolean(item)))]
-      .sort();
-  }
-
-  async pesquisar(cidade: CidadeGeo360, prefixo: string): Promise<SearchItem[]> {
-    const payload = await this.request(
-      `/search/${cidade}/imobiliario?inscricao_cartografica=${encodeURIComponent(prefixo)}`,
-      120_000,
-    );
-    return normalizarListaGeo360<SearchItem>(payload);
-  }
-
-  async detalhe(cidade: CidadeGeo360, idImobiliario: string | number): Promise<Record<string, unknown> | null> {
-    const payload = await this.request(`/${cidade}/lote/busca_imoveis_all/${idImobiliario}/`);
-    const data = normalizarListaGeo360<Record<string, unknown>>(payload);
-    if (data.length) return data[0];
-    return payload && typeof payload === 'object' ? payload as Record<string, unknown> : null;
-  }
+  if (!lotes.size) return;
+  await prisma.$executeRawUnsafe(`
+    WITH dados AS (
+      SELECT * FROM jsonb_to_recordset($1::jsonb) AS x(
+        id_lote integer,geometria_wkt text,latitude double precision,longitude double precision
+      )
+    )
+    INSERT INTO geo360_lotes
+      (cidade,id_lote,geometria_wkt,latitude,longitude,status,atualizado_em)
+    SELECT $2,id_lote,geometria_wkt,latitude,longitude,'PENDENTE',now() FROM dados
+    ON CONFLICT (cidade,id_lote) DO UPDATE SET
+      geometria_wkt=COALESCE(EXCLUDED.geometria_wkt,geo360_lotes.geometria_wkt),
+      latitude=COALESCE(EXCLUDED.latitude,geo360_lotes.latitude),
+      longitude=COALESCE(EXCLUDED.longitude,geo360_lotes.longitude),
+      atualizado_em=now()`,
+  JSON.stringify([...lotes.values()]), cidade);
 }
 
 async function prepararEstrutura() {
@@ -387,11 +348,11 @@ async function promoverItens(runId: string, cidade: CidadeGeo360, items: SearchI
 
 export async function sincronizarGeo360(opcoes: OpcoesGeo360Sync) {
   await prepararEstrutura();
-  const client = new Geo360Client();
+  const client = new Geo360Client(opcoes.cidade);
   const runId = randomUUID();
   const concorrencia = Math.max(1, Math.min(opcoes.concorrencia ?? 10, 20));
   const pausaMs = Math.max(50, opcoes.pausaMs ?? 150);
-  const prefixos = opcoes.prefixos?.length ? opcoes.prefixos : await client.setores(opcoes.cidade);
+  const prefixos = opcoes.prefixos?.length ? opcoes.prefixos : await client.setores();
   await prisma.$executeRawUnsafe(
     `INSERT INTO geo360_sync_runs (id,cidade,status,promover,prefixos_total)
      VALUES ($1::uuid,$2,'EM_ANDAMENTO',$3,$4)`,
@@ -406,7 +367,7 @@ export async function sincronizarGeo360(opcoes: OpcoesGeo360Sync) {
       if (opcoes.deadlineMs && Date.now() >= opcoes.deadlineMs) break;
       let items: SearchItem[];
       try {
-        items = [...new Map((await client.pesquisar(opcoes.cidade, prefixo))
+        items = [...new Map((await client.pesquisar(prefixo))
           .map((item) => [String(item.id_imobiliario), item])).values()];
       } catch (error) {
         erros++;
@@ -423,6 +384,7 @@ export async function sincronizarGeo360(opcoes: OpcoesGeo360Sync) {
         continue;
       }
       encontrados += items.length;
+      await gravarLotesDescobertos(opcoes.cidade, items);
       const idsReutilizados = opcoes.reutilizarStage
         ? await reutilizarStageExistente(runId, opcoes.cidade, items)
         : new Set<string>();
@@ -436,7 +398,7 @@ export async function sincronizarGeo360(opcoes: OpcoesGeo360Sync) {
         const lote = pendentes.slice(offset, offset + concorrencia).slice(
           0, opcoes.limiteDetalhes ? opcoes.limiteDetalhes - processados : undefined);
         const resultados = await Promise.allSettled(lote.map(async (item) => {
-          const detail = await client.detalhe(opcoes.cidade, item.id_imobiliario);
+          const detail = await client.detalhe(item.id_imobiliario);
           if (!detail?.inscricao_cartografica___imobiliario) return null;
           return { item, row: mapearDetalheGeo360(item, detail, opcoes.cidade) };
         }));
