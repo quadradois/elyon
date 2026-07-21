@@ -61,7 +61,10 @@ const asNumber = (value: unknown): number | null => {
 };
 const asText = (value: unknown): string | null =>
   value === null || value === undefined ? null : String(value).trim() || null;
-const inscricao14 = (value: unknown) => String(value ?? '').replace(/\D/g, '').padStart(14, '0');
+const normalizarInscricao = (value: unknown, cidade: CidadeGeo360) => {
+  const tamanho = cidade === 'aparecidadegoiania' ? 17 : 14;
+  return String(value ?? '').replace(/\D/g, '').padStart(tamanho, '0');
+};
 
 export function normalizarListaGeo360<T>(payload: unknown): T[] {
   if (Array.isArray(payload)) return payload as T[];
@@ -204,10 +207,14 @@ async function prepararEstrutura() {
 export function mapearDetalheGeo360(
   item: SearchItem,
   detail: Record<string, unknown>,
+  cidade: CidadeGeo360 = 'goiania',
 ): Geo360StageRow {
-  const inscricao = inscricao14(
-    detail.inscricao_cartografica___imobiliario ?? item.inscricao_cartografica);
-  if (!/^\d{14}$/.test(inscricao)) throw new Error('INSCRICAO_INVALIDA');
+  const inscricao = normalizarInscricao(
+    detail.inscricao_cartografica___imobiliario ?? item.inscricao_cartografica, cidade);
+  const tamanhoEsperado = cidade === 'aparecidadegoiania' ? 17 : 14;
+  if (!new RegExp(`^\\d{${tamanhoEsperado}}$`).test(inscricao)) {
+    throw new Error('INSCRICAO_INVALIDA');
+  }
   const [latitude, longitude] = centroideWkt(item.geom);
   return {
     inscricao,
@@ -289,7 +296,7 @@ async function registrarFalha(
   item: SearchItem,
   error: unknown,
 ) {
-  const inscricao = inscricao14(item.inscricao_cartografica);
+  const inscricao = normalizarInscricao(item.inscricao_cartografica, cidade);
   const mensagem = error instanceof Error ? error.message : String(error);
   const codigo = typeof error === 'object' && error && 'code' in error
     ? String((error as { code?: unknown }).code ?? '') || null
@@ -427,7 +434,7 @@ export async function sincronizarGeo360(opcoes: OpcoesGeo360Sync) {
         const resultados = await Promise.allSettled(lote.map(async (item) => {
           const detail = await client.detalhe(opcoes.cidade, item.id_imobiliario);
           if (!detail?.inscricao_cartografica___imobiliario) return null;
-          return { item, row: mapearDetalheGeo360(item, detail) };
+          return { item, row: mapearDetalheGeo360(item, detail, opcoes.cidade) };
         }));
         const entradas: Array<{ item: SearchItem; row: Geo360StageRow }> = [];
         for (let indice = 0; indice < resultados.length; indice++) {

@@ -38,4 +38,15 @@ describe('geo360 sync helpers', () => {
     });
     expect(() => JSON.stringify([row])).not.toThrow();
   });
+
+  it('preserva a inscricao de 17 digitos de Aparecida de Goiania', () => {
+    const row = mapearDetalheGeo360({
+      inscricao_cartografica: '12010000700010168',
+      id_imobiliario: '209911',
+    }, {
+      inscricao_cartografica___imobiliario: '12010000700010168',
+    }, 'aparecidadegoiania');
+
+    expect(row.inscricao).toBe('12010000700010168');
+  });
 });
