@@ -182,6 +182,8 @@ Discrepância = a API truncou → erro logado (não confie cegamente). Persiste 
 - Falha de **rede/5xx/429** → **não marque** a versão (reentra depois). Falha **4xx definitiva** (lote
   sem ficha) → marque como processado p/ não revisitar eternamente.
 - `UPSERT` por inscrição (idempotente). Rodar 2x não duplica.
+- Ao promover um setor, selecione os imóveis pelos `id_imobiliario` retornados pelo Search. Não use
+  `inscricao LIKE 'setor%'`: em Aparecida, o código do setor não ocupa o início da inscrição.
 
 ---
 
