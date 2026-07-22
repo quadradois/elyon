@@ -3,6 +3,7 @@ import {
   mapearCaracterizacaoLote,
   mapearMidiasLote,
   mapearUnidadesLote,
+  persistirCaracterizacao,
   prepararIndiceLotesGeo360,
 } from '../geo360-lotes';
 
@@ -100,5 +101,26 @@ describe('geo360 lotes helpers', () => {
       principal: 1,
     });
     expect(resultado[1].idMidia).toBe(468606);
+  });
+
+  it('persiste areas inteiras com cast seguro para double precision', async () => {
+    (prisma.$executeRawUnsafe as jest.Mock).mockResolvedValue(1);
+
+    await persistirCaracterizacao('goiania', 123, {
+      nomeCondominio: 'CONDOMINIO TESTE',
+      enderecoOficial: 'RUA TESTE',
+      bairro: 'CENTRO',
+      ocupacao: 'Edificado',
+      totalUnidades: 10,
+      areaTerreno: 1200,
+      areaTotalConstruida: 4500,
+      raw: {},
+    });
+
+    const chamada = (prisma.$executeRawUnsafe as jest.Mock).mock.calls[0];
+    expect(chamada[0]).toContain('$8::text::double precision');
+    expect(chamada[0]).toContain('$9::text::double precision');
+    expect(chamada[8]).toBe('1200');
+    expect(chamada[9]).toBe('4500');
   });
 });
