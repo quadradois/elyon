@@ -173,7 +173,7 @@ export async function prepararIndiceLotesGeo360(
   cidade, ...(ids?.length ? [ids] : []));
 }
 
-async function persistirCaracterizacao(
+export async function persistirCaracterizacao(
   cidade: CidadeGeo360,
   idLote: number,
   caracterizacao: CaracterizacaoLote,
@@ -183,7 +183,11 @@ async function persistirCaracterizacao(
       cidade,id_lote,nome_condominio,endereco_oficial,bairro,ocupacao,total_unidades,
       area_terreno,area_total_construida,raw_caracterizacao,status,tentativas,
       ultimo_erro,caracterizado_em,atualizado_em
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,'CARACTERIZADO',1,NULL,now(),now())
+    ) VALUES (
+      $1,$2,$3,$4,$5,$6,$7,
+      $8::text::double precision,$9::text::double precision,
+      $10::jsonb,'CARACTERIZADO',1,NULL,now(),now()
+    )
     ON CONFLICT (cidade,id_lote) DO UPDATE SET
       nome_condominio=EXCLUDED.nome_condominio,endereco_oficial=EXCLUDED.endereco_oficial,
       bairro=COALESCE(EXCLUDED.bairro,geo360_lotes.bairro),ocupacao=EXCLUDED.ocupacao,
@@ -194,7 +198,8 @@ async function persistirCaracterizacao(
       caracterizado_em=now(),atualizado_em=now()`,
   cidade, idLote, caracterizacao.nomeCondominio, caracterizacao.enderecoOficial,
   caracterizacao.bairro, caracterizacao.ocupacao, caracterizacao.totalUnidades,
-  caracterizacao.areaTerreno, caracterizacao.areaTotalConstruida,
+  caracterizacao.areaTerreno === null ? null : String(caracterizacao.areaTerreno),
+  caracterizacao.areaTotalConstruida === null ? null : String(caracterizacao.areaTotalConstruida),
   JSON.stringify(caracterizacao.raw));
 }
 
