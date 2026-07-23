@@ -3,6 +3,7 @@ import { prisma } from '../lib/db';
 
 const MAPA_API_URL = 'https://portalmapa.goiania.go.gov.br/servicogyn/rest/services/MapaServer/Feature_BaseTeste/FeatureServer/3/query';
 const MODO_BASE_LOCAL_ONLY = process.env.MINERACAO_LOCAL_ONLY !== 'false';
+const LEGADO_FALLBACK_HABILITADO = process.env.MINERACAO_LEGADO_FALLBACK !== 'false';
 
 interface BuscaParams {
   nmedificio?: string;
@@ -819,6 +820,16 @@ export class MapaService {
 
     const empreendimentosGeo360 = await this.buscarEmpreendimentosGeo360(termo, limite);
 
+    // GEO360 é a fonte canônica. O legado só participa quando a fonte primária
+    // não encontra nenhum resultado, evitando duplicar o mesmo empreendimento.
+    if (empreendimentosGeo360.length > 0) {
+      return empreendimentosGeo360.slice(0, limite);
+    }
+
+    if (!LEGADO_FALLBACK_HABILITADO) {
+      return [];
+    }
+
     try {
       const termoUpper = termo.toUpperCase();
 
@@ -873,20 +884,15 @@ export class MapaService {
         });
       }
 
-      // Não deduplicar apenas pelo nome: empreendimentos homônimos podem existir
-      // em lotes/endereço distintos. A identidade canônica GEO360 é cidade + id_lote.
       const locaisLegado = Array.from(mapaEdificios.values());
 
-      if (empreendimentosGeo360.length > 0 || locaisLegado.length > 0) {
+      if (locaisLegado.length > 0) {
         const legadoEnriquecido = await this.enriquecerEdificiosComResumo(locaisLegado);
-        return [
-          ...empreendimentosGeo360,
-          ...legadoEnriquecido.map((item) => ({
-            ...item,
-            fonte: 'legado' as const,
-            encontradoPor: 'legado' as const
-          }))
-        ].slice(0, limite);
+        return legadoEnriquecido.map((item) => ({
+          ...item,
+          fonte: 'legado' as const,
+          encontradoPor: 'legado' as const
+        })).slice(0, limite);
       }
 
       if (MODO_BASE_LOCAL_ONLY) {
@@ -894,9 +900,6 @@ export class MapaService {
       }
     } catch (error) {
       console.error('[MapaService] Erro ao buscar edifícios na base local:', error);
-      if (empreendimentosGeo360.length > 0) {
-        return empreendimentosGeo360;
-      }
       if (MODO_BASE_LOCAL_ONLY) {
         return [];
       }
