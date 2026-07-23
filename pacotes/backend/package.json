@@ -10,6 +10,7 @@
     "webhook:replay": "node dist/scripts/replay-webhook-inbox.js",
     "geo360:sync": "tsx src/scripts/sincronizar-geo360.ts",
     "geo360:lotes": "tsx src/scripts/sincronizar-geo360-lotes.ts",
+    "geo360:aliases": "tsx src/scripts/sincronizar-geo360-aliases.ts",
     "test": "npm run test:unit",
     "test:unit": "jest --config jest.config.js",
     "test:integration": "jest --config jest.integration.config.js --runInBand",
