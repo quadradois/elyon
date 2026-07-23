@@ -2,6 +2,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../servicos/api";
+import {
+  ehUnidadeAcessoria,
+  obterTipoUnidadeAcessoria,
+} from "../lib/unidades-imobiliarias";
 import { Button } from "../componentes/ui/button";
 import { Input } from "../componentes/ui/input";
 import { Stepper, StepperEtapa } from "../componentes/ui/stepper";
@@ -489,10 +493,10 @@ export function Captacao() {
 
       setUnidades(todasUnidades);
       
-      // Desmarca BOXes por padrão para evitar gasto duplo
+      // Unidades acessórias costumam repetir o proprietário da unidade principal.
       setSelecionados(
         todasUnidades
-          .filter((u: Unidade) => !u.incompl?.toUpperCase().includes('BOX'))
+          .filter((u: Unidade) => !ehUnidadeAcessoria(u.incompl))
           .map((u: Unidade) => u.nrinscr)
       );
       setEtapa(2);
@@ -560,10 +564,10 @@ export function Captacao() {
 
       setUnidades(unidadesCarregadas);
       
-      // Desmarca BOXes por padrão para evitar duplicidade
+      // Unidades acessórias costumam repetir o proprietário da unidade principal.
       setSelecionados(
         unidadesCarregadas
-          .filter((u: Unidade) => !u.incompl?.toUpperCase().includes('BOX'))
+          .filter((u: Unidade) => !ehUnidadeAcessoria(u.incompl))
           .map((u: Unidade) => u.nrinscr)
       );
       setEtapa(2);
@@ -1403,6 +1407,8 @@ export function Captacao() {
                     ) : (
                       unidadesFiltradas.map((item, index) => {
                         const isSelected = selecionados.includes(item.nrinscr);
+                        const tipoUnidadeAcessoria =
+                          obterTipoUnidadeAcessoria(item.incompl);
                         return (
                           <TableRow
                             key={`${item.nrinscr}-${index}`}
@@ -1435,9 +1441,10 @@ export function Captacao() {
                               <>
                                 <TableCell className="font-medium flex items-center gap-2">
                                   {item.incompl || "—"}
-                                  {item.incompl?.toUpperCase().includes('BOX') && (
-                                    <span title="Unidades do tipo Box costumam ter o mesmo proprietário do apartamento. Desmarcadas por padrão para economizar créditos." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                                      <span className="text-xs">🅿️</span> Box
+                                  {tipoUnidadeAcessoria && (
+                                    <span title="Unidade acessória, desmarcada por padrão para evitar consultas e créditos duplicados." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                      <span className="text-xs">🅿️</span>{" "}
+                                      {tipoUnidadeAcessoria}
                                     </span>
                                   )}
                                 </TableCell>
