@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { prisma } from '../lib/db';
+import { formatarEnderecoEmpreendimento } from './geo360-endereco';
 
 const MAPA_API_URL = 'https://portalmapa.goiania.go.gov.br/servicogyn/rest/services/MapaServer/Feature_BaseTeste/FeatureServer/3/query';
 const MODO_BASE_LOCAL_ONLY = process.env.MINERACAO_LOCAL_ONLY !== 'false';
@@ -67,6 +68,7 @@ interface EmpreendimentoGeo360Row {
   id_lote: number;
   nome: string;
   endereco_oficial: string | null;
+  bairro: string | null;
   total_unidades: number;
   encontrado_por: 'alias' | 'nome_oficial' | 'endereco';
 }
@@ -103,6 +105,7 @@ export class MapaService {
             'LOTE ' || g.id_lote::text
           ) AS nome,
           g.endereco_oficial,
+          g.bairro,
           g.total_unidades,
           CASE
             WHEN alias_encontrado.nome IS NOT NULL THEN 'alias'
@@ -239,7 +242,7 @@ export class MapaService {
       return lotes.map((lote) => ({
         codigo: lote.id_lote,
         nome: lote.nome,
-        logradouro: lote.endereco_oficial || '',
+        logradouro: formatarEnderecoEmpreendimento(lote.endereco_oficial, lote.bairro),
         fonte: 'geo360',
         cidade: lote.cidade,
         idLote: lote.id_lote,

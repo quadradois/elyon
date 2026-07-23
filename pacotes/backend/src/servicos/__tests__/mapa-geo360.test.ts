@@ -31,6 +31,7 @@ describe('MapaService - descoberta GEO360', () => {
         id_lote: 405683,
         nome: 'WISH VACA BRAVA',
         endereco_oficial: 'R T-53, SETOR BUENO',
+        bairro: 'S BUENO',
         total_unidades: 287,
         encontrado_por: 'alias'
       }
@@ -68,6 +69,7 @@ describe('MapaService - descoberta GEO360', () => {
         id_lote: 22366,
         nome: 'GRAN CANÁRIA',
         endereco_oficial: 'R DA DIVISA AP 402-BL03, BAIRRO S MORADA DO SOL',
+        bairro: 'S MORADA DO SOL',
         total_unidades: 112,
         encontrado_por: 'nome_oficial'
       }
@@ -79,7 +81,8 @@ describe('MapaService - descoberta GEO360', () => {
     expect(resultado[0]).toEqual(expect.objectContaining({
       idLote: 22366,
       fonte: 'geo360',
-      nome: 'GRAN CANÁRIA'
+      nome: 'GRAN CANÁRIA',
+      logradouro: 'R DA DIVISA, BAIRRO S MORADA DO SOL'
     }));
     expect(prisma.edificio.findMany).not.toHaveBeenCalled();
     expect(prisma.imovel.findMany).not.toHaveBeenCalled();
