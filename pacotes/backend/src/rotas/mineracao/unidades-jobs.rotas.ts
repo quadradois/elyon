@@ -9,7 +9,10 @@ const router = Router();
 const iniciarJobSchema = z.object({
     cdedificio: z.number({ required_error: 'Código do local é obrigatório' }),
     tipo: z.enum(['edificio', 'condominio'], { required_error: 'Tipo do local é obrigatório' }),
-    nomeEdificio: z.string().optional()
+    nomeEdificio: z.string().optional(),
+    fonte: z.enum(['legado', 'geo360']).default('legado'),
+    cidade: z.string().min(2).default('goiania'),
+    idLote: z.number().int().positive().optional()
 });
 
 /**
@@ -18,11 +21,18 @@ const iniciarJobSchema = z.object({
  */
 router.post('/iniciar', async (req: Request, res: Response) => {
     try {
-        const { cdedificio, tipo, nomeEdificio } = iniciarJobSchema.parse(req.body);
+        const { cdedificio, tipo, nomeEdificio, fonte, cidade, idLote } = iniciarJobSchema.parse(req.body);
 
-        console.log(`[JobUnidadesRoutes] Iniciando job para ${tipo} ${cdedificio}`);
+        console.log(`[JobUnidadesRoutes] Iniciando job para ${fonte}/${tipo} ${cdedificio}`);
 
-        const jobId = await criarJobUnidades(cdedificio, tipo, nomeEdificio);
+        const jobId = await criarJobUnidades(
+            cdedificio,
+            tipo,
+            nomeEdificio,
+            fonte,
+            cidade,
+            idLote
+        );
 
         return res.status(201).json({
             sucesso: true,
