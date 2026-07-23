@@ -653,17 +653,17 @@ model LoteMensagemInbound {
 }
 
 model EfeitoLoteInbound {
-  id           String                 @id @default(uuid())
-  loteId       String
-  lote         LoteMensagemInbound    @relation(fields: [loteId], references: [id], onDelete: Cascade)
-  tipo         String
-  status       String                 @default("RESERVADO")
-  fencingToken Int
-  chaveIdempotencia String             @unique
-  criadoEm     DateTime               @default(now())
-  atualizadoEm DateTime               @updatedAt
-  concluidoEm  DateTime?
-  resultado    String?                @db.Text
+  id                String              @id @default(uuid())
+  loteId            String
+  lote              LoteMensagemInbound @relation(fields: [loteId], references: [id], onDelete: Cascade)
+  tipo              String
+  status            String              @default("RESERVADO")
+  fencingToken      Int
+  chaveIdempotencia String              @unique
+  criadoEm          DateTime            @default(now())
+  atualizadoEm      DateTime            @updatedAt
+  concluidoEm       DateTime?
+  resultado         String?             @db.Text
 
   @@unique([loteId, tipo])
   @@index([status, criadoEm])
@@ -687,35 +687,35 @@ model FragmentoMensagemInbound {
 }
 
 model FollowupOutbound {
-  id                 String   @id @default(uuid())
-  tenantId           String
-  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  leadId             String
-  lead               Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  agendadoParaUtc    DateTime
-  timezoneIana       String
-  expressaoOriginal  String
-  motivo             String
-  motivoNormalizado  String
-  mensagemEnvio      String   @db.Text
-  policyVersion      String
-  status             String   @default("PENDENTE")
-  tentativas         Int      @default(0)
-  proximoRetryEm     DateTime?
-  leaseOwner         String?
-  leaseAte           DateTime?
-  fencingToken       Int      @default(0)
-  chaveEquivalencia  String
-  origemPedido       String
-  evidenciaPedido    String   @db.Text
-  reasonCode         String?
-  ultimoErro         String?  @db.Text
-  criadoEm           DateTime @default(now())
-  atualizadoEm       DateTime @updatedAt
-  executadoEm        DateTime?
-  canceladoEm        DateTime?
-  efeito             EfeitoFollowupOutbound?
-  requisicoes        RequisicaoFollowupOutbound[]
+  id                String                       @id @default(uuid())
+  tenantId          String
+  tenant            Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leadId            String
+  lead              Lead                         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agendadoParaUtc   DateTime
+  timezoneIana      String
+  expressaoOriginal String
+  motivo            String
+  motivoNormalizado String
+  mensagemEnvio     String                       @db.Text
+  policyVersion     String
+  status            String                       @default("PENDENTE")
+  tentativas        Int                          @default(0)
+  proximoRetryEm    DateTime?
+  leaseOwner        String?
+  leaseAte          DateTime?
+  fencingToken      Int                          @default(0)
+  chaveEquivalencia String
+  origemPedido      String
+  evidenciaPedido   String                       @db.Text
+  reasonCode        String?
+  ultimoErro        String?                      @db.Text
+  criadoEm          DateTime                     @default(now())
+  atualizadoEm      DateTime                     @updatedAt
+  executadoEm       DateTime?
+  canceladoEm       DateTime?
+  efeito            EfeitoFollowupOutbound?
+  requisicoes       RequisicaoFollowupOutbound[]
 
   @@index([tenantId, leadId, status, agendadoParaUtc])
   @@index([chaveEquivalencia])
@@ -724,14 +724,14 @@ model FollowupOutbound {
 }
 
 model RequisicaoFollowupOutbound {
-  id              String   @id @default(cuid())
-  chaveRequisicao String   @unique
+  id              String           @id @default(cuid())
+  chaveRequisicao String           @unique
   fingerprint     String
   operacao        String
   followupId      String
   outcome         String
-  criadoEm        DateTime @default(now())
-  atualizadoEm    DateTime @updatedAt
+  criadoEm        DateTime         @default(now())
+  atualizadoEm    DateTime         @updatedAt
   ultimoReplayEm  DateTime?
   followup        FollowupOutbound @relation(fields: [followupId], references: [id], onDelete: Cascade)
 
@@ -740,16 +740,16 @@ model RequisicaoFollowupOutbound {
 }
 
 model EfeitoFollowupOutbound {
-  id                 String           @id @default(uuid())
-  followupId         String           @unique
-  followup           FollowupOutbound @relation(fields: [followupId], references: [id], onDelete: Cascade)
-  status             String           @default("RESERVADO")
-  fencingToken       Int
-  chaveIdempotencia  String           @unique
-  resultado          String?          @db.Text
-  criadoEm           DateTime         @default(now())
-  atualizadoEm       DateTime         @updatedAt
-  concluidoEm        DateTime?
+  id                String           @id @default(uuid())
+  followupId        String           @unique
+  followup          FollowupOutbound @relation(fields: [followupId], references: [id], onDelete: Cascade)
+  status            String           @default("RESERVADO")
+  fencingToken      Int
+  chaveIdempotencia String           @unique
+  resultado         String?          @db.Text
+  criadoEm          DateTime         @default(now())
+  atualizadoEm      DateTime         @updatedAt
+  concluidoEm       DateTime?
 
   @@index([status, criadoEm])
   @@map("efeitos_followups_outbound")
@@ -1316,30 +1316,31 @@ model ImovelRancho {
 /// Caracterizacao agregada do lote/empreendimento no portal publico GEO360.
 /// Uma linha atende todas as unidades que compartilham cidade + id_lote.
 model Geo360Lote {
-  cidade               String
-  idLote               Int       @map("id_lote")
-  nomeCondominio       String?   @map("nome_condominio")
-  enderecoOficial      String?   @map("endereco_oficial")
-  bairro               String?
-  ocupacao             String?
-  totalUnidades        Int       @default(0) @map("total_unidades")
-  areaTerreno          Float?    @map("area_terreno")
-  areaTotalConstruida  Float?    @map("area_total_construida")
-  geometriaWkt         String?   @map("geometria_wkt")
-  latitude             Float?
-  longitude            Float?
-  fonteCaracterizacao  String    @default("PORTAL_INFO_LOTE") @map("fonte_caracterizacao")
-  rawCaracterizacao    Json?     @map("raw_caracterizacao")
-  status               String    @default("PENDENTE")
-  tentativas           Int       @default(0)
-  ultimoErro           String?   @map("ultimo_erro")
-  caracterizadoEm      DateTime? @map("caracterizado_em") @db.Timestamptz(6)
+  cidade                  String
+  idLote                  Int       @map("id_lote")
+  nomeCondominio          String?   @map("nome_condominio")
+  enderecoOficial         String?   @map("endereco_oficial")
+  bairro                  String?
+  ocupacao                String?
+  totalUnidades           Int       @default(0) @map("total_unidades")
+  areaTerreno             Float?    @map("area_terreno")
+  areaTotalConstruida     Float?    @map("area_total_construida")
+  geometriaWkt            String?   @map("geometria_wkt")
+  latitude                Float?
+  longitude               Float?
+  fonteCaracterizacao     String    @default("PORTAL_INFO_LOTE") @map("fonte_caracterizacao")
+  rawCaracterizacao       Json?     @map("raw_caracterizacao")
+  status                  String    @default("PENDENTE")
+  tentativas              Int       @default(0)
+  ultimoErro              String?   @map("ultimo_erro")
+  caracterizadoEm         DateTime? @map("caracterizado_em") @db.Timestamptz(6)
   unidadesSincronizadasEm DateTime? @map("unidades_sincronizadas_em") @db.Timestamptz(6)
-  midiasSincronizadasEm DateTime? @map("midias_sincronizadas_em") @db.Timestamptz(6)
-  criadoEm             DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
-  atualizadoEm         DateTime  @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+  midiasSincronizadasEm   DateTime? @map("midias_sincronizadas_em") @db.Timestamptz(6)
+  criadoEm                DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm            DateTime  @updatedAt @map("atualizado_em") @db.Timestamptz(6)
 
   midias  Geo360MidiaLote[]
+  aliases Geo360LoteAlias[]
 
   @@id([cidade, idLote])
   @@index([cidade, status])
@@ -1348,20 +1349,43 @@ model Geo360Lote {
   @@map("geo360_lotes")
 }
 
+/// Nomes comerciais e outros aliases validados sem sobrescrever o dado oficial.
+model Geo360LoteAlias {
+  cidade       String
+  idLote       Int       @map("id_lote")
+  nome         String
+  tipo         String    @default("COMERCIAL")
+  construtora  String?
+  fonteUrl     String?   @map("fonte_url")
+  validado     Boolean   @default(false)
+  validadoEm   DateTime? @map("validado_em") @db.Timestamptz(6)
+  observacao   String?
+  metadados    Json?
+  criadoEm     DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoEm DateTime  @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+
+  lote Geo360Lote @relation(fields: [cidade, idLote], references: [cidade, idLote], onDelete: Cascade)
+
+  @@id([cidade, idLote, nome])
+  @@index([nome])
+  @@index([cidade, idLote, validado])
+  @@map("geo360_lote_aliases")
+}
+
 /// Metadados de fotos publicas vinculadas ao lote no portal GEO360.
 model Geo360MidiaLote {
-  cidade       String
-  idMidia      BigInt   @map("id_midia")
-  idLote       Int      @map("id_lote")
-  link         String
-  nome         String?
-  principal    Int      @default(0)
-  situacaoFoto Int?     @map("situacao_foto")
-  dataPanorama DateTime? @map("data_panorama") @db.Date
-  nomeCamada   String?  @map("nome_camada")
-  raw          Json?
-  sincronizadoEm DateTime @default(now()) @map("sincronizado_em") @db.Timestamptz(6)
-  atualizadoEm DateTime @updatedAt @map("atualizado_em") @db.Timestamptz(6)
+  cidade         String
+  idMidia        BigInt    @map("id_midia")
+  idLote         Int       @map("id_lote")
+  link           String
+  nome           String?
+  principal      Int       @default(0)
+  situacaoFoto   Int?      @map("situacao_foto")
+  dataPanorama   DateTime? @map("data_panorama") @db.Date
+  nomeCamada     String?   @map("nome_camada")
+  raw            Json?
+  sincronizadoEm DateTime  @default(now()) @map("sincronizado_em") @db.Timestamptz(6)
+  atualizadoEm   DateTime  @updatedAt @map("atualizado_em") @db.Timestamptz(6)
 
   lote Geo360Lote @relation(fields: [cidade, idLote], references: [cidade, idLote], onDelete: Cascade)
 
@@ -1391,14 +1415,14 @@ model Geo360SyncRun {
 }
 
 model Geo360PrefixProgress {
-  cidade      String
-  prefixo     String
-  status      String
-  runId       String   @map("run_id") @db.Uuid
-  totalSearch Int      @default(0) @map("total_search")
-  detalhesOk  Int      @default(0) @map("detalhes_ok")
-  semFicha    Int      @default(0) @map("sem_ficha")
-  erros       Int      @default(0)
+  cidade       String
+  prefixo      String
+  status       String
+  runId        String   @map("run_id") @db.Uuid
+  totalSearch  Int      @default(0) @map("total_search")
+  detalhesOk   Int      @default(0) @map("detalhes_ok")
+  semFicha     Int      @default(0) @map("sem_ficha")
+  erros        Int      @default(0)
   atualizadoEm DateTime @default(now()) @map("atualizado_em") @db.Timestamptz(6)
 
   @@id([cidade, prefixo])
@@ -1406,34 +1430,34 @@ model Geo360PrefixProgress {
 }
 
 model Geo360ImovelStage {
-  cidade            String
-  inscricao         String
-  idImobiliario     BigInt?   @map("id_imobiliario")
-  idLote            BigInt?   @map("id_lote")
-  numeroCadastro    BigInt?   @map("numero_cadastro")
-  latitude          Float?
-  longitude         Float?
-  cpfCnpj           String?   @map("cpf_cnpj")
-  nomePessoa        String?   @map("nome_pessoa")
-  tipoPessoa        Int?      @map("tipo_pessoa")
-  endereco          String?
-  bairro            String?
-  cep               String?
-  complemento       String?
-  logradouro        String?
-  areaConstruida    Float?    @map("area_construida")
-  areaTerreno       Float?    @map("area_terreno")
-  tipoEdificacao    Int?      @map("tipo_edificacao")
-  nrLote            String?   @map("nr_lote")
-  idBairro          Int?      @map("id_bairro")
-  idQuadra          Int?      @map("id_quadra")
-  idSetor           Int?      @map("id_setor")
-  raw               Json?
-  detalheVersao     Int       @default(0) @map("detalhe_versao")
-  detalheEm         DateTime? @map("detalhe_em") @db.Timestamptz(6)
-  vistoEm           DateTime  @default(now()) @map("visto_em") @db.Timestamptz(6)
-  runId             String    @map("run_id") @db.Uuid
-  ativo             Boolean   @default(true)
+  cidade         String
+  inscricao      String
+  idImobiliario  BigInt?   @map("id_imobiliario")
+  idLote         BigInt?   @map("id_lote")
+  numeroCadastro BigInt?   @map("numero_cadastro")
+  latitude       Float?
+  longitude      Float?
+  cpfCnpj        String?   @map("cpf_cnpj")
+  nomePessoa     String?   @map("nome_pessoa")
+  tipoPessoa     Int?      @map("tipo_pessoa")
+  endereco       String?
+  bairro         String?
+  cep            String?
+  complemento    String?
+  logradouro     String?
+  areaConstruida Float?    @map("area_construida")
+  areaTerreno    Float?    @map("area_terreno")
+  tipoEdificacao Int?      @map("tipo_edificacao")
+  nrLote         String?   @map("nr_lote")
+  idBairro       Int?      @map("id_bairro")
+  idQuadra       Int?      @map("id_quadra")
+  idSetor        Int?      @map("id_setor")
+  raw            Json?
+  detalheVersao  Int       @default(0) @map("detalhe_versao")
+  detalheEm      DateTime? @map("detalhe_em") @db.Timestamptz(6)
+  vistoEm        DateTime  @default(now()) @map("visto_em") @db.Timestamptz(6)
+  runId          String    @map("run_id") @db.Uuid
+  ativo          Boolean   @default(true)
 
   @@id([cidade, inscricao])
   @@index([runId], map: "geo360_stage_run_idx")
@@ -1442,18 +1466,18 @@ model Geo360ImovelStage {
 }
 
 model Geo360SyncFailure {
-  cidade         String
-  prefixo        String
-  inscricao      String
-  idImobiliario  BigInt?   @map("id_imobiliario")
-  etapa          String
-  codigo         String?
-  mensagem       String
-  tentativas     Int       @default(1)
-  primeiraEm     DateTime  @default(now()) @map("primeira_em") @db.Timestamptz(6)
-  ultimaEm       DateTime  @default(now()) @map("ultima_em") @db.Timestamptz(6)
-  resolvidoEm    DateTime? @map("resolvido_em") @db.Timestamptz(6)
-  runId          String    @map("run_id") @db.Uuid
+  cidade        String
+  prefixo       String
+  inscricao     String
+  idImobiliario BigInt?   @map("id_imobiliario")
+  etapa         String
+  codigo        String?
+  mensagem      String
+  tentativas    Int       @default(1)
+  primeiraEm    DateTime  @default(now()) @map("primeira_em") @db.Timestamptz(6)
+  ultimaEm      DateTime  @default(now()) @map("ultima_em") @db.Timestamptz(6)
+  resolvidoEm   DateTime? @map("resolvido_em") @db.Timestamptz(6)
+  runId         String    @map("run_id") @db.Uuid
 
   @@id([cidade, inscricao, etapa])
   @@index([cidade, prefixo, resolvidoEm], map: "geo360_failures_abertas_idx")
@@ -1465,29 +1489,29 @@ model Geo360SyncFailure {
 // ====================================
 
 model Atividade {
-  id           String        @id @default(uuid())
-  leadId       String
-  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  tipo         TipoAtividade
-  canal        String?
-  titulo       String
-  descricao    String?
-  duracao      Int?
-  gravacao     String?
-  mensagem     String?
-  resultado    String?
-  agendadoPara DateTime?
-  completadoEm DateTime?
-  criadoPor    String?
-  criadoEm     DateTime      @default(now())
-    versao       Int           @default(0)
-    substituidaPorId String?       @unique
-    estadoAgendaAtualizadoEm DateTime @default(now())
-    noShowLeaseOwner         String?
-    noShowLeaseAte           DateTime?
-    noShowFencingToken       Int      @default(0)
-    noShowProcessadoEm       DateTime?
-    noShowReasonCode         String?
+  id                       String        @id @default(uuid())
+  leadId                   String
+  lead                     Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tipo                     TipoAtividade
+  canal                    String?
+  titulo                   String
+  descricao                String?
+  duracao                  Int?
+  gravacao                 String?
+  mensagem                 String?
+  resultado                String?
+  agendadoPara             DateTime?
+  completadoEm             DateTime?
+  criadoPor                String?
+  criadoEm                 DateTime      @default(now())
+  versao                   Int           @default(0)
+  substituidaPorId         String?       @unique
+  estadoAgendaAtualizadoEm DateTime      @default(now())
+  noShowLeaseOwner         String?
+  noShowLeaseAte           DateTime?
+  noShowFencingToken       Int           @default(0)
+  noShowProcessadoEm       DateTime?
+  noShowReasonCode         String?
 
   // ====================================
   // CONFIRMAÇÃO DE AGENDAMENTO
@@ -1524,8 +1548,8 @@ model Atividade {
   @@index([lembreteCorretorEnviadoEm])
   @@index([corretorOriginalId])
   @@index([corretorAtualId])
-    @@index([leadId, versao])
-    @@index([statusAgendamento, agendadoPara, noShowProcessadoEm], map: "atividades_no_show_claim_idx")
+  @@index([leadId, versao])
+  @@index([statusAgendamento, agendadoPara, noShowProcessadoEm], map: "atividades_no_show_claim_idx")
   @@map("atividades")
 }
 
@@ -1571,25 +1595,25 @@ model ComandoAgendaLedger {
 }
 
 model EfeitoAgendaOutbox {
-  id                 String    @id @default(uuid())
-  chaveComando       String    @unique
-  chaveIdempotencia  String    @unique
-  tenantId           String
-  leadId             String
-  atividadeId        String
-  tipo               String
-  mensagem           String    @db.Text
-  status             String    @default("NOVA")
-  fencingToken       Int       @default(0)
-  leaseOwner         String?
-  leaseAte           DateTime?
-  tentativas         Int       @default(0)
-  resultado          String?   @db.Text
-  reasonCode         String?
-  criadoEm           DateTime  @default(now())
-  atualizadoEm       DateTime  @updatedAt
-  concluidoEm        DateTime?
-  reconciliacaoEm    DateTime?
+  id                String    @id @default(uuid())
+  chaveComando      String    @unique
+  chaveIdempotencia String    @unique
+  tenantId          String
+  leadId            String
+  atividadeId       String
+  tipo              String
+  mensagem          String    @db.Text
+  status            String    @default("NOVA")
+  fencingToken      Int       @default(0)
+  leaseOwner        String?
+  leaseAte          DateTime?
+  tentativas        Int       @default(0)
+  resultado         String?   @db.Text
+  reasonCode        String?
+  criadoEm          DateTime  @default(now())
+  atualizadoEm      DateTime  @updatedAt
+  concluidoEm       DateTime?
+  reconciliacaoEm   DateTime?
 
   @@index([status, criadoEm])
   @@index([tenantId, leadId, criadoEm])
