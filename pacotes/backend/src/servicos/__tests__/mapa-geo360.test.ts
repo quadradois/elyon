@@ -12,6 +12,9 @@ jest.mock('../../lib/db', () => ({
       findMany: jest.fn<any>(),
       count: jest.fn<any>()
     },
+    geo360BuscaFallback: {
+      upsert: jest.fn<any>()
+    },
     imovelRancho: {
       count: jest.fn<any>(),
       findMany: jest.fn<any>()
@@ -22,6 +25,7 @@ jest.mock('../../lib/db', () => ({
 describe('MapaService - descoberta GEO360', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (prisma.geo360BuscaFallback.upsert as any).mockResolvedValue({});
   });
 
   it('retorna referência tipada quando encontra um alias validado', async () => {
@@ -111,6 +115,13 @@ describe('MapaService - descoberta GEO360', () => {
         encontradoPor: 'legado'
       })
     ]);
+    expect(prisma.geo360BuscaFallback.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          termoNormalizado: 'SOMENTE LEGADO'
+        })
+      })
+    );
   });
 
   it('lista unidades pelo par cidade e idLote, sem usar codigoEdificio', async () => {

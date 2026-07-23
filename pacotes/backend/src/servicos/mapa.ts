@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { prisma } from '../lib/db';
+import { registrarMetricaBuscaEmpreendimento } from '../observabilidade/geo360-busca-metrics';
+import { registrarBuscaFallbackLegado } from './geo360-busca-monitoramento';
 import { formatarEnderecoEmpreendimento } from './geo360-endereco';
 
 const MAPA_API_URL = 'https://portalmapa.goiania.go.gov.br/servicogyn/rest/services/MapaServer/Feature_BaseTeste/FeatureServer/3/query';
@@ -826,10 +828,12 @@ export class MapaService {
     // GEO360 é a fonte canônica. O legado só participa quando a fonte primária
     // não encontra nenhum resultado, evitando duplicar o mesmo empreendimento.
     if (empreendimentosGeo360.length > 0) {
+      registrarMetricaBuscaEmpreendimento('geo360');
       return empreendimentosGeo360.slice(0, limite);
     }
 
     if (!LEGADO_FALLBACK_HABILITADO) {
+      registrarMetricaBuscaEmpreendimento('legado_desabilitado');
       return [];
     }
 
@@ -891,19 +895,25 @@ export class MapaService {
 
       if (locaisLegado.length > 0) {
         const legadoEnriquecido = await this.enriquecerEdificiosComResumo(locaisLegado);
-        return legadoEnriquecido.map((item) => ({
+        const resultadoLegado = legadoEnriquecido.map((item) => ({
           ...item,
           fonte: 'legado' as const,
           encontradoPor: 'legado' as const
         })).slice(0, limite);
+
+        registrarMetricaBuscaEmpreendimento('legado_local');
+        await registrarBuscaFallbackLegado(termo, resultadoLegado);
+        return resultadoLegado;
       }
 
       if (MODO_BASE_LOCAL_ONLY) {
+        registrarMetricaBuscaEmpreendimento('vazio');
         return [];
       }
     } catch (error) {
       console.error('[MapaService] Erro ao buscar edifícios na base local:', error);
       if (MODO_BASE_LOCAL_ONLY) {
+        registrarMetricaBuscaEmpreendimento('vazio');
         return [];
       }
     }
@@ -914,6 +924,8 @@ export class MapaService {
       console.log(`[MapaService] ✅ ${doCache.length} edifícios encontrados no CACHE`);
       // Tentar atualizar cache em background (não bloqueia)
       this.atualizarCacheEdificiosBackground(termo, limite).catch(() => { });
+      registrarMetricaBuscaEmpreendimento('legado_local');
+      await registrarBuscaFallbackLegado(termo, doCache);
       return doCache;
     }
 
@@ -962,14 +974,19 @@ export class MapaService {
         console.error('[MapaService] Erro ao salvar cache de edifícios:', err)
       );
 
-      return this.enriquecerEdificiosComResumo(edificios);
+      const resultadoLegado = await this.enriquecerEdificiosComResumo(edificios);
+      registrarMetricaBuscaEmpreendimento('legado_api');
+      await registrarBuscaFallbackLegado(termo, resultadoLegado);
+      return resultadoLegado;
 
     } catch (error) {
       console.error('[MapaService] ❌ Erro na API externa:', error);
       console.log('[MapaService] API indisponível e cache vazio - retornando mock');
 
       // 3. Fallback Final: Mock de edifícios conhecidos
-      return this.mockEdificiosPorNome(termo);
+      const resultadoMock = this.mockEdificiosPorNome(termo);
+      registrarMetricaBuscaEmpreendimento(resultadoMock.length > 0 ? 'mock' : 'vazio');
+      return resultadoMock;
     }
   }
 
