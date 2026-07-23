@@ -1372,6 +1372,24 @@ model Geo360LoteAlias {
   @@map("geo360_lote_aliases")
 }
 
+/// Fila operacional agregada das buscas atendidas exclusivamente pelo legado.
+/// Não possui relação com as tabelas antigas para não criar dependência permanente.
+model Geo360BuscaFallback {
+  id                String    @id @default(uuid()) @db.Uuid
+  termoHash         String    @unique @map("termo_hash")
+  termoNormalizado  String    @map("termo_normalizado")
+  resultadosLegado Json      @map("resultados_legado")
+  ocorrencias       Int       @default(1)
+  status            String    @default("PENDENTE")
+  primeiroEm        DateTime  @default(now()) @map("primeiro_em") @db.Timestamptz(6)
+  ultimoEm          DateTime  @default(now()) @map("ultimo_em") @db.Timestamptz(6)
+  resolvidoEm       DateTime? @map("resolvido_em") @db.Timestamptz(6)
+  observacao        String?
+
+  @@index([status, ultimoEm])
+  @@map("geo360_buscas_fallback")
+}
+
 /// Metadados de fotos publicas vinculadas ao lote no portal GEO360.
 model Geo360MidiaLote {
   cidade         String
