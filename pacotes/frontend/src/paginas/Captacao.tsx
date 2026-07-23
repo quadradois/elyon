@@ -63,6 +63,10 @@ interface ResultadoBusca {
   bairro: string;
   tipo: "edificio" | "condominio";
   icone: string;
+  fonte?: "legado" | "geo360";
+  cidade?: string;
+  idLote?: number;
+  encontradoPor?: "alias" | "nome_oficial" | "endereco" | "legado";
   totalUnidades?: number;
 }
 
@@ -450,7 +454,10 @@ export function Captacao() {
         const { data: jobData } = await api.post('/mineracao/unidades/jobs/iniciar', {
           cdedificio: local.codigo,
           tipo: local.tipo,
-          nomeEdificio: local.nome
+          nomeEdificio: local.nome,
+          fonte: local.fonte || 'legado',
+          cidade: local.cidade || 'goiania',
+          idLote: local.idLote
         });
         const jobId = jobData.jobId;
 
@@ -517,7 +524,10 @@ export function Captacao() {
       const { data: jobData } = await api.post('/mineracao/unidades/jobs/iniciar', {
         cdedificio: local.codigo,
         tipo: local.tipo,
-        nomeEdificio: local.nome
+        nomeEdificio: local.nome,
+        fonte: local.fonte || 'legado',
+        cidade: local.cidade || 'goiania',
+        idLote: local.idLote
       });
       const jobId = jobData.jobId;
 

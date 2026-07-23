@@ -7,6 +7,9 @@ export interface JobUnidades {
     id: string;
     codigo: number;
     tipo: 'edificio' | 'condominio';
+    fonte: 'legado' | 'geo360';
+    cidade: string;
+    idLote?: number;
     nome?: string;
     status: 'pendente' | 'processando' | 'concluido' | 'erro';
     mensagem?: string;
@@ -30,7 +33,10 @@ const JOB_TTL_SECONDS = 3600; // 1 hora
 export async function criarJobUnidades(
     codigo: number,
     tipo: 'edificio' | 'condominio',
-    nome?: string
+    nome?: string,
+    fonte: 'legado' | 'geo360' = 'legado',
+    cidade: string = 'goiania',
+    idLote?: number
 ): Promise<string> {
     const redis = await getRedisClient();
     const jobId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
@@ -39,6 +45,9 @@ export async function criarJobUnidades(
         id: jobId,
         codigo,
         tipo,
+        fonte,
+        cidade,
+        idLote,
         nome,
         status: 'pendente',
         total: 0,
@@ -110,7 +119,36 @@ async function processarJobUnidades(jobId: string): Promise<void> {
 
         let todasUnidades: any[] = [];
 
-        if (job.tipo === 'edificio') {
+        if (job.fonte === 'geo360') {
+            const idLote = job.idLote || job.codigo;
+            const limit = 100;
+            let offset = 0;
+            let hasMore = true;
+
+            while (hasMore) {
+                const resultado = await mapaService.buscarUnidadesPorLoteGeo360(
+                    job.cidade || 'goiania',
+                    idLote,
+                    offset,
+                    limit,
+                    job.nome
+                );
+
+                if (offset === 0) {
+                    await atualizarJob(jobId, { total: resultado.total });
+                }
+
+                todasUnidades = [...todasUnidades, ...resultado.unidades];
+                await atualizarJob(jobId, {
+                    processados: todasUnidades.length
+                });
+
+                hasMore = resultado.hasMore;
+                offset += limit;
+
+                if (hasMore) await new Promise(r => setTimeout(r, 200));
+            }
+        } else if (job.tipo === 'edificio') {
             // ============================================
             // LÓGICA PARA EDIFÍCIOS VERTICAIS
             // ============================================

@@ -20,6 +20,10 @@ interface Edificio {
   codigo: number;
   nome: string;
   logradouro: string;
+  fonte?: 'legado' | 'geo360';
+  cidade?: string;
+  idLote?: number;
+  encontradoPor?: 'alias' | 'nome_oficial' | 'endereco' | 'legado';
   totalUnidades?: number;
   codigoEdificio?: number;
   numeroPavimentos?: number | null;
@@ -57,7 +61,232 @@ interface UnidadeImovel {
   cdedificio?: number;
 }
 
+interface EmpreendimentoGeo360Row {
+  cidade: string;
+  id_lote: number;
+  nome: string;
+  endereco_oficial: string | null;
+  total_unidades: number;
+  encontrado_por: 'alias' | 'nome_oficial' | 'endereco';
+}
+
 export class MapaService {
+
+  private normalizarTermoBusca(valor: string): string {
+    return valor
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '');
+  }
+
+  async buscarEmpreendimentosGeo360(
+    termo: string,
+    limite: number = 20
+  ): Promise<Edificio[]> {
+    const termoNormalizado = this.normalizarTermoBusca(termo);
+    if (termoNormalizado.length < 2) return [];
+
+    try {
+      const contem = `%${termoNormalizado}%`;
+      const prefixo = `${termoNormalizado}%`;
+
+      const lotes = await prisma.$queryRaw<EmpreendimentoGeo360Row[]>`
+        SELECT
+          g.cidade,
+          g.id_lote,
+          coalesce(
+            alias_encontrado.nome,
+            nullif(trim(g.nome_condominio), ''),
+            alias_preferido.nome,
+            'LOTE ' || g.id_lote::text
+          ) AS nome,
+          g.endereco_oficial,
+          g.total_unidades,
+          CASE
+            WHEN alias_encontrado.nome IS NOT NULL THEN 'alias'
+            WHEN regexp_replace(
+              translate(
+                upper(coalesce(g.nome_condominio, '')),
+                'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                'AAAAAEEEEIIIIOOOOOUUUUC'
+              ),
+              '[^A-Z0-9]+',
+              '',
+              'g'
+            ) LIKE ${contem} THEN 'nome_oficial'
+            ELSE 'endereco'
+          END AS encontrado_por
+        FROM geo360_lotes g
+        LEFT JOIN LATERAL (
+          SELECT a.nome
+          FROM geo360_lote_aliases a
+          WHERE a.cidade = g.cidade
+            AND a.id_lote = g.id_lote
+            AND a.validado = true
+            AND regexp_replace(
+              translate(
+                upper(a.nome),
+                'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                'AAAAAEEEEIIIIOOOOOUUUUC'
+              ),
+              '[^A-Z0-9]+',
+              '',
+              'g'
+            ) LIKE ${contem}
+          ORDER BY
+            CASE
+              WHEN regexp_replace(
+                translate(
+                  upper(a.nome),
+                  'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                  'AAAAAEEEEIIIIOOOOOUUUUC'
+                ),
+                '[^A-Z0-9]+',
+                '',
+                'g'
+              ) = ${termoNormalizado} THEN 0
+              WHEN regexp_replace(
+                translate(
+                  upper(a.nome),
+                  'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                  'AAAAAEEEEIIIIOOOOOUUUUC'
+                ),
+                '[^A-Z0-9]+',
+                '',
+                'g'
+              ) LIKE ${prefixo} THEN 1
+              ELSE 2
+            END,
+            a.nome
+          LIMIT 1
+        ) alias_encontrado ON true
+        LEFT JOIN LATERAL (
+          SELECT a.nome
+          FROM geo360_lote_aliases a
+          WHERE a.cidade = g.cidade
+            AND a.id_lote = g.id_lote
+            AND a.validado = true
+          ORDER BY a.criado_em
+          LIMIT 1
+        ) alias_preferido ON true
+        WHERE g.cidade = 'goiania'
+          AND (
+            alias_encontrado.nome IS NOT NULL
+            OR regexp_replace(
+              translate(
+                upper(coalesce(g.nome_condominio, '')),
+                'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                'AAAAAEEEEIIIIOOOOOUUUUC'
+              ),
+              '[^A-Z0-9]+',
+              '',
+              'g'
+            ) LIKE ${contem}
+            OR regexp_replace(
+              translate(
+                upper(coalesce(g.endereco_oficial, '')),
+                'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                'AAAAAEEEEIIIIOOOOOUUUUC'
+              ),
+              '[^A-Z0-9]+',
+              '',
+              'g'
+            ) LIKE ${contem}
+          )
+        ORDER BY
+          CASE
+            WHEN alias_encontrado.nome IS NOT NULL
+              AND regexp_replace(
+                translate(
+                  upper(alias_encontrado.nome),
+                  'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                  'AAAAAEEEEIIIIOOOOOUUUUC'
+                ),
+                '[^A-Z0-9]+',
+                '',
+                'g'
+              ) = ${termoNormalizado} THEN 0
+            WHEN regexp_replace(
+              translate(
+                upper(coalesce(g.nome_condominio, '')),
+                'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                'AAAAAEEEEIIIIOOOOOUUUUC'
+              ),
+              '[^A-Z0-9]+',
+              '',
+              'g'
+            ) = ${termoNormalizado} THEN 1
+            WHEN alias_encontrado.nome IS NOT NULL THEN 2
+            WHEN regexp_replace(
+              translate(
+                upper(coalesce(g.nome_condominio, '')),
+                'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                'AAAAAEEEEIIIIOOOOOUUUUC'
+              ),
+              '[^A-Z0-9]+',
+              '',
+              'g'
+            ) LIKE ${prefixo} THEN 3
+            ELSE 4
+          END,
+          g.total_unidades DESC,
+          nome
+        LIMIT ${limite};
+      `;
+
+      return lotes.map((lote) => ({
+        codigo: lote.id_lote,
+        nome: lote.nome,
+        logradouro: lote.endereco_oficial || '',
+        fonte: 'geo360',
+        cidade: lote.cidade,
+        idLote: lote.id_lote,
+        encontradoPor: lote.encontrado_por,
+        totalUnidades: lote.total_unidades
+      }));
+    } catch (error) {
+      console.error('[MapaService] Erro ao buscar empreendimentos GEO360:', error);
+      return [];
+    }
+  }
+
+  async buscarUnidadesPorLoteGeo360(
+    cidade: string,
+    idLote: number,
+    offset: number = 0,
+    limit: number = 500,
+    nomeEmpreendimento: string = ''
+  ): Promise<{ unidades: UnidadeImovel[]; total: number; hasMore: boolean }> {
+    const where = { cidade, idLote };
+    const [total, imoveis] = await Promise.all([
+      prisma.imovelRancho.count({ where }),
+      prisma.imovelRancho.findMany({
+        where,
+        skip: offset,
+        take: limit,
+        orderBy: [
+          { complemento: 'asc' },
+          { inscricaoCartografica: 'asc' }
+        ]
+      })
+    ]);
+
+    const unidades = imoveis.map((imovel) => ({
+      nrinscr: imovel.inscricaoCartografica,
+      nmedificio: nomeEmpreendimento,
+      incompl: imovel.complemento || imovel.nrLote || '',
+      nmlogradou: imovel.logradouro || imovel.endereco || '',
+      nmbairro: imovel.bairro || '',
+      areaedif: imovel.areaConstruida || undefined
+    }));
+
+    return {
+      unidades,
+      total,
+      hasMore: offset + unidades.length < total
+    };
+  }
 
   private sanitizarInteiroPositivo(valor?: number | null): number | null {
     if (typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0) return null;
@@ -588,6 +817,8 @@ export class MapaService {
   async buscarEdificiosPorNome(termo: string, limite: number = 20): Promise<Edificio[]> {
     console.log(`[MapaService] Buscando edifícios por nome: "${termo}"...`);
 
+    const empreendimentosGeo360 = await this.buscarEmpreendimentosGeo360(termo, limite);
+
     try {
       const termoUpper = termo.toUpperCase();
 
@@ -642,9 +873,20 @@ export class MapaService {
         });
       }
 
-      const locais = Array.from(mapaEdificios.values()).slice(0, limite);
-      if (locais.length > 0) {
-        return this.enriquecerEdificiosComResumo(locais);
+      // Não deduplicar apenas pelo nome: empreendimentos homônimos podem existir
+      // em lotes/endereço distintos. A identidade canônica GEO360 é cidade + id_lote.
+      const locaisLegado = Array.from(mapaEdificios.values());
+
+      if (empreendimentosGeo360.length > 0 || locaisLegado.length > 0) {
+        const legadoEnriquecido = await this.enriquecerEdificiosComResumo(locaisLegado);
+        return [
+          ...empreendimentosGeo360,
+          ...legadoEnriquecido.map((item) => ({
+            ...item,
+            fonte: 'legado' as const,
+            encontradoPor: 'legado' as const
+          }))
+        ].slice(0, limite);
       }
 
       if (MODO_BASE_LOCAL_ONLY) {
@@ -652,6 +894,9 @@ export class MapaService {
       }
     } catch (error) {
       console.error('[MapaService] Erro ao buscar edifícios na base local:', error);
+      if (empreendimentosGeo360.length > 0) {
+        return empreendimentosGeo360;
+      }
       if (MODO_BASE_LOCAL_ONLY) {
         return [];
       }

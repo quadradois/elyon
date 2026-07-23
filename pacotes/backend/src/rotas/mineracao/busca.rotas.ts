@@ -195,7 +195,12 @@ router.get('/buscar-imoveis', async (req, res) => {
         nome: e.nome,
         bairro: e.logradouro || '',
         tipo: 'edificio' as const,
-        icone: '🏢'
+        icone: '🏢',
+        fonte: e.fonte || 'legado',
+        cidade: e.cidade,
+        idLote: e.idLote,
+        encontradoPor: e.encontradoPor,
+        totalUnidades: e.totalUnidades
       })),
       ...condominios.map(c => ({
         codigo: c.codigo,
