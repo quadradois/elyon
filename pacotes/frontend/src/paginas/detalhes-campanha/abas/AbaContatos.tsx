@@ -30,6 +30,10 @@ import {
 import { Contato, formatarTelefone, getStatusProspeccaoColor } from "../hooks/useCampanhaDetalhes";
 import { api } from "../../../servicos/api";
 import { toast } from "sonner";
+import {
+  formatarStatusProspeccao,
+  obterStatusProspeccaoExibicao,
+} from "../../../lib/status-prospeccao";
 
 interface AbaContatosProps {
   contatos: Contato[];
@@ -388,6 +392,7 @@ export function AbaContatos({
                   {contatos.map((contato) => {
                     const estaConfirmando =
                       confirmandoAcao !== null && confirmandoAcao.contatoId === contato.id;
+                    const statusProspeccao = obterStatusProspeccaoExibicao(contato);
 
                     return (
                       <tr
@@ -493,12 +498,12 @@ export function AbaContatos({
                           <div className="flex flex-col gap-1">
                             <span
                               className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusProspeccaoColor(
-                                contato.statusProspeccao
+                                statusProspeccao
                               )}`}
                             >
-                              {contato.statusProspeccao.replace(/_/g, " ")}
+                              {formatarStatusProspeccao(statusProspeccao)}
                             </span>
-                            {contato.virouLead && (
+                            {contato.virouLead && statusProspeccao !== "LEAD" && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 w-fit">
                                 <UserCheck className="w-3 h-3" />
                                 LEAD
