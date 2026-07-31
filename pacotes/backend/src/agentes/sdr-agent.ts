@@ -17,6 +17,7 @@ import { Agent, type RunContext, type Tool } from '@openai/agents';
 import { ElyonContext, criarModeloBYOK } from './elyon-context';
 import type { ElyonAgent } from './types';
 import { z } from 'zod';
+import { formatInTimeZone } from 'date-fns-tz';
 import {
     converterParaLeadTool,
     qualificarLeadTool,
@@ -494,6 +495,7 @@ export function criarSdrAgent(config: {
 
             // Shared behavioral guardrails (espelhamento, anti-contradição, etc.)
             basePrompt += getSharedBehavioralRules();
+            basePrompt += `\n\n[RELÓGIO CONFIÁVEL DO SISTEMA]\nAgora em America/Sao_Paulo: ${formatInTimeZone(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm')}.\nInterprete hoje/amanhã a partir deste relógio. Após uma tool confirmar o agendamento, repita sempre a data absoluta retornada; não a substitua por "hoje" ou "amanhã".`;
 
             // Knowledge base do empreendimento (briefing)
             if (ctx?.knowledgeBase) {

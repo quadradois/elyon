@@ -306,43 +306,61 @@ export async function criarEventoComMeet(params: CriarEventoParams): Promise<Eve
     attendees.push({ email: cfg.closerEmail });
   }
 
-  try {
-    const response = await calendar.events.insert({
-      calendarId: cfg.calendarId,
-      conferenceDataVersion: 1,  // Necessário para gerar Google Meet
-      requestBody: {
-        summary: params.titulo,
-        description: descricaoFull,
-        start: {
-          dateTime: inicio.toISOString(),
-          timeZone: CALENDAR_CONFIG.TIMEZONE,
-        },
-        end: {
-          dateTime: fim.toISOString(),
-          timeZone: CALENDAR_CONFIG.TIMEZONE,
-        },
-        attendees,
-        conferenceData: {
-          createRequest: {
-            requestId: `elyon-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            conferenceSolutionKey: { type: 'hangoutsMeet' },
-          },
-        },
-        reminders: {
-          useDefault: false,
-          overrides: [
-            { method: 'popup', minutes: 30 },
-            { method: 'email', minutes: 60 },
-          ],
-        },
-        // Cor verde (sinal de reunião confirmada)
-        colorId: '10',
+  const requestBody: calendar_v3.Schema$Event = {
+    summary: params.titulo,
+    description: descricaoFull,
+    start: {
+      dateTime: inicio.toISOString(),
+      timeZone: CALENDAR_CONFIG.TIMEZONE,
+    },
+    end: {
+      dateTime: fim.toISOString(),
+      timeZone: CALENDAR_CONFIG.TIMEZONE,
+    },
+    attendees,
+    conferenceData: {
+      createRequest: {
+        requestId: `elyon-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
       },
-    });
+    },
+    reminders: {
+      useDefault: false,
+      overrides: [
+        { method: 'popup', minutes: 30 },
+        { method: 'email', minutes: 60 },
+      ],
+    },
+    colorId: '10',
+  };
+
+  try {
+    let response: any;
+    try {
+      response = await calendar.events.insert({
+        calendarId: cfg.calendarId,
+        conferenceDataVersion: 1,
+        requestBody,
+      });
+    } catch (error: any) {
+      const semDelegacao = attendees.length > 0
+        && /cannot invite attendees without domain-wide delegation/i.test(String(error?.message || ''));
+      if (!semDelegacao) throw error;
+
+      // Contas de serviço sem DWD podem criar o evento no calendário
+      // compartilhado, mas não enviar convites. Mantemos o evento/Meet e as
+      // notificações seguem pelo próprio Elyon.
+      logger.warn('[GoogleCalendar] Conta sem Domain-Wide Delegation; repetindo criação sem attendees');
+      response = await calendar.events.insert({
+        calendarId: cfg.calendarId,
+        conferenceDataVersion: 1,
+        requestBody: { ...requestBody, attendees: undefined },
+      });
+    }
 
     const evento = response.data;
     const linkMeet = evento.conferenceData?.entryPoints?.find(
-      (ep) => ep.entryPointType === 'video'
+      (ep: calendar_v3.Schema$EntryPoint) => ep.entryPointType === 'video'
     )?.uri || null;
 
     const resultado: EventoCriado = {

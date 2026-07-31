@@ -75,11 +75,23 @@ export async function resolverEspecialistaCampanha(params: {
     };
   }
 
-  const pool = await prisma.usuario.findFirst({
+  // Prioriza corretores. Em tenants que ainda operam apenas com perfis ADMIN,
+  // permite um especialista comercial ativo como fallback, evitando agenda órfã.
+  const poolCorretor = await prisma.usuario.findFirst({
     where: {
       tenantId: params.tenantId,
       estaAtivo: true,
       papel: 'CORRETOR',
+      telefone: { not: null },
+    },
+    orderBy: { atualizadoEm: 'desc' },
+    select: { id: true, nome: true, telefone: true, email: true, papel: true }
+  });
+  const pool = poolCorretor || await prisma.usuario.findFirst({
+    where: {
+      tenantId: params.tenantId,
+      estaAtivo: true,
+      papel: 'ADMIN',
       telefone: { not: null },
     },
     orderBy: { atualizadoEm: 'desc' },
