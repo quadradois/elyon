@@ -131,13 +131,34 @@ export async function resolverLeadIdCanonico(
     telefone: string,
     tenantId: string
 ): Promise<string | null> {
-    const telNormalizado = telefone.replace(/\D/g, '').slice(-11);
+    const digitos = telefone.replace(/\D/g, '');
+    const telefoneNacional = digitos.startsWith('55') && (digitos.length === 12 || digitos.length === 13)
+        ? digitos.slice(2)
+        : digitos;
+
+    if (telefoneNacional.length !== 10 && telefoneNacional.length !== 11) {
+        logger.warn({ tamanho: telefoneNacional.length }, '[ORCHESTRATOR-QUERIES] Telefone brasileiro invalido para resolucao canonica');
+        return null;
+    }
+
+    const variantes = new Set<string>([telefoneNacional]);
+    if (telefoneNacional.length === 10) {
+        variantes.add(`${telefoneNacional.slice(0, 2)}9${telefoneNacional.slice(2)}`);
+    } else if (telefoneNacional[2] === '9') {
+        variantes.add(`${telefoneNacional.slice(0, 2)}${telefoneNacional.slice(3)}`);
+    }
+
+    const telefones = [...variantes];
+    const camposTelefone = ['telefone', 'telefone2', 'telefone3', 'telefone4', 'telefone5'] as const;
+    const filtrosTelefone = camposTelefone.flatMap((campo) =>
+        telefones.map((numero) => ({ [campo]: { contains: numero } }))
+    );
 
     // 1. Buscar Leads por telefone no tenant (independente de statusProspeccao)
     const leads = await prisma.lead.findMany({
         where: {
-            telefone: { contains: telNormalizado },
             tenantId,
+            OR: filtrosTelefone,
         },
         select: { id: true },
     });
@@ -149,7 +170,6 @@ export async function resolverLeadIdCanonico(
     if (leads.length > 1) {
         // Ambiguidade: múltiplos Leads para o mesmo telefone no mesmo tenant
         logger.warn({
-            telefone: telNormalizado,
             tenantId,
             count: leads.length,
         }, '[ORCHESTRATOR-QUERIES] Ambiguidade: múltiplos Leads para telefone no tenant — falha fechada');
