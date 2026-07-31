@@ -11,6 +11,7 @@ export type EvolutionReasonCode =
   | 'EVOLUTION_UNAVAILABLE'
   | 'EVOLUTION_UPSTREAM_FAILURE'
   | 'WHATSAPP_DATABASE_FAILURE'
+  | 'WHATSAPP_QR_TIMEOUT'
   | 'WHATSAPP_CONNECTION_FAILED';
 
 interface EvolutionFailureContext {
