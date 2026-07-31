@@ -46,11 +46,40 @@ describe('resolverLeadIdCanonico', () => {
             .resolves.toBe('lead-canonico');
         expect(mockPrisma.lead.findMany).toHaveBeenCalledWith({
             where: {
-                telefone: { contains: '62999990001' },
                 tenantId: 'tenant-001',
+                OR: expect.arrayContaining([
+                    { telefone: { contains: '62999990001' } },
+                    { telefone: { contains: '6299990001' } },
+                    { telefone5: { contains: '62999990001' } },
+                    { telefone5: { contains: '6299990001' } },
+                ]),
             },
             select: { id: true },
         });
+    });
+
+    it.each([
+        ['telefone nacional de 10 digitos', '6233334444', ['6233334444', '62933334444']],
+        ['telefone nacional de 11 digitos', '62933334444', ['62933334444', '6233334444']],
+        ['DDI com telefone de 10 digitos', '556233334444', ['6233334444', '62933334444']],
+        ['DDI com telefone de 11 digitos', '+55 (62) 93333-4444', ['62933334444', '6233334444']],
+    ])('resolve %s usando variantes seguras em todos os campos', async (_cenario, entrada, esperados) => {
+        mockPrisma.lead.findMany.mockResolvedValue([{ id: 'lead-canonico' }]);
+
+        await expect(resolverLeadIdCanonico(entrada, 'tenant-001')).resolves.toBe('lead-canonico');
+
+        const chamada = mockPrisma.lead.findMany.mock.calls[0][0];
+        expect(chamada.where.tenantId).toBe('tenant-001');
+        for (const campo of ['telefone', 'telefone2', 'telefone3', 'telefone4', 'telefone5']) {
+            for (const numero of esperados) {
+                expect(chamada.where.OR).toContainEqual({ [campo]: { contains: numero } });
+            }
+        }
+    });
+
+    it('falha fechada sem consultar o banco quando o telefone e invalido', async () => {
+        await expect(resolverLeadIdCanonico('12345', 'tenant-001')).resolves.toBeNull();
+        expect(mockPrisma.lead.findMany).not.toHaveBeenCalled();
     });
 
     it('falha fechada quando não existe Lead no tenant', async () => {
