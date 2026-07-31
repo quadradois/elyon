@@ -28,6 +28,8 @@ import { sanitizeInt, sanitizeFloat, sanitizeBool, sanitizeStr, sanitizeEnum, sa
 import { wrapToolExecute } from './tool-wrapper';
 import { avaliarPolicyAcaoSensivel, isAutoCaptadoAfterCrmEnabled } from './sensitive-action-policy';
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
+import { interpretarAgendamentoTemporal } from '../servicos/agenda-temporal';
+import { resolverEspecialistaCampanha } from '../servicos/resolucao-especialista-campanha';
 
 async function registrarExecucaoTool(params: {
     leadId?: string;
@@ -924,7 +926,8 @@ NÃO confirme o agendamento em texto sem chamar esta tool primeiro. A confirmaç
 
 Se a tool retornar disponivel=false, SUGIRA horários alternativos do campo 'alternativas' e peça ao lead para escolher outro horário.
 
-FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano atual (2026).
+FORMATO da data: preserve a expressão temporal do lead sempre que possível (ex.: "amanhã 14:00").
+O backend resolverá datas relativas de forma determinística em America/Sao_Paulo usando a mensagem inbound original.
 
 ⚠️ NUNCA substitua a chamada desta tool por uma confirmação textual. Se não chamar a tool, o agendamento NÃO será registrado no sistema.
 
@@ -932,7 +935,7 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
 
     parameters: z.object({
         contatoId: z.string().describe('ID do contato (mesmo usado nas outras tools)'),
-        dataHora: z.string().describe('Data e hora confirmada: "DD/MM/YYYY HH:mm"'),
+        dataHora: z.string().describe('Data e hora informada pelo lead; preserve expressões relativas como "amanhã 14:00"'),
         modalidade: z.enum(['google_meet', 'whatsapp_video', 'zoom']).default('whatsapp_video').describe('Tipo de reunião virtual'),
         observacoesCloser: z.string().nullable().describe('RELATÓRIO DA CONVERSA para o Corretor Humano: dores SPIN identificadas, nível de interesse, objeções levantadas, PVAM inferido, contexto da negociação')
     }),
@@ -951,7 +954,7 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
             // 1. Resolver leadId a partir do contatoId
             const contato = await prisma.lead.findUnique({
                 where: { id: args.contatoId },
-                select: { id: true, nome: true, email: true }
+                select: { id: true, nome: true, email: true, campanhaOrigemId: true }
             });
 
             if (!contato) {
@@ -961,23 +964,30 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
             const leadId = contato.id;
             console.log(`[TOOL] agendar_reuniao_closer - LeadId resolvido: ${leadId}`);
 
-            // 2. Parse data "DD/MM/YYYY HH:mm"
-            let agendadoPara: Date | null = null;
-            try {
-                const [dataParte, horaParte] = args.dataHora.split(' ');
-                if (dataParte) {
-                    const [dia, mes, ano] = dataParte.split('/').map(Number);
-                    if (dia && mes && ano) {
-                        const [hora, minuto] = (horaParte || '10:00').split(':').map(Number);
-                        agendadoPara = new Date(ano, mes - 1, dia, hora || 10, minuto || 0);
-                    }
-                }
-            } catch (e) {
-                console.warn('[TOOL] agendar_reuniao_closer - Erro no parse da data:', e);
+            // 2. Resolver a data a partir da mensagem inbound confiável. Quando o
+            // modelo transforma "amanhã" em uma data errada, a evidência original
+            // prevalece sobre o argumento gerado pelo LLM.
+            const temporal = interpretarAgendamentoTemporal({
+                mensagemAtual: runContext?.context?.mensagemAtual,
+                dataHoraArgumento: args.dataHora,
+                timezone: 'America/Sao_Paulo',
+            });
+            if (!temporal.ok) {
+                return JSON.stringify({ success: false, error: 'Data ou hora inválida/ambígua. Confirme novamente com o lead.', reasonCode: temporal.reasonCode });
             }
+            const agendadoPara = temporal.utc;
+            const dataHoraConfirmada = temporal.dataHoraLocal;
 
-            if (!agendadoPara || isNaN(agendadoPara.getTime())) {
-                return JSON.stringify({ success: false, error: `Data inválida: "${args.dataHora}". Formato esperado: DD/MM/YYYY HH:mm` });
+            const tenantId = resolverTenantIdDoContexto(runContext)!;
+            const especialista = contato.campanhaOrigemId
+                ? await resolverEspecialistaCampanha({ tenantId, campanhaId: contato.campanhaOrigemId })
+                : null;
+            if (!especialista) {
+                return JSON.stringify({
+                    success: false,
+                    reasonCode: 'SPECIALIST_NOT_CONFIGURED',
+                    error: 'Nenhum especialista ativo está configurado para esta campanha. Não confirme o agendamento ainda.'
+                });
             }
 
             // 3. Tentar Google Calendar (se configurado)
@@ -1013,17 +1023,18 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                             disponivel: false,
                             conflito,
                             alternativas: alternativasTexto,
-                            mensagem: `⚠️ Esse horário (${args.dataHora}) já está ocupado. Sugira ao lead os seguintes horários disponíveis:\n\n${alternativasTexto}`
+                            mensagem: `⚠️ Esse horário (${dataHoraConfirmada}) já está ocupado. Sugira ao lead os seguintes horários disponíveis:\n\n${alternativasTexto}`
                         });
                     }
 
                     // 3b. Criar evento real com Google Meet
                     const participantes: string[] = [];
                     if (contato.email) participantes.push(contato.email);
+                    if (especialista.email && !participantes.includes(especialista.email)) participantes.push(especialista.email);
 
                     const evento = await googleCalendarService.criarEventoComMeet({
-                    titulo: `Atendimento ${contato.nome || 'Lead'} — Elyon`,
-                    descricao: `Atendimento agendado via WhatsApp (Elyon AI)`,
+                    titulo: `Atendimento ${contato.nome || 'Lead'} com ${especialista.nome} — Elyon`,
+                    descricao: `Atendimento agendado via WhatsApp (Elyon AI). Especialista: ${especialista.nome}.`,
                         dataHoraInicio: agendadoPara,
                         participantes,
                         observacoesCloser: args.observacoesCloser,
@@ -1063,8 +1074,9 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
             });
 
             const descricaoAtividade = [
-                `Data/Hora: ${args.dataHora}`,
+                `Data/Hora: ${dataHoraConfirmada}`,
                 `Modalidade: ${args.modalidade}`,
+                `Especialista: ${especialista.nome} (${especialista.origem})`,
                 linkReuniao ? `Link: ${linkReuniao}` : 'Link: sem link automático (Google Calendar indisponível)',
                 eventoGoogleId ? `Google Event ID: ${eventoGoogleId}` : '',
                 usouGoogleCalendar ? '✅ Sincronizado com Google Calendar' : '⚠️ Apenas registro local (Google Calendar não configurado)',
@@ -1072,31 +1084,38 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
             ].filter(Boolean).join(' | ');
 
             if (atividadeAberta) {
-                const tenantId = resolverTenantIdDoContexto(runContext)!;
                 const result = await executarComandoAgenda({
                     operacao: 'REAGENDAR', tenantId, leadId, atividadeId: atividadeAberta.id,
                     requestIdentity: { source: 'INBOUND_BATCH', id: `${durableExecutionId}:agenda-reschedule` },
                     ator: 'ai_agent', origem: 'TOOL_AGENDAR_REUNIAO', motivo: 'Novo horario confirmado pelo Lead',
                     policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION, ocorridoEm: new Date(),
                     expectedVersion: atividadeAberta.versao, novoHorario: agendadoPara,
-                    novoTitulo: `Atendimento reagendado — ${args.dataHora}`, novaDescricao: descricaoAtividade,
+                    novoTitulo: `Atendimento reagendado — ${dataHoraConfirmada}`, novaDescricao: descricaoAtividade,
                 });
                 if (!result.success) return JSON.stringify({ success: false, reasonCode: result.reasonCode });
+                await prisma.atividade.update({
+                    where: { id: atividadeAberta.id },
+                    data: {
+                        corretorOriginalId: especialista.usuarioId || undefined,
+                        corretorAtualId: especialista.usuarioId || undefined,
+                    }
+                });
             } else {
-                const tenantId = resolverTenantIdDoContexto(runContext)!;
                 await prisma.$transaction(async (tx) => {
                     const leadAtual = await tx.lead.findFirst({ where: { id: leadId, tenantId }, select: { status: true } });
                     if (!leadAtual || !['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA'].includes(leadAtual.status)) throw new Error('STATE_TRANSITION_DENIED');
                     const criada = await tx.atividade.create({ data: {
                         leadId,
                         tipo: 'REUNIAO',
-                        titulo: `Atendimento agendado — ${args.dataHora}`,
+                        titulo: `Atendimento agendado — ${dataHoraConfirmada}`,
                         descricao: descricaoAtividade,
                         criadoPor: 'ai_agent',
                         agendadoPara,
                         statusAgendamento: 'PENDENTE',
                         statusConfirmacaoCorretor: 'PENDENTE',
                         tokenConfirmacaoCorretor: crypto.randomUUID(),
+                        corretorOriginalId: especialista.usuarioId || null,
+                        corretorAtualId: especialista.usuarioId || null,
                     } });
                     await tx.lead.update({ where: { id: leadId }, data: { status: 'VISITA_AGENDADA' } });
                     await tx.milestoneAgenda.create({ data: {
@@ -1111,16 +1130,17 @@ FORMATO da data: "DD/MM/YYYY HH:mm" — Se o lead não informou o ano, use o ano
                 leadId,
                 toolName: 'agendar_reuniao_closer',
                 sucesso: true,
-                detalhes: `${atividadeAberta ? 'Reagendado' : 'Agendado'} para ${args.dataHora} via ${args.modalidade}${usouGoogleCalendar ? ' (Google Calendar)' : ' (local)'}`
+                detalhes: `${atividadeAberta ? 'Reagendado' : 'Agendado'} para ${dataHoraConfirmada} via ${args.modalidade} com ${especialista.nome}${usouGoogleCalendar ? ' (Google Calendar)' : ' (local)'}`
             });
 
-            const mensagem = `✅ Agendamento confirmado! Envie ao lead: "Perfeito — está confirmado para ${args.dataHora}. O corretor vai te ligar nesse horário combinado."`;
+            const mensagem = `✅ Agendamento confirmado! Envie ao lead: "Perfeito — está confirmado para ${dataHoraConfirmada}. ${especialista.nome} vai te ligar nesse horário combinado."`;
 
             return JSON.stringify({
                 success: true,
                 disponivel: true,
                 leadId,
-                dataHora: args.dataHora,
+                dataHora: dataHoraConfirmada,
+                especialista: { nome: especialista.nome, cargo: especialista.cargo, origem: especialista.origem },
                 modalidade: args.modalidade,
                 linkReuniao,
                 eventoGoogleId,

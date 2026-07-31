@@ -598,6 +598,7 @@ Use isso como desempate estratégico na próxima ação.`;
             assertFencing: contexto.assertFencing,
             withFencedTransaction: contexto.withFencedTransaction,
             executeExternalEffect: contexto.executeExternalEffect,
+            mensagemAtual: mensagens.filter((mensagem) => mensagem.role === 'user').pop()?.content,
         });
 
         tFases.preContexto = Date.now() - inicioTurno;

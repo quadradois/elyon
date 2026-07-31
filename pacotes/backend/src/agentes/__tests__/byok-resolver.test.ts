@@ -113,6 +113,14 @@ describe('resolverChaveAgentes', () => {
     const result = resolverChaveAgentes(tenant);
     expect(result.fonte).toBe('plataforma');
   });
+
+  it('não envia chave OpenRouter ao endpoint de embeddings da OpenAI', () => {
+    mockedDescriptografar.mockReturnValue('openrouter-key');
+    const tenant = criarTenant({ llmProvedor: 'openrouter', llmBaseUrl: 'https://openrouter.ai/api/v1' });
+    const result = resolverChaveEmbeddings(tenant);
+    expect(result).toMatchObject({ fonte: 'plataforma', apiKey: PLATAFORMA_KEY });
+    expect(mockedDescriptografar).not.toHaveBeenCalled();
+  });
 });
 
 // ============================================

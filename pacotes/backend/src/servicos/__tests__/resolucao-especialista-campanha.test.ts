@@ -54,4 +54,22 @@ describe('resolverEspecialistaCampanha', () => {
     expect(res?.origem).toBe('POOL_TENANT');
     expect(res?.usuarioId).toBe('u3');
   });
+
+  it('usa admin ativo como especialista comercial quando não há corretor no tenant', async () => {
+    mockPrisma.campanha.findUnique.mockResolvedValue({
+      tenantId: 't1', responsavelCorretor: null, fallbackCorretor: null,
+    });
+    mockPrisma.usuario.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'admin-1', nome: 'Ricardo', telefone: '62999999999', email: 'r@x.com', papel: 'ADMIN', estaAtivo: true,
+      });
+
+    const res = await resolverEspecialistaCampanha({ tenantId: 't1', campanhaId: 'c1' });
+
+    expect(res).toMatchObject({
+      origem: 'POOL_TENANT', usuarioId: 'admin-1', cargo: 'Especialista Comercial',
+    });
+    expect(mockPrisma.usuario.findFirst).toHaveBeenCalledTimes(2);
+  });
 });

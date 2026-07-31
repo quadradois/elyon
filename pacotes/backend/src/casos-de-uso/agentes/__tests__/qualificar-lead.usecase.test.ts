@@ -26,8 +26,8 @@ describe('QualificarLeadUseCase', () => {
     jest.clearAllMocks();
   });
 
-  it('retorna erro quando contato não existe', async () => {
-    mockPrisma.contato.findUnique.mockResolvedValue(null);
+  it('retorna erro quando lead não existe', async () => {
+    mockPrisma.lead.findUnique.mockResolvedValue(null);
 
     const result = await useCase.execute({
       contatoId: 'contato-inexistente',
@@ -36,7 +36,7 @@ describe('QualificarLeadUseCase', () => {
       timeline: '2 meses',
     });
 
-    expect(result).toEqual({ success: false, error: 'Contato não encontrado' });
+    expect(result).toEqual({ success: false, error: 'Lead não encontrado' });
     expect(mockPrisma.lead.create).not.toHaveBeenCalled();
   });
 
@@ -114,17 +114,10 @@ describe('QualificarLeadUseCase', () => {
     expect(mockPrisma.lead.create).not.toHaveBeenCalled();
   });
 
-  it('qualifica lead existente sem criar novo lead', async () => {
-    mockPrisma.contato.findUnique.mockResolvedValue({
-      id: 'contato-1',
-      leadId: 'lead-1',
-      campanha: { tenantId: 'tenant-1' },
-    });
-
-    mockPrisma.lead.findUnique.mockResolvedValue({
-      doresIdentificadas: [],
-      status: 'QUALIFICADO',
-    });
+  it('qualifica lead existente via alias contatoId sem criar novo lead', async () => {
+    mockPrisma.lead.findUnique
+      .mockResolvedValueOnce({ id: 'lead-1', enderecoImovel: null, tipoImovel: null })
+      .mockResolvedValueOnce({ doresIdentificadas: [], status: 'QUALIFICADO', schemaState: {} });
 
     mockPrisma.lead.update.mockResolvedValue({
       interesseEm: 'Vender apartamento',
@@ -140,7 +133,7 @@ describe('QualificarLeadUseCase', () => {
     });
 
     const result = await useCase.execute({
-      contatoId: 'contato-1',
+      contatoId: 'lead-1',
       temperatura: 'QUENTE',
       interesse: 'Vender apartamento',
       timeline: '3 meses',
@@ -160,29 +153,10 @@ describe('QualificarLeadUseCase', () => {
     expect(mockPrisma.atividade.create).toHaveBeenCalledTimes(1);
   });
 
-  it('cria lead novo, enriquece dados e retorna prontidão completa', async () => {
-    mockPrisma.contato.findUnique.mockResolvedValue({
-      id: 'contato-2',
-      leadId: null,
-      campanhaId: 'camp-1',
-      criadoEm: new Date('2026-01-01'),
-      nome: 'Maria',
-      telefone: '5511999999999',
-      email: 'maria@teste.com',
-      cpf: '12345678900',
-      endereco: 'Rua A',
-      enderecoImovel: 'Rua B',
-      tipoImovel: 'Apartamento',
-      campanha: { tenantId: 'tenant-1' },
-    });
-
-    mockPrisma.lead.create.mockResolvedValue({ id: 'lead-novo' });
-    mockPrisma.contato.update.mockResolvedValue({});
-
-    mockPrisma.lead.findUnique.mockResolvedValue({
-      doresIdentificadas: ['falta tempo'],
-      status: 'NOVO',
-    });
+  it('enriquece lead canônico e retorna prontidão completa', async () => {
+    mockPrisma.lead.findUnique
+      .mockResolvedValueOnce({ id: 'lead-canonico', enderecoImovel: 'Rua B', tipoImovel: 'Apartamento' })
+      .mockResolvedValueOnce({ doresIdentificadas: ['falta tempo'], status: 'NOVO', schemaState: {} });
 
     mockPrisma.lead.update.mockResolvedValue({
       interesseEm: 'Vender apartamento',
@@ -198,7 +172,7 @@ describe('QualificarLeadUseCase', () => {
     });
 
     const result = await useCase.execute({
-      contatoId: 'contato-2',
+      leadId: 'lead-canonico',
       temperatura: 'QUENTE',
       interesse: 'Vender apartamento',
       timeline: 'urgente',
@@ -217,24 +191,17 @@ describe('QualificarLeadUseCase', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.leadCriado).toBe(true);
-    expect(result.leadId).toBe('lead-novo');
+    expect(result.leadCriado).toBe(false);
+    expect(result.leadId).toBe('lead-canonico');
     expect(result.prontidaoQualificacao).toBe('COMPLETA');
     expect(result.statusLead).toBe('QUALIFICADO');
 
-    expect(mockPrisma.lead.create).toHaveBeenCalledTimes(1);
-    expect(mockPrisma.contato.update).toHaveBeenCalledWith({
-      where: { id: 'contato-2' },
-      data: expect.objectContaining({
-        virouLead: true,
-        leadId: 'lead-novo',
-        statusProspeccao: 'LEAD',
-      }),
-    });
+    expect(mockPrisma.lead.create).not.toHaveBeenCalled();
+    expect(mockPrisma.contato.update).not.toHaveBeenCalled();
 
     expect(mockPrisma.lead.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'lead-novo' },
+        where: { id: 'lead-canonico' },
         data: expect.objectContaining({
           urgencia: 'ALTA',
           interesseEm: 'Vender apartamento',
@@ -247,7 +214,7 @@ describe('QualificarLeadUseCase', () => {
   });
 
   it('retorna erro quando ocorre exceção no banco', async () => {
-    mockPrisma.contato.findUnique.mockRejectedValue(new Error('DB offline'));
+    mockPrisma.lead.findUnique.mockRejectedValue(new Error('DB offline'));
 
     const result = await useCase.execute({
       contatoId: 'contato-1',
@@ -399,22 +366,7 @@ describe('QualificarLeadUseCase', () => {
     expect(updateCallDados.data.urgencia).toBeUndefined();
   });
 
-  it('mantém lead novo como NOVO quando prontidão de qualificação é parcial', async () => {
-    mockPrisma.contato.findUnique.mockResolvedValue({
-      id: 'contato-6',
-      leadId: null,
-      campanhaId: 'camp-1',
-      criadoEm: new Date('2026-01-01'),
-      nome: 'João',
-      telefone: '5511888888888',
-      email: 'joao@teste.com',
-      cpf: '98765432100',
-      endereco: 'Rua C',
-      campanha: { tenantId: 'tenant-1' },
-    });
-
-    mockPrisma.lead.create.mockResolvedValue({ id: 'lead-parcial' });
-    mockPrisma.contato.update.mockResolvedValue({});
+  it('mantém lead canônico como NOVO quando prontidão de qualificação é parcial', async () => {
     mockPrisma.lead.findUnique.mockResolvedValue({
       doresIdentificadas: [],
       status: 'NOVO',
@@ -433,14 +385,14 @@ describe('QualificarLeadUseCase', () => {
     });
 
     const result = await useCase.execute({
-      contatoId: 'contato-6',
+      leadId: 'lead-parcial',
       temperatura: 'MORNO',
       interesse: 'Vender',
       timeline: '6 meses',
     });
 
     expect(result.success).toBe(true);
-    expect(result.leadCriado).toBe(true);
+    expect(result.leadCriado).toBe(false);
     expect(result.prontidaoQualificacao).toBe('PARCIAL');
     expect(result.statusLead).toBe('NOVO');
     expect(mockPrisma.lead.update).toHaveBeenCalledTimes(2);
