@@ -37,6 +37,13 @@ function axiosFailure(status?: number, code?: string) {
   };
 }
 
+function qrAindaIndisponivel() {
+  return {
+    isAxiosError: true,
+    response: { status: 400, data: { error: 'no QR code available. Please wait a moment and try again' } },
+  };
+}
+
 describe('WhatsAppService - contrato de conexão Evolution Go', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -248,6 +255,69 @@ describe('WhatsAppService - contrato de conexão Evolution Go', () => {
       reasonCode: 'EVOLUTION_UPSTREAM_FAILURE',
       httpStatus: 502,
     });
+  });
+
+  it('aguarda o QR transitório e retorna assim que a Evolution o disponibiliza', async () => {
+    jest.useFakeTimers();
+    try {
+      sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: 'remote-id', evolutionToken: 'remote-token' });
+      mockedAxios.get
+        .mockResolvedValueOnce({ data: { data: [{ id: 'remote-id', name: 'elyon_test_qr_delayed', token: 'remote-token' }] } })
+        .mockRejectedValueOnce(qrAindaIndisponivel())
+        .mockResolvedValueOnce({ data: { data: { Connected: false, LoggedIn: false } } })
+        .mockResolvedValueOnce({ data: { data: { Qrcode: 'qr-delayed' } } });
+      mockedAxios.post.mockResolvedValueOnce({ data: { success: true } });
+
+      const connection = new WhatsAppService('elyon_test_qr_delayed').conectarInstancia();
+      await jest.advanceTimersByTimeAsync(1000);
+
+      await expect(connection).resolves.toMatchObject({ qrcode: 'qr-delayed', count: 1 });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('encerra o polling quando a instância já ficou conectada', async () => {
+    sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: 'remote-id', evolutionToken: 'remote-token' });
+    mockedAxios.get
+      .mockResolvedValueOnce({ data: { data: [{ id: 'remote-id', name: 'elyon_test_open', token: 'remote-token' }] } })
+      .mockRejectedValueOnce(qrAindaIndisponivel())
+      .mockResolvedValueOnce({ data: { data: { Connected: true, LoggedIn: true } } });
+    mockedAxios.post.mockResolvedValueOnce({ data: { success: true } });
+
+    await expect(new WhatsAppService('elyon_test_open').conectarInstancia()).resolves.toMatchObject({
+      status: 'open',
+      count: 0,
+    });
+  });
+
+  it('falha de forma limitada e identificável quando o QR não aparece', async () => {
+    jest.useFakeTimers();
+    try {
+      sessaoWhatsapp.findUnique.mockResolvedValue({ evolutionInstanceId: null, evolutionToken: null });
+      mockedAxios.post
+        .mockResolvedValueOnce({ data: { data: { id: 'remote-id', token: 'remote-token' } } })
+        .mockResolvedValueOnce({ data: { success: true } });
+      mockedAxios.get.mockImplementation(async (url) => {
+        if (String(url).endsWith('/instance/qr')) throw qrAindaIndisponivel();
+        return { data: { data: { Connected: false, LoggedIn: false } } };
+      });
+
+      const connection = new WhatsAppService('elyon_test_qr_timeout').conectarInstancia();
+      const rejection = expect(connection).rejects.toMatchObject({
+        stage: 'instance/qr',
+        route: '/instance/qr',
+        upstreamStatus: 400,
+        reasonCode: 'WHATSAPP_QR_TIMEOUT',
+        httpStatus: 502,
+      });
+      await jest.advanceTimersByTimeAsync(25000);
+
+      await rejection;
+      expect(mockedAxios.get.mock.calls.filter(([url]) => String(url).endsWith('/instance/qr'))).toHaveLength(11);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('coalesce duas conexões concorrentes e cria a instância uma única vez', async () => {

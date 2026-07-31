@@ -24,6 +24,15 @@ export interface WhatsAppConnectionResult {
   status?: string;
 }
 
+// A Evolution Go inicia a conexão antes de disponibilizar o QR. Esta janela
+// limitada evita transformar esse estado transitório em erro imediato sem
+// manter a requisição presa indefinidamente.
+const QR_POLL_DELAYS_MS = [1000, 1000, 1500, 1500, 2000, 2000, 2500, 2500, 3000, 3000] as const;
+
+function aguardar(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * WhatsAppService - Gerencia conexão com o Evolution GO (whatsmeow).
  *
@@ -295,37 +304,80 @@ export class WhatsAppService {
       throw falha;
     }
 
-    // Busca o QR Code (data:image/png;base64,...). Se já logado, retorna status open.
-    try {
-      const qrResp = await axios.get(
-        `${this.apiUrl}/instance/qr`,
-        { headers: this.headersInstancia() },
-      );
-      const dados = qrResp.data?.data || qrResp.data || {};
-      const qrcode = dados.Qrcode || dados.qrcode;
-      return { base64: qrcode, qrcode, code: dados.Code || dados.code, count: 0 };
-    } catch (error: any) {
-      const detalhe = error?.response?.data?.error || error?.message || '';
-      if (/already logged in/i.test(String(detalhe))) {
-        return { status: 'open', count: 0 };
+    return this.aguardarQrCode(instanceAlreadyExisted);
+  }
+
+  private async aguardarQrCode(instanceAlreadyExisted: boolean): Promise<WhatsAppConnectionResult> {
+    for (let tentativa = 0; tentativa <= QR_POLL_DELAYS_MS.length; tentativa += 1) {
+      try {
+        const qrResp = await axios.get(
+          `${this.apiUrl}/instance/qr`,
+          { headers: this.headersInstancia() },
+        );
+        const dados = qrResp.data?.data || qrResp.data || {};
+        const qrcode = dados.Qrcode || dados.qrcode;
+        if (qrcode) {
+          return { base64: qrcode, qrcode, code: dados.Code || dados.code, count: tentativa };
+        }
+      } catch (error: any) {
+        const detalhe = String(error?.response?.data?.error || error?.message || '');
+        if (/already logged in/i.test(detalhe)) {
+          return { status: 'open', count: tentativa };
+        }
+
+        const qrAindaIndisponivel = error?.response?.status === 400
+          && /no qr code available/i.test(detalhe);
+        if (!qrAindaIndisponivel) {
+          const falha = toEvolutionIntegrationError(error, {
+            stage: 'instance/qr',
+            route: '/instance/qr',
+            instanceAlreadyExisted,
+          });
+          logger.error(
+            {
+              ...this.contextoSeguro(instanceAlreadyExisted),
+              stage: falha.stage,
+              route: falha.route,
+              upstreamStatus: falha.upstreamStatus,
+              reasonCode: falha.reasonCode,
+            },
+            '[WhatsApp] Erro ao obter QR Code',
+          );
+          throw falha;
+        }
       }
-      const falha = toEvolutionIntegrationError(error, {
-        stage: 'instance/qr',
-        route: '/instance/qr',
-        instanceAlreadyExisted,
-      });
-      logger.error(
-        {
-          ...this.contextoSeguro(instanceAlreadyExisted),
-          stage: falha.stage,
-          route: falha.route,
-          upstreamStatus: falha.upstreamStatus,
-          reasonCode: falha.reasonCode,
-        },
-        '[WhatsApp] Erro ao obter QR Code',
-      );
-      throw falha;
+
+      const status = await this.verificarStatus();
+      if (status?.instance?.state === 'open') {
+        return { status: 'open', count: tentativa };
+      }
+
+      if (tentativa < QR_POLL_DELAYS_MS.length) {
+        await aguardar(QR_POLL_DELAYS_MS[tentativa]);
+      }
     }
+
+    const falha = new EvolutionIntegrationError({
+      message: 'QR Code não disponibilizado pela Evolution Go no prazo esperado',
+      stage: 'instance/qr',
+      route: '/instance/qr',
+      upstreamStatus: 400,
+      reasonCode: 'WHATSAPP_QR_TIMEOUT',
+      httpStatus: 502,
+      instanceAlreadyExisted,
+    });
+    logger.error(
+      {
+        ...this.contextoSeguro(instanceAlreadyExisted),
+        stage: falha.stage,
+        route: falha.route,
+        upstreamStatus: falha.upstreamStatus,
+        reasonCode: falha.reasonCode,
+        attempts: QR_POLL_DELAYS_MS.length + 1,
+      },
+      '[WhatsApp] QR Code indisponível após polling',
+    );
+    throw falha;
   }
 
   async verificarStatus(): Promise<{ instance: EvolutionInstance } | null> {
