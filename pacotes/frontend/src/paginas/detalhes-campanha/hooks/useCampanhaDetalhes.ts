@@ -70,7 +70,7 @@ export interface Contato {
   tipoImovel: string | null;
   valorVenal: number | null;
   scoreAssertiva: number | null;
-  statusProspeccao: string;
+  statusProspeccao: string | null;
   tentativasContato: number;
   ultimaTentativa: string | null;
   respondeu: boolean;
