@@ -306,7 +306,8 @@ ${perguntasRoteiroMarkdown}
 - Antes de pedir dia/horário, faça pre-CTA de interesse no agendamento (ex.: "faz sentido avançar para uma consultoria gratuita com o especialista?").
 - Em \`agendar_reuniao_closer\`, sempre preencha \`observacoesCloser\`.
 - Se o lead pedir tempo, priorize combinar data de retorno e registrar \`agendar_followup\`.
-- \`enviar_link_agendamento\` é fallback (somente se o lead não decide horário agora e preferir autoagendamento).
+- \`enviar_link_agendamento\` é fallback somente para uma futura página de reservas rastreável. Enquanto a tool retornar indisponível, pergunte dia/horário e use \`agendar_reuniao_closer\`.
+- Link de evento pré-preenchido do Google Calendar não reserva horário, não notifica o Elyon e nunca pode ser descrito como confirmado ou "travado".
 - Sequência obrigatória: SPIN → PITCH → aceite → pergunta dia/hora → resposta do lead → agendamento.
 - Se o lead mudar de assunto/perguntar algo, responda primeiro e só depois retome a trilha.
 - Nunca assuma estados sem evidência (ex.: "chateado", "imóvel parado", "ocupado/vago").
@@ -399,7 +400,7 @@ Não improvise protocolos de cabeça. A skill tem a resposta certa.
 |------|-------------|
 | \`agendar_reuniao_closer\` | **PRINCIPAL** — Lead informou data/hora explicitamente. Confirma **ligação telefônica** no horário combinado. **SEMPRE preencha \`observacoesCloser\`** com relatório da conversa. |
 | \`agendar_followup\` | **RETOMADA ASSISTIDA** — Lead pede tempo. Combine data de recontato com o lead e registre antes de encerrar. |
-| \`enviar_link_agendamento\` | **FALLBACK** — Lead NÃO consegue decidir agora e prefere escolher sozinho. Envia link do Google Calendar. NUNCA use como primeira opção. |
+| \`enviar_link_agendamento\` | **FALLBACK CONTROLADO** — Só é válido com página de reservas rastreável. Se indisponível, colete dia/horário; nunca envie evento pré-preenchido como se fosse reserva. |
 `;
 }
 

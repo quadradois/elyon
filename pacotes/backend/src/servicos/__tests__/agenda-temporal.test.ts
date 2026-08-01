@@ -1,4 +1,4 @@
-import { interpretarAgendamentoTemporal } from '../agenda-temporal';
+import { interpretarAgendamentoTemporal, mensagemContemDataHoraExplicita } from '../agenda-temporal';
 
 describe('interpretarAgendamentoTemporal', () => {
   const agora = new Date('2026-07-31T22:01:48.000Z'); // 31/07 19:01 em São Paulo
@@ -33,5 +33,12 @@ describe('interpretarAgendamentoTemporal', () => {
       dataHoraArgumento: '07/08/2026 14:00',
       agora,
     })).toEqual({ ok: false, reasonCode: 'DATE_AMBIGUOUS' });
+  });
+
+  it('detecta data e hora explícitas para impedir fallback por link', () => {
+    expect(mensagemContemDataHoraExplicita('Pode ser dia 03/08 às 08:00')).toBe(true);
+    expect(mensagemContemDataHoraExplicita('Amanhã 14h')).toBe(true);
+    expect(mensagemContemDataHoraExplicita('Preciso ver minha agenda')).toBe(false);
+    expect(mensagemContemDataHoraExplicita('Pode ser amanhã')).toBe(false);
   });
 });
