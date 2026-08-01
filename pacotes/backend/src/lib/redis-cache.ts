@@ -62,6 +62,16 @@ export async function estaNoCooldown(contatoId: string): Promise<boolean> {
   }
 }
 
+export async function obterCooldownRespostaRestanteMs(contatoId: string): Promise<number> {
+  try {
+    const redis = await getRedisClient();
+    const ttlMs = await redis.pTTL(`cooldown:resposta:${contatoId}`);
+    return ttlMs > 0 ? ttlMs : 0;
+  } catch {
+    return 0;
+  }
+}
+
 // ─────────────────────────────────────────────────
 // MUTEX DE PROCESSAMENTO (substitui processandoContato Map)
 // ─────────────────────────────────────────────────

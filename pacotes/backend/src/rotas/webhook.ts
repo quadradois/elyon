@@ -8,7 +8,7 @@ import {
   marcarMensagemComoVista,
   jaVimosMensagem,
   registrarRespostaEnviada,
-  estaNoCooldown,
+  obterCooldownRespostaRestanteMs,
   adquirirMutexContato,
   liberarMutexContato,
   marcarAssinaturaProcessada,
@@ -17,6 +17,7 @@ import {
   obterHashResposta,
   registrarHashRespostaUnicaJanela
 } from '../lib/redis-cache';
+import { aguardarCooldownInbound } from '../servicos/cooldown-inbound';
 // 🆕 Orquestrador dos 4 Agentes de Captação
 import {
   processarMensagemOrquestrada,
@@ -1079,11 +1080,6 @@ async function deveEnviarResposta(params: {
   return true;
 }
 
-// ✅ Versões assíncronas usando Redis (substitui Maps em memória)
-async function podeMosResponder(contatoId: string): Promise<boolean> {
-  return !(await estaNoCooldown(contatoId));
-}
-
 async function registrarResposta(contatoId: string): Promise<void> {
   await registrarRespostaEnviada(contatoId);
 }
@@ -1529,10 +1525,15 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                 const processarAposDebounce = async (): Promise<boolean> => {
                   console.log(`[Debounce] Processando leadId=${leadIdCanonico}`);
                   
-                  // 🔍 VERIFICAR COOLDOWN ANTES DE PROCESSAR
-                  if (!(await podeMosResponder(leadIdCanonico))) {
-                    registrarIgnorado(telefone, 'cooldown', leadIdCanonico);
-                    return true;
+                  // O cooldown serve apenas para cadenciar respostas. Uma nova mensagem
+                  // inbound já deduplicada nunca pode ser descartada por ele.
+                  const cooldownRestanteMs = await obterCooldownRespostaRestanteMs(leadIdCanonico);
+                  const esperaCooldownMs = await aguardarCooldownInbound({
+                    cooldownRestanteMs,
+                    limiteEsperaMs: COOLDOWN_RESPOSTA_MS,
+                  });
+                  if (esperaCooldownMs > 0) {
+                    console.log(`[Cooldown] ⏳ Lead ${leadIdCanonico}: mensagem preservada e processada após ${esperaCooldownMs}ms`);
                   }
                   
                   // 🔍 VERIFICAR SE MENSAGENS SÃO MUITO RECENTES (< 2 segundos)
