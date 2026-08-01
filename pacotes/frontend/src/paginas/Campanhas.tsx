@@ -65,6 +65,12 @@ export function Campanhas() {
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [corretores, setCorretores] = useState<Usuario[]>([]);
   const [carregandoCorretores, setCarregandoCorretores] = useState(false);
+  const [campanhaEditando, setCampanhaEditando] = useState<Campanha | null>(null);
+  const [salvandoResponsaveis, setSalvandoResponsaveis] = useState(false);
+  const [responsaveisForm, setResponsaveisForm] = useState({
+    responsavelCorretorId: "",
+    fallbackCorretorId: "",
+  });
 
   // Form state com campos separados de endereço
   const [formData, setFormData] = useState({
@@ -195,6 +201,46 @@ export function Campanhas() {
       alert(`Erro: ${error.response?.data?.erro || error.message}`);
     } finally {
       setCriandoCampanha(false);
+    }
+  };
+
+  const abrirEdicaoResponsaveis = (campanha: Campanha) => {
+    setCampanhaEditando(campanha);
+    setResponsaveisForm({
+      responsavelCorretorId: campanha.responsavelCorretorId || "",
+      fallbackCorretorId: campanha.fallbackCorretorId || "",
+    });
+  };
+
+  const salvarResponsaveis = async () => {
+    if (!campanhaEditando) return;
+    if (!responsaveisForm.responsavelCorretorId || !responsaveisForm.fallbackCorretorId) {
+      alert("Selecione o responsável principal e o fallback.");
+      return;
+    }
+    if (responsaveisForm.responsavelCorretorId === responsaveisForm.fallbackCorretorId) {
+      alert("Responsável principal e fallback devem ser pessoas diferentes.");
+      return;
+    }
+
+    try {
+      setSalvandoResponsaveis(true);
+      const response = await api.patch(
+        `/campanhas/${campanhaEditando.id}/responsaveis`,
+        responsaveisForm
+      );
+      const atualizada = response.data.campanha;
+      setCampanhas((atuais) => atuais.map((campanha) =>
+        campanha.id === campanhaEditando.id
+          ? { ...campanha, ...atualizada }
+          : campanha
+      ));
+      setCampanhaEditando(null);
+    } catch (error: any) {
+      console.error("Erro ao atualizar responsáveis:", error);
+      alert(error.response?.data?.erro || "Não foi possível atualizar os responsáveis.");
+    } finally {
+      setSalvandoResponsaveis(false);
     }
   };
 
@@ -602,8 +648,75 @@ export function Campanhas() {
         </div>
       )}
 
+      <Dialog
+        open={Boolean(campanhaEditando)}
+        onOpenChange={(open) => !open && setCampanhaEditando(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar responsáveis</DialogTitle>
+            <DialogDescription>
+              Defina quem recebe os atendimentos da campanha {campanhaEditando?.nome} e quem assume quando houver recusa ou indisponibilidade.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="editarResponsavelCorretorId" className="text-sm font-medium text-slate-700">
+                Responsável principal
+              </label>
+              <select
+                id="editarResponsavelCorretorId"
+                className="w-full h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+                value={responsaveisForm.responsavelCorretorId}
+                onChange={(e) => setResponsaveisForm((atual) => ({ ...atual, responsavelCorretorId: e.target.value }))}
+                disabled={salvandoResponsaveis || carregandoCorretores}
+              >
+                <option value="">Selecione o responsável</option>
+                {corretoresElegiveis.map((corretor) => (
+                  <option key={corretor.id} value={corretor.id}>{corretor.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="editarFallbackCorretorId" className="text-sm font-medium text-slate-700">
+                Responsável fallback
+              </label>
+              <select
+                id="editarFallbackCorretorId"
+                className="w-full h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+                value={responsaveisForm.fallbackCorretorId}
+                onChange={(e) => setResponsaveisForm((atual) => ({ ...atual, fallbackCorretorId: e.target.value }))}
+                disabled={salvandoResponsaveis || carregandoCorretores}
+              >
+                <option value="">Selecione o fallback</option>
+                {corretoresElegiveis
+                  .filter((corretor) => corretor.id !== responsaveisForm.responsavelCorretorId)
+                  .map((corretor) => (
+                    <option key={corretor.id} value={corretor.id}>{corretor.nome}</option>
+                  ))}
+              </select>
+              <p className="text-xs text-slate-500">
+                O fallback é usado quando o responsável principal recusa ou não confirma no prazo.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setCampanhaEditando(null)} disabled={salvandoResponsaveis}>
+                Cancelar
+              </Button>
+              <Button onClick={salvarResponsaveis} disabled={salvandoResponsaveis || carregandoCorretores}>
+                {salvandoResponsaveis && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar responsáveis
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
         {loading ? (
           <div className="p-4">
             <SkeletonTable rows={6} columns={7} />
@@ -621,12 +734,13 @@ export function Campanhas() {
                 <TableHead>Responsável</TableHead>
                 <TableHead>Fallback</TableHead>
                 <TableHead className="text-right">Criado em</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {campanhasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-8">
+                  <TableCell colSpan={10} className="py-8">
                     <EmptyState
                       tipo="nenhuma-campanha"
                       titulo="Nenhuma campanha encontrada"
@@ -695,6 +809,21 @@ export function Campanhas() {
                     </TableCell>
                     <TableCell className="text-right text-sm text-slate-500">
                       {new Date(campanha.criadoEm).toLocaleDateString("pt-BR")}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          abrirEdicaoResponsaveis(campanha);
+                        }}
+                        aria-label={`Editar responsáveis da campanha ${campanha.nome}`}
+                      >
+                        <FileEdit className="mr-2 h-4 w-4" />
+                        Editar
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))

@@ -19,8 +19,21 @@ import { criarFollowupOutbound, reagendarFollowupOutbound } from '../servicos/fo
 import { formatInTimeZone } from 'date-fns-tz';
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
 import { enviarWhatsappAgendamento, montarMensagemLigacaoConfirmada } from '../servicos/notificacao-agendamento';
+import { remanejarCorretorAtividade } from '../servicos/remanejamento-corretor';
 
 const router = Router();
+
+function prazoConfirmacaoCorretor(atividade: {
+  agendadoPara?: Date | null;
+  remanejadoCorretorEm?: Date | null;
+}): Date | null {
+  if (!atividade.agendadoPara) return null;
+  const horario = new Date(atividade.agendadoPara);
+  const cutoffPadrao = new Date(horario.getTime() - 60 * 60 * 1000);
+  if (!atividade.remanejadoCorretorEm) return cutoffPadrao;
+  const toleranciaRemanejamento = new Date(new Date(atividade.remanejadoCorretorEm).getTime() + 15 * 60 * 1000);
+  return toleranciaRemanejamento < horario ? new Date(Math.max(cutoffPadrao.getTime(), toleranciaRemanejamento.getTime())) : horario;
+}
 
 
 const normalizarTelefone = (telefone?: string): string | null => {
@@ -2042,12 +2055,14 @@ router.get('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
       return responderErro(res, 404, 'Link inválido ou expirado', { valido: false });
     }
 
-    const prazoCutoff = atividade.agendadoPara
-      ? new Date(new Date(atividade.agendadoPara).getTime() - 60 * 60 * 1000)
-      : null;
+    const prazoCutoff = prazoConfirmacaoCorretor(atividade as any);
 
     res.json({
       valido: true,
+      leadNome: atividade.lead.nome,
+      horario: atividade.agendadoPara,
+      statusConfirmacaoCorretor: (atividade as any).statusConfirmacaoCorretor || 'PENDENTE',
+      prazoCutoff,
       atividade: {
         id: atividade.id,
         tipo: atividade.tipo,
@@ -2126,9 +2141,7 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
     }
 
     const agora = new Date();
-    const cutoff = atividade.agendadoPara
-      ? new Date(new Date(atividade.agendadoPara).getTime() - 60 * 60 * 1000)
-      : null;
+    const cutoff = prazoConfirmacaoCorretor(atividade as any);
 
     if (acao === 'confirmar') {
       if (cutoff && agora > cutoff) {
@@ -2216,9 +2229,22 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
       }
     });
 
+    const remanejamento = await remanejarCorretorAtividade({
+      atividadeId,
+      origem: 'RECUSA_EXPLICITA',
+    });
+
+    if (remanejamento.sucesso) {
+      return res.json({
+        sucesso: true,
+        mensagem: `Recusa registrada. ${remanejamento.especialistaNome} recebeu a solicitação de substituição.`,
+        statusConfirmacaoCorretor: 'PENDENTE'
+      });
+    }
+
     return res.json({
       sucesso: true,
-      mensagem: 'Ausência/recusa registrada. O sistema poderá remanejar automaticamente.',
+      mensagem: 'Recusa registrada, mas não há outro especialista disponível. A equipe precisa remanejar o atendimento.',
       statusConfirmacaoCorretor: 'RECUSADO'
     });
   } catch (error) {

@@ -24,8 +24,9 @@ function cargoPorPapel(papel?: string | null): string {
   return 'Corretor Especialista';
 }
 
-function elegivelUsuario(usuario: any): boolean {
+function elegivelUsuario(usuario: any, idsExcluidos: Set<string>): boolean {
   if (!usuario) return false;
+  if (idsExcluidos.has(usuario.id)) return false;
   if (!usuario.estaAtivo) return false;
   if (!telefoneValido(usuario.telefone)) return false;
   return true;
@@ -34,7 +35,9 @@ function elegivelUsuario(usuario: any): boolean {
 export async function resolverEspecialistaCampanha(params: {
   tenantId: string;
   campanhaId: string;
+  excluirUsuarioIds?: string[];
 }): Promise<EspecialistaResolvido | null> {
+  const idsExcluidos = new Set((params.excluirUsuarioIds || []).filter(Boolean));
   const campanha = await (prisma.campanha as any).findUnique({
     where: { id: params.campanhaId },
     select: {
@@ -51,7 +54,7 @@ export async function resolverEspecialistaCampanha(params: {
 
   if (!campanha || campanha.tenantId !== params.tenantId) return null;
 
-  if (elegivelUsuario(campanha.responsavelCorretor)) {
+  if (elegivelUsuario(campanha.responsavelCorretor, idsExcluidos)) {
     return {
       tipo: 'USUARIO_EQUIPE',
       origem: 'RESPONSAVEL_CAMPANHA',
@@ -63,7 +66,7 @@ export async function resolverEspecialistaCampanha(params: {
     };
   }
 
-  if (elegivelUsuario(campanha.fallbackCorretor)) {
+  if (elegivelUsuario(campanha.fallbackCorretor, idsExcluidos)) {
     return {
       tipo: 'USUARIO_EQUIPE',
       origem: 'FALLBACK_CAMPANHA',
@@ -83,6 +86,7 @@ export async function resolverEspecialistaCampanha(params: {
       estaAtivo: true,
       papel: 'CORRETOR',
       telefone: { not: null },
+      ...(idsExcluidos.size > 0 ? { id: { notIn: [...idsExcluidos] } } : {}),
     },
     orderBy: { atualizadoEm: 'desc' },
     select: { id: true, nome: true, telefone: true, email: true, papel: true, estaAtivo: true }
@@ -93,12 +97,13 @@ export async function resolverEspecialistaCampanha(params: {
       estaAtivo: true,
       papel: 'ADMIN',
       telefone: { not: null },
+      ...(idsExcluidos.size > 0 ? { id: { notIn: [...idsExcluidos] } } : {}),
     },
     orderBy: { atualizadoEm: 'desc' },
     select: { id: true, nome: true, telefone: true, email: true, papel: true, estaAtivo: true }
   });
 
-  if (pool && elegivelUsuario(pool)) {
+  if (pool && elegivelUsuario(pool, idsExcluidos)) {
     return {
       tipo: 'USUARIO_EQUIPE',
       origem: 'POOL_TENANT',
