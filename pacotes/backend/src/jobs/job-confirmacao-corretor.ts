@@ -12,8 +12,8 @@ function normalizarTelefoneParaWaMe(telefone?: string | null): string {
   return digits.startsWith('55') ? digits : `55${digits}`;
 }
 
-function minutosAntes(data: Date, minutos: number): Date {
-  return new Date(new Date(data).getTime() - minutos * 60 * 1000);
+function adicionarMinutos(data: Date, minutos: number): Date {
+  return new Date(new Date(data).getTime() + minutos * 60 * 1000);
 }
 
 function linkConfirmacaoCorretor(atividadeId: string, token: string): string {
@@ -48,17 +48,48 @@ async function buscarSessaoConectadaTenant(tenantId: string): Promise<string | n
   return sessao?.instanceName || null;
 }
 
+async function resolverEspecialistaAtividade(atividade: any): Promise<any | null> {
+  if (atividade.corretorAtualId) {
+    const atual = await prisma.usuario.findFirst({
+      where: {
+        id: atividade.corretorAtualId,
+        tenantId: atividade.lead.tenantId,
+        estaAtivo: true,
+        telefone: { not: null },
+      },
+      select: { id: true, nome: true, telefone: true, email: true, papel: true },
+    });
+    if (atual && normalizarTelefoneParaWaMe(atual.telefone).length >= 12) {
+      return {
+        usuarioId: atual.id,
+        nome: atual.nome,
+        telefone: atual.telefone,
+        email: atual.email || undefined,
+        cargo: atual.papel === 'ADMIN' ? 'Especialista Comercial' : 'Corretor Especialista',
+        origem: 'RESPONSAVEL_ATIVIDADE',
+      };
+    }
+  }
+
+  if (!atividade.lead?.campanhaOrigemId) return null;
+  return resolverEspecialistaCampanha({
+    tenantId: atividade.lead.tenantId,
+    campanhaId: atividade.lead.campanhaOrigemId,
+  });
+}
+
 export async function executarConvitesConfirmacaoCorretor(): Promise<{ processados: number; enviados: number; erros: number }> {
   const agora = new Date();
-  const janelaInicio = minutosAntes(agora, -120); // agora +120
-  const janelaFim = minutosAntes(agora, -110); // agora +110
+  const limiteSuperior = adicionarMinutos(agora, 120);
+  const limiteInferior = adicionarMinutos(agora, 60);
 
   const atividades = await (prisma.atividade as any).findMany({
     where: {
       tipo: 'REUNIAO',
       statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
       statusConfirmacaoCorretor: 'PENDENTE',
-      agendadoPara: { gte: janelaFim, lte: janelaInicio },
+      // Recupera convites não enviados após reinício, mas nunca invade o cutoff T-60.
+      agendadoPara: { gt: limiteInferior, lte: limiteSuperior },
       confirmacaoCorretorSolicitadaEm: null,
       tokenConfirmacaoCorretor: { not: null },
     },
@@ -72,11 +103,7 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
   let erros = 0;
   for (const atividade of atividades) {
     try {
-      if (!atividade.lead?.campanhaOrigemId) continue;
-      const especialista = await resolverEspecialistaCampanha({
-        tenantId: atividade.lead.tenantId,
-        campanhaId: atividade.lead.campanhaOrigemId
-      });
+      const especialista = await resolverEspecialistaAtividade(atividade);
       if (!especialista?.telefone) continue;
 
       const instanceName = await buscarSessaoConectadaTenant(atividade.lead.tenantId);
@@ -119,16 +146,18 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
 
 export async function executarLembretesConfirmacaoCorretor(): Promise<{ processados: number; enviados: number; erros: number }> {
   const agora = new Date();
-  const janelaInicio = minutosAntes(agora, -90); // agora +90
-  const janelaFim = minutosAntes(agora, -80); // agora +80
+  const limiteSuperior = adicionarMinutos(agora, 90);
+  const limiteInferior = adicionarMinutos(agora, 60);
+  const conviteMinimo = adicionarMinutos(agora, -15);
 
   const atividades = await (prisma.atividade as any).findMany({
     where: {
       tipo: 'REUNIAO',
       statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
       statusConfirmacaoCorretor: 'PENDENTE',
-      agendadoPara: { gte: janelaFim, lte: janelaInicio },
-      confirmacaoCorretorSolicitadaEm: { not: null },
+      // Janela elástica: recupera lembrete perdido sem enviá-lo junto de um convite tardio.
+      agendadoPara: { gt: limiteInferior, lte: limiteSuperior },
+      confirmacaoCorretorSolicitadaEm: { not: null, lte: conviteMinimo },
       lembreteCorretorEnviadoEm: null,
       tokenConfirmacaoCorretor: { not: null },
     },
@@ -142,11 +171,7 @@ export async function executarLembretesConfirmacaoCorretor(): Promise<{ processa
   let erros = 0;
   for (const atividade of atividades) {
     try {
-      if (!atividade.lead?.campanhaOrigemId) continue;
-      const especialista = await resolverEspecialistaCampanha({
-        tenantId: atividade.lead.tenantId,
-        campanhaId: atividade.lead.campanhaOrigemId
-      });
+      const especialista = await resolverEspecialistaAtividade(atividade);
       if (!especialista?.telefone) continue;
 
       const instanceName = await buscarSessaoConectadaTenant(atividade.lead.tenantId);
@@ -190,7 +215,11 @@ export async function executarCutoffRemanejamentoCorretor(): Promise<{ processad
       tipo: 'REUNIAO',
       statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
       statusConfirmacaoCorretor: { in: ['PENDENTE', 'RECUSADO'] },
-      agendadoPara: { gt: agora, lte: minutosAntes(agora, -60) },
+      agendadoPara: { gt: agora, lte: adicionarMinutos(agora, 60) },
+      OR: [
+        { remanejadoCorretorEm: null },
+        { remanejadoCorretorEm: { lte: adicionarMinutos(agora, -15) } },
+      ],
       tokenConfirmacaoCorretor: { not: null },
     },
     include: {
