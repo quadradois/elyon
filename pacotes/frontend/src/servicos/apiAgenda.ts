@@ -18,6 +18,9 @@ export interface EventoAgenda {
         leadNome: string;
         leadTelefone: string;
         descricao?: string;
+        especialistaId?: string | null;
+        especialistaNome?: string | null;
+        statusConfirmacaoCorretor?: string | null;
         versao: number;
     };
 }

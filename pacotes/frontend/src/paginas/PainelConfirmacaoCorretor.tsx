@@ -9,6 +9,7 @@ type ItemPainel = {
   atividadeId: string;
   leadNome: string;
   campanhaNome: string | null;
+  corretorAtualNome: string | null;
   agendadoPara: string;
   statusConfirmacaoCorretor: "PENDENTE" | "CONFIRMADO" | "EXPIRADO" | "REMANEJADO" | "RECUSADO";
   cutoffEm: string | null;
@@ -95,6 +96,7 @@ export function PainelConfirmacaoCorretor() {
                   <tr>
                     <th className="text-left p-3">Lead</th>
                     <th className="text-left p-3">Campanha</th>
+                    <th className="text-left p-3">Responsável</th>
                     <th className="text-left p-3">Reunião</th>
                     <th className="text-left p-3">Cutoff</th>
                     <th className="text-left p-3">Status</th>
@@ -105,6 +107,7 @@ export function PainelConfirmacaoCorretor() {
                     <tr key={item.atividadeId} className="border-b border-slate-100">
                       <td className="p-3">{item.leadNome}</td>
                       <td className="p-3">{item.campanhaNome || "-"}</td>
+                      <td className="p-3">{item.corretorAtualNome || "Não atribuído"}</td>
                       <td className="p-3">{new Date(item.agendadoPara).toLocaleString("pt-BR")}</td>
                       <td className="p-3">{item.cutoffEm ? new Date(item.cutoffEm).toLocaleString("pt-BR") : "-"}</td>
                       <td className="p-3">

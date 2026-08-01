@@ -45,6 +45,17 @@ router.get('/', verificarAutenticacao, async (req, res) => {
             orderBy: { agendadoPara: 'asc' }
         });
 
+        const corretorIds = [...new Set(
+            atividades.map(atividade => atividade.corretorAtualId).filter(Boolean)
+        )] as string[];
+        const corretores = corretorIds.length > 0
+            ? await prisma.usuario.findMany({
+                where: { tenantId, id: { in: corretorIds } },
+                select: { id: true, nome: true }
+            })
+            : [];
+        const nomeCorretorPorId = new Map(corretores.map(corretor => [corretor.id, corretor.nome]));
+
         // Formatar para FullCalendar / Frontend Standard
         const eventos = atividades.map(a => ({
             id: a.id,
@@ -59,6 +70,11 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                 leadNome: a.lead?.nome || 'Desconhecido',
                 leadTelefone: a.lead?.telefone || '',
                 descricao: a.descricao,
+                especialistaId: a.corretorAtualId || null,
+                especialistaNome: a.corretorAtualId
+                    ? nomeCorretorPorId.get(a.corretorAtualId) || null
+                    : null,
+                statusConfirmacaoCorretor: a.statusConfirmacaoCorretor || null,
                 versao: a.versao
             },
             // Color coding básico
@@ -317,15 +333,20 @@ router.post('/:id/aprovar', verificarAutenticacao, async (req, res) => {
             especialistaNome: corretor?.nome,
         });
 
-        await enviarWhatsappAgendamento({
+        const notificacaoLead = await enviarWhatsappAgendamento({
             tenantId,
+            leadId: atividade.lead.id,
             telefone: atividade.lead.telefone,
             mensagem: mensagemConfirmacao
         });
 
         res.json({
             sucesso: true,
-            mensagem: 'Agendamento aprovado com sucesso',
+            mensagem: notificacaoLead.enviado
+                ? 'Agendamento aprovado com sucesso. O lead foi notificado.'
+                : 'Agendamento aprovado, mas não foi possível notificar o lead pelo WhatsApp.',
+            notificacaoLeadEnviada: notificacaoLead.enviado,
+            notificacaoRegistradaNoHistorico: notificacaoLead.registradoNoHistorico,
             atividade: atividadeAtualizada
         });
 
@@ -474,9 +495,22 @@ ${formatarDataHoraAgenda(horarioProposto)}
 
 Se não funcionar, me fala que te envio outras opções.`;
 
-        await enviarWhatsappAgendamento({ tenantId, telefone: atividade.lead.telefone, mensagem });
+        const notificacaoLead = await enviarWhatsappAgendamento({
+            tenantId,
+            leadId: atividade.lead.id,
+            telefone: atividade.lead.telefone,
+            mensagem,
+        });
 
-        return res.json({ sucesso: true, mensagem: 'Novo horário proposto ao cliente', atividade: atividadeAtualizada });
+        return res.json({
+            sucesso: true,
+            mensagem: notificacaoLead.enviado
+                ? 'Novo horário proposto ao cliente'
+                : 'Horário registrado, mas não foi possível notificar o cliente pelo WhatsApp.',
+            notificacaoLeadEnviada: notificacaoLead.enviado,
+            notificacaoRegistradaNoHistorico: notificacaoLead.registradoNoHistorico,
+            atividade: atividadeAtualizada,
+        });
     } catch (error) {
         console.error('[Agenda] Erro ao propor novo horário:', error);
         if (error instanceof z.ZodError) return responderErro(res, 400, 'Dados inválidos', { detalhes: error.errors });
