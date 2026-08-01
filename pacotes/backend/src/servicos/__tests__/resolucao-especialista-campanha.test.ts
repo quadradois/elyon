@@ -39,6 +39,22 @@ describe('resolverEspecialistaCampanha', () => {
     expect(res?.usuarioId).toBe('u2');
   });
 
+  it('exclui o especialista que recusou e usa o fallback da campanha', async () => {
+    mockPrisma.campanha.findUnique.mockResolvedValue({
+      tenantId: 't1',
+      responsavelCorretor: { id: 'u1', nome: 'Ana', telefone: '11999999999', email: 'ana@x.com', papel: 'CORRETOR', estaAtivo: true },
+      fallbackCorretor: { id: 'u2', nome: 'Bia', telefone: '11988888888', email: 'bia@x.com', papel: 'CORRETOR', estaAtivo: true },
+    });
+
+    const res = await resolverEspecialistaCampanha({
+      tenantId: 't1',
+      campanhaId: 'c1',
+      excluirUsuarioIds: ['u1'],
+    });
+
+    expect(res).toMatchObject({ origem: 'FALLBACK_CAMPANHA', usuarioId: 'u2' });
+  });
+
   it('usa pool do tenant quando campanha não tem elegíveis', async () => {
     mockPrisma.campanha.findUnique.mockResolvedValue({
       tenantId: 't1',

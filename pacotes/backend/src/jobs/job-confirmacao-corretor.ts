@@ -2,6 +2,7 @@ import { prisma } from '../lib/db';
 import { getWhatsAppService } from '../servicos/whatsapp';
 import { ServicoAuditoria } from '../servicos/servico-auditoria';
 import { resolverEspecialistaCampanha } from '../servicos/resolucao-especialista-campanha';
+import { remanejarCorretorAtividade } from '../servicos/remanejamento-corretor';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost';
 
@@ -36,10 +37,6 @@ function templateLembrete(params: { leadNome: string; horario: Date; link: strin
     `Prazo de confirmação: até T-60`,
     params.link,
   ].join('\n');
-}
-
-function templateRemanejamentoLead(params: { especialistaNome: string; especialistaCargo: string }): string {
-  return `Atualização: seu atendimento será conduzido por ${params.especialistaNome} (${params.especialistaCargo}). Seguimos no horário combinado.`;
 }
 
 async function buscarSessaoConectadaTenant(tenantId: string): Promise<string | null> {
@@ -192,8 +189,8 @@ export async function executarCutoffRemanejamentoCorretor(): Promise<{ processad
     where: {
       tipo: 'REUNIAO',
       statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
-      statusConfirmacaoCorretor: 'PENDENTE',
-      agendadoPara: { lte: minutosAntes(agora, -60) },
+      statusConfirmacaoCorretor: { in: ['PENDENTE', 'RECUSADO'] },
+      agendadoPara: { gt: agora, lte: minutosAntes(agora, -60) },
       tokenConfirmacaoCorretor: { not: null },
     },
     include: {
@@ -236,61 +233,11 @@ export async function executarCutoffRemanejamentoCorretor(): Promise<{ processad
         detalhes: { leadId: atividade.lead.id }
       });
 
-      if (!atividade.lead?.campanhaOrigemId) continue;
-      const especialista = await resolverEspecialistaCampanha({
-        tenantId: atividade.lead.tenantId,
-        campanhaId: atividade.lead.campanhaOrigemId
+      const remanejamento = await remanejarCorretorAtividade({
+        atividadeId: atividade.id,
+        origem: 'CUTOFF',
       });
-
-      if (!especialista) continue;
-
-      await (prisma.atividade as any).update({
-        where: { id: atividade.id },
-        data: {
-          statusConfirmacaoCorretor: 'REMANEJADO',
-          remanejadoCorretorEm: new Date(),
-          corretorAtualId: especialista.usuarioId || null,
-          versao: { increment: 1 },
-          estadoAgendaAtualizadoEm: new Date(),
-        }
-      });
-
-      const instanceName = await buscarSessaoConectadaTenant(atividade.lead.tenantId);
-      if (instanceName) {
-        const whatsapp = getWhatsAppService(instanceName);
-        const telCorretor = normalizarTelefoneParaWaMe(especialista.telefone);
-        const telLead = normalizarTelefoneParaWaMe(atividade.lead.telefone || '');
-
-        if (telCorretor) {
-          await whatsapp.enviarMensagemTexto(
-            telCorretor,
-            `Você foi designado para reunião remanejada.\nLead: ${atividade.lead.nome}\nHorário: ${new Date(atividade.agendadoPara).toLocaleString('pt-BR')}`
-          );
-        }
-        if (telLead) {
-          await whatsapp.enviarMensagemTexto(
-            telLead,
-            templateRemanejamentoLead({
-              especialistaNome: especialista.nome,
-              especialistaCargo: especialista.cargo
-            })
-          );
-        }
-      }
-
-      ServicoAuditoria.registrar({
-        tenantId: atividade.lead.tenantId,
-        acao: 'REMANEJAMENTO_CORRETOR_AUTO',
-        entidade: 'Atividade',
-        entidadeId: atividade.id,
-        ip: '127.0.0.1',
-        detalhes: {
-          leadId: atividade.lead.id,
-          corretorAtualId: especialista.usuarioId || null,
-          origem: especialista.origem
-        }
-      });
-      remanejados++;
+      if (remanejamento.sucesso) remanejados++;
     } catch (e) {
       erros++;
     }

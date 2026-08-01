@@ -5,11 +5,13 @@ const mockPrisma = {
 
 const mockWhatsapp = { enviarMensagemTexto: jest.fn() };
 const mockResolver = jest.fn();
+const mockRemanejar = jest.fn();
 const mockAuditoria = { registrar: jest.fn() };
 
 jest.mock('../../lib/db', () => ({ prisma: mockPrisma }));
 jest.mock('../../servicos/whatsapp', () => ({ getWhatsAppService: () => mockWhatsapp }));
 jest.mock('../../servicos/resolucao-especialista-campanha', () => ({ resolverEspecialistaCampanha: (...args: any[]) => mockResolver(...args) }));
+jest.mock('../../servicos/remanejamento-corretor', () => ({ remanejarCorretorAtividade: (...args: any[]) => mockRemanejar(...args) }));
 jest.mock('../../servicos/servico-auditoria', () => ({ ServicoAuditoria: mockAuditoria }));
 
 import {
@@ -20,6 +22,7 @@ import {
 describe('job-confirmacao-corretor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRemanejar.mockResolvedValue({ sucesso: true, motivo: 'REMANEJADO' });
   });
 
   it('expira e remaneja reunião pendente', async () => {
@@ -38,8 +41,14 @@ describe('job-confirmacao-corretor', () => {
     expect(out.processados).toBe(1);
     expect(out.expirados).toBe(1);
     expect(out.remanejados).toBe(1);
-    expect(mockPrisma.atividade.update).toHaveBeenCalledTimes(2);
-    expect(mockWhatsapp.enviarMensagemTexto).toHaveBeenCalled();
+    expect(mockPrisma.atividade.update).toHaveBeenCalledTimes(1);
+    expect(mockRemanejar).toHaveBeenCalledWith({ atividadeId: 'a1', origem: 'CUTOFF' });
+    expect(mockPrisma.atividade.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        statusConfirmacaoCorretor: { in: ['PENDENTE', 'RECUSADO'] },
+        agendadoPara: expect.objectContaining({ gt: expect.any(Date), lte: expect.any(Date) }),
+      }),
+    }));
   });
 
   it('não reenvia lembrete quando já enviado (idempotência)', async () => {
