@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/db';
-import { agendaComercialEventos } from '../observabilidade/agenda-comercial-metrics';
+import { agendaComercialEventos, registrarAgendaLifecycleDecision } from '../observabilidade/agenda-comercial-metrics';
+import { avaliarAgendaPolicy, type AgendaPolicyActor } from './agenda-policy';
 
 export const AGENDA_COMMERCIAL_POLICY_VERSION = 'agenda-commercial-v1';
 
@@ -15,6 +16,7 @@ export type AgendaReasonCode =
   | 'REQUEST_ID_CONFLICT'
   | 'TENANT_OWNERSHIP_DENIED'
   | 'ACTIVITY_ALREADY_REPLACED'
+  | 'APPOINTMENT_STARTED'
   | 'STALE_EVENT'
   | 'STATE_TRANSITION_DENIED'
   | 'NO_SHOW_NOT_DUE'
@@ -34,6 +36,7 @@ type BaseCommand = {
   policyVersion: string;
   ocorridoEm: Date;
   expectedVersion: number;
+  correlationId?: string;
   notificacao?: { tipo: 'CANCELAMENTO' | 'REAGENDAMENTO'; mensagem: string };
 };
 
@@ -67,6 +70,14 @@ function hash(parts: string[]): string {
 
 function normalizar(value: string): string {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9:_ -]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function resolverAtorPolicy(command: AgendaCommand): AgendaPolicyActor {
+  if (command.requestIdentity.source === 'PUBLIC_TOKEN') return 'PUBLICO';
+  if (command.requestIdentity.source === 'WORKER') return 'SISTEMA';
+  if (normalizar(command.ator).includes('admin')) return 'ADMIN';
+  if (normalizar(command.ator).includes('ai_agent')) return 'AGENTE';
+  return 'OPERADOR';
 }
 
 function validar(command: AgendaCommand): AgendaReasonCode | null {
@@ -129,6 +140,7 @@ async function persistirDecisao(
     chaveRequisicao: key, fingerprint: fp, operacao: command.operacao, tenantId: command.tenantId,
     leadId: command.leadId, atividadeId: command.atividadeId,
     atividadeResultanteId: result.atividadeResultanteId || command.atividadeId,
+    correlationId: command.correlationId?.trim() || key,
     outcome: durableResult.reasonCode, resultado: durableResult as unknown as Prisma.InputJsonValue,
   } });
   return durableResult;
@@ -136,6 +148,7 @@ async function persistirDecisao(
 
 function resultadoFalha(command: AgendaCommand, reasonCode: AgendaReasonCode): AgendaCommandResult {
   agendaComercialEventos.inc({ resultado: reasonCode.toLowerCase() });
+  registrarAgendaLifecycleDecision({ resultado: 'rejeitado', reasonCode });
   return { success: false, reasonCode, atividadeId: command.atividadeId };
 }
 
@@ -168,10 +181,9 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
     include: { lead: { select: { id: true, status: true, tenantId: true } } },
   });
   if (!atividade) return { success: false, reasonCode: 'TENANT_OWNERSHIP_DENIED', atividadeId: command.atividadeId };
-  let transactionNow: Date | undefined;
+  const [clock] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT CURRENT_TIMESTAMP AS "now"`;
+  const transactionNow = clock.now;
   if (workerNoShow) {
-    const [clock] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT CURRENT_TIMESTAMP AS "now"`;
-    transactionNow = clock.now;
     const lease = command.noShowLease;
     const leaseValido = lease
       && atividade.noShowLeaseOwner === lease.owner
@@ -189,6 +201,26 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
   if (atividade.substituidaPorId) return persistirDecisao(tx, command, key, fp, { success: false, reasonCode: 'ACTIVITY_ALREADY_REPLACED', atividadeId: command.atividadeId });
   if (!atividade.agendadoPara || !['AVALIACAO', 'REUNIAO'].includes(atividade.tipo)) {
     return persistirDecisao(tx, command, key, fp, { success: false, reasonCode: 'STATE_TRANSITION_DENIED', atividadeId: command.atividadeId });
+  }
+  if (command.operacao === 'CANCELAR' || command.operacao === 'REAGENDAR') {
+    const policyDecision = avaliarAgendaPolicy({
+      status: atividade.statusAgendamento,
+      agendadoPara: atividade.agendadoPara,
+      duracaoMinutos: atividade.duracao,
+      agora: transactionNow,
+      ator: resolverAtorPolicy(command),
+      acao: command.operacao,
+    });
+    if (!policyDecision.allowed) {
+      const reasonCode: AgendaReasonCode = policyDecision.reasonCode === 'APPOINTMENT_STARTED'
+        ? 'APPOINTMENT_STARTED'
+        : 'STATE_TRANSITION_DENIED';
+      return persistirDecisao(tx, command, key, fp, {
+        success: false,
+        reasonCode,
+        atividadeId: command.atividadeId,
+      });
+    }
   }
   if (command.operacao === 'NO_SHOW') {
     const elegivelEm = new Date(atividade.agendadoPara.getTime() + obterNoShowGraceMinutes() * 60_000);
@@ -283,6 +315,7 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
       atividadeId: result.atividadeResultanteId || command.atividadeId,
       tipo: command.notificacao.tipo,
       mensagem: command.notificacao.mensagem,
+      correlationId: command.correlationId?.trim() || key,
     } });
   }
   return result;
@@ -295,6 +328,14 @@ export async function executarComandoAgenda(command: AgendaCommand): Promise<Age
     try {
       const result = await prisma.$transaction((tx) => executarNaTransacao(tx as unknown as Prisma.TransactionClient, command), { isolationLevel: 'Serializable' });
       agendaComercialEventos.inc({ resultado: result.reasonCode.toLowerCase() });
+      registrarAgendaLifecycleDecision({
+        resultado: result.replay
+          ? 'replay'
+          : ['STALE_EVENT', 'REQUEST_ID_CONFLICT'].includes(result.reasonCode)
+            ? 'conflito'
+            : result.success ? 'aceito' : 'rejeitado',
+        reasonCode: result.reasonCode,
+      });
       return result;
     } catch (error) {
       const code = (error as { code?: string }).code;

@@ -1519,6 +1519,7 @@ model Atividade {
   mensagem                 String?
   resultado                String?
   agendadoPara             DateTime?
+  timezoneIana             String?
   completadoEm             DateTime?
   criadoPor                String?
   criadoEm                 DateTime      @default(now())
@@ -1567,6 +1568,7 @@ model Atividade {
   @@index([corretorOriginalId])
   @@index([corretorAtualId])
   @@index([leadId, versao])
+  @@index([leadId, statusAgendamento, agendadoPara], map: "atividades_lead_status_agendado_idx")
   @@index([statusAgendamento, agendadoPara, noShowProcessadoEm], map: "atividades_no_show_claim_idx")
   @@map("atividades")
 }
@@ -1606,9 +1608,11 @@ model ComandoAgendaLedger {
   criadoEm              DateTime  @default(now())
   atualizadoEm          DateTime  @updatedAt
   ultimoReplayEm        DateTime?
+  correlationId         String?
 
   @@index([tenantId, leadId, criadoEm])
   @@index([atividadeResultanteId, criadoEm])
+  @@index([correlationId, criadoEm], map: "comandos_agenda_correlation_idx")
   @@map("comandos_agenda_ledger")
 }
 
@@ -1632,9 +1636,11 @@ model EfeitoAgendaOutbox {
   atualizadoEm      DateTime  @updatedAt
   concluidoEm       DateTime?
   reconciliacaoEm   DateTime?
+  correlationId     String?
 
   @@index([status, criadoEm])
   @@index([tenantId, leadId, criadoEm])
+  @@index([correlationId, criadoEm], map: "efeitos_agenda_correlation_idx")
   @@map("efeitos_agenda_outbox")
 }
 
@@ -1650,11 +1656,14 @@ enum TipoAtividade {
 }
 
 enum StatusAgendamento {
+  PROPOSTO
+  SOLICITADO
   PENDENTE // Aguardando confirmação do proprietário
   CONFIRMADO // Proprietário confirmou
   CANCELADO // Cancelado (por qualquer parte)
   REALIZADO // Avaliação concluída
   NAO_COMPARECEU // No-show
+  SUBSTITUIDO
 }
 
 enum StatusConfirmacaoCorretor {

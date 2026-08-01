@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { verificarAutenticacao } from '../middleware/middleware-auth';
 import { googleCalendarService } from '../servicos/google-calendar';
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
+import { obterAgendaPolicy } from '../servicos/agenda-policy';
 import {
     enviarWhatsappAgendamento,
     formatarDataHoraAgenda,
@@ -57,7 +58,17 @@ router.get('/', verificarAutenticacao, async (req, res) => {
         const nomeCorretorPorId = new Map(corretores.map(corretor => [corretor.id, corretor.nome]));
 
         // Formatar para FullCalendar / Frontend Standard
-        const eventos = atividades.map(a => ({
+        const agora = new Date();
+        const atorPolicy = req.usuario?.papel === 'ADMIN' ? 'ADMIN' as const : 'OPERADOR' as const;
+        const eventos = atividades.map(a => {
+            const policy = obterAgendaPolicy({
+                status: a.statusAgendamento,
+                agendadoPara: a.agendadoPara,
+                duracaoMinutos: a.duracao,
+                agora,
+                ator: atorPolicy,
+            });
+            return ({
             id: a.id,
             title: a.titulo, // Ex: "Visita com João", "Bloqueio"
             start: a.agendadoPara,
@@ -75,7 +86,10 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                     ? nomeCorretorPorId.get(a.corretorAtualId) || null
                     : null,
                 statusConfirmacaoCorretor: a.statusConfirmacaoCorretor || null,
-                versao: a.versao
+                versao: a.versao,
+                faseTemporal: policy.faseTemporal,
+                allowedActions: policy.allowedActions,
+                policyReasonCode: policy.reasonCode,
             },
             // Color coding básico
             backgroundColor:
@@ -83,7 +97,8 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                     a.tipo === 'AVALIACAO' ? '#1890ff' :        // Azul para visitas/avaliação
                         a.tipo === 'REUNIAO' ? '#52c41a' :          // Verde para reuniões
                             '#faad14',                                  // Amarelo para tarefas/outros
-        }));
+            });
+        });
 
         res.json(eventos);
 

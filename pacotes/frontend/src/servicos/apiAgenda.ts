@@ -22,6 +22,9 @@ export interface EventoAgenda {
         especialistaNome?: string | null;
         statusConfirmacaoCorretor?: string | null;
         versao: number;
+        faseTemporal?: 'FUTURO' | 'INICIADO' | 'ENCERRADO' | null;
+        allowedActions?: Array<'CANCELAR' | 'REAGENDAR' | 'REALIZAR' | 'NAO_COMPARECEU' | 'CORRIGIR'>;
+        policyReasonCode?: string;
     };
 }
 

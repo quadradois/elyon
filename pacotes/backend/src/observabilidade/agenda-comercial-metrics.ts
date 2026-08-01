@@ -23,6 +23,38 @@ export const agendaNoShowEventos = new Counter({
   registers: [metricsRegistry],
 });
 
+export const agendaLifecycleDecisions = new Counter({
+  name: 'elyon_agenda_lifecycle_decisions_total',
+  help: 'Decisoes agregadas da politica de ciclo de vida, sem identidade ou PII.',
+  labelNames: ['resultado', 'reason_code', 'fase'] as const,
+  registers: [metricsRegistry],
+});
+
+export const agendaLifecycleExpiredPending = new Gauge({
+  name: 'elyon_agenda_lifecycle_expired_pending',
+  help: 'Quantidade agregada de compromissos vencidos ainda sem desfecho.',
+  registers: [metricsRegistry],
+});
+
+export const agendaLifecycleOperationalQueueAgeSeconds = new Gauge({
+  name: 'elyon_agenda_lifecycle_operational_queue_age_seconds',
+  help: 'Idade em segundos do item mais antigo na fila operacional.',
+  registers: [metricsRegistry],
+});
+
+export function registrarAgendaLifecycleDecision(input: {
+  resultado: 'aceito' | 'rejeitado' | 'conflito' | 'replay';
+  reasonCode: string;
+  fase?: 'FUTURO' | 'INICIADO' | 'ENCERRADO' | 'NAO_APLICAVEL';
+}): void {
+  const safeReason = /^[A-Z0-9_]{1,64}$/.test(input.reasonCode) ? input.reasonCode.toLowerCase() : 'unknown';
+  agendaLifecycleDecisions.inc({
+    resultado: input.resultado,
+    reason_code: safeReason,
+    fase: (input.fase || 'NAO_APLICAVEL').toLowerCase(),
+  });
+}
+
 export const agendaPilotGate = new Gauge({
   name: 'elyon_agenda_pilot_gate',
   help: 'Estado fail-closed dos recursos do piloto, sem identidade do tenant.',
@@ -46,6 +78,16 @@ export function registrarAgendaPilotConfig(config: AgendaPilotConfig): void {
   agendaPilotGate.reset();
   agendaPilotTenantScope.set(config.scope ? 1 : 0);
   agendaPilotCutoffConfigured.set(config.scope?.startedAtUtc ? 1 : 0);
+  agendaPilotGate.set({
+    recurso: 'lifecycle_policy',
+    status: config.lifecyclePolicy.enabled ? 'enabled' : 'disabled',
+    reason_code: config.lifecyclePolicy.reason.toLowerCase(),
+  }, 1);
+  agendaPilotGate.set({
+    recurso: 'lifecycle_commands',
+    status: config.lifecycleCommands.enabled ? 'enabled' : 'disabled',
+    reason_code: config.lifecycleCommands.reason.toLowerCase(),
+  }, 1);
   agendaPilotGate.set({
     recurso: 'effects',
     status: config.effects.enabled ? 'enabled' : 'disabled',

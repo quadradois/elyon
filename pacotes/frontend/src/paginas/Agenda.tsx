@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 
 import { agendaService, EventoAgenda } from '../servicos/apiAgenda';
 import { Loader2, Calendar as CalendarIcon, Ban, Check, Clock, Phone, User, Trash2, CalendarX, Settings, XCircle, RefreshCw, MessageSquare } from 'lucide-react';
+import { acaoAgendaPermitida } from './agenda-actions';
 
 const locales = { 'pt-BR': ptBR };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
@@ -581,6 +582,13 @@ export function Agenda() {
                         )}
                     </DrawerBody>
                     <DrawerFooter>
+                        {selectedEvent && !acaoAgendaPermitida(selectedEvent, 'CANCELAR')
+                            && !acaoAgendaPermitida(selectedEvent, 'REAGENDAR')
+                            && selectedEvent.extendedProps?.faseTemporal !== 'FUTURO' && (
+                            <p className="mb-2 text-sm text-amber-700">
+                                O horário deste atendimento já chegou ou passou. Cancelar e reagendar não estão mais disponíveis; registre o resultado do atendimento.
+                            </p>
+                        )}
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                             <Button variant="outline" onClick={() => setShowEventModal(false)}>Fechar</Button>
                             {selectedEvent?.extendedProps?.status === 'PENDENTE' && (
@@ -589,18 +597,24 @@ export function Agenda() {
                                     Aprovar
                                 </Button>
                             )}
-                            <Button variant="destructive" onClick={handleCancelarAgendamento} disabled={actionLoading}>
-                                {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
-                                Cancelar
-                            </Button>
-                            <Button variant="outline" onClick={handleReagendarAgendamento} disabled={actionLoading}>
-                                {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                                Reagendar
-                            </Button>
-                            <Button onClick={handleProporHorario} disabled={actionLoading}>
-                                {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}
-                                Propor Horário
-                            </Button>
+                            {acaoAgendaPermitida(selectedEvent, 'CANCELAR') && (
+                                <Button variant="destructive" onClick={handleCancelarAgendamento} disabled={actionLoading}>
+                                    {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
+                                    Cancelar
+                                </Button>
+                            )}
+                            {acaoAgendaPermitida(selectedEvent, 'REAGENDAR') && (
+                                <>
+                                    <Button variant="outline" onClick={handleReagendarAgendamento} disabled={actionLoading}>
+                                        {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                                        Reagendar
+                                    </Button>
+                                    <Button onClick={handleProporHorario} disabled={actionLoading}>
+                                        {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}
+                                        Propor Horário
+                                    </Button>
+                                </>
+                            )}
                         </div>
                     </DrawerFooter>
                 </DrawerContent>

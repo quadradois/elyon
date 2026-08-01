@@ -1214,12 +1214,14 @@ REGRA ABSOLUTA: nunca afirme que o agendamento foi cancelado antes de esta tool 
             return JSON.stringify({ success: false, reasonCode: 'TRUSTED_REQUEST_ID_REQUIRED' });
         }
 
+        const agora = new Date();
         const atividadeAtiva = await prisma.atividade.findFirst({
             where: {
                 leadId: args.contatoId,
                 tipo: { in: ['REUNIAO', 'AVALIACAO'] },
                 completadoEm: null,
                 statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
+                agendadoPara: { gt: agora },
                 lead: { tenantId },
             },
             orderBy: { agendadoPara: 'asc' },
@@ -1227,6 +1229,26 @@ REGRA ABSOLUTA: nunca afirme que o agendamento foi cancelado antes de esta tool 
         });
 
         if (!atividadeAtiva) {
+            const atividadeIniciada = await prisma.atividade.findFirst({
+                where: {
+                    leadId: args.contatoId,
+                    tipo: { in: ['REUNIAO', 'AVALIACAO'] },
+                    completadoEm: null,
+                    statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
+                    agendadoPara: { lte: agora },
+                    lead: { tenantId },
+                },
+                orderBy: { agendadoPara: 'desc' },
+                select: { id: true, agendadoPara: true },
+            });
+            if (atividadeIniciada) {
+                return JSON.stringify({
+                    success: false,
+                    reasonCode: 'APPOINTMENT_STARTED',
+                    atividadeId: atividadeIniciada.id,
+                    error: 'O horÃ¡rio desse atendimento jÃ¡ chegou ou passou. NÃ£o diga ao lead que ele foi cancelado; encaminhe para registrar o resultado ou para atendimento humano.',
+                });
+            }
             const atividadeCancelada = await prisma.atividade.findFirst({
                 where: {
                     leadId: args.contatoId,
