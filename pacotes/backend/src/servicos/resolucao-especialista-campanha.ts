@@ -85,7 +85,7 @@ export async function resolverEspecialistaCampanha(params: {
       telefone: { not: null },
     },
     orderBy: { atualizadoEm: 'desc' },
-    select: { id: true, nome: true, telefone: true, email: true, papel: true }
+    select: { id: true, nome: true, telefone: true, email: true, papel: true, estaAtivo: true }
   });
   const pool = poolCorretor || await prisma.usuario.findFirst({
     where: {
@@ -95,7 +95,7 @@ export async function resolverEspecialistaCampanha(params: {
       telefone: { not: null },
     },
     orderBy: { atualizadoEm: 'desc' },
-    select: { id: true, nome: true, telefone: true, email: true, papel: true }
+    select: { id: true, nome: true, telefone: true, email: true, papel: true, estaAtivo: true }
   });
 
   if (pool && elegivelUsuario(pool)) {
