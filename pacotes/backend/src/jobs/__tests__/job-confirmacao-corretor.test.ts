@@ -1,6 +1,7 @@
 const mockPrisma = {
   atividade: { findMany: jest.fn(), update: jest.fn() },
   sessaoWhatsapp: { findFirst: jest.fn() },
+  usuario: { findFirst: jest.fn() },
 };
 
 const mockWhatsapp = { enviarMensagemTexto: jest.fn() };
@@ -15,6 +16,7 @@ jest.mock('../../servicos/remanejamento-corretor', () => ({ remanejarCorretorAti
 jest.mock('../../servicos/servico-auditoria', () => ({ ServicoAuditoria: mockAuditoria }));
 
 import {
+  executarConvitesConfirmacaoCorretor,
   executarCutoffRemanejamentoCorretor,
   executarLembretesConfirmacaoCorretor,
 } from '../job-confirmacao-corretor';
@@ -65,5 +67,41 @@ describe('job-confirmacao-corretor', () => {
         statusConfirmacaoCorretor: 'PENDENTE',
       }),
     }));
+  });
+
+  it('recupera convite não enviado entre T-120 e T-60', async () => {
+    mockPrisma.atividade.findMany.mockResolvedValue([]);
+
+    await executarConvitesConfirmacaoCorretor();
+
+    const chamada = mockPrisma.atividade.findMany.mock.calls[0][0];
+    const janela = chamada.where.agendadoPara;
+    expect(janela.gt).toBeInstanceOf(Date);
+    expect(janela.lte).toBeInstanceOf(Date);
+    expect(janela.lte.getTime() - janela.gt.getTime()).toBe(60 * 60 * 1000);
+    expect(chamada.where.confirmacaoCorretorSolicitadaEm).toBeNull();
+  });
+
+  it('envia convite ao especialista atual da atividade após remanejamento', async () => {
+    mockPrisma.atividade.findMany.mockResolvedValue([{
+      id: 'a-remanejada',
+      tokenConfirmacaoCorretor: 'token-novo',
+      agendadoPara: new Date('2026-08-01T18:00:00Z'),
+      corretorAtualId: 'u-julia',
+      lead: { id: 'l1', nome: 'Ivonet', tenantId: 't1', campanhaOrigemId: 'c1' },
+    }]);
+    mockPrisma.usuario.findFirst.mockResolvedValue({
+      id: 'u-julia', nome: 'Julia', telefone: '+55 62 8591-9018', email: null, papel: 'CORRETOR',
+    });
+    mockPrisma.sessaoWhatsapp.findFirst.mockResolvedValue({ instanceName: 'inst1' });
+
+    const out = await executarConvitesConfirmacaoCorretor();
+
+    expect(out.enviados).toBe(1);
+    expect(mockResolver).not.toHaveBeenCalled();
+    expect(mockWhatsapp.enviarMensagemTexto).toHaveBeenCalledWith(
+      '556285919018',
+      expect.stringContaining('/confirmar-corretor/a-remanejada/token-novo'),
+    );
   });
 });

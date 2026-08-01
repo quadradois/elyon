@@ -10,6 +10,7 @@ import { executarEventoWebhook } from './servicos/webhook-worker-executor';
 import { schedulerSincronizacaoMapa } from './servicos/scheduler-sincronizacao-mapa';
 import { schedulerLimpezaCache } from './servicos/scheduler-limpeza-cache';
 import { schedulerReconciliacaoWhatsapp } from './servicos/scheduler-reconciliacao-whatsapp';
+import { schedulerConfirmacaoCorretor } from './servicos/scheduler-confirmacao-corretor';
 import { installSecureConsoleBridge, logger } from './lib/logger';
 import { validarConfiguracaoCriptografia } from './lib/crypto';
 import { validarConfiguracaoWebhooks } from './servicos/webhook-seguranca';
@@ -145,6 +146,7 @@ async function encerrar(sinal: string): Promise<void> {
   schedulerSincronizacaoMapa.parar();
   schedulerLimpezaCache.parar();
   schedulerReconciliacaoWhatsapp.parar();
+  schedulerConfirmacaoCorretor.parar();
   servidorSaude.close();
   await prisma.$disconnect();
 }
@@ -173,6 +175,7 @@ async function iniciar(): Promise<void> {
   schedulerSincronizacaoMapa.iniciar();
   schedulerLimpezaCache.iniciar();
   schedulerReconciliacaoWhatsapp.iniciar();
+  schedulerConfirmacaoCorretor.iniciar();
   servidorSaude.listen(porta, '0.0.0.0', () => logger.info({ porta }, '[WORKER] Health server iniciado'));
   await loop();
 }
