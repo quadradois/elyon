@@ -302,4 +302,22 @@ Qual valor você espera pelo seu apartamento?
     expect(result.respostaLimpa).not.toContain('parado');
     expect(result.respostaLimpa).toContain('imovel esta anunciado');
   });
+
+  it('bloqueia alegação de confirmação automática por link sem tool de agenda', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Quando você confirma pelo link do Google Calendar, o horário fica travado automaticamente e o especialista já recebe o aviso.',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Já agendei, consegue confirmar?',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_CONFIRMATION_GUARD');
+    expect(result.respostaLimpa).toContain('não consigo confirmar');
+    expect(result.respostaLimpa).not.toContain('fica travado');
+  });
 });

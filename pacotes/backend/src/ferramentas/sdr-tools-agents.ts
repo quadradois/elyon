@@ -28,7 +28,7 @@ import { sanitizeInt, sanitizeFloat, sanitizeBool, sanitizeStr, sanitizeEnum, sa
 import { wrapToolExecute } from './tool-wrapper';
 import { avaliarPolicyAcaoSensivel, isAutoCaptadoAfterCrmEnabled } from './sensitive-action-policy';
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
-import { interpretarAgendamentoTemporal } from '../servicos/agenda-temporal';
+import { interpretarAgendamentoTemporal, mensagemContemDataHoraExplicita } from '../servicos/agenda-temporal';
 import { resolverEspecialistaCampanha } from '../servicos/resolucao-especialista-campanha';
 
 async function registrarExecucaoTool(params: {
@@ -990,6 +990,20 @@ O backend resolverá datas relativas de forma determinística em America/Sao_Pau
                 });
             }
 
+            // Valida o estado antes de qualquer efeito externo no Google Calendar.
+            // A transação abaixo repete a checagem com compare-and-set para impedir
+            // corrida entre a validação e a persistência local.
+            const estadoAgenda = await prisma.lead.findFirst({
+                where: { id: leadId, tenantId },
+                select: { status: true }
+            });
+            if (!estadoAgenda) {
+                return JSON.stringify({ success: false, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+            }
+            if (!['NOVO', 'TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA'].includes(estadoAgenda.status)) {
+                return JSON.stringify({ success: false, reasonCode: 'STATE_TRANSITION_DENIED' });
+            }
+
             // 3. Tentar Google Calendar (se configurado)
             let linkReuniao: string | null = null;
             let eventoGoogleId: string | null = null;
@@ -1101,9 +1115,12 @@ O backend resolverá datas relativas de forma determinística em America/Sao_Pau
                     }
                 });
             } else {
-                await prisma.$transaction(async (tx) => {
+                const criacaoLocal = await prisma.$transaction(async (tx: any) => {
                     const leadAtual = await tx.lead.findFirst({ where: { id: leadId, tenantId }, select: { status: true } });
-                    if (!leadAtual || !['TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA'].includes(leadAtual.status)) throw new Error('STATE_TRANSITION_DENIED');
+                    if (!leadAtual) return { success: false as const, reasonCode: 'TENANT_OWNERSHIP_DENIED' };
+                    if (!['NOVO', 'TENTATIVA_AGENDAMENTO', 'VISITA_AGENDADA'].includes(leadAtual.status)) {
+                        return { success: false as const, reasonCode: 'STATE_TRANSITION_DENIED' };
+                    }
                     const criada = await tx.atividade.create({ data: {
                         leadId,
                         tipo: 'REUNIAO',
@@ -1117,13 +1134,21 @@ O backend resolverá datas relativas de forma determinística em America/Sao_Pau
                         corretorOriginalId: especialista.usuarioId || null,
                         corretorAtualId: especialista.usuarioId || null,
                     } });
-                    await tx.lead.update({ where: { id: leadId }, data: { status: 'VISITA_AGENDADA' } });
+                    const leadAtualizado = await tx.lead.updateMany({
+                        where: { id: leadId, tenantId, status: leadAtual.status },
+                        data: { status: 'VISITA_AGENDADA' }
+                    });
+                    if (leadAtualizado.count !== 1) throw new Error('LEAD_CONCURRENT_WRITE');
                     await tx.milestoneAgenda.create({ data: {
                         tenantId, leadId, atividadeId: criada.id, tipo: 'VISITA_AGENDADA', ator: 'ai_agent',
                         origem: 'TOOL_AGENDAR_REUNIAO', motivo: 'Horario confirmado pelo Lead', reasonCode: 'SCHEDULED',
                         ocorridoEm: new Date(), chaveIdempotencia: crypto.createHash('sha256').update(`agenda-scheduled:${durableExecutionId}`).digest('hex'),
                     } });
+                    return { success: true as const, atividadeId: criada.id };
                 });
+                if (!criacaoLocal.success) {
+                    return JSON.stringify({ success: false, reasonCode: criacaoLocal.reasonCode });
+                }
             }
 
             await registrarExecucaoTool({
@@ -1165,7 +1190,9 @@ Exemplos de gatilho:
 - "Não sei meu horário ainda"
 - "Vou ver e te falo"
 
-Esta tool gera um link nativo do Google Calendar para o lead escolher o melhor horário.
+Esta tool só pode usar uma página de reservas rastreável. Um link de evento
+pré-preenchido do Google Calendar NÃO reserva o horário do especialista e NÃO
+pode ser apresentado como agendamento confirmado.
 
 ⚠️ NUNCA use esta tool se o lead já informou data/hora — nesse caso use agendar_reuniao_closer.
 ⚠️ SEMPRE tente primeiro definir o horário pela conversa. Esta tool é o ÚLTIMO RECURSO.`,
@@ -1184,6 +1211,16 @@ Esta tool gera um link nativo do Google Calendar para o lead escolher o melhor h
             });
             if (!ownership.ok) return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
 
+            const mensagemAtual = runContext?.context?.mensagemAtual;
+            if (mensagemContemDataHoraExplicita(mensagemAtual)) {
+                return JSON.stringify({
+                    success: false,
+                    reasonCode: 'EXPLICIT_DATETIME_ALREADY_PROVIDED',
+                    error: 'O lead já informou data e hora. Use agendar_reuniao_closer; não envie link de fallback.',
+                    instrucaoParaAgente: 'Use agendar_reuniao_closer com a data e hora informadas na mensagem atual.'
+                });
+            }
+
             const contato = await prisma.lead.findUnique({
                 where: { id: args.contatoId },
                 select: { id: true, nome: true }
@@ -1193,46 +1230,11 @@ Esta tool gera um link nativo do Google Calendar para o lead escolher o melhor h
                 return JSON.stringify({ success: false, error: 'Contato não encontrado' });
             }
 
-            // Gerar link de agendamento nativo Google Calendar
-            let linkAgendamento: string;
-            try {
-                const { googleCalendarService } = require('../servicos/google-calendar');
-                linkAgendamento = googleCalendarService.gerarLinkAgendamento({
-                    titulo: `Reunião com ${contato.nome || 'Consultor'} — Elyon`,
-                    descricao: args.observacoesCloser || 'Reunião de apresentação agendada via WhatsApp (Elyon AI)',
-                });
-            } catch {
-                // Fallback mínimo se Google Calendar não estiver disponível
-                linkAgendamento = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=Reuni%C3%A3o+Elyon';
-            }
-
-            // Registrar atividade de follow-up
-            await prisma.atividade.create({
-                data: {
-                    leadId: contato.id,
-                    tipo: 'TAREFA',
-                    titulo: `📅 Link de agendamento enviado ao lead`,
-                    descricao: [
-                        `Link: ${linkAgendamento}`,
-                        `Lead não definiu horário na conversa — link enviado como fallback`,
-                        args.observacoesCloser ? `Contexto: ${args.observacoesCloser}` : ''
-                    ].filter(Boolean).join(' | '),
-                    criadoPor: 'ai_agent',
-                    statusAgendamento: 'PENDENTE'
-                }
-            });
-
-            await registrarExecucaoTool({
-                leadId: contato.id,
-                toolName: 'enviar_link_agendamento',
-                sucesso: true,
-                detalhes: 'Link de agendamento gerado e enviado'
-            });
-
             return JSON.stringify({
-                success: true,
-                linkAgendamento,
-                mensagem: `📅 Envie ao lead: "Sem problema! Te mando esse link aqui pra você escolher o melhor horário quando puder: ${linkAgendamento} 😊"`
+                success: false,
+                reasonCode: 'TRACKABLE_BOOKING_LINK_UNAVAILABLE',
+                error: 'Autoagendamento rastreável ainda não está configurado.',
+                instrucaoParaAgente: 'NÃO envie link do Google Calendar e NÃO afirme que houve reserva. Pergunte qual dia e horário o lead prefere e use agendar_reuniao_closer.'
             });
     })
 });

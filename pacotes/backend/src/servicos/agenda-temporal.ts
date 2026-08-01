@@ -17,6 +17,13 @@ function normalizar(texto: string): string {
     .trim();
 }
 
+export function mensagemContemDataHoraExplicita(texto?: string): boolean {
+  const mensagem = normalizar(texto || '');
+  const temData = /\b(?:amanha|hoje|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\b/.test(mensagem);
+  const temHora = /\b(?:as\s+)?\d{1,2}(?::|h)\d{0,2}\b/.test(mensagem);
+  return temData && temHora;
+}
+
 function montarUtc(data: string, hora: string, timezone: string): Date | null {
   const local = `${data}T${hora}:00`;
   const utc = fromZonedTime(local, timezone);

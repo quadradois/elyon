@@ -66,6 +66,18 @@ function aplicarGuardrailLinguagemGovernanca(resposta: string, ultimaMsgLead?: s
     .trim();
 }
 
+function aplicarGuardrailConfirmacaoAgenda(resposta: string, nomesToolsTurno: string[]): string {
+  const normalizada = normalizarTexto(resposta);
+  const confirmouViaTool = nomesToolsTurno.some((nome) => /agendar_reuniao_closer/i.test(nome));
+  const mencionaCalendar = /google\s+calendar|calendario|link/.test(normalizada);
+  const alegaReservaAutomatica = /horario\s+(?:fica|ficou|esta)\s+travad|confirmad[oa]\s+automaticamente|especialista\s+ja\s+(?:recebeu|foi\s+avisado)|nao\s+preciso\s+validar/.test(normalizada);
+
+  if (!confirmouViaTool && mencionaCalendar && alegaReservaAutomatica) {
+    return 'O link apenas abre um evento pré-preenchido no Google Calendar; eu não consigo confirmar por aqui se ele foi salvo nem reservar a agenda do especialista. Qual data e horário você escolheu?';
+  }
+  return resposta;
+}
+
 /**
  * Filtros de resposta pós-agente.
  * v2.0 — Simplificado após unificação SDR (Opener+Presenter merge).
@@ -114,6 +126,12 @@ export function aplicarFiltrosRespostaOrchestrator(
   respostaLimpa = sanitizarRespostaParaCliente(respostaLimpa);
   const respostaAntesGovernanca = respostaLimpa;
   respostaLimpa = aplicarGuardrailLinguagemGovernanca(respostaLimpa, ultimaMsgLead);
+  const respostaAntesGuardrailAgenda = respostaLimpa;
+  respostaLimpa = aplicarGuardrailConfirmacaoAgenda(respostaLimpa, nomesToolsTurno);
+  if (respostaAntesGuardrailAgenda !== respostaLimpa) {
+    logger.warn('[ORCHESTRATOR] Guardrail bloqueou confirmação de agenda sem registro via tool.');
+    fallbackAplicado = 'AGENDA_CONFIRMATION_GUARD';
+  }
   if (respostaAntesGovernanca !== respostaLimpa) {
     logger.debug(`[ORCHESTRATOR] 🛡️ Guardrail de linguagem aplicado. Antes="${respostaAntesGovernanca.substring(0, 80)}" Depois="${respostaLimpa.substring(0, 80)}"`);
   }
