@@ -71,5 +71,11 @@ describe('resolverEspecialistaCampanha', () => {
       origem: 'POOL_TENANT', usuarioId: 'admin-1', cargo: 'Especialista Comercial',
     });
     expect(mockPrisma.usuario.findFirst).toHaveBeenCalledTimes(2);
+    expect(mockPrisma.usuario.findFirst).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      select: expect.objectContaining({ estaAtivo: true }),
+    }));
+    expect(mockPrisma.usuario.findFirst).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      select: expect.objectContaining({ estaAtivo: true }),
+    }));
   });
 });

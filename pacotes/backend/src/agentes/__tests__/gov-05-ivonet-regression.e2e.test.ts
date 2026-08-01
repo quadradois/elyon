@@ -227,4 +227,24 @@ Qual valor você espera pelo seu apartamento?
     expect(parsed.success).toBe(true);
     expect(parsed.argsRecebidos.leadId).toBe('lead-ivonet-001');
   });
+
+  it('não traduz ausência de especialista como conflito de horário', async () => {
+    const wrapped = wrapToolExecute('agendar_reuniao_closer', async () => {
+      return JSON.stringify({
+        success: false,
+        reasonCode: 'SPECIALIST_NOT_CONFIGURED',
+        error: 'Nenhum especialista ativo está configurado para esta campanha.',
+      });
+    });
+
+    const raw = await wrapped({
+      contatoId: 'lead-ivonet-001',
+      dataHora: '03/08/2026 08:00',
+      observacoesCloser: 'Lead solicitou avaliação.',
+    });
+    const parsed = JSON.parse(raw);
+
+    expect(parsed.instrucaoParaAgente).toContain('NÃO diga que o horário está indisponível');
+    expect(parsed.instrucaoParaAgente).toContain('O horário não foi consultado');
+  });
 });

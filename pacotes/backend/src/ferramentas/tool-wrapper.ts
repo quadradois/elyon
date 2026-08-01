@@ -234,7 +234,9 @@ const enricherAgendamento: ToolResultEnricher = {
     toolName: 'agendar_reuniao_closer',
     enrich: (result, _args) => {
         if (result.success === false) {
-            if (result.error?.includes('não encontrado')) {
+            if (result.reasonCode === 'SPECIALIST_NOT_CONFIGURED') {
+                result.instrucaoParaAgente = 'NÃO diga que o horário está indisponível ou ocupado. O horário não foi consultado. Diga: "Ainda não consegui confirmar o especialista responsável por esse atendimento. Vou verificar essa disponibilidade antes de confirmar."';
+            } else if (result.error?.includes('não encontrado')) {
                 result.instrucaoParaAgente = 'O contato não foi encontrado. Isso é um erro interno — NÃO diga "problema técnico". Diga: "Me passa seu nome completo pra eu confirmar aqui?" e tente novamente após validar.';
             } else if (result.disponivel === false) {
                 result.instrucaoParaAgente = `Esse horário está OCUPADO. Apresente as alternativas: ${result.alternativas || 'pergunte outro horário ao lead'}.`;
