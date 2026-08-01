@@ -506,6 +506,12 @@ export function Agenda() {
                             <div className="flex items-center gap-2 text-sm"><Clock className="h-4 w-4 text-muted-foreground" /><span>{selectedEvent?.start instanceof Date ? selectedEvent.start.toLocaleString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'N/A'}</span></div>
                             {selectedEvent?.extendedProps?.leadNome && <div className="flex items-center gap-2 text-sm"><User className="h-4 w-4 text-muted-foreground" /><span>{selectedEvent.extendedProps.leadNome}</span></div>}
                             {selectedEvent?.extendedProps?.leadTelefone && <div className="flex items-center gap-2 text-sm"><Phone className="h-4 w-4 text-muted-foreground" /><span>{selectedEvent.extendedProps.leadTelefone}</span></div>}
+                            {selectedEvent?.extendedProps?.especialistaNome && (
+                                <div className="flex items-center gap-2 text-sm">
+                                    <User className="h-4 w-4 text-muted-foreground" />
+                                    <span>Responsável: <strong>{selectedEvent.extendedProps.especialistaNome}</strong></span>
+                                </div>
+                            )}
                         </section>
 
                         <section className="space-y-2 w-full min-w-0">

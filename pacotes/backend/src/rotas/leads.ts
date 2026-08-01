@@ -1827,6 +1827,17 @@ router.get('/confirmacao-corretor/painel', async (req, res) => {
       take: 200,
     });
 
+    const corretorIds = [...new Set(
+      atividades.map((atividade: any) => atividade.corretorAtualId).filter(Boolean)
+    )] as string[];
+    const corretores = corretorIds.length > 0
+      ? await prisma.usuario.findMany({
+          where: { tenantId, id: { in: corretorIds } },
+          select: { id: true, nome: true },
+        })
+      : [];
+    const nomeCorretorPorId = new Map(corretores.map(corretor => [corretor.id, corretor.nome]));
+
     const statusAlvo = ['PENDENTE', 'CONFIRMADO', 'EXPIRADO', 'REMANEJADO', 'RECUSADO'];
     const totais = {
       pendente: 0,
@@ -1880,6 +1891,9 @@ router.get('/confirmacao-corretor/painel', async (req, res) => {
         remanejadoCorretorEm: atividade.remanejadoCorretorEm,
         corretorOriginalId: atividade.corretorOriginalId,
         corretorAtualId: atividade.corretorAtualId,
+        corretorAtualNome: atividade.corretorAtualId
+          ? nomeCorretorPorId.get(atividade.corretorAtualId) || null
+          : null,
         cutoffEm: cutoff,
       };
     });
@@ -2101,7 +2115,7 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
         tokenConfirmacaoCorretor: token
       },
       include: {
-        lead: { select: { tenantId: true, nome: true, telefone: true } }
+        lead: { select: { id: true, tenantId: true, nome: true, telefone: true } }
       }
     });
 
@@ -2189,8 +2203,9 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
             select: { nome: true }
           })
         : null;
-      await enviarWhatsappAgendamento({
+      const notificacaoLead = await enviarWhatsappAgendamento({
         tenantId: atividade.lead.tenantId,
+        leadId: atividade.lead.id,
         telefone: atividade.lead.telefone,
         mensagem: montarMensagemLigacaoConfirmada({
           leadNome: atividade.lead.nome,
@@ -2201,7 +2216,11 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
 
       return res.json({
         sucesso: true,
-        mensagem: 'Ligação confirmada com sucesso. O lead foi notificado.',
+        mensagem: notificacaoLead.enviado
+          ? 'Ligação confirmada com sucesso. O lead foi notificado.'
+          : 'Ligação confirmada, mas não foi possível notificar o lead pelo WhatsApp.',
+        notificacaoLeadEnviada: notificacaoLead.enviado,
+        notificacaoRegistradaNoHistorico: notificacaoLead.registradoNoHistorico,
         statusConfirmacaoCorretor: 'CONFIRMADO'
       });
     }

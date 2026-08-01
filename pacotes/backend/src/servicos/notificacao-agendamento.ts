@@ -34,26 +34,54 @@ ${especialista} confirmou seu atendimento por telefone para:
 O especialista ligará para você no horário combinado. Se precisar reagendar, é só me avisar. 📞`;
 }
 
+export type ResultadoNotificacaoAgendamento = {
+  enviado: boolean;
+  registradoNoHistorico: boolean;
+  messageId: string | null;
+};
+
 export async function enviarWhatsappAgendamento(params: {
   tenantId: string;
+  leadId: string;
   telefone?: string | null;
   mensagem: string;
-}): Promise<boolean> {
-  if (!params.telefone) return false;
+}): Promise<ResultadoNotificacaoAgendamento> {
+  const naoEnviado: ResultadoNotificacaoAgendamento = {
+    enviado: false,
+    registradoNoHistorico: false,
+    messageId: null,
+  };
+  if (!params.telefone) return naoEnviado;
   const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
     where: { tenantId: params.tenantId, status: 'CONECTADO' },
     orderBy: { atualizadoEm: 'desc' },
     select: { instanceName: true },
   });
-  if (!sessaoWhatsapp) return false;
+  if (!sessaoWhatsapp) return naoEnviado;
 
   try {
     const { getWhatsAppService } = await import('./whatsapp');
     const whatsapp = getWhatsAppService(sessaoWhatsapp.instanceName);
-    await whatsapp.enviarMensagemTexto(params.telefone, params.mensagem);
-    return true;
+    const resultado = await whatsapp.enviarMensagemTexto(params.telefone, params.mensagem);
+    const messageId = resultado?.key?.id || resultado?.messageId || null;
+    try {
+      await prisma.mensagemProspeccao.create({
+        data: {
+          leadId: params.leadId,
+          direcao: 'SAIDA',
+          conteudo: params.mensagem,
+          telefone: params.telefone,
+          messageId,
+          processadaPorIA: false,
+        },
+      });
+      return { enviado: true, registradoNoHistorico: true, messageId };
+    } catch (error) {
+      console.error('[Agenda] WhatsApp enviado, mas o histórico não foi registrado:', error);
+      return { enviado: true, registradoNoHistorico: false, messageId };
+    }
   } catch (error) {
     console.error('[Agenda] Erro ao enviar WhatsApp:', error);
-    return false;
+    return naoEnviado;
   }
 }
