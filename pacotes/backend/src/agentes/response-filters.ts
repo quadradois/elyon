@@ -78,6 +78,19 @@ function aplicarGuardrailConfirmacaoAgenda(resposta: string, nomesToolsTurno: st
   return resposta;
 }
 
+function aplicarGuardrailCancelamentoAgenda(resposta: string, nomesToolsTurno: string[]): string {
+  const normalizada = normalizarTexto(resposta);
+  const cancelouViaTool = nomesToolsTurno.some((nome) => /cancelar_agendamento/i.test(nome));
+  const alegaCancelamento =
+    /(?:agendamento|horario|atendimento).{0,45}(?:foi|esta|ficou).{0,20}cancelad/.test(normalizada)
+    || /(?:ja\s+)?cancelei|cancelamento.{0,30}(?:feito|concluido|confirmado)/.test(normalizada);
+
+  if (!cancelouViaTool && alegaCancelamento) {
+    return 'Ainda não consegui registrar o cancelamento no sistema. Você confirma que deseja cancelar o agendamento atual?';
+  }
+  return resposta;
+}
+
 /**
  * Filtros de resposta pós-agente.
  * v2.0 — Simplificado após unificação SDR (Opener+Presenter merge).
@@ -131,6 +144,12 @@ export function aplicarFiltrosRespostaOrchestrator(
   if (respostaAntesGuardrailAgenda !== respostaLimpa) {
     logger.warn('[ORCHESTRATOR] Guardrail bloqueou confirmação de agenda sem registro via tool.');
     fallbackAplicado = 'AGENDA_CONFIRMATION_GUARD';
+  }
+  const respostaAntesGuardrailCancelamento = respostaLimpa;
+  respostaLimpa = aplicarGuardrailCancelamentoAgenda(respostaLimpa, nomesToolsTurno);
+  if (respostaAntesGuardrailCancelamento !== respostaLimpa) {
+    logger.warn('[ORCHESTRATOR] Guardrail bloqueou confirmação de cancelamento sem registro via tool.');
+    fallbackAplicado = 'AGENDA_CANCELLATION_GUARD';
   }
   if (respostaAntesGovernanca !== respostaLimpa) {
     logger.debug(`[ORCHESTRATOR] 🛡️ Guardrail de linguagem aplicado. Antes="${respostaAntesGovernanca.substring(0, 80)}" Depois="${respostaLimpa.substring(0, 80)}"`);

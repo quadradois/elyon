@@ -357,6 +357,7 @@ const TIPOS_EFEITO_TOOL: Record<string, TipoEfeitoTool> = {
     salvar_dados_imovel: 'POSTGRES_MUTATION',
     registrar_indicacao: 'POSTGRES_MUTATION',
     enviar_link_agendamento: 'POSTGRES_MUTATION',
+    cancelar_agendamento: 'POSTGRES_MUTATION',
     enviar_para_crm: 'EXTERNAL_EFFECT',
     agendar_reuniao_closer: 'EXTERNAL_EFFECT',
 };

@@ -27,6 +27,7 @@ import {
     registrarIndicacaoTool,
     atualizarDadosLeadTool,
     agendarReuniaoCloserTool,
+    cancelarAgendamentoTool,
     enviarLinkAgendamentoTool,
 } from '../ferramentas/sdr-tools-agents';
 import { consultarPrecoMercadoTool } from '../ferramentas/consultar-preco-mercado';
@@ -305,6 +306,8 @@ ${perguntasRoteiroMarkdown}
 - "sim/pode ser/fechou" não são datas: após aceite, pergunte dia e horário.
 - Antes de pedir dia/horário, faça pre-CTA de interesse no agendamento (ex.: "faz sentido avançar para uma consultoria gratuita com o especialista?").
 - Em \`agendar_reuniao_closer\`, sempre preencha \`observacoesCloser\`.
+- Quando o lead confirmar que deseja cancelar, chame \`cancelar_agendamento\` imediatamente. Nunca confirme o cancelamento apenas em texto.
+- Só diga que o agendamento foi cancelado depois de \`cancelar_agendamento\` retornar \`success=true\`.
 - Se o lead pedir tempo, priorize combinar data de retorno e registrar \`agendar_followup\`.
 - \`enviar_link_agendamento\` é fallback somente para uma futura página de reservas rastreável. Enquanto a tool retornar indisponível, pergunte dia/horário e use \`agendar_reuniao_closer\`.
 - Link de evento pré-preenchido do Google Calendar não reserva horário, não notifica o Elyon e nunca pode ser descrito como confirmado ou "travado".
@@ -394,11 +397,12 @@ O conteúdo retornado é o playbook que você DEVE seguir — não improvise.
 ⚠️ REGRA: Detectou o gatilho → chame \`ler_skill\` PRIMEIRO → só então responda.
 Não improvise protocolos de cabeça. A skill tem a resposta certa.
 
-## 📅 AGENDAMENTO (2 TOOLS)
+## 📅 AGENDAMENTO
 
 | Tool | Quando usar |
 |------|-------------|
 | \`agendar_reuniao_closer\` | **PRINCIPAL** — Lead informou data/hora explicitamente. Confirma **ligação telefônica** no horário combinado. **SEMPRE preencha \`observacoesCloser\`** com relatório da conversa. |
+| \`cancelar_agendamento\` | **CANCELAMENTO** — Lead confirmou que quer cancelar o agendamento atual. Só confirme ao lead depois de a tool retornar \`success=true\`. |
 | \`agendar_followup\` | **RETOMADA ASSISTIDA** — Lead pede tempo. Combine data de recontato com o lead e registre antes de encerrar. |
 | \`enviar_link_agendamento\` | **FALLBACK CONTROLADO** — Só é válido com página de reservas rastreável. Se indisponível, colete dia/horário; nunca envie evento pré-preenchido como se fosse reserva. |
 `;
@@ -524,6 +528,7 @@ ID_DO_CONTATO: ${contatoIdStr}
 
 ⚠️ INSTRUÇÃO OBRIGATÓRIA DE IDs (NÃO CONFUNDIR):
 - Para agendar_reuniao_closer → use contatoId='${contatoIdStr}'
+- Para cancelar_agendamento → use contatoId='${ctx.leadId}'
 - Para qualificar_lead → use leadId='${ctx.leadId}' (contatoId apenas legado/compatibilidade)
 - Para mover_para_fase → use leadId='${ctx.leadId}'
 - Para atualizar_dados_lead → use leadId='${ctx.leadId}'
@@ -553,6 +558,7 @@ Mantenha o tom casual e WhatsApp no campo 'respostaParaOCliente'.
             registrarIndicacaoTool,
             atualizarDadosLeadTool,
             agendarReuniaoCloserTool,
+            cancelarAgendamentoTool,
             enviarLinkAgendamentoTool,
             consultarPrecoMercadoTool,
             ...(config.tools || [])

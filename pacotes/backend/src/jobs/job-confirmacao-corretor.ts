@@ -59,6 +59,7 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
   const atividades = await (prisma.atividade as any).findMany({
     where: {
       tipo: 'REUNIAO',
+      statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
       statusConfirmacaoCorretor: 'PENDENTE',
       agendadoPara: { gte: janelaFim, lte: janelaInicio },
       confirmacaoCorretorSolicitadaEm: null,
@@ -127,6 +128,7 @@ export async function executarLembretesConfirmacaoCorretor(): Promise<{ processa
   const atividades = await (prisma.atividade as any).findMany({
     where: {
       tipo: 'REUNIAO',
+      statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
       statusConfirmacaoCorretor: 'PENDENTE',
       agendadoPara: { gte: janelaFim, lte: janelaInicio },
       confirmacaoCorretorSolicitadaEm: { not: null },
@@ -189,6 +191,7 @@ export async function executarCutoffRemanejamentoCorretor(): Promise<{ processad
   const atividades = await (prisma.atividade as any).findMany({
     where: {
       tipo: 'REUNIAO',
+      statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
       statusConfirmacaoCorretor: 'PENDENTE',
       agendadoPara: { lte: minutosAntes(agora, -60) },
       tokenConfirmacaoCorretor: { not: null },
