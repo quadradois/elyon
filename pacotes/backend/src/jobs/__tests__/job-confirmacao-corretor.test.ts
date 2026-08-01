@@ -50,5 +50,11 @@ describe('job-confirmacao-corretor', () => {
     expect(out.processados).toBe(0);
     expect(out.enviados).toBe(0);
     expect(mockWhatsapp.enviarMensagemTexto).not.toHaveBeenCalled();
+    expect(mockPrisma.atividade.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
+        statusConfirmacaoCorretor: 'PENDENTE',
+      }),
+    }));
   });
 });

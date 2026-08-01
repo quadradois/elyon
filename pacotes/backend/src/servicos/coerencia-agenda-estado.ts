@@ -224,7 +224,9 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
     const encerrada = await tx.atividade.updateMany({
       where: { id: atividade.id, leadId: command.leadId, versao: command.expectedVersion, substituidaPorId: null, statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] } },
       data: { statusAgendamento: 'CANCELADO', canceladoPor: command.ator, canceladoEm: command.ocorridoEm,
-        motivoCancelamento: command.motivo, substituidaPorId: substituta.id, versao: { increment: 1 }, estadoAgendaAtualizadoEm: command.ocorridoEm },
+        motivoCancelamento: command.motivo, substituidaPorId: substituta.id,
+        statusConfirmacaoCorretor: atividade.tipo === 'REUNIAO' ? 'REMANEJADO' : atividade.statusConfirmacaoCorretor,
+        versao: { increment: 1 }, estadoAgendaAtualizadoEm: command.ocorridoEm },
     });
     if (encerrada.count !== 1) throw new Error('AGENDA_CONCURRENT_WRITE');
     milestoneType = 'VISITA_REAGENDADA';
@@ -245,6 +247,9 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
       data: { statusAgendamento: statusAgenda, canceladoPor: command.operacao === 'CANCELAR' ? command.ator : atividade.canceladoPor,
         canceladoEm: command.operacao === 'CANCELAR' ? command.ocorridoEm : atividade.canceladoEm,
         motivoCancelamento: command.operacao === 'CANCELAR' ? command.motivo : atividade.motivoCancelamento,
+        statusConfirmacaoCorretor: command.operacao === 'CANCELAR' && atividade.tipo === 'REUNIAO'
+          ? 'RECUSADO'
+          : atividade.statusConfirmacaoCorretor,
         completadoEm: command.operacao === 'NO_SHOW' ? command.ocorridoEm : atividade.completadoEm,
         versao: { increment: 1 }, estadoAgendaAtualizadoEm: command.ocorridoEm },
     });

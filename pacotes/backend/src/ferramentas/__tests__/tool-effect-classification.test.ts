@@ -6,6 +6,7 @@ describe('classificacao de efeitos das tools', () => {
     expect(classificarEfeitoTool('consultar_preco_mercado')).toBe('READ_ONLY');
     expect(classificarEfeitoTool('enviar_para_crm')).toBe('EXTERNAL_EFFECT');
     expect(classificarEfeitoTool('agendar_reuniao_closer')).toBe('EXTERNAL_EFFECT');
+    expect(classificarEfeitoTool('cancelar_agendamento')).toBe('POSTGRES_MUTATION');
     expect(() => classificarEfeitoTool('tool_sem_classificacao')).toThrow('TOOL_EFFECT_CLASSIFICATION_MISSING');
   });
 

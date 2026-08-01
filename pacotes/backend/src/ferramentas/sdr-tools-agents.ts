@@ -1181,7 +1181,119 @@ O backend resolverá datas relativas de forma determinística em America/Sao_Pau
 });
 
 // ====================================
-// TOOL 17: Enviar Link de Agendamento (Fallback)
+// TOOL 17: Cancelar Agendamento Ativo
+// ====================================
+
+export const cancelarAgendamentoTool = tool({
+    name: 'cancelar_agendamento',
+    description: `Use quando o lead pedir explicitamente para cancelar o agendamento atual.
+
+Se o lead apenas perguntar se é possível cancelar, esclareça e confirme a intenção antes de chamar a tool.
+Quando ele disser algo como "vamos cancelar", "pode cancelar" ou "não vou poder comparecer", chame esta tool imediatamente.
+
+REGRA ABSOLUTA: nunca afirme que o agendamento foi cancelado antes de esta tool retornar success=true.`,
+
+    parameters: z.object({
+        contatoId: z.string().describe('ID do contato/lead informado no contexto do sistema'),
+        motivo: z.string().trim().max(500).nullable().describe('Motivo informado pelo lead; use "Solicitação do lead" quando ele não detalhar'),
+    }),
+
+    execute: wrapToolExecute('cancelar_agendamento', async (args, runContext?: any) => {
+        const tenantId = resolverTenantIdDoContexto(runContext);
+        const ownership = await validarOwnershipLeadPorTenant({
+            leadId: args.contatoId,
+            tenantId,
+            toolName: 'cancelar_agendamento',
+        });
+        if (!ownership.ok) {
+            return JSON.stringify({ success: false, error: ownership.error, reasonCode: 'TENANT_OWNERSHIP_DENIED' });
+        }
+
+        const durableExecutionId = resolverExecucaoDuravelDoContexto(runContext);
+        if (!durableExecutionId) {
+            return JSON.stringify({ success: false, reasonCode: 'TRUSTED_REQUEST_ID_REQUIRED' });
+        }
+
+        const atividadeAtiva = await prisma.atividade.findFirst({
+            where: {
+                leadId: args.contatoId,
+                tipo: { in: ['REUNIAO', 'AVALIACAO'] },
+                completadoEm: null,
+                statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
+                lead: { tenantId },
+            },
+            orderBy: { agendadoPara: 'asc' },
+            select: { id: true, versao: true, agendadoPara: true },
+        });
+
+        if (!atividadeAtiva) {
+            const atividadeCancelada = await prisma.atividade.findFirst({
+                where: {
+                    leadId: args.contatoId,
+                    tipo: { in: ['REUNIAO', 'AVALIACAO'] },
+                    statusAgendamento: 'CANCELADO',
+                    lead: { tenantId },
+                },
+                orderBy: { canceladoEm: 'desc' },
+                select: { id: true, canceladoEm: true },
+            });
+            if (atividadeCancelada) {
+                return JSON.stringify({
+                    success: true,
+                    jaCancelado: true,
+                    atividadeId: atividadeCancelada.id,
+                    mensagem: 'O agendamento já estava cancelado no sistema. Informe isso ao lead sem prometer um novo horário.',
+                });
+            }
+            return JSON.stringify({
+                success: false,
+                reasonCode: 'NO_ACTIVE_APPOINTMENT',
+                error: 'Não existe agendamento ativo para cancelar. Não diga ao lead que houve cancelamento.',
+            });
+        }
+
+        const motivo = args.motivo?.trim() || 'Solicitação do lead';
+        const result = await executarComandoAgenda({
+            operacao: 'CANCELAR',
+            tenantId: tenantId!,
+            leadId: args.contatoId,
+            atividadeId: atividadeAtiva.id,
+            requestIdentity: { source: 'INBOUND_BATCH', id: `${durableExecutionId}:agenda-cancel` },
+            ator: 'ai_agent',
+            origem: 'TOOL_CANCELAR_AGENDAMENTO',
+            motivo,
+            policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION,
+            ocorridoEm: new Date(),
+            expectedVersion: atividadeAtiva.versao,
+        });
+
+        if (!result.success) {
+            return JSON.stringify({
+                success: false,
+                reasonCode: result.reasonCode,
+                error: 'Não foi possível cancelar o agendamento no sistema. Não confirme o cancelamento ao lead.',
+            });
+        }
+
+        await registrarExecucaoTool({
+            leadId: args.contatoId,
+            toolName: 'cancelar_agendamento',
+            sucesso: true,
+            detalhes: `Agendamento ${atividadeAtiva.id} cancelado a pedido do lead`,
+        });
+
+        return JSON.stringify({
+            success: true,
+            jaCancelado: false,
+            atividadeId: atividadeAtiva.id,
+            statusAgendamento: 'CANCELADO',
+            mensagem: 'Agendamento cancelado com sucesso no sistema. Confirme ao lead e informe que ele pode retornar quando quiser reagendar.',
+        });
+    }),
+});
+
+// ====================================
+// TOOL 18: Enviar Link de Agendamento (Fallback)
 // Quando o lead não decide horário na conversa.
 // ====================================
 

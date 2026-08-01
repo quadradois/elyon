@@ -320,4 +320,39 @@ Qual valor você espera pelo seu apartamento?
     expect(result.respostaLimpa).toContain('não consigo confirmar');
     expect(result.respostaLimpa).not.toContain('fica travado');
   });
+
+  it('bloqueia confirmação de cancelamento sem execução da tool', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Sim, o agendamento foi cancelado. 😊',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'O agendamento foi cancelado?',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_CANCELLATION_GUARD');
+    expect(result.respostaLimpa).toContain('não consegui registrar');
+    expect(result.respostaLimpa).not.toContain('foi cancelado');
+  });
+
+  it('mantém confirmação de cancelamento quando a tool foi executada', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Sim, o agendamento foi cancelado. 😊',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['cancelar_agendamento'],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Pode cancelar.',
+    });
+
+    expect(result.fallbackAplicado).toBe('NONE');
+    expect(result.respostaLimpa).toContain('foi cancelado');
+  });
 });

@@ -2094,6 +2094,14 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
       return responderErro(res, 404, 'Link inválido ou expirado', { sucesso: false });
     }
 
+    if (atividade.statusAgendamento === 'CANCELADO') {
+      return res.json({
+        sucesso: false,
+        mensagem: 'Este agendamento foi cancelado e não pode mais ser confirmado.',
+        statusAgendamento: 'CANCELADO'
+      });
+    }
+
     const statusAtual = (atividade as any).statusConfirmacaoCorretor || 'PENDENTE';
     if (statusAtual === 'CONFIRMADO') {
       return res.json({
