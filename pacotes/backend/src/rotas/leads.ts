@@ -18,6 +18,7 @@ import { withTenantDb } from '../lib/tenant-db';
 import { criarFollowupOutbound, reagendarFollowupOutbound } from '../servicos/followup-outbound';
 import { formatInTimeZone } from 'date-fns-tz';
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
+import { enviarWhatsappAgendamento, montarMensagemLigacaoConfirmada } from '../servicos/notificacao-agendamento';
 
 const router = Router();
 
@@ -2085,7 +2086,7 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
         tokenConfirmacaoCorretor: token
       },
       include: {
-        lead: { select: { tenantId: true } }
+        lead: { select: { tenantId: true, nome: true, telefone: true } }
       }
     });
 
@@ -2140,6 +2141,9 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
         where: { id: atividadeId },
         data: {
           statusConfirmacaoCorretor: 'CONFIRMADO',
+          statusAgendamento: 'CONFIRMADO',
+          confirmadoPor: 'corretor',
+          confirmadoEm: agora,
           confirmadoCorretorEm: agora,
           versao: { increment: 1 },
           estadoAgendaAtualizadoEm: agora
@@ -2158,9 +2162,25 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
         }
       });
 
+      const corretor = (atividade as any).corretorAtualId
+        ? await prisma.usuario.findFirst({
+            where: { id: (atividade as any).corretorAtualId, tenantId: atividade.lead.tenantId },
+            select: { nome: true }
+          })
+        : null;
+      await enviarWhatsappAgendamento({
+        tenantId: atividade.lead.tenantId,
+        telefone: atividade.lead.telefone,
+        mensagem: montarMensagemLigacaoConfirmada({
+          leadNome: atividade.lead.nome,
+          agendadoPara: atividade.agendadoPara,
+          especialistaNome: corretor?.nome,
+        })
+      });
+
       return res.json({
         sucesso: true,
-        mensagem: 'Presença confirmada com sucesso.',
+        mensagem: 'Ligação confirmada com sucesso. O lead foi notificado.',
         statusConfirmacaoCorretor: 'CONFIRMADO'
       });
     }

@@ -30,6 +30,7 @@ import { avaliarPolicyAcaoSensivel, isAutoCaptadoAfterCrmEnabled } from './sensi
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
 import { interpretarAgendamentoTemporal, mensagemContemDataHoraExplicita } from '../servicos/agenda-temporal';
 import { resolverEspecialistaCampanha } from '../servicos/resolucao-especialista-campanha';
+import { montarMensagemSolicitacaoLigacao } from '../servicos/notificacao-agendamento';
 
 async function registrarExecucaoTool(params: {
     leadId?: string;
@@ -1158,7 +1159,11 @@ O backend resolverá datas relativas de forma determinística em America/Sao_Pau
                 detalhes: `${atividadeAberta ? 'Reagendado' : 'Agendado'} para ${dataHoraConfirmada} via ${args.modalidade} com ${especialista.nome}${usouGoogleCalendar ? ' (Google Calendar)' : ' (local)'}`
             });
 
-            const mensagem = `✅ Agendamento confirmado! Envie ao lead: "Perfeito — está confirmado para ${dataHoraConfirmada}. ${especialista.nome} vai te ligar nesse horário combinado."`;
+            const mensagemPendente = montarMensagemSolicitacaoLigacao({
+                dataHora: dataHoraConfirmada,
+                especialistaNome: especialista.nome,
+            });
+            const mensagem = `✅ Solicitação registrada, aguardando confirmação do especialista. Envie ao lead: "${mensagemPendente}"`;
 
             return JSON.stringify({
                 success: true,

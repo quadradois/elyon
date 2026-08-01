@@ -100,11 +100,14 @@ describe('agendamento SDR — regressão de estado e fallback', () => {
       mensagemAtual: 'Pode ser amanhã às 14:00',
     } });
 
-    expect(JSON.parse(raw)).toMatchObject({
+    const result = JSON.parse(raw);
+    expect(result).toMatchObject({
       success: true,
       dataHora: '01/08/2026 14:00',
       especialista: { nome: 'Especialista Teste' },
     });
+    expect(result.mensagem).toContain('aguardando confirmação do especialista');
+    expect(result.mensagem).not.toContain('está confirmado');
     expect(tx.lead.updateMany).toHaveBeenCalledWith({
       where: { id: 'lead-agenda-123', tenantId: 'tenant-1', status: 'NOVO' },
       data: { status: 'VISITA_AGENDADA' },
