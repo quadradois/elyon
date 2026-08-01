@@ -5,39 +5,13 @@ import { z } from 'zod';
 import { verificarAutenticacao } from '../middleware/middleware-auth';
 import { googleCalendarService } from '../servicos/google-calendar';
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
+import {
+    enviarWhatsappAgendamento,
+    formatarDataHoraAgenda,
+    montarMensagemLigacaoConfirmada,
+} from '../servicos/notificacao-agendamento';
 
 const router = Router();
-
-function formatarDataHoraPtBr(data?: Date | null): string {
-    if (!data) return 'data a confirmar';
-    return new Date(data).toLocaleDateString('pt-BR', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-async function enviarWhatsappAgenda(params: {
-    tenantId: string;
-    telefone?: string | null;
-    mensagem: string;
-}) {
-    if (!params.telefone) return;
-    const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
-        where: { tenantId: params.tenantId, status: 'CONECTADO' }
-    });
-    if (!sessaoWhatsapp) return;
-
-    try {
-        const { getWhatsAppService } = await import('../servicos/whatsapp');
-        const whatsapp = getWhatsAppService(sessaoWhatsapp.instanceName);
-        await whatsapp.enviarMensagemTexto(params.telefone, params.mensagem);
-    } catch (error) {
-        console.error('[Agenda] Erro ao enviar WhatsApp:', error);
-    }
-}
 
 // ====================================
 // GET /api/agenda - Listar Eventos
@@ -307,28 +281,43 @@ router.post('/:id/aprovar', verificarAutenticacao, async (req, res) => {
             return responderErro(res, 403, 'Sem permissão para este agendamento');
         }
 
+        if ((atividade as any).statusConfirmacaoCorretor === 'CONFIRMADO') {
+            return res.json({
+                sucesso: true,
+                mensagem: 'Ligação já confirmada anteriormente',
+                atividade
+            });
+        }
+
+        const confirmadoEm = new Date();
+
         // 2. Atualizar status para CONFIRMADO
         const atividadeAtualizada = await prisma.atividade.update({
             where: { id },
             data: {
                 statusAgendamento: 'CONFIRMADO',
+                statusConfirmacaoCorretor: 'CONFIRMADO',
                 confirmadoPor: req.usuario?.email || 'corretor',
-                confirmadoEm: new Date(),
+                confirmadoEm,
+                confirmadoCorretorEm: confirmadoEm,
                 versao: { increment: 1 },
-                estadoAgendaAtualizadoEm: new Date()
+                estadoAgendaAtualizadoEm: confirmadoEm
             }
         });
 
-        const mensagemConfirmacao = `✅ *Visita Confirmada!*
+        const corretor = (atividade as any).corretorAtualId
+            ? await prisma.usuario.findFirst({
+                where: { id: (atividade as any).corretorAtualId, tenantId },
+                select: { nome: true }
+            })
+            : null;
+        const mensagemConfirmacao = montarMensagemLigacaoConfirmada({
+            leadNome: atividade.lead.nome,
+            agendadoPara: atividade.agendadoPara,
+            especialistaNome: corretor?.nome,
+        });
 
-Olá, ${atividade.lead.nome}! 
-
-Sua avaliação foi confirmada pelo corretor para:
-📅 ${formatarDataHoraPtBr(atividade.agendadoPara)}
-
-Aguardamos você! Se precisar reagendar, é só me avisar. 🏡`;
-
-        await enviarWhatsappAgenda({
+        await enviarWhatsappAgendamento({
             tenantId,
             telefone: atividade.lead.telefone,
             mensagem: mensagemConfirmacao
@@ -371,7 +360,7 @@ router.post('/:id/cancelar', verificarAutenticacao, async (req, res) => {
         const mensagemNotificacao = `⚠️ *Atualização do agendamento*
 
 Olá, ${atividade.lead.nome}.
-Seu atendimento de ${formatarDataHoraPtBr(atividade.agendadoPara)} foi cancelado.${body.motivo ? `\nMotivo: ${body.motivo}` : ''}
+Seu atendimento de ${formatarDataHoraAgenda(atividade.agendadoPara)} foi cancelado.${body.motivo ? `\nMotivo: ${body.motivo}` : ''}
 
 Se quiser, já te proponho novos horários para reagendar.`;
 
@@ -423,7 +412,7 @@ router.post('/:id/reagendar', verificarAutenticacao, async (req, res) => {
 
 Olá, ${atividade.lead.nome}.
 Seu atendimento foi reagendado para:
-${formatarDataHoraPtBr(novoHorario)}${body.motivo ? `\nMotivo: ${body.motivo}` : ''}
+${formatarDataHoraAgenda(novoHorario)}${body.motivo ? `\nMotivo: ${body.motivo}` : ''}
 
 Pode me confirmar se esse horário funciona para você?`;
 
@@ -472,7 +461,7 @@ router.post('/:id/propor-horario', verificarAutenticacao, async (req, res) => {
             where: { id },
             data: {
                 statusAgendamento: 'PENDENTE',
-                descricao: [atividade.descricao, `Horário proposto ao cliente: ${formatarDataHoraPtBr(horarioProposto)}`].filter(Boolean).join(' | '),
+                descricao: [atividade.descricao, `Horário proposto ao cliente: ${formatarDataHoraAgenda(horarioProposto)}`].filter(Boolean).join(' | '),
                 versao: { increment: 1 },
                 estadoAgendaAtualizadoEm: new Date()
             }
@@ -481,11 +470,11 @@ router.post('/:id/propor-horario', verificarAutenticacao, async (req, res) => {
         const mensagem = body.mensagem?.trim() || `Oi, ${atividade.lead.nome}! 😊
 
 Te proponho este novo horário para o atendimento:
-${formatarDataHoraPtBr(horarioProposto)}
+${formatarDataHoraAgenda(horarioProposto)}
 
 Se não funcionar, me fala que te envio outras opções.`;
 
-        await enviarWhatsappAgenda({ tenantId, telefone: atividade.lead.telefone, mensagem });
+        await enviarWhatsappAgendamento({ tenantId, telefone: atividade.lead.telefone, mensagem });
 
         return res.json({ sucesso: true, mensagem: 'Novo horário proposto ao cliente', atividade: atividadeAtualizada });
     } catch (error) {
