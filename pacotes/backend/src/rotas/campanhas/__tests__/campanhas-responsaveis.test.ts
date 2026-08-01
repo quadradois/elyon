@@ -86,4 +86,3 @@ describe('PATCH /campanhas/:id/responsaveis', () => {
     expect(mockPrisma.campanha.update).not.toHaveBeenCalled();
   });
 });
-
