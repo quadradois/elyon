@@ -26,6 +26,7 @@ import {
     moverParaFaseTool,
     registrarIndicacaoTool,
     atualizarDadosLeadTool,
+    consultarHorariosDisponiveisTool,
     agendarReuniaoCloserTool,
     cancelarAgendamentoTool,
     enviarLinkAgendamentoTool,
@@ -301,9 +302,11 @@ ${perguntasRoteiroMarkdown}
 - Ordem de prioridade: PVAM (descoberta) primeiro; SPIN só inicia após descoberta mínima completa.
 - Em DIAGNOSTICO_SPIN, as perguntas devem ser abertas e curtas (máx 1 linha), sem listar hipóteses.
 - Em PITCH, chame \`ler_skill\` com ID \`diagnostico/pitch-rede-parceiros\` antes de iniciar.
-- Em AGENDAMENTO, só chame \`agendar_reuniao_closer\` com dia+hora explícitos do lead.
+- Em AGENDAMENTO, só chame \`agendar_reuniao_closer\` com dia+hora explícitos ou com uma opção que o lead acabou de confirmar.
+- Se o lead disser "qualquer horário", "pode escolher", "quando tiver vaga", "tanto faz" ou equivalente, chame \`consultar_horarios_disponiveis\`. Ofereça no máximo duas opções e faça uma pergunta de escolha/aceite; não repita "qual dia e horário?".
+- \`consultar_horarios_disponiveis\` nunca agenda sozinho. Aguarde o lead escolher ou confirmar uma opção e então chame \`agendar_reuniao_closer\` com a data/hora escolhida.
 - Em AGENDAMENTO, o atendimento inicial é **ligação telefônica** (não prometa videochamada, Meet ou Zoom).
-- "sim/pode ser/fechou" não são datas: após aceite, pergunte dia e horário.
+- "sim/pode ser/fechou" após um convite genérico não são datas: pergunte a preferência. Como resposta direta a uma opção exata recém-oferecida, confirmam aquela opção.
 - Antes de pedir dia/horário, faça pre-CTA de interesse no agendamento (ex.: "faz sentido avançar para uma consultoria gratuita com o especialista?").
 - Em \`agendar_reuniao_closer\`, sempre preencha \`observacoesCloser\`.
 - Quando o lead confirmar que deseja cancelar, chame \`cancelar_agendamento\` imediatamente. Nunca confirme o cancelamento apenas em texto.
@@ -311,7 +314,7 @@ ${perguntasRoteiroMarkdown}
 - Se o lead pedir tempo, priorize combinar data de retorno e registrar \`agendar_followup\`.
 - \`enviar_link_agendamento\` é fallback somente para uma futura página de reservas rastreável. Enquanto a tool retornar indisponível, pergunte dia/horário e use \`agendar_reuniao_closer\`.
 - Link de evento pré-preenchido do Google Calendar não reserva horário, não notifica o Elyon e nunca pode ser descrito como confirmado ou "travado".
-- Sequência obrigatória: SPIN → PITCH → aceite → pergunta dia/hora → resposta do lead → agendamento.
+- Sequência obrigatória: SPIN → PITCH → aceite → preferência. Se houver data/hora, agende; se houver flexibilidade, consulte opções → lead escolhe/confirma → agende.
 - Se o lead mudar de assunto/perguntar algo, responda primeiro e só depois retome a trilha.
 - Nunca assuma estados sem evidência (ex.: "chateado", "imóvel parado", "ocupado/vago").
 
@@ -401,6 +404,7 @@ Não improvise protocolos de cabeça. A skill tem a resposta certa.
 
 | Tool | Quando usar |
 |------|-------------|
+| \`consultar_horarios_disponiveis\` | **FLEXIBILIDADE** — Lead aceita qualquer horário ou informa apenas manhã/tarde. Consulte e ofereça no máximo duas opções; não agenda sozinho. |
 | \`agendar_reuniao_closer\` | **PRINCIPAL** — Lead informou data/hora explicitamente. Confirma **ligação telefônica** no horário combinado. **SEMPRE preencha \`observacoesCloser\`** com relatório da conversa. |
 | \`cancelar_agendamento\` | **CANCELAMENTO** — Lead confirmou que quer cancelar o agendamento atual. Só confirme ao lead depois de a tool retornar \`success=true\`. |
 | \`agendar_followup\` | **RETOMADA ASSISTIDA** — Lead pede tempo. Combine data de recontato com o lead e registre antes de encerrar. |
@@ -557,6 +561,7 @@ Mantenha o tom casual e WhatsApp no campo 'respostaParaOCliente'.
             moverParaFaseTool,
             registrarIndicacaoTool,
             atualizarDadosLeadTool,
+            consultarHorariosDisponiveisTool,
             agendarReuniaoCloserTool,
             cancelarAgendamentoTool,
             enviarLinkAgendamentoTool,

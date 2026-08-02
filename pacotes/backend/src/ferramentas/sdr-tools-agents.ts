@@ -31,6 +31,11 @@ import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../serv
 import { interpretarAgendamentoTemporal, mensagemContemDataHoraExplicita } from '../servicos/agenda-temporal';
 import { resolverEspecialistaCampanha } from '../servicos/resolucao-especialista-campanha';
 import { montarMensagemSolicitacaoLigacao } from '../servicos/notificacao-agendamento';
+import {
+    formatarSugestaoHorario,
+    gerarSlotsComerciaisLocais,
+    selecionarSugestoesDeHorario,
+} from '../servicos/sugestao-horarios-agenda';
 
 async function registrarExecucaoTool(params: {
     leadId?: string;
@@ -911,16 +916,136 @@ OBRIGATÓRIO coletar: nome e telefone do indicado.`,
 });
 
 // ====================================
-// TOOL 16: Agendar Reunião com Closer Humano
+// TOOL 16: Consultar horários para lead flexível
+// ====================================
+
+export const consultarHorariosDisponiveisTool = tool({
+    name: 'consultar_horarios_disponiveis',
+    description: `Use quando o lead aceitar o atendimento, mas responder com flexibilidade em vez de informar data e hora exatas.
+
+Exemplos: "qualquer horário", "pode escolher", "quando vocês puderem", "pra mim tanto faz", "qualquer dia".
+
+Esta tool NÃO agenda e NÃO confirma nada. Ela retorna no máximo duas opções para você fazer uma pergunta simples ao lead. Apresente as opções e aguarde a escolha ou confirmação antes de chamar agendar_reuniao_closer.
+
+Se o lead disser apenas um período, preserve a preferência: manhã ou tarde. NÃO volte a perguntar de forma aberta "qual dia e horário?" depois que ele já informou que possui flexibilidade.`,
+
+    parameters: z.object({
+        contatoId: z.string().describe('ID do contato (mesmo usado nas outras tools)'),
+        periodoPreferido: z.enum(['qualquer', 'manha', 'tarde']).default('qualquer')
+            .describe('Período indicado pelo lead; use qualquer quando ele não restringir'),
+    }),
+
+    execute: wrapToolExecute('consultar_horarios_disponiveis', async (args, runContext?: any) => {
+        const tenantId = resolverTenantIdDoContexto(runContext);
+        const ownership = await validarOwnershipLeadPorTenant({
+            leadId: args.contatoId,
+            tenantId,
+            toolName: 'consultar_horarios_disponiveis',
+        });
+        if (!ownership.ok) {
+            return JSON.stringify({ success: false, reasonCode: 'TENANT_OWNERSHIP_DENIED', error: ownership.error });
+        }
+
+        const contato = await prisma.lead.findUnique({
+            where: { id: args.contatoId },
+            select: { id: true, campanhaOrigemId: true },
+        });
+        if (!contato?.campanhaOrigemId) {
+            return JSON.stringify({
+                success: false,
+                reasonCode: 'CAMPAIGN_NOT_FOUND',
+                instrucaoParaAgente: 'Não repita a pergunta de data e hora. Diga que vai verificar a agenda do especialista e retornar com opções.',
+            });
+        }
+
+        const especialista = await resolverEspecialistaCampanha({
+            tenantId: tenantId!,
+            campanhaId: contato.campanhaOrigemId,
+        });
+        if (!especialista) {
+            return JSON.stringify({
+                success: false,
+                reasonCode: 'SPECIALIST_NOT_CONFIGURED',
+                instrucaoParaAgente: 'Não repita a pergunta de data e hora. Diga que vai verificar a agenda do especialista e retornar com opções.',
+            });
+        }
+
+        const agora = new Date();
+        const fimConsulta = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const conflitosLocais = especialista.usuarioId
+            ? await prisma.atividade.findMany({
+                where: {
+                    corretorAtualId: especialista.usuarioId,
+                    tipo: 'REUNIAO',
+                    completadoEm: null,
+                    statusAgendamento: { in: ['PENDENTE', 'SOLICITADO', 'PROPOSTO', 'CONFIRMADO'] },
+                    agendadoPara: { gte: agora, lte: fimConsulta },
+                    lead: { tenantId: tenantId! },
+                },
+                select: { agendadoPara: true, duracao: true },
+            })
+            : [];
+
+        let slots = gerarSlotsComerciaisLocais(agora, 7);
+        let fonte: 'GOOGLE_CALENDAR_E_LOCAL' | 'AGENDA_LOCAL' = 'AGENDA_LOCAL';
+        try {
+            const { googleCalendarService } = require('../servicos/google-calendar');
+            if (googleCalendarService.isConfigurado()) {
+                slots = await googleCalendarService.consultarSlotsLivres({
+                    dataInicio: agora,
+                    dataFim: fimConsulta,
+                });
+                fonte = 'GOOGLE_CALENDAR_E_LOCAL';
+            }
+        } catch (error: any) {
+            logger.warn({ error: error?.message }, '[TOOL] consultar_horarios_disponiveis usando agenda local');
+        }
+
+        const sugestoes = selecionarSugestoesDeHorario({
+            slots,
+            conflitosLocais: conflitosLocais
+                .filter((item: any) => item.agendadoPara)
+                .map((item: any) => ({ agendadoPara: item.agendadoPara, duracao: item.duracao })),
+            periodoPreferido: args.periodoPreferido,
+            limite: 2,
+            agora,
+        }).map((slot) => ({
+            dataHora: formatarSugestaoHorario(slot),
+            inicioUtc: slot.inicio,
+        }));
+
+        if (sugestoes.length === 0) {
+            return JSON.stringify({
+                success: false,
+                reasonCode: 'NO_SLOTS_FOUND',
+                especialista: especialista.nome,
+                instrucaoParaAgente: 'Não pressione o lead nem repita a pergunta. Diga que vai verificar a agenda do especialista e retornar com opções.',
+            });
+        }
+
+        return JSON.stringify({
+            success: true,
+            especialista: especialista.nome,
+            fonte,
+            sugestoes,
+            instrucaoParaAgente: sugestoes.length === 1
+                ? `Pergunte apenas: "Perfeito. Posso solicitar ${sugestoes[0].dataHora} para você?"`
+                : `Ofereça somente estas opções e aguarde a escolha: ${sugestoes.map((item) => item.dataHora).join(' ou ')}.`,
+        });
+    }),
+});
+
+// ====================================
+// TOOL 17: Agendar Reunião com Closer Humano
 // (v2.0 — Integração Google Calendar + Fallback local)
 // ====================================
 
 export const agendarReuniaoCloserTool = tool({
     name: 'agendar_reuniao_closer',
-    description: `🚨 CHAME ESTA TOOL SOMENTE quando o lead EXPLICITAMENTE informar uma data E um horário para agendamento de ligação com o corretor.
+    description: `🚨 CHAME ESTA TOOL SOMENTE quando o lead informar data+horário OU confirmar diretamente uma opção exata que você acabou de oferecer após consultar_horarios_disponiveis.
 
-🔴 REGRA ABSOLUTA: O lead DEVE ter dito dia+hora na mensagem dele. Exemplos válidos: "pode ser dia X às YH", "amanhã às 14h", "03/04 às 17h". 
-❌ "Sim", "pode ser", "fechou", "bora", "ok" NÃO são datas — são aceites. Se o lead só aceitou, PERGUNTE a data antes de chamar esta tool.
+🔴 REGRA ABSOLUTA: A data+hora precisa ter vindo do lead ou de uma opção retornada por consultar_horarios_disponiveis e confirmada pelo lead. Exemplos válidos: "pode ser dia X às YH", "amanhã às 14h", "03/04 às 17h" ou "pode ser" como resposta direta a "posso solicitar 03/04 às 17h?".
+❌ "Sim", "pode ser", "fechou", "bora", "ok" após um convite genérico NÃO são datas. Nesse caso, pergunte a preferência ou consulte horários se o lead indicar flexibilidade.
 ❌ NUNCA INVENTE uma data/hora. Se o lead não disse explicitamente dia e hora, NÃO chame esta tool.
 
 NÃO confirme o agendamento em texto sem chamar esta tool primeiro. A confirmação textual só deve vir DEPOIS da tool retornar success=true.
