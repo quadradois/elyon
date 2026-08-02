@@ -47,8 +47,8 @@ const REGRAS_FASE: Record<FaseRoteiroSdr, RegraFase> = {
   },
   AGENDAMENTO: {
     objetivo: 'Validar interesse explicito no agendamento e so entao coletar dia/horario sem inventar datas',
-    toolsPermitidas: ['agendar_reuniao_closer', 'enviar_link_agendamento', 'agendar_followup', 'mover_para_fase'],
-    regraAvanco: 'Antes de pedir horario, confirme interesse no agendamento. Se pedir tempo, registre follow-up com data combinada. Chame agendar_reuniao_closer somente com data+hora explicitas.',
+    toolsPermitidas: ['consultar_horarios_disponiveis', 'agendar_reuniao_closer', 'enviar_link_agendamento', 'agendar_followup', 'mover_para_fase'],
+    regraAvanco: 'Antes de pedir horario, confirme interesse no agendamento. Se o lead aceitar qualquer horario, consulte opcoes e ofereca no maximo duas. Se pedir tempo, registre follow-up com data combinada. Chame agendar_reuniao_closer somente com data+hora escolhidas pelo lead.',
   },
   FOLLOW_UP: {
     objetivo: 'Registrar recontato quando lead pede tempo',
@@ -112,10 +112,12 @@ const GUIA_PERGUNTAS_FASE: Record<FaseRoteiroSdr, GuiaPerguntasFase> = {
     perguntas: [
       'Pre-CTA obrigatorio: "Faz sentido pra voce avancar para essa consultoria gratuita com o especialista?"',
       'Pergunta de agendamento (apos aceite): "Qual dia e horario ficam melhores pra voce?"',
+      'Se o lead disser que pode ser qualquer horario: consulte a agenda e pergunte "Tenho [opcao 1] ou [opcao 2]. Qual funciona melhor?"',
       'Se horario indisponivel: "Entre estas opcoes, qual funciona melhor pra voce?"',
     ],
     proibicoes: [
       'Nao marcar reuniao sem dia e horario explicitos.',
+      'Nao repetir pergunta aberta de dia/horario quando o lead ja informou flexibilidade.',
       'Nao enviar link de agenda como primeira opcao sem tentar horario no chat.',
     ],
   },

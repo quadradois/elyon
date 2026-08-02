@@ -38,6 +38,7 @@ jest.mock('../../ferramentas/sdr-tools-agents', () => ({
     moverParaFaseTool: 'moverParaFaseTool',
     registrarIndicacaoTool: 'registrarIndicacaoTool',
     atualizarDadosLeadTool: 'atualizarDadosLeadTool',
+    consultarHorariosDisponiveisTool: 'consultarHorariosDisponiveisTool',
     agendarAvaliacaoTool: 'agendarAvaliacaoTool',
     agendarReuniaoCloserTool: 'agendarReuniaoCloserTool',
     cancelarAgendamentoTool: 'cancelarAgendamentoTool',
@@ -225,6 +226,15 @@ describe('Behavioral Contracts — Invariantes SDR', () => {
     it('SDR inclui agendarReuniaoCloserTool nas suas tools', () => {
         const agent = criarSdrAgent(baseConfig);
         expect(agent.tools).toContain('agendarReuniaoCloserTool');
+    });
+
+    it('SDR trata disponibilidade flexível sem repetir pergunta aberta', () => {
+        const agent = criarSdrAgent(baseConfig);
+        const prompt = agent.instructions({});
+        expect(agent.tools).toContain('consultarHorariosDisponiveisTool');
+        expect(prompt).toContain('consultar_horarios_disponiveis');
+        expect(prompt).toContain('não repita "qual dia e horário?"');
+        expect(prompt).toContain('no máximo duas opções');
     });
 
     it('SDR NÃO inclui agendarAvaliacaoTool (agendamento unificado via agendar_reuniao_closer)', () => {
