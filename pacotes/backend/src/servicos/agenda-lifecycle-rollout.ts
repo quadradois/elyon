@@ -14,6 +14,11 @@ export interface AgendaLifecycleRollout {
   commandsReason: AgendaLifecycleRolloutReason;
 }
 
+export interface AgendaEffectsRollout {
+  effectsEnabled: boolean;
+  effectsReason: AgendaLifecycleRolloutReason;
+}
+
 let configPromise: Promise<AgendaPilotConfig> | undefined;
 
 export function avaliarAgendaLifecycleRollout(
@@ -53,12 +58,43 @@ export function avaliarAgendaLifecycleRollout(
   };
 }
 
+export function avaliarAgendaEffectsRollout(
+  config: AgendaPilotConfig,
+  tenantId: string,
+  instant: Date,
+): AgendaEffectsRollout {
+  if (!config.scope) {
+    return {
+      effectsEnabled: false,
+      effectsReason: config.effects.requested ? 'SCOPE_UNAVAILABLE' : 'FLAG_DISABLED',
+    };
+  }
+  if (config.scope.tenantId !== tenantId) {
+    return { effectsEnabled: false, effectsReason: 'TENANT_OUT_OF_SCOPE' };
+  }
+  if (instant.getTime() < new Date(config.scope.startedAtUtc).getTime()) {
+    return { effectsEnabled: false, effectsReason: 'BEFORE_CUTOFF' };
+  }
+  return {
+    effectsEnabled: config.effects.enabled,
+    effectsReason: config.effects.enabled ? 'ENABLED' : 'FLAG_DISABLED',
+  };
+}
+
 export async function obterAgendaLifecycleRollout(
   tenantId: string,
   instant = new Date(),
 ): Promise<AgendaLifecycleRollout> {
   configPromise ??= resolverAgendaPilotConfig();
   return avaliarAgendaLifecycleRollout(await configPromise, tenantId, instant);
+}
+
+export async function obterAgendaEffectsRollout(
+  tenantId: string,
+  instant = new Date(),
+): Promise<AgendaEffectsRollout> {
+  configPromise ??= resolverAgendaPilotConfig();
+  return avaliarAgendaEffectsRollout(await configPromise, tenantId, instant);
 }
 
 export function resetAgendaLifecycleRolloutCacheForTests(): void {

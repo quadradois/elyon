@@ -4,8 +4,6 @@ import { ServicoAuditoria } from './servico-auditoria';
 import { resolverEspecialistaCampanha } from './resolucao-especialista-campanha';
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from './coerencia-agenda-estado';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost';
-
 export type ResultadoRemanejamentoCorretor = {
   sucesso: boolean;
   motivo: 'REMANEJADO' | 'SEM_SUBSTITUTO' | 'ESTADO_INVALIDO' | 'CONCORRENCIA';
@@ -56,7 +54,6 @@ export async function remanejarCorretorAtividade(params: {
   const agora = new Date();
   const novoToken = crypto.randomUUID();
   if (!especialista.usuarioId) return { sucesso: false, motivo: 'SEM_SUBSTITUTO' };
-  const link = `${FRONTEND_URL}/confirmar-corretor/${atividade.id}/${novoToken}`;
   const command = await executarComandoAgenda({
     operacao: 'SOLICITAR', tenantId: atividade.lead.tenantId, leadId: atividade.lead.id, atividadeId: atividade.id,
     requestIdentity: { source: 'WORKER', id: `reatribuicao:${atividade.id}:${atividade.versao}:${especialista.usuarioId}` },
@@ -64,24 +61,10 @@ export async function remanejarCorretorAtividade(params: {
     motivo: 'Solicitação de substituição do especialista', policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION,
     ocorridoEm: agora, expectedVersion: atividade.versao, manifestacaoLead: 'HORARIO_ACEITO',
     responsavelId: especialista.usuarioId, tokenConfirmacaoCorretor: novoToken,
-    notificacoes: [
-      {
-        tipo: 'SUBSTITUICAO', destinatarioTipo: 'USUARIO', usuarioDestinoId: especialista.usuarioId,
-        mensagem: [
-          'Elyon | Solicitação de substituição',
-          `Lead: ${atividade.lead.nome}`,
-          `Atendimento: ${new Date(atividade.agendadoPara).toLocaleString('pt-BR')}`,
-          `Confirme sua disponibilidade: ${link}`,
-        ].join('\n'),
-      },
-      {
-        tipo: 'SUBSTITUICAO', destinatarioTipo: 'LEAD',
-        mensagem: `Precisamos substituir o especialista do seu atendimento. ${especialista.nome} recebeu a solicitação para o mesmo horário; avisaremos por aqui assim que houver confirmação.`,
-      },
-    ],
   });
   if (!command.success) return { sucesso: false, motivo: 'CONCORRENCIA' };
 
+  // O scheduler envia o convite no próximo ciclo e inicia o novo SLA só após o WhatsApp aceitar.
   const notificacaoEspecialistaEnviada = false;
   const notificacaoLeadEnviada = false;
 
@@ -97,8 +80,8 @@ export async function remanejarCorretorAtividade(params: {
       corretorAnteriorId: atividade.corretorAtualId || null,
       corretorAtualId: especialista.usuarioId || null,
       especialistaOrigem: especialista.origem,
-      notificacaoEspecialistaEnfileirada: true,
-      notificacaoLeadEnfileirada: true,
+      conviteEspecialistaPendente: true,
+      notificacaoLeadAguardandoAceite: true,
     }
   });
 

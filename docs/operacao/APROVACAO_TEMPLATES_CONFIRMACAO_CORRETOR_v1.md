@@ -1,7 +1,7 @@
 # Aprovação de Conteúdo — Templates Confirmação Corretor (v1)
 
 Data: 2026-04-29
-Escopo: convites `T-120`, lembretes `T-90` e remanejamento ao lead.
+Escopo: convite imediato, SLA de 60 minutos, lembrete 15 minutos antes e remanejamento para fallback.
 
 ## Versão aprovada
 - Versão: `v1`
@@ -10,20 +10,21 @@ Escopo: convites `T-120`, lembretes `T-90` e remanejamento ao lead.
 
 ## Templates
 
-### 1) Convite (`T-120`)
+### 1) Convite imediato
 ```
 Elyon | Convite de confirmação
 Lead: {leadNome}
 Reunião: {dataHora}
-Confirme até 1h antes: {linkConfirmacao}
+Responda em até 60 minutos (prazo: {prazoConfirmacao}).
+{linkConfirmacao}
 ```
 
-### 2) Lembrete (`T-90`)
+### 2) Lembrete (15 minutos antes do prazo)
 ```
-Elyon | Lembrete de confirmação (T-90)
+Elyon | Lembrete de confirmação
 Lead: {leadNome}
 Reunião: {dataHora}
-Prazo de confirmação: até T-60
+Seu prazo termina às {prazoConfirmacao}. Sem resposta, o atendimento será oferecido ao especialista fallback.
 {linkConfirmacao}
 ```
 

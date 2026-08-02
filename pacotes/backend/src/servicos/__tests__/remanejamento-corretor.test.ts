@@ -47,11 +47,8 @@ describe('remanejarCorretorAtividade', () => {
     expect(mockExecutarComando).toHaveBeenCalledWith(expect.objectContaining({
       operacao: 'SOLICITAR', atividadeId: 'a1', expectedVersion: 3,
       responsavelId: 'u2', tokenConfirmacaoCorretor: expect.any(String),
-      notificacoes: expect.arrayContaining([
-        expect.objectContaining({ destinatarioTipo: 'USUARIO', usuarioDestinoId: 'u2' }),
-        expect.objectContaining({ destinatarioTipo: 'LEAD' }),
-      ]),
     }));
+    expect(mockExecutarComando.mock.calls[0][0].notificacoes).toBeUndefined();
   });
 
   it('não recoloca o recusante quando não existe substituto', async () => {
