@@ -68,6 +68,13 @@ describe('AgendaPolicy', () => {
     expect(policy.allowedActions).toEqual(['CANCELAR']);
   });
 
+  it('permite ao Lead aceitar uma proposta futura sem segundo aceite', () => {
+    const policy = obterAgendaPolicy({
+      ...base, status: 'PROPOSTO', ator: 'PUBLICO', agora: new Date('2026-08-03T10:00:00Z'),
+    });
+    expect(policy.allowedActions).toEqual(['ACEITAR', 'CANCELAR']);
+  });
+
   it('recusa data ausente ou invalida de forma fechada', () => {
     expect(obterAgendaPolicy({ ...base, agendadoPara: null, agora: inicio })).toMatchObject({
       allowedActions: [],

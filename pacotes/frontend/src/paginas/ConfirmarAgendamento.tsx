@@ -26,6 +26,7 @@ import { Button } from "../componentes/ui/button";
 import { Card, CardContent } from "../componentes/ui/card";
 import { Textarea } from "../componentes/ui/textarea";
 import { api } from "../servicos/api";
+import { acaoPublicaPermitida, mensagemRejeicaoPublica } from './confirmar-agendamento-policy';
 
 // ============================================
 // TIPOS
@@ -40,6 +41,10 @@ interface DadosAgendamento {
     descricao: string | null;
     dataAgendada: string;
     statusAgendamento: string;
+    versao: number;
+    faseTemporal?: 'FUTURO' | 'INICIADO' | 'ENCERRADO' | null;
+    allowedActions?: string[];
+    policyReasonCode?: string;
   };
   lead: {
     nome: string;
@@ -117,7 +122,7 @@ export default function ConfirmarAgendamento() {
         setDados(response.data);
         
         // Se já foi processado, mostrar o estado atual
-        if (response.data.atividade.statusAgendamento === 'CONFIRMADO') {
+        if (['CONFIRMADO', 'SOLICITADO'].includes(response.data.atividade.statusAgendamento)) {
           setEstado('ja_processado');
         } else if (response.data.atividade.statusAgendamento === 'CANCELADO') {
           setEstado('ja_processado');
@@ -147,7 +152,7 @@ export default function ConfirmarAgendamento() {
     } catch (error: any) {
       console.error('Erro ao confirmar:', error);
       setEstado('erro');
-      setErro(error.response?.data?.erro || 'Erro ao confirmar agendamento');
+      setErro(mensagemRejeicaoPublica(error.response?.data?.code || error.response?.data?.erro));
     } finally {
       setProcessando(false);
     }
@@ -159,14 +164,14 @@ export default function ConfirmarAgendamento() {
       
       await api.post(`/leads/confirmar/${atividadeId}/${token}`, {
         acao: 'cancelar',
-        motivo: motivoCancelamento || 'Cancelado pelo proprietário'
+        motivoCancelamento: motivoCancelamento || 'Cancelado pelo proprietário'
       });
       
       setEstado('cancelado');
     } catch (error: any) {
       console.error('Erro ao cancelar:', error);
       setEstado('erro');
-      setErro(error.response?.data?.erro || 'Erro ao cancelar agendamento');
+      setErro(mensagemRejeicaoPublica(error.response?.data?.code || error.response?.data?.erro));
     } finally {
       setProcessando(false);
     }
@@ -358,6 +363,8 @@ export default function ConfirmarAgendamento() {
 
   // Tela principal - Aguardando ação
   if (estado === 'aguardando' && dados) {
+    const podeAceitar = acaoPublicaPermitida(dados.atividade.allowedActions, 'ACEITAR');
+    const podeCancelar = acaoPublicaPermitida(dados.atividade.allowedActions, 'CANCELAR');
     return (
       <PageContainer>
         {/* Header da Imobiliária */}
@@ -485,7 +492,7 @@ export default function ConfirmarAgendamento() {
             ) : (
               /* Botões de Ação */
               <div className="space-y-3">
-                <Button
+                {podeAceitar && <Button
                   className="w-full bg-success hover:bg-success-dark"
                   size="lg"
                   onClick={confirmarAgendamento}
@@ -502,9 +509,9 @@ export default function ConfirmarAgendamento() {
                       Confirmar Presença
                     </>
                   )}
-                </Button>
+                </Button>}
                 
-                <Button
+                {podeCancelar && <Button
                   variant="outline"
                   className="w-full text-red-600 border-red-200 hover:bg-red-50"
                   size="lg"
@@ -513,7 +520,12 @@ export default function ConfirmarAgendamento() {
                 >
                   <XCircle className="w-5 h-5 mr-2" />
                   Não Posso Comparecer
-                </Button>
+                </Button>}
+                {!podeAceitar && !podeCancelar && (
+                  <p className="text-sm text-center text-slate-600">
+                    Este compromisso já iniciou; alterações não estão mais disponíveis por este link.
+                  </p>
+                )}
               </div>
             )}
           </CardContent>

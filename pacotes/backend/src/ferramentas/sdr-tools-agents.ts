@@ -1106,15 +1106,9 @@ O backend resolverá datas relativas de forma determinística em America/Sao_Pau
                     policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION, ocorridoEm: new Date(),
                     expectedVersion: atividadeAberta.versao, novoHorario: agendadoPara,
                     novoTitulo: `Atendimento reagendado — ${dataHoraConfirmada}`, novaDescricao: descricaoAtividade,
+                    responsavelId: especialista.usuarioId || undefined,
                 });
                 if (!result.success) return JSON.stringify({ success: false, reasonCode: result.reasonCode });
-                await prisma.atividade.update({
-                    where: { id: atividadeAberta.id },
-                    data: {
-                        corretorOriginalId: especialista.usuarioId || undefined,
-                        corretorAtualId: especialista.usuarioId || undefined,
-                    }
-                });
             } else {
                 const criacaoLocal = await prisma.$transaction(async (tx: any) => {
                     const leadAtual = await tx.lead.findFirst({ where: { id: leadId, tenantId }, select: { status: true } });

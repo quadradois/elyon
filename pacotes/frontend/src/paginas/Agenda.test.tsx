@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EventoAgenda } from '../servicos/apiAgenda';
-import { acaoAgendaPermitida } from './agenda-actions';
+import { acaoAgendaPermitida, ordenarPendenciasVencidas } from './agenda-actions';
 
 function event(allowedActions: NonNullable<EventoAgenda['extendedProps']>['allowedActions']): EventoAgenda {
   return {
@@ -22,5 +22,12 @@ describe('acoes visiveis da Agenda', () => {
     const started = event(['REALIZAR', 'NAO_COMPARECEU']);
     expect(acaoAgendaPermitida(started, 'CANCELAR')).toBe(false);
     expect(acaoAgendaPermitida(started, 'REAGENDAR')).toBe(false);
+  });
+  it('prioriza o vencido mais antigo e mantém ações de desfecho', () => {
+    const queue = ordenarPendenciasVencidas([
+      { id: 'recente', pendingAgeMinutes: 15, allowedActions: ['REALIZAR'] },
+      { id: 'antigo', pendingAgeMinutes: 120, allowedActions: ['REALIZAR', 'NAO_COMPARECEU'] },
+    ]);
+    expect(queue[0]).toMatchObject({ id: 'antigo', allowedActions: ['REALIZAR', 'NAO_COMPARECEU'] });
   });
 });

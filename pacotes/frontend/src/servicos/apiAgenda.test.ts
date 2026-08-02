@@ -11,10 +11,10 @@ describe('contrato atomico da agenda manual', () => {
       motivo: 'Solicitado pelo Lead', avisarCliente: true,
       requestId: 'request-1', expectedVersion: 4,
     });
-    expect(post).toHaveBeenCalledWith('/agenda/atividade-1/cancelar', {
-      motivo: 'Solicitado pelo Lead', avisarCliente: true,
-      requestId: 'request-1', expectedVersion: 4,
-    });
+    expect(post).toHaveBeenCalledWith('/agenda/atividade-1/commands', {
+      command: 'CANCELAR', channel: 'PAINEL', expectedVersion: 4,
+      reasonCode: 'Solicitado pelo Lead', scheduledFor: undefined,
+    }, { headers: { 'Idempotency-Key': 'request-1' } });
   });
 
   it('envia nova agenda, identidade e versao no reagendamento', async () => {
@@ -23,10 +23,10 @@ describe('contrato atomico da agenda manual', () => {
       novoHorario: new Date('2027-02-12T16:00:00Z'), motivo: 'Novo horario confirmado',
       avisarCliente: false, requestId: 'request-2', expectedVersion: 2,
     });
-    expect(post).toHaveBeenCalledWith('/agenda/atividade-1/reagendar', {
-      novoHorario: '2027-02-12T16:00:00.000Z', motivo: 'Novo horario confirmado',
-      avisarCliente: false, requestId: 'request-2', expectedVersion: 2,
-    });
+    expect(post).toHaveBeenCalledWith('/agenda/atividade-1/commands', {
+      command: 'REAGENDAR', channel: 'PAINEL', expectedVersion: 2,
+      reasonCode: 'Novo horario confirmado', scheduledFor: '2027-02-12T16:00:00.000Z',
+    }, { headers: { 'Idempotency-Key': 'request-2' } });
   });
 
   it('preserva o especialista atual retornado pela agenda', async () => {

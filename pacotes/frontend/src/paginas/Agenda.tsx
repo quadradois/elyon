@@ -16,9 +16,9 @@ import { PageHeader } from '../componentes/ui/page-header';
 import { EmptyStateInline } from '../componentes/ui/empty-state';
 import { toast } from 'sonner';
 
-import { agendaService, EventoAgenda } from '../servicos/apiAgenda';
+import { agendaService, EventoAgenda, executarComandoAgenda } from '../servicos/apiAgenda';
 import { Loader2, Calendar as CalendarIcon, Ban, Check, Clock, Phone, User, Trash2, CalendarX, Settings, XCircle, RefreshCw, MessageSquare } from 'lucide-react';
-import { acaoAgendaPermitida } from './agenda-actions';
+import { acaoAgendaPermitida, ordenarPendenciasVencidas } from './agenda-actions';
 
 const locales = { 'pt-BR': ptBR };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
@@ -73,6 +73,9 @@ export function Agenda() {
 
     const [bloqueios, setBloqueios] = useState<Bloqueio[]>([]);
     const [loadingBloqueios, setLoadingBloqueios] = useState(false);
+    const [pendenciasVencidas, setPendenciasVencidas] = useState<Array<{
+        id: string; leadNome: string; scheduledFor: string; pendingAgeMinutes: number; operationalReason: string;
+    }>>([]);
 
     const [showModal, setShowModal] = useState(false);
     const [selectedSlot, setSelectedSlot] = useState<{ start: Date; end: Date } | null>(null);
@@ -106,6 +109,9 @@ export function Agenda() {
     useEffect(() => {
         fetchEvents();
         fetchBloqueios();
+        agendaService.listarPendenciasVencidas().then((items) => setPendenciasVencidas(ordenarPendenciasVencidas(items))).catch((error) => {
+            console.error('Erro ao carregar pendências vencidas:', error);
+        });
     }, [date, view]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const fetchEvents = async () => {
@@ -352,7 +358,8 @@ export function Agenda() {
         try {
             await agendaService.proporNovoHorario(selectedEvent.id, {
                 horarioProposto: new Date(novoHorario),
-                mensagem: mensagemFinalProposta
+                mensagem: mensagemFinalProposta,
+                expectedVersion: selectedEvent.extendedProps?.versao ?? 0,
             });
             toast.success('Horário proposto ao cliente.');
             setShowEventModal(false);
@@ -360,6 +367,56 @@ export function Agenda() {
         } catch (error) {
             console.error('Erro ao propor horário:', error);
             toast.error('Erro ao propor novo horário.');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleRegistrarResultado = async (command: 'REALIZAR' | 'NAO_COMPARECEU') => {
+        if (!selectedEvent) return;
+        setActionLoading(true);
+        try {
+            await executarComandoAgenda(selectedEvent.id, {
+                command,
+                expectedVersion: selectedEvent.extendedProps?.versao ?? 0,
+                reasonCode: command === 'REALIZAR' ? 'Atendimento realizado' : 'Lead não compareceu',
+            }, requestIdFor(`${selectedEvent.id}:${selectedEvent.extendedProps?.versao ?? 0}:${command}`));
+            toast.success(command === 'REALIZAR' ? 'Atendimento marcado como realizado.' : 'Ausência registrada.');
+            setShowEventModal(false);
+            fetchEvents();
+        } catch (error) {
+            console.error('Erro ao registrar resultado:', error);
+            toast.error('Não foi possível registrar o resultado.');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleCorrigirResultado = async () => {
+        if (!selectedEvent) return;
+        const correctedStatus = window.prompt('Novo desfecho: REALIZADO, NAO_COMPARECEU ou CANCELADO')?.trim().toUpperCase();
+        if (!['REALIZADO', 'NAO_COMPARECEU', 'CANCELADO'].includes(correctedStatus || '')) {
+            toast.warning('Informe um desfecho válido.');
+            return;
+        }
+        const justification = window.prompt('Justificativa administrativa (mínimo de 10 caracteres)')?.trim();
+        if (!justification || justification.length < 10) {
+            toast.warning('A justificativa é obrigatória.');
+            return;
+        }
+        setActionLoading(true);
+        try {
+            await executarComandoAgenda(selectedEvent.id, {
+                command: 'CORRIGIR', expectedVersion: selectedEvent.extendedProps?.versao ?? 0,
+                reasonCode: 'CORRECAO_ADMINISTRATIVA', justification,
+                correctedStatus: correctedStatus as 'REALIZADO' | 'NAO_COMPARECEU' | 'CANCELADO',
+            });
+            toast.success('Correção registrada sem apagar o histórico.');
+            setShowEventModal(false);
+            fetchEvents();
+        } catch (error) {
+            console.error('Erro ao corrigir resultado:', error);
+            toast.error('Não foi possível registrar a correção.');
         } finally {
             setActionLoading(false);
         }
@@ -404,6 +461,25 @@ export function Agenda() {
                 </div>
                 )}
             />
+
+            {pendenciasVencidas.length > 0 && (
+                <Card className="border-amber-300 bg-amber-50/50">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-base">Pendências de desfecho ({pendenciasVencidas.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                        {pendenciasVencidas.map((item) => (
+                            <div key={item.id} className="rounded-md border bg-background p-3 text-sm">
+                                <p className="font-medium">{item.leadNome}</p>
+                                <p className="text-muted-foreground">
+                                    {item.operationalReason === 'SPECIALIST_PENDING' ? 'Sem especialista atribuído' : 'Aguardando classificação'}
+                                    {' · '}{item.pendingAgeMinutes} min
+                                </p>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <Card className="lg:col-span-1">
@@ -614,6 +690,21 @@ export function Agenda() {
                                         Propor Horário
                                     </Button>
                                 </>
+                            )}
+                            {acaoAgendaPermitida(selectedEvent, 'REALIZAR') && (
+                                <Button onClick={() => handleRegistrarResultado('REALIZAR')} disabled={actionLoading}>
+                                    <Check className="mr-2 h-4 w-4" />Realizado
+                                </Button>
+                            )}
+                            {acaoAgendaPermitida(selectedEvent, 'NAO_COMPARECEU') && (
+                                <Button variant="outline" onClick={() => handleRegistrarResultado('NAO_COMPARECEU')} disabled={actionLoading}>
+                                    <CalendarX className="mr-2 h-4 w-4" />Não compareceu
+                                </Button>
+                            )}
+                            {acaoAgendaPermitida(selectedEvent, 'CORRIGIR') && (
+                                <Button variant="outline" onClick={handleCorrigirResultado} disabled={actionLoading}>
+                                    <RefreshCw className="mr-2 h-4 w-4" />Corrigir desfecho
+                                </Button>
                             )}
                         </div>
                     </DrawerFooter>

@@ -115,10 +115,10 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
     expect(result).toMatchObject({ success: true, reasonCode: 'RESCHEDULED', leadStatus: 'VISITA_AGENDADA' });
     const original = await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } });
     expect(original).toMatchObject({
-      statusAgendamento: 'CANCELADO', statusConfirmacaoCorretor: 'REMANEJADO',
+      statusAgendamento: 'SUBSTITUIDO', statusConfirmacaoCorretor: 'REMANEJADO',
       substituidaPorId: result.atividadeResultanteId, versao: 1,
     });
-    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: result.atividadeResultanteId } })).toMatchObject({ statusAgendamento: 'PENDENTE', versao: 0 });
+    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: result.atividadeResultanteId } })).toMatchObject({ statusAgendamento: 'SOLICITADO', versao: 0 });
     expect((await prisma.milestoneAgenda.findFirstOrThrow({ where: { atividadeId: atividadeA } })).tipo).toBe('VISITA_REAGENDADA');
   });
 
@@ -171,7 +171,7 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
     const moved = await executarComandoAgenda({ ...base(), operacao: 'REAGENDAR', novoHorario: new Date('2027-02-12T16:00:00Z') });
     const stale = await executarComandoAgenda({ ...base(), expectedVersion: 1, operacao: 'CANCELAR' });
     expect(stale.reasonCode).toBe('ACTIVITY_ALREADY_REPLACED');
-    expect((await prisma.atividade.findUniqueOrThrow({ where: { id: moved.atividadeResultanteId } })).statusAgendamento).toBe('PENDENTE');
+    expect((await prisma.atividade.findUniqueOrThrow({ where: { id: moved.atividadeResultanteId } })).statusAgendamento).toBe('SOLICITADO');
   });
 
   it('no-show atrasado nao regride estado comercial mais avancado', async () => {

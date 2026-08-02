@@ -3,6 +3,11 @@ import type { AgendaActorKind } from './agenda-command-types';
 export type AgendaTemporalPhase = 'FUTURO' | 'INICIADO' | 'ENCERRADO';
 
 export type AgendaPolicyAction =
+  | 'SOLICITAR'
+  | 'PROPOR'
+  | 'ACEITAR'
+  | 'RECUSAR'
+  | 'CONFIRMAR_ATRIBUICAO'
   | 'CANCELAR'
   | 'REAGENDAR'
   | 'REALIZAR'
@@ -59,9 +64,16 @@ export function obterAgendaPolicy(input: AgendaPolicyInput): AgendaPolicyView {
   }
 
   if (faseTemporal === 'FUTURO') {
-    if (input.ator === 'PUBLICO') return { faseTemporal, allowedActions: ['CANCELAR'], reasonCode: 'ALLOWED' };
+    if (input.ator === 'PUBLICO') {
+      const allowedActions: AgendaPolicyAction[] = ['CANCELAR'];
+      if (['PENDENTE', 'PROPOSTO'].includes(status)) allowedActions.unshift('ACEITAR');
+      return { faseTemporal, allowedActions, reasonCode: 'ALLOWED' };
+    }
     if (input.ator === 'SISTEMA') return { faseTemporal, allowedActions: [], reasonCode: 'ACTOR_NOT_ALLOWED' };
-    return { faseTemporal, allowedActions: ['CANCELAR', 'REAGENDAR'], reasonCode: 'ALLOWED' };
+    const allowedActions: AgendaPolicyAction[] = ['CANCELAR', 'REAGENDAR'];
+    if (['PENDENTE', 'PROPOSTO'].includes(status)) allowedActions.push('PROPOR');
+    if (['PENDENTE', 'SOLICITADO', 'PROPOSTO'].includes(status)) allowedActions.push('CONFIRMAR_ATRIBUICAO', 'RECUSAR');
+    return { faseTemporal, allowedActions, reasonCode: 'ALLOWED' };
   }
 
   if (input.ator === 'PUBLICO') return { faseTemporal, allowedActions: [], reasonCode: 'APPOINTMENT_STARTED' };
@@ -69,7 +81,6 @@ export function obterAgendaPolicy(input: AgendaPolicyInput): AgendaPolicyView {
     return { faseTemporal, allowedActions: ['NAO_COMPARECEU'], reasonCode: 'ALLOWED' };
   }
   const allowedActions: AgendaPolicyAction[] = ['REALIZAR', 'NAO_COMPARECEU'];
-  if (input.ator === 'ADMIN') allowedActions.push('CORRIGIR');
   return { faseTemporal, allowedActions, reasonCode: 'ALLOWED' };
 }
 

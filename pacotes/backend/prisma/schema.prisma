@@ -1618,7 +1618,7 @@ model ComandoAgendaLedger {
 
 model EfeitoAgendaOutbox {
   id                String    @id @default(uuid())
-  chaveComando      String    @unique
+  chaveComando      String
   chaveIdempotencia String    @unique
   tenantId          String
   leadId            String
@@ -1637,10 +1637,14 @@ model EfeitoAgendaOutbox {
   concluidoEm       DateTime?
   reconciliacaoEm   DateTime?
   correlationId     String?
+  destinatarioTipo  String    @default("LEAD")
+  usuarioDestinoId  String?
 
   @@index([status, criadoEm])
   @@index([tenantId, leadId, criadoEm])
   @@index([correlationId, criadoEm], map: "efeitos_agenda_correlation_idx")
+  @@index([chaveComando, criadoEm], map: "efeitos_agenda_command_idx")
+  @@index([usuarioDestinoId, criadoEm], map: "efeitos_agenda_user_destination_idx")
   @@map("efeitos_agenda_outbox")
 }
 

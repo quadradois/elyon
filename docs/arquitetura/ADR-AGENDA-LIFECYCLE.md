@@ -39,3 +39,16 @@ A fase é derivada e não persistida.
 3. Migrar escritores um a um na Onda 1.
 4. Ativar comandos centrais somente após zero escritores diretos conhecidos.
 5. Desligar flags diante de transição inválida, confirmação falsa, quebra de isolamento ou duplicação.
+
+## Auditoria de escritores — 2026-08-01
+
+Escritores de transição conhecidos foram migrados para `executarComandoAgenda`: painel, atividade do Lead, links públicos do Lead e especialista, ferramenta SDR, worker de no-show e reatribuição/fallback.
+
+Exceções justificadas fora do agregado comercial:
+
+- criação inicial de atividade;
+- lease/fencing e carimbos operacionais do no-show;
+- cancelamento lógico de bloqueio interno (`TAREFA` da Agenda Interna);
+- exclusão de notas sem data; o endpoint recusa exclusão de agendamentos.
+
+O teste `test/architecture/agenda-writers.test.ts` impede que updates diretos de ciclo de vida retornem aos adaptadores migrados.

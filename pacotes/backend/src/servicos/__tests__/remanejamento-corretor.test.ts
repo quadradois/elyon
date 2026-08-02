@@ -1,17 +1,19 @@
 const mockPrisma = {
-  atividade: { findUnique: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
-  sessaoWhatsapp: { findFirst: jest.fn() },
+  atividade: { findUnique: jest.fn() },
 };
 const mockResolver = jest.fn();
-const mockWhatsapp = { enviarMensagemTexto: jest.fn() };
+const mockExecutarComando = jest.fn();
 const mockAuditoria = { registrar: jest.fn() };
 
 jest.mock('../../lib/db', () => ({ prisma: mockPrisma }));
 jest.mock('../resolucao-especialista-campanha', () => ({
   resolverEspecialistaCampanha: (...args: any[]) => mockResolver(...args),
 }));
-jest.mock('../whatsapp', () => ({ getWhatsAppService: () => mockWhatsapp }));
 jest.mock('../servico-auditoria', () => ({ ServicoAuditoria: mockAuditoria }));
+jest.mock('../coerencia-agenda-estado', () => ({
+  AGENDA_COMMERCIAL_POLICY_VERSION: 'agenda-commercial-v1',
+  executarComandoAgenda: (...args: any[]) => mockExecutarComando(...args),
+}));
 
 import { remanejarCorretorAtividade } from '../remanejamento-corretor';
 
@@ -23,7 +25,7 @@ describe('remanejarCorretorAtividade', () => {
       tipo: 'REUNIAO',
       versao: 3,
       agendadoPara: new Date('2026-08-03T13:00:00Z'),
-      statusAgendamento: 'CONFIRMADO',
+      statusAgendamento: 'SOLICITADO',
       statusConfirmacaoCorretor: 'RECUSADO',
       corretorOriginalId: 'u1',
       corretorAtualId: 'u1',
@@ -31,8 +33,7 @@ describe('remanejarCorretorAtividade', () => {
         id: 'l1', nome: 'Ivonet', telefone: '62999999999', tenantId: 't1', campanhaOrigemId: 'c1',
       },
     });
-    mockPrisma.atividade.updateMany.mockResolvedValue({ count: 1 });
-    mockPrisma.sessaoWhatsapp.findFirst.mockResolvedValue(null);
+    mockExecutarComando.mockResolvedValue({ success: true, reasonCode: 'REQUESTED' });
     mockResolver.mockResolvedValue({
       nome: 'Eloisa', telefone: '62988888888', usuarioId: 'u2', origem: 'POOL_TENANT', cargo: 'Corretor Especialista',
     });
@@ -43,14 +44,13 @@ describe('remanejarCorretorAtividade', () => {
 
     expect(resultado).toMatchObject({ sucesso: true, motivo: 'REMANEJADO', especialistaId: 'u2' });
     expect(mockResolver).toHaveBeenCalledWith(expect.objectContaining({ excluirUsuarioIds: ['u1'] }));
-    expect(mockPrisma.atividade.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ id: 'a1', versao: 3, statusConfirmacaoCorretor: { in: ['RECUSADO', 'EXPIRADO'] } }),
-      data: expect.objectContaining({
-        statusConfirmacaoCorretor: 'PENDENTE',
-        corretorOriginalId: 'u1',
-        corretorAtualId: 'u2',
-        tokenConfirmacaoCorretor: expect.any(String),
-      }),
+    expect(mockExecutarComando).toHaveBeenCalledWith(expect.objectContaining({
+      operacao: 'SOLICITAR', atividadeId: 'a1', expectedVersion: 3,
+      responsavelId: 'u2', tokenConfirmacaoCorretor: expect.any(String),
+      notificacoes: expect.arrayContaining([
+        expect.objectContaining({ destinatarioTipo: 'USUARIO', usuarioDestinoId: 'u2' }),
+        expect.objectContaining({ destinatarioTipo: 'LEAD' }),
+      ]),
     }));
   });
 
@@ -60,6 +60,6 @@ describe('remanejarCorretorAtividade', () => {
     const resultado = await remanejarCorretorAtividade({ atividadeId: 'a1', origem: 'RECUSA_EXPLICITA' });
 
     expect(resultado).toEqual({ sucesso: false, motivo: 'SEM_SUBSTITUTO' });
-    expect(mockPrisma.atividade.updateMany).not.toHaveBeenCalled();
+    expect(mockExecutarComando).not.toHaveBeenCalled();
   });
 });
