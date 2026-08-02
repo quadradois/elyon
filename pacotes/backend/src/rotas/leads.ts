@@ -19,24 +19,12 @@ import { criarFollowupOutbound, reagendarFollowupOutbound } from '../servicos/fo
 import { formatInTimeZone } from 'date-fns-tz';
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
 import { obterAgendaPolicy } from '../servicos/agenda-policy';
-import { obterAgendaLifecycleRollout } from '../servicos/agenda-lifecycle-rollout';
+import { obterAgendaEffectsRollout, obterAgendaLifecycleRollout } from '../servicos/agenda-lifecycle-rollout';
 import { enviarWhatsappAgendamento, montarMensagemLigacaoConfirmada } from '../servicos/notificacao-agendamento';
 import { remanejarCorretorAtividade } from '../servicos/remanejamento-corretor';
+import { calcularPrazoConfirmacaoCorretor } from '../servicos/prazo-confirmacao-corretor';
 
 const router = Router();
-
-function prazoConfirmacaoCorretor(atividade: {
-  agendadoPara?: Date | null;
-  remanejadoCorretorEm?: Date | null;
-}): Date | null {
-  if (!atividade.agendadoPara) return null;
-  const horario = new Date(atividade.agendadoPara);
-  const cutoffPadrao = new Date(horario.getTime() - 60 * 60 * 1000);
-  if (!atividade.remanejadoCorretorEm) return cutoffPadrao;
-  const toleranciaRemanejamento = new Date(new Date(atividade.remanejadoCorretorEm).getTime() + 15 * 60 * 1000);
-  return toleranciaRemanejamento < horario ? new Date(Math.max(cutoffPadrao.getTime(), toleranciaRemanejamento.getTime())) : horario;
-}
-
 
 const normalizarTelefone = (telefone?: string): string | null => {
   if (!telefone) return null;
@@ -2070,7 +2058,7 @@ router.get('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
       return responderErro(res, 404, 'Link inválido ou expirado', { valido: false });
     }
 
-    const prazoCutoff = prazoConfirmacaoCorretor(atividade as any);
+    const prazoCutoff = calcularPrazoConfirmacaoCorretor(atividade as any);
 
     res.json({
       valido: true,
@@ -2156,7 +2144,7 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
     }
 
     const agora = new Date();
-    const cutoff = prazoConfirmacaoCorretor(atividade as any);
+    const cutoff = calcularPrazoConfirmacaoCorretor(atividade as any);
 
     if (acao === 'confirmar') {
       if (cutoff && agora > cutoff) {
@@ -2168,7 +2156,7 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
         });
         return res.json({
           sucesso: false,
-          mensagem: 'Confirmação fora do prazo de corte (T-60). A reunião pode já ter sido remanejada.',
+          mensagem: 'O prazo de resposta deste convite expirou. O atendimento pode já ter sido oferecido ao especialista fallback.',
           statusConfirmacaoCorretor: statusAtual
         });
       }
@@ -2184,6 +2172,7 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
           agendadoPara: atividade.agendadoPara,
           especialistaNome: corretor?.nome,
       });
+      const effectsRollout = await obterAgendaEffectsRollout(atividade.lead.tenantId, agora);
       const result = await executarComandoAgenda({
         operacao: 'CONFIRMAR_ATRIBUICAO', tenantId: atividade.lead.tenantId, leadId: atividade.lead.id, atividadeId,
         requestIdentity: { source: 'PUBLIC_TOKEN', id: `${token}:confirmar-especialista` },
@@ -2191,9 +2180,20 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
         motivo: 'Aceite do especialista', policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION,
         ocorridoEm: agora, expectedVersion: atividade.versao,
         responsavelId: (atividade as any).corretorAtualId || undefined,
-        notificacao: { tipo: 'CONFIRMACAO', mensagem: mensagemConfirmacao },
+        notificacao: effectsRollout.effectsEnabled
+          ? { tipo: 'CONFIRMACAO', mensagem: mensagemConfirmacao }
+          : undefined,
       });
       if (!result.success && result.reasonCode !== 'COMMAND_REPLAY') return responderErro(res, result.transient ? 503 : 409, result.reasonCode);
+
+      const notificacaoDireta = effectsRollout.effectsEnabled
+        ? { enviado: false, registradoNoHistorico: false }
+        : await enviarWhatsappAgendamento({
+            tenantId: atividade.lead.tenantId,
+            leadId: atividade.lead.id,
+            telefone: atividade.lead.telefone,
+            mensagem: mensagemConfirmacao,
+          });
 
       ServicoAuditoria.registrar({
         tenantId: atividade.lead.tenantId,
@@ -2206,9 +2206,13 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
 
       return res.json({
         sucesso: true,
-        mensagem: 'Ligação confirmada. A notificação do Lead foi enfileirada com segurança.',
-        notificacaoLeadEnviada: false,
-        notificacaoRegistradaNoHistorico: false,
+        mensagem: effectsRollout.effectsEnabled
+          ? 'Ligação confirmada. A notificação do Lead foi enfileirada com segurança.'
+          : notificacaoDireta.enviado
+            ? 'Ligação confirmada e Lead notificado.'
+            : 'Ligação confirmada, mas não foi possível notificar o Lead automaticamente.',
+        notificacaoLeadEnviada: notificacaoDireta.enviado,
+        notificacaoRegistradaNoHistorico: notificacaoDireta.registradoNoHistorico,
         statusConfirmacaoCorretor: 'CONFIRMADO'
       });
     }

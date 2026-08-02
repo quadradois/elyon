@@ -334,8 +334,11 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
         statusConfirmacaoCorretor: command.operacao === 'SOLICITAR' && command.responsavelId ? 'PENDENTE' : atividade.statusConfirmacaoCorretor,
         tokenConfirmacaoCorretor: command.operacao === 'SOLICITAR' && command.responsavelId
           ? command.tokenConfirmacaoCorretor || randomUUID() : atividade.tokenConfirmacaoCorretor,
+        // O SLA só começa quando o convite é efetivamente aceito pelo WhatsApp.
         confirmacaoCorretorSolicitadaEm: command.operacao === 'SOLICITAR' && command.responsavelId
-          ? command.ocorridoEm : atividade.confirmacaoCorretorSolicitadaEm,
+          ? null : atividade.confirmacaoCorretorSolicitadaEm,
+        lembreteCorretorEnviadoEm: command.operacao === 'SOLICITAR' && command.responsavelId
+          ? null : atividade.lembreteCorretorEnviadoEm,
         remanejadoCorretorEm: command.operacao === 'SOLICITAR' && command.responsavelId ? command.ocorridoEm : atividade.remanejadoCorretorEm,
         versao: { increment: 1 }, estadoAgendaAtualizadoEm: command.ocorridoEm },
     });

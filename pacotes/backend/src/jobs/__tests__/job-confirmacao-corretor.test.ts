@@ -47,8 +47,11 @@ describe('job-confirmacao-corretor', () => {
     expect(mockRemanejar).toHaveBeenCalledWith({ atividadeId: 'a1', origem: 'CUTOFF' });
     expect(mockPrisma.atividade.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        statusConfirmacaoCorretor: { in: ['PENDENTE', 'RECUSADO'] },
-        agendadoPara: expect.objectContaining({ gt: expect.any(Date), lte: expect.any(Date) }),
+        agendadoPara: expect.objectContaining({ gt: expect.any(Date) }),
+        OR: expect.arrayContaining([
+          { statusConfirmacaoCorretor: 'RECUSADO' },
+          expect.objectContaining({ statusConfirmacaoCorretor: 'PENDENTE' }),
+        ]),
       }),
     }));
   });
@@ -63,13 +66,13 @@ describe('job-confirmacao-corretor', () => {
     expect(mockWhatsapp.enviarMensagemTexto).not.toHaveBeenCalled();
     expect(mockPrisma.atividade.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
+        statusAgendamento: { in: ['PENDENTE', 'SOLICITADO', 'PROPOSTO', 'CONFIRMADO'] },
         statusConfirmacaoCorretor: 'PENDENTE',
       }),
     }));
   });
 
-  it('recupera convite não enviado entre T-120 e T-60', async () => {
+  it('recupera e envia imediatamente qualquer convite futuro ainda não enviado', async () => {
     mockPrisma.atividade.findMany.mockResolvedValue([]);
 
     await executarConvitesConfirmacaoCorretor();
@@ -77,9 +80,9 @@ describe('job-confirmacao-corretor', () => {
     const chamada = mockPrisma.atividade.findMany.mock.calls[0][0];
     const janela = chamada.where.agendadoPara;
     expect(janela.gt).toBeInstanceOf(Date);
-    expect(janela.lte).toBeInstanceOf(Date);
-    expect(janela.lte.getTime() - janela.gt.getTime()).toBe(60 * 60 * 1000);
+    expect(janela.lte).toBeUndefined();
     expect(chamada.where.confirmacaoCorretorSolicitadaEm).toBeNull();
+    expect(chamada.orderBy).toEqual({ criadoEm: 'asc' });
   });
 
   it('envia convite ao especialista atual da atividade após remanejamento', async () => {

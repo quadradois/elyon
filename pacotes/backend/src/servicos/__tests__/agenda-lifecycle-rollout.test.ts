@@ -1,4 +1,4 @@
-import { avaliarAgendaLifecycleRollout } from '../agenda-lifecycle-rollout';
+import { avaliarAgendaEffectsRollout, avaliarAgendaLifecycleRollout } from '../agenda-lifecycle-rollout';
 import type { AgendaPilotConfig } from '../agenda-pilot-config';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -31,6 +31,13 @@ describe('Agenda lifecycle rollout', () => {
     expect(avaliarAgendaLifecycleRollout(config(true, true), TENANT, new Date(CUTOFF))).toMatchObject({
       policyEnabled: true,
       commandsEnabled: true,
+    });
+  });
+
+  it('mantém a entrega legada direta enquanto os efeitos duráveis estão desligados', () => {
+    expect(avaliarAgendaEffectsRollout(config(true, false), TENANT, new Date(CUTOFF))).toEqual({
+      effectsEnabled: false,
+      effectsReason: 'FLAG_DISABLED',
     });
   });
 

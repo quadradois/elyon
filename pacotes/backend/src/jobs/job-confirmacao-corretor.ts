@@ -3,8 +3,14 @@ import { getWhatsAppService } from '../servicos/whatsapp';
 import { ServicoAuditoria } from '../servicos/servico-auditoria';
 import { resolverEspecialistaCampanha } from '../servicos/resolucao-especialista-campanha';
 import { remanejarCorretorAtividade } from '../servicos/remanejamento-corretor';
+import {
+  calcularPrazoConfirmacaoCorretor,
+  obterAntecedenciaLembreteCorretorMinutos,
+  obterPrazoConfirmacaoCorretorMinutos,
+} from '../servicos/prazo-confirmacao-corretor';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost';
+const STATUS_AGENDAMENTO_ATIVOS = ['PENDENTE', 'SOLICITADO', 'PROPOSTO', 'CONFIRMADO'];
 
 function normalizarTelefoneParaWaMe(telefone?: string | null): string {
   const digits = (telefone || '').replace(/\D/g, '');
@@ -20,21 +26,26 @@ function linkConfirmacaoCorretor(atividadeId: string, token: string): string {
   return `${FRONTEND_URL}/confirmar-corretor/${atividadeId}/${token}`;
 }
 
-function templateConvite(params: { leadNome: string; horario: Date; link: string }): string {
+function formatarHorario(data: Date): string {
+  return new Date(data).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
+function templateConvite(params: { leadNome: string; horario: Date; prazo: Date; link: string }): string {
   return [
     'Elyon | Convite de confirmação',
     `Lead: ${params.leadNome}`,
-    `Reunião: ${new Date(params.horario).toLocaleString('pt-BR')}`,
-    `Confirme até 1h antes: ${params.link}`,
+    `Reunião: ${formatarHorario(params.horario)}`,
+    `Responda em até ${obterPrazoConfirmacaoCorretorMinutos()} minutos (prazo: ${formatarHorario(params.prazo)}).`,
+    params.link,
   ].join('\n');
 }
 
-function templateLembrete(params: { leadNome: string; horario: Date; link: string }): string {
+function templateLembrete(params: { leadNome: string; horario: Date; prazo: Date; link: string }): string {
   return [
-    'Elyon | Lembrete de confirmação (T-90)',
+    'Elyon | Lembrete de confirmação',
     `Lead: ${params.leadNome}`,
-    `Reunião: ${new Date(params.horario).toLocaleString('pt-BR')}`,
-    `Prazo de confirmação: até T-60`,
+    `Reunião: ${formatarHorario(params.horario)}`,
+    `Seu prazo termina às ${formatarHorario(params.prazo)}. Sem resposta, o atendimento será oferecido ao especialista fallback.`,
     params.link,
   ].join('\n');
 }
@@ -80,22 +91,21 @@ async function resolverEspecialistaAtividade(atividade: any): Promise<any | null
 
 export async function executarConvitesConfirmacaoCorretor(): Promise<{ processados: number; enviados: number; erros: number }> {
   const agora = new Date();
-  const limiteSuperior = adicionarMinutos(agora, 120);
-  const limiteInferior = adicionarMinutos(agora, 60);
 
   const atividades = await (prisma.atividade as any).findMany({
     where: {
       tipo: 'REUNIAO',
-      statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
+      statusAgendamento: { in: STATUS_AGENDAMENTO_ATIVOS },
       statusConfirmacaoCorretor: 'PENDENTE',
-      // Recupera convites não enviados após reinício, mas nunca invade o cutoff T-60.
-      agendadoPara: { gt: limiteInferior, lte: limiteSuperior },
+      // O convite nasce com o pedido; o scheduler também recupera convites perdidos após reinício.
+      agendadoPara: { gt: agora },
       confirmacaoCorretorSolicitadaEm: null,
       tokenConfirmacaoCorretor: { not: null },
     },
     include: {
       lead: { select: { id: true, nome: true, tenantId: true, campanhaOrigemId: true } }
     },
+    orderBy: { criadoEm: 'asc' },
     take: 100
   });
 
@@ -112,9 +122,14 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
       const whatsapp = getWhatsAppService(instanceName);
       const telefone = normalizarTelefoneParaWaMe(especialista.telefone);
       const link = linkConfirmacaoCorretor(atividade.id, atividade.tokenConfirmacaoCorretor!);
+      const solicitadoEm = new Date();
       const msg = templateConvite({
         leadNome: atividade.lead.nome,
         horario: atividade.agendadoPara,
+        prazo: new Date(Math.min(
+          atividade.agendadoPara.getTime(),
+          solicitadoEm.getTime() + obterPrazoConfirmacaoCorretorMinutos() * 60 * 1000,
+        )),
         link,
       });
       await whatsapp.enviarMensagemTexto(telefone, msg);
@@ -122,7 +137,7 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
       await (prisma.atividade as any).update({
         where: { id: atividade.id },
         data: {
-          confirmacaoCorretorSolicitadaEm: new Date(),
+          confirmacaoCorretorSolicitadaEm: solicitadoEm,
           corretorAtualId: especialista.usuarioId || (atividade as any).corretorAtualId || null,
           corretorOriginalId: (atividade as any).corretorOriginalId || especialista.usuarioId || null,
         }
@@ -146,18 +161,19 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
 
 export async function executarLembretesConfirmacaoCorretor(): Promise<{ processados: number; enviados: number; erros: number }> {
   const agora = new Date();
-  const limiteSuperior = adicionarMinutos(agora, 90);
-  const limiteInferior = adicionarMinutos(agora, 60);
-  const conviteMinimo = adicionarMinutos(agora, -15);
+  const prazoMinutos = obterPrazoConfirmacaoCorretorMinutos();
+  const antecedenciaMinutos = obterAntecedenciaLembreteCorretorMinutos();
+  const inicioJanela = adicionarMinutos(agora, -(prazoMinutos - antecedenciaMinutos));
+  const fimJanela = adicionarMinutos(agora, -prazoMinutos);
 
   const atividades = await (prisma.atividade as any).findMany({
     where: {
       tipo: 'REUNIAO',
-      statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
+      statusAgendamento: { in: STATUS_AGENDAMENTO_ATIVOS },
       statusConfirmacaoCorretor: 'PENDENTE',
-      // Janela elástica: recupera lembrete perdido sem enviá-lo junto de um convite tardio.
-      agendadoPara: { gt: limiteInferior, lte: limiteSuperior },
-      confirmacaoCorretorSolicitadaEm: { not: null, lte: conviteMinimo },
+      // Lembra perto do fim do SLA, sem reenviar depois que o prazo venceu.
+      agendadoPara: { gt: agora },
+      confirmacaoCorretorSolicitadaEm: { not: null, gt: fimJanela, lte: inicioJanela },
       lembreteCorretorEnviadoEm: null,
       tokenConfirmacaoCorretor: { not: null },
     },
@@ -183,6 +199,7 @@ export async function executarLembretesConfirmacaoCorretor(): Promise<{ processa
       const msg = templateLembrete({
         leadNome: atividade.lead.nome,
         horario: atividade.agendadoPara,
+        prazo: calcularPrazoConfirmacaoCorretor(atividade)!,
         link,
       });
       await whatsapp.enviarMensagemTexto(telefone, msg);
@@ -209,16 +226,19 @@ export async function executarLembretesConfirmacaoCorretor(): Promise<{ processa
 
 export async function executarCutoffRemanejamentoCorretor(): Promise<{ processados: number; remanejados: number; expirados: number; erros: number }> {
   const agora = new Date();
+  const prazoVencidoEm = adicionarMinutos(agora, -obterPrazoConfirmacaoCorretorMinutos());
 
   const atividades = await (prisma.atividade as any).findMany({
     where: {
       tipo: 'REUNIAO',
-      statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
-      statusConfirmacaoCorretor: { in: ['PENDENTE', 'RECUSADO'] },
-      agendadoPara: { gt: agora, lte: adicionarMinutos(agora, 60) },
+      statusAgendamento: { in: STATUS_AGENDAMENTO_ATIVOS },
+      agendadoPara: { gt: agora },
       OR: [
-        { remanejadoCorretorEm: null },
-        { remanejadoCorretorEm: { lte: adicionarMinutos(agora, -15) } },
+        { statusConfirmacaoCorretor: 'RECUSADO' },
+        {
+          statusConfirmacaoCorretor: 'PENDENTE',
+          confirmacaoCorretorSolicitadaEm: { not: null, lte: prazoVencidoEm },
+        },
       ],
       tokenConfirmacaoCorretor: { not: null },
     },
