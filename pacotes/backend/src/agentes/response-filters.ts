@@ -12,6 +12,7 @@ interface AplicarFiltrosRespostaParams {
   estadoConversaAtual: EstadoConversa;
   cotLog?: string | null;
   nomesToolsTurno: string[];
+  nomesToolsSucessoTurno?: string[];
   fallbackAplicadoAtual: string;
   ultimaMsgAssistente?: string;
   ultimaMsgLead?: string;
@@ -66,9 +67,9 @@ function aplicarGuardrailLinguagemGovernanca(resposta: string, ultimaMsgLead?: s
     .trim();
 }
 
-function aplicarGuardrailConfirmacaoAgenda(resposta: string, nomesToolsTurno: string[]): string {
+function aplicarGuardrailConfirmacaoAgenda(resposta: string, nomesToolsSucessoTurno: string[]): string {
   const normalizada = normalizarTexto(resposta);
-  const confirmouViaTool = nomesToolsTurno.some((nome) => /agendar_reuniao_closer/i.test(nome));
+  const confirmouViaTool = nomesToolsSucessoTurno.some((nome) => /agendar_reuniao_closer/i.test(nome));
   const mencionaCalendar = /google\s+calendar|calendario|link/.test(normalizada);
   const alegaReservaAutomatica = /horario\s+(?:fica|ficou|esta)\s+travad|confirmad[oa]\s+automaticamente|especialista\s+ja\s+(?:recebeu|foi\s+avisado)|nao\s+preciso\s+validar/.test(normalizada);
 
@@ -78,9 +79,9 @@ function aplicarGuardrailConfirmacaoAgenda(resposta: string, nomesToolsTurno: st
   return resposta;
 }
 
-function aplicarGuardrailCancelamentoAgenda(resposta: string, nomesToolsTurno: string[]): string {
+function aplicarGuardrailCancelamentoAgenda(resposta: string, nomesToolsSucessoTurno: string[]): string {
   const normalizada = normalizarTexto(resposta);
-  const cancelouViaTool = nomesToolsTurno.some((nome) => /cancelar_agendamento/i.test(nome));
+  const cancelouViaTool = nomesToolsSucessoTurno.some((nome) => /cancelar_agendamento/i.test(nome));
   const alegaCancelamento =
     /(?:agendamento|horario|atendimento).{0,45}(?:foi|esta|ficou).{0,20}cancelad/.test(normalizada)
     || /(?:ja\s+)?cancelei|cancelamento.{0,30}(?:feito|concluido|confirmado)/.test(normalizada);
@@ -106,6 +107,7 @@ export function aplicarFiltrosRespostaOrchestrator(
     agenteQueRespondeuFormatado,
     estadoConversaAtual,
     nomesToolsTurno,
+    nomesToolsSucessoTurno = [],
     fallbackAplicadoAtual,
     ultimaMsgAssistente,
     ultimaMsgLead,
@@ -140,13 +142,13 @@ export function aplicarFiltrosRespostaOrchestrator(
   const respostaAntesGovernanca = respostaLimpa;
   respostaLimpa = aplicarGuardrailLinguagemGovernanca(respostaLimpa, ultimaMsgLead);
   const respostaAntesGuardrailAgenda = respostaLimpa;
-  respostaLimpa = aplicarGuardrailConfirmacaoAgenda(respostaLimpa, nomesToolsTurno);
+  respostaLimpa = aplicarGuardrailConfirmacaoAgenda(respostaLimpa, nomesToolsSucessoTurno);
   if (respostaAntesGuardrailAgenda !== respostaLimpa) {
     logger.warn('[ORCHESTRATOR] Guardrail bloqueou confirmação de agenda sem registro via tool.');
     fallbackAplicado = 'AGENDA_CONFIRMATION_GUARD';
   }
   const respostaAntesGuardrailCancelamento = respostaLimpa;
-  respostaLimpa = aplicarGuardrailCancelamentoAgenda(respostaLimpa, nomesToolsTurno);
+  respostaLimpa = aplicarGuardrailCancelamentoAgenda(respostaLimpa, nomesToolsSucessoTurno);
   if (respostaAntesGuardrailCancelamento !== respostaLimpa) {
     logger.warn('[ORCHESTRATOR] Guardrail bloqueou confirmação de cancelamento sem registro via tool.');
     fallbackAplicado = 'AGENDA_CANCELLATION_GUARD';

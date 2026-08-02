@@ -29,6 +29,7 @@ describe('persistirHistoricoSdk', () => {
       lastAgent: { name: 'presenter_agent_v4' },
       newItems: [
         { type: 'tool_call_item', name: 'qualificar_lead' },
+        { type: 'tool_call_output_item', name: 'qualificar_lead', output: '{"success":true}' },
         { type: 'handoff_call_item' },
       ],
     } as any);
@@ -47,6 +48,7 @@ describe('persistirHistoricoSdk', () => {
 
     expect(result).toEqual({
       nomesToolsTurno: ['qualificar_lead'],
+      nomesToolsSucessoTurno: ['qualificar_lead'],
       toolCallsTurno: 1,
       handoffsTurno: 1,
     });
@@ -60,24 +62,56 @@ describe('persistirHistoricoSdk', () => {
     expect(mockSetHistory).not.toHaveBeenCalled();
     expect(result).toEqual({
       nomesToolsTurno: [],
+      nomesToolsSucessoTurno: [],
       toolCallsTurno: 0,
       handoffsTurno: 0,
     });
   });
 
-  it('retorna zeros quando ocorre erro interno', async () => {
+  it('preserva evidência da tool no formato real do SDK quando o cache falha', async () => {
     mockSetHistory.mockRejectedValueOnce(new Error('Falha cache'));
 
     const result = await persistirHistoricoSdk('contato-3', {
       history: [{ role: 'user', content: 'Oi' }],
       lastAgent: { name: 'opener_agent_v11' },
-      newItems: [{ type: 'tool_call_item', name: 'buscar_contexto' }],
+      newItems: [
+        {
+          type: 'tool_call_item',
+          rawItem: { type: 'function_call', callId: 'call-cancel-1', name: 'cancelar_agendamento' },
+        },
+        {
+          type: 'tool_call_output_item',
+          rawItem: { type: 'function_call_result', callId: 'call-cancel-1' },
+          output: '{"success":true,"statusAgendamento":"CANCELADO"}',
+        },
+      ],
     } as any);
 
     expect(result).toEqual({
-      nomesToolsTurno: [],
-      toolCallsTurno: 0,
+      nomesToolsTurno: ['cancelar_agendamento'],
+      nomesToolsSucessoTurno: ['cancelar_agendamento'],
+      toolCallsTurno: 1,
       handoffsTurno: 0,
     });
+  });
+
+  it('não registra sucesso quando a tool retorna success=false', async () => {
+    const result = await persistirHistoricoSdk('contato-4', {
+      history: [{ role: 'user', content: 'Cancele' }],
+      newItems: [
+        {
+          type: 'tool_call_item',
+          rawItem: { type: 'function_call', callId: 'call-cancel-2', name: 'cancelar_agendamento' },
+        },
+        {
+          type: 'tool_call_output_item',
+          rawItem: { type: 'function_call_result', callId: 'call-cancel-2' },
+          output: '{"success":false,"reasonCode":"NO_ACTIVE_APPOINTMENT"}',
+        },
+      ],
+    } as any);
+
+    expect(result.nomesToolsTurno).toEqual(['cancelar_agendamento']);
+    expect(result.nomesToolsSucessoTurno).toEqual([]);
   });
 });
