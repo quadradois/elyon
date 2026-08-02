@@ -321,6 +321,42 @@ Qual valor você espera pelo seu apartamento?
     expect(result.respostaLimpa).not.toContain('fica travado');
   });
 
+  it('mantém confirmação de agenda quando a tool retornou sucesso', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'O horário fica travado automaticamente no Google Calendar.',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['agendar_reuniao_closer'],
+      nomesToolsSucessoTurno: ['agendar_reuniao_closer'],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Pode ser amanhã às 9h.',
+    });
+
+    expect(result.fallbackAplicado).toBe('NONE');
+    expect(result.respostaLimpa).toContain('fica travado');
+  });
+
+  it('bloqueia confirmação de agenda quando a tool foi chamada mas retornou falha', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'O horário fica travado automaticamente no Google Calendar.',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['agendar_reuniao_closer'],
+      nomesToolsSucessoTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Pode ser amanhã às 9h.',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_CONFIRMATION_GUARD');
+    expect(result.respostaLimpa).toContain('não consigo confirmar');
+  });
+
   it('bloqueia confirmação de cancelamento sem execução da tool', () => {
     const result = aplicarFiltrosRespostaOrchestrator({
       respostaFinal: 'Sim, o agendamento foi cancelado. 😊',
@@ -348,11 +384,30 @@ Qual valor você espera pelo seu apartamento?
       estadoConversaAtual: estadoBase,
       cotLog: null,
       nomesToolsTurno: ['cancelar_agendamento'],
+      nomesToolsSucessoTurno: ['cancelar_agendamento'],
       fallbackAplicadoAtual: 'NONE',
       ultimaMsgLead: 'Pode cancelar.',
     });
 
     expect(result.fallbackAplicado).toBe('NONE');
     expect(result.respostaLimpa).toContain('foi cancelado');
+  });
+
+  it('bloqueia confirmação quando cancelar_agendamento foi chamada mas retornou falha', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Sim, o agendamento foi cancelado. 😊',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['cancelar_agendamento'],
+      nomesToolsSucessoTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Pode cancelar.',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_CANCELLATION_GUARD');
+    expect(result.respostaLimpa).toContain('não consegui registrar');
   });
 });

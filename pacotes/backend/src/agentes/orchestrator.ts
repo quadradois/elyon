@@ -605,6 +605,7 @@ Use isso como desempate estratégico na próxima ação.`;
 
         // 6. EXECUTAR AGENTE (SDK gerencia handoffs automaticamente)
         let nomesToolsTurno: string[] = [];
+        let nomesToolsSucessoTurno: string[] = [];
         let result: ElyonRunResult;
 
         // Fallback de provedor: se o tenant usa BYOK (chave própria), criamos
@@ -654,6 +655,7 @@ Use isso como desempate estratégico na próxima ação.`;
         if (contexto.contatoId) {
             const persistenciaResult = await persistirHistoricoSdk(contexto.contatoId, result);
             nomesToolsTurno = persistenciaResult.nomesToolsTurno;
+            nomesToolsSucessoTurno = persistenciaResult.nomesToolsSucessoTurno;
             toolCallsTurno = persistenciaResult.toolCallsTurno;
             handoffsTurno = persistenciaResult.handoffsTurno;
         }
@@ -710,6 +712,7 @@ Use isso como desempate estratégico na próxima ação.`;
             estadoConversaAtual,
             cotLog,
             nomesToolsTurno,
+            nomesToolsSucessoTurno,
             fallbackAplicadoAtual: fallbackAplicado,
             ultimaMsgAssistente,
             ultimaMsgLead: ultimaMsgLeadTexto,
