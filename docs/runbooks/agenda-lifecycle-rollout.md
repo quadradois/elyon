@@ -9,7 +9,9 @@
 
 ## Flags e escopo
 
-`AGENDA_LIFECYCLE_POLICY_ENABLED` e `AGENDA_LIFECYCLE_COMMANDS_ENABLED` ficam desligadas por padrão. O escopo exige `AGENDA_PILOT_TENANT_ID` e `AGENDA_PILOT_STARTED_AT_UTC`; configuração incompleta falha fechada.
+`AGENDA_LIFECYCLE_POLICY_ENABLED` e `AGENDA_LIFECYCLE_COMMANDS_ENABLED` ficam desligadas por padrão. O escopo exige `AGENDA_PILOT_TENANT_ID` e `AGENDA_PILOT_STARTED_AT`; configuração incompleta falha fechada.
+
+As flags devem estar presentes tanto no `backend` quanto no `worker`. A política controla `allowedActions` e as proteções temporais expostas ao piloto; a flag de comandos controla o endpoint canônico e as ações novas de desfecho/correção. Adaptadores legados podem usar internamente o serviço central para preservar invariantes, mas não expõem a experiência da Onda 1 enquanto a flag de comandos estiver desligada.
 
 ## Onda 0 — política
 

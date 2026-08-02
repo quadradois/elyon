@@ -19,6 +19,7 @@ import { criarFollowupOutbound, reagendarFollowupOutbound } from '../servicos/fo
 import { formatInTimeZone } from 'date-fns-tz';
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
 import { obterAgendaPolicy } from '../servicos/agenda-policy';
+import { obterAgendaLifecycleRollout } from '../servicos/agenda-lifecycle-rollout';
 import { enviarWhatsappAgendamento, montarMensagemLigacaoConfirmada } from '../servicos/notificacao-agendamento';
 import { remanejarCorretorAtividade } from '../servicos/remanejamento-corretor';
 
@@ -1934,6 +1935,7 @@ router.get('/confirmar/:atividadeId/:token', async (req, res) => {
     }
 
     const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT CURRENT_TIMESTAMP AS "now"`;
+    const rollout = await obterAgendaLifecycleRollout(atividade.lead.tenantId, clock.now);
     const policy = obterAgendaPolicy({
       status: atividade.statusAgendamento,
       agendadoPara: atividade.agendadoPara,
@@ -1952,8 +1954,10 @@ router.get('/confirmar/:atividadeId/:token', async (req, res) => {
         statusAgendamento: atividade.statusAgendamento,
         versao: atividade.versao,
         faseTemporal: policy.faseTemporal,
-        allowedActions: policy.allowedActions,
-        policyReasonCode: policy.reasonCode,
+        allowedActions: rollout.policyEnabled ? policy.allowedActions : ['ACEITAR', 'CANCELAR'],
+        policyReasonCode: rollout.policyEnabled ? policy.reasonCode : 'LEGACY_COMPATIBILITY',
+        lifecyclePolicyEnabled: rollout.policyEnabled,
+        lifecycleCommandsEnabled: rollout.commandsEnabled,
         lead: {
           nome: atividade.lead.nome,
           telefone: atividade.lead.telefone,

@@ -84,3 +84,13 @@ Desligar a flag se houver transição temporal inválida, confirmação falsa, q
 
 - T059: ensaio cronometrado requer cinco operadores reais; protocolo está definido acima, mas não foi simulado como se fosse evidência humana.
 - T062/T063: ativação das Ondas 0 e 1 exige autorização operacional no momento da execução, tenant/corte aprovados e janela observada.
+
+## Rollout gate correction — 2026-08-02
+
+- O primeiro deploy de `f59177a5` foi interrompido operacionalmente antes da ativação das flags porque o Compose não injetava as flags de lifecycle no backend e as rotas não consultavam o gate.
+- O rollback restaurou as imagens do release `517cd7f5`; backend, worker e frontend ficaram saudáveis e `/live`, `/ready` e CRM retornaram `200`.
+- A correção passa as flags ao backend e ao worker, aplica tenant + cutoff usando o relógio do PostgreSQL e mantém o endpoint canônico fechado enquanto `AGENDA_LIFECYCLE_COMMANDS_ENABLED=false`.
+- Na Onda 0, a visão do piloto expõe somente `CANCELAR` e `REAGENDAR`; fila de desfechos, correção e endpoint canônico permanecem indisponíveis.
+- Compatibilidade: cancelar, reagendar e propor horário continuam pelos endpoints legados, que preservam idempotência e usam internamente o serviço central.
+- Validação local: backend 121 suítes/1.063 testes, frontend 9 arquivos/33 testes, contrato HTTP 6/6, typecheck, arquitetura, Compose e builds aprovados.
+- T062 continua pendente até o novo deploy, ativação exclusiva da política e início da janela observada; T063 permanece bloqueada pelo checkpoint da Onda 0.

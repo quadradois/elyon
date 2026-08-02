@@ -158,6 +158,8 @@ async function iniciar(): Promise<void> {
   agendaPilotConfig = await resolverAgendaPilotConfig();
   registrarAgendaPilotConfig(agendaPilotConfig);
   for (const [recurso, gate] of [
+    ['lifecycle_policy', agendaPilotConfig.lifecyclePolicy],
+    ['lifecycle_commands', agendaPilotConfig.lifecycleCommands],
     ['effects', agendaPilotConfig.effects],
     ['no_show', agendaPilotConfig.noShow],
   ] as const) {

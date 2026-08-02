@@ -25,6 +25,8 @@ export interface EventoAgenda {
         faseTemporal?: 'FUTURO' | 'INICIADO' | 'ENCERRADO' | null;
         allowedActions?: Array<'CANCELAR' | 'REAGENDAR' | 'REALIZAR' | 'NAO_COMPARECEU' | 'CORRIGIR'>;
         policyReasonCode?: string;
+        lifecyclePolicyEnabled?: boolean;
+        lifecycleCommandsEnabled?: boolean;
     };
 }
 
@@ -100,30 +102,33 @@ export const agendaService = {
         id: string,
         payload: { motivo?: string; avisarCliente?: boolean; requestId: string; expectedVersion: number }
     ): Promise<{ sucesso: boolean; mensagem: string }> => {
-        return executarComandoAgenda(id, {
-            command: 'CANCELAR', expectedVersion: payload.expectedVersion,
-            reasonCode: payload.motivo || 'Cancelamento pelo operador',
-        }, payload.requestId);
+        const response = await api.post(`/agenda/${id}/cancelar`, payload, {
+            headers: { 'Idempotency-Key': payload.requestId },
+        });
+        return response.data;
     },
 
     reagendarAgendamento: async (
         id: string,
         payload: { novoHorario: Date; motivo?: string; avisarCliente?: boolean; requestId: string; expectedVersion: number }
     ): Promise<{ sucesso: boolean; mensagem: string }> => {
-        return executarComandoAgenda(id, {
-            command: 'REAGENDAR', expectedVersion: payload.expectedVersion,
-            reasonCode: payload.motivo || 'Reagendamento pelo operador', scheduledFor: payload.novoHorario,
-        }, payload.requestId);
+        const response = await api.post(`/agenda/${id}/reagendar`, {
+            ...payload,
+            novoHorario: payload.novoHorario.toISOString(),
+        }, { headers: { 'Idempotency-Key': payload.requestId } });
+        return response.data;
     },
 
     proporNovoHorario: async (
         id: string,
         payload: { horarioProposto: Date; mensagem?: string; expectedVersion?: number }
     ): Promise<{ sucesso: boolean; mensagem: string }> => {
-        return executarComandoAgenda(id, {
-            command: 'PROPOR', expectedVersion: payload.expectedVersion || 0,
-            reasonCode: payload.mensagem || 'Proposta de horário', scheduledFor: payload.horarioProposto,
+        const response = await api.post(`/agenda/${id}/propor-horario`, {
+            horarioProposto: payload.horarioProposto.toISOString(),
+            mensagem: payload.mensagem,
+            expectedVersion: payload.expectedVersion,
         });
+        return response.data;
     },
 
     listarBloqueios: async (): Promise<Array<{

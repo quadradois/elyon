@@ -5,11 +5,30 @@ import { z } from 'zod';
 import { verificarAutenticacao } from '../middleware/middleware-auth';
 import { googleCalendarService } from '../servicos/google-calendar';
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda, type AgendaCommand } from '../servicos/coerencia-agenda-estado';
-import { obterAgendaPolicy } from '../servicos/agenda-policy';
+import { obterAgendaPolicy, type AgendaPolicyAction } from '../servicos/agenda-policy';
+import { obterAgendaLifecycleRollout, type AgendaLifecycleRollout } from '../servicos/agenda-lifecycle-rollout';
 import { agendaLifecycleExpiredPending, agendaLifecycleOperationalQueueAgeSeconds } from '../observabilidade/agenda-comercial-metrics';
 import { formatarDataHoraAgenda, montarMensagemLigacaoConfirmada } from '../servicos/notificacao-agendamento';
 
 const router = Router();
+
+const LEGACY_VISIBLE_ACTIONS: AgendaPolicyAction[] = ['CANCELAR', 'REAGENDAR'];
+
+function obterAcoesVisiveis(
+    policyActions: AgendaPolicyAction[],
+    rollout: AgendaLifecycleRollout,
+): AgendaPolicyAction[] {
+    if (rollout.commandsEnabled) return policyActions;
+    if (rollout.policyEnabled) {
+        return policyActions.filter((action) => action === 'CANCELAR' || action === 'REAGENDAR');
+    }
+    return LEGACY_VISIBLE_ACTIONS;
+}
+
+async function obterAgoraBanco(): Promise<Date> {
+    const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT CURRENT_TIMESTAMP AS "now"`;
+    return clock.now;
+}
 
 const AgendaCommandSchema = z.object({
     command: z.enum(['SOLICITAR', 'PROPOR', 'RECUSAR', 'CONFIRMAR_ATRIBUICAO', 'CANCELAR', 'REAGENDAR', 'REALIZAR', 'NAO_COMPARECEU', 'CORRIGIR']),
@@ -29,12 +48,13 @@ async function obterVisaoAgenda(id: string, tenantId: string, ator: 'ADMIN' | 'O
         include: { lead: { select: { id: true } } },
     });
     if (!atividade) return null;
-    const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT CURRENT_TIMESTAMP AS "now"`;
+    const agora = await obterAgoraBanco();
+    const rollout = await obterAgendaLifecycleRollout(tenantId, agora);
     const policy = obterAgendaPolicy({
         status: atividade.statusAgendamento,
         agendadoPara: atividade.agendadoPara,
         duracaoMinutos: atividade.duracao,
-        agora: clock.now,
+        agora,
         ator,
     });
     return {
@@ -43,8 +63,11 @@ async function obterVisaoAgenda(id: string, tenantId: string, ator: 'ADMIN' | 'O
         status: atividade.statusAgendamento,
         temporalPhase: policy.faseTemporal,
         version: atividade.versao,
-        allowedActions: policy.allowedActions,
-        blockedReasons: policy.reasonCode === 'ALLOWED' ? {} : { lifecycle: policy.reasonCode },
+        allowedActions: obterAcoesVisiveis(policy.allowedActions, rollout),
+        blockedReasons: !rollout.policyEnabled || policy.reasonCode === 'ALLOWED'
+            ? {} : { lifecycle: policy.reasonCode },
+        lifecyclePolicyEnabled: rollout.policyEnabled,
+        lifecycleCommandsEnabled: rollout.commandsEnabled,
         scheduledFor: atividade.agendadoPara,
         durationMinutes: atividade.duracao,
         responsibleId: atividade.corretorAtualId,
@@ -95,7 +118,8 @@ router.get('/', verificarAutenticacao, async (req, res) => {
         const nomeCorretorPorId = new Map(corretores.map(corretor => [corretor.id, corretor.nome]));
 
         // Formatar para FullCalendar / Frontend Standard
-        const agora = new Date();
+        const agora = await obterAgoraBanco();
+        const rollout = await obterAgendaLifecycleRollout(tenantId, agora);
         const atorPolicy = req.usuario?.papel === 'ADMIN' ? 'ADMIN' as const : 'OPERADOR' as const;
         const eventos = atividades.map(a => {
             const policy = obterAgendaPolicy({
@@ -125,8 +149,10 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                 statusConfirmacaoCorretor: a.statusConfirmacaoCorretor || null,
                 versao: a.versao,
                 faseTemporal: policy.faseTemporal,
-                allowedActions: policy.allowedActions,
-                policyReasonCode: policy.reasonCode,
+                allowedActions: obterAcoesVisiveis(policy.allowedActions, rollout),
+                policyReasonCode: rollout.policyEnabled ? policy.reasonCode : 'LEGACY_COMPATIBILITY',
+                lifecyclePolicyEnabled: rollout.policyEnabled,
+                lifecycleCommandsEnabled: rollout.commandsEnabled,
             },
             // Color coding básico
             backgroundColor:
@@ -346,13 +372,15 @@ router.get('/pendencias/vencidas', verificarAutenticacao, async (req, res) => {
     try {
         const tenantId = req.tenantId;
         if (!tenantId) return responderErro(res, 401, 'Não autorizado');
-        const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT CURRENT_TIMESTAMP AS "now"`;
+        const agora = await obterAgoraBanco();
+        const rollout = await obterAgendaLifecycleRollout(tenantId, agora);
+        if (!rollout.commandsEnabled) return res.json([]);
         const atividades = await prisma.atividade.findMany({
             where: {
                 lead: { tenantId },
                 tipo: { in: ['AVALIACAO', 'REUNIAO'] },
                 statusAgendamento: { in: ['PENDENTE', 'SOLICITADO', 'PROPOSTO', 'CONFIRMADO'] },
-                agendadoPara: { lt: clock.now },
+                agendadoPara: { lt: agora },
             },
             include: { lead: { select: { nome: true } } },
             orderBy: { agendadoPara: 'asc' },
@@ -361,11 +389,11 @@ router.get('/pendencias/vencidas', verificarAutenticacao, async (req, res) => {
         agendaLifecycleExpiredPending.set(atividades.length);
         const oldest = atividades[0]?.agendadoPara;
         agendaLifecycleOperationalQueueAgeSeconds.set(oldest
-            ? Math.max(0, Math.floor((clock.now.getTime() - oldest.getTime()) / 1_000)) : 0);
+            ? Math.max(0, Math.floor((agora.getTime() - oldest.getTime()) / 1_000)) : 0);
         return res.json(atividades.map((atividade) => {
             const policy = obterAgendaPolicy({
                 status: atividade.statusAgendamento, agendadoPara: atividade.agendadoPara,
-                duracaoMinutos: atividade.duracao, agora: clock.now, ator,
+                duracaoMinutos: atividade.duracao, agora, ator,
             });
             return {
                 id: atividade.id,
@@ -376,7 +404,7 @@ router.get('/pendencias/vencidas', verificarAutenticacao, async (req, res) => {
                 temporalPhase: policy.faseTemporal,
                 allowedActions: policy.allowedActions,
                 pendingAgeMinutes: atividade.agendadoPara
-                    ? Math.max(0, Math.floor((clock.now.getTime() - atividade.agendadoPara.getTime()) / 60_000))
+                    ? Math.max(0, Math.floor((agora.getTime() - atividade.agendadoPara.getTime()) / 60_000))
                     : 0,
                 responsibleId: atividade.corretorAtualId,
                 operationalReason: atividade.corretorAtualId ? 'OUTCOME_PENDING' : 'SPECIALIST_PENDING',
@@ -392,6 +420,10 @@ router.post('/:id/commands', verificarAutenticacao, async (req, res) => {
     try {
         const tenantId = req.tenantId;
         if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        const rollout = await obterAgendaLifecycleRollout(tenantId, await obterAgoraBanco());
+        if (!rollout.commandsEnabled) {
+            return responderErro(res, 404, 'AGENDA_LIFECYCLE_COMMANDS_DISABLED');
+        }
         const idempotencyKey = req.header('Idempotency-Key')?.trim();
         if (!idempotencyKey || idempotencyKey.length < 8 || idempotencyKey.length > 128) {
             return responderErro(res, 400, 'Idempotency-Key inválida');
