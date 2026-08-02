@@ -72,6 +72,26 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
     expect(await prisma.milestoneAgenda.findMany({ where: { atividadeId: atividadeA } })).toHaveLength(1);
   });
 
+  it('nao cancela compromisso quando o horario de inicio ja chegou', async () => {
+    await prisma.atividade.update({
+      where: { id: atividadeA },
+      data: { agendadoPara: new Date('2020-02-10T15:00:00Z') },
+    });
+    const result = await executarComandoAgenda({
+      ...base(),
+      operacao: 'CANCELAR',
+      ocorridoEm: new Date('2027-02-10T15:00:00Z'),
+    });
+
+    expect(result).toMatchObject({ success: false, reasonCode: 'APPOINTMENT_STARTED' });
+    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } })).toMatchObject({
+      statusAgendamento: 'CONFIRMADO',
+      versao: 0,
+      canceladoEm: null,
+    });
+    expect(await prisma.milestoneAgenda.count({ where: { atividadeId: atividadeA } })).toBe(0);
+  });
+
   it('atravessa o caminho humano real API -> comando -> PostgreSQL', async () => {
     const app = express();
     app.use(express.json());
@@ -95,10 +115,10 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
     expect(result).toMatchObject({ success: true, reasonCode: 'RESCHEDULED', leadStatus: 'VISITA_AGENDADA' });
     const original = await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeA } });
     expect(original).toMatchObject({
-      statusAgendamento: 'CANCELADO', statusConfirmacaoCorretor: 'REMANEJADO',
+      statusAgendamento: 'SUBSTITUIDO', statusConfirmacaoCorretor: 'REMANEJADO',
       substituidaPorId: result.atividadeResultanteId, versao: 1,
     });
-    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: result.atividadeResultanteId } })).toMatchObject({ statusAgendamento: 'PENDENTE', versao: 0 });
+    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: result.atividadeResultanteId } })).toMatchObject({ statusAgendamento: 'SOLICITADO', versao: 0 });
     expect((await prisma.milestoneAgenda.findFirstOrThrow({ where: { atividadeId: atividadeA } })).tipo).toBe('VISITA_REAGENDADA');
   });
 
@@ -151,7 +171,7 @@ describe('B16 - coerencia atomica entre agenda e estado comercial', () => {
     const moved = await executarComandoAgenda({ ...base(), operacao: 'REAGENDAR', novoHorario: new Date('2027-02-12T16:00:00Z') });
     const stale = await executarComandoAgenda({ ...base(), expectedVersion: 1, operacao: 'CANCELAR' });
     expect(stale.reasonCode).toBe('ACTIVITY_ALREADY_REPLACED');
-    expect((await prisma.atividade.findUniqueOrThrow({ where: { id: moved.atividadeResultanteId } })).statusAgendamento).toBe('PENDENTE');
+    expect((await prisma.atividade.findUniqueOrThrow({ where: { id: moved.atividadeResultanteId } })).statusAgendamento).toBe('SOLICITADO');
   });
 
   it('no-show atrasado nao regride estado comercial mais avancado', async () => {

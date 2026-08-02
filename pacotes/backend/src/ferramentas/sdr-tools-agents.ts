@@ -1106,15 +1106,9 @@ O backend resolverá datas relativas de forma determinística em America/Sao_Pau
                     policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION, ocorridoEm: new Date(),
                     expectedVersion: atividadeAberta.versao, novoHorario: agendadoPara,
                     novoTitulo: `Atendimento reagendado — ${dataHoraConfirmada}`, novaDescricao: descricaoAtividade,
+                    responsavelId: especialista.usuarioId || undefined,
                 });
                 if (!result.success) return JSON.stringify({ success: false, reasonCode: result.reasonCode });
-                await prisma.atividade.update({
-                    where: { id: atividadeAberta.id },
-                    data: {
-                        corretorOriginalId: especialista.usuarioId || undefined,
-                        corretorAtualId: especialista.usuarioId || undefined,
-                    }
-                });
             } else {
                 const criacaoLocal = await prisma.$transaction(async (tx: any) => {
                     const leadAtual = await tx.lead.findFirst({ where: { id: leadId, tenantId }, select: { status: true } });
@@ -1214,12 +1208,14 @@ REGRA ABSOLUTA: nunca afirme que o agendamento foi cancelado antes de esta tool 
             return JSON.stringify({ success: false, reasonCode: 'TRUSTED_REQUEST_ID_REQUIRED' });
         }
 
+        const agora = new Date();
         const atividadeAtiva = await prisma.atividade.findFirst({
             where: {
                 leadId: args.contatoId,
                 tipo: { in: ['REUNIAO', 'AVALIACAO'] },
                 completadoEm: null,
                 statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
+                agendadoPara: { gt: agora },
                 lead: { tenantId },
             },
             orderBy: { agendadoPara: 'asc' },
@@ -1227,6 +1223,26 @@ REGRA ABSOLUTA: nunca afirme que o agendamento foi cancelado antes de esta tool 
         });
 
         if (!atividadeAtiva) {
+            const atividadeIniciada = await prisma.atividade.findFirst({
+                where: {
+                    leadId: args.contatoId,
+                    tipo: { in: ['REUNIAO', 'AVALIACAO'] },
+                    completadoEm: null,
+                    statusAgendamento: { in: ['PENDENTE', 'CONFIRMADO'] },
+                    agendadoPara: { lte: agora },
+                    lead: { tenantId },
+                },
+                orderBy: { agendadoPara: 'desc' },
+                select: { id: true, agendadoPara: true },
+            });
+            if (atividadeIniciada) {
+                return JSON.stringify({
+                    success: false,
+                    reasonCode: 'APPOINTMENT_STARTED',
+                    atividadeId: atividadeIniciada.id,
+                    error: 'O horÃ¡rio desse atendimento jÃ¡ chegou ou passou. NÃ£o diga ao lead que ele foi cancelado; encaminhe para registrar o resultado ou para atendimento humano.',
+                });
+            }
             const atividadeCancelada = await prisma.atividade.findFirst({
                 where: {
                     leadId: args.contatoId,

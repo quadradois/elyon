@@ -22,7 +22,36 @@ export interface EventoAgenda {
         especialistaNome?: string | null;
         statusConfirmacaoCorretor?: string | null;
         versao: number;
+        faseTemporal?: 'FUTURO' | 'INICIADO' | 'ENCERRADO' | null;
+        allowedActions?: Array<'CANCELAR' | 'REAGENDAR' | 'REALIZAR' | 'NAO_COMPARECEU' | 'CORRIGIR'>;
+        policyReasonCode?: string;
     };
+}
+
+export type AgendaCommandName = 'SOLICITAR' | 'PROPOR' | 'RECUSAR' | 'CONFIRMAR_ATRIBUICAO' | 'CANCELAR'
+    | 'REAGENDAR' | 'REALIZAR' | 'NAO_COMPARECEU' | 'CORRIGIR';
+
+export async function executarComandoAgenda(
+    id: string,
+    payload: {
+        command: AgendaCommandName;
+        expectedVersion: number;
+        reasonCode: string;
+        channel?: 'WHATSAPP' | 'PAINEL' | 'LINK_PUBLICO' | 'JOB' | 'INTEGRACAO';
+        scheduledFor?: Date;
+        responsibleId?: string;
+        justification?: string;
+        correctedStatus?: 'REALIZADO' | 'NAO_COMPARECEU' | 'CANCELADO';
+        leadManifestation?: 'HORARIO_ESCOLHIDO' | 'HORARIO_ACEITO';
+    },
+    idempotencyKey = crypto.randomUUID(),
+) {
+    const response = await api.post(`/agenda/${id}/commands`, {
+        ...payload,
+        channel: payload.channel || 'PAINEL',
+        scheduledFor: payload.scheduledFor?.toISOString(),
+    }, { headers: { 'Idempotency-Key': idempotencyKey } });
+    return response.data;
 }
 
 export const agendaService = {
@@ -35,6 +64,15 @@ export const agendaService = {
             start: new Date(evt.start),
             end: new Date(evt.end)
         }));
+    },
+
+    listarPendenciasVencidas: async (): Promise<Array<{
+        id: string; leadNome: string; scheduledFor: string; status: string; version: number;
+        temporalPhase: 'INICIADO' | 'ENCERRADO'; allowedActions: string[];
+        pendingAgeMinutes: number; responsibleId?: string | null; operationalReason: string;
+    }>> => {
+        const response = await api.get('/agenda/pendencias/vencidas');
+        return response.data;
     },
 
     criarBloqueio: async (inicio: Date, fim: Date, motivo: string) => {
@@ -62,30 +100,30 @@ export const agendaService = {
         id: string,
         payload: { motivo?: string; avisarCliente?: boolean; requestId: string; expectedVersion: number }
     ): Promise<{ sucesso: boolean; mensagem: string }> => {
-        const response = await api.post(`/agenda/${id}/cancelar`, payload);
-        return response.data;
+        return executarComandoAgenda(id, {
+            command: 'CANCELAR', expectedVersion: payload.expectedVersion,
+            reasonCode: payload.motivo || 'Cancelamento pelo operador',
+        }, payload.requestId);
     },
 
     reagendarAgendamento: async (
         id: string,
         payload: { novoHorario: Date; motivo?: string; avisarCliente?: boolean; requestId: string; expectedVersion: number }
     ): Promise<{ sucesso: boolean; mensagem: string }> => {
-        const response = await api.post(`/agenda/${id}/reagendar`, {
-            ...payload,
-            novoHorario: payload.novoHorario.toISOString(),
-        });
-        return response.data;
+        return executarComandoAgenda(id, {
+            command: 'REAGENDAR', expectedVersion: payload.expectedVersion,
+            reasonCode: payload.motivo || 'Reagendamento pelo operador', scheduledFor: payload.novoHorario,
+        }, payload.requestId);
     },
 
     proporNovoHorario: async (
         id: string,
-        payload: { horarioProposto: Date; mensagem?: string }
+        payload: { horarioProposto: Date; mensagem?: string; expectedVersion?: number }
     ): Promise<{ sucesso: boolean; mensagem: string }> => {
-        const response = await api.post(`/agenda/${id}/propor-horario`, {
-            ...payload,
-            horarioProposto: payload.horarioProposto.toISOString(),
+        return executarComandoAgenda(id, {
+            command: 'PROPOR', expectedVersion: payload.expectedVersion || 0,
+            reasonCode: payload.mensagem || 'Proposta de horário', scheduledFor: payload.horarioProposto,
         });
-        return response.data;
     },
 
     listarBloqueios: async (): Promise<Array<{
