@@ -1,4 +1,4 @@
-import { createAgendaTestClock } from '../../../test/helpers/agenda-clock';
+import { createAgendaTestClock } from './helpers/agenda-clock';
 import { avaliarAgendaPolicy } from '../agenda-policy';
 
 describe('coerencia temporal dos comandos de Agenda', () => {

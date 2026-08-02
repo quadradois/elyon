@@ -8,6 +8,7 @@ ALTER TABLE "efeitos_agenda_outbox" ADD COLUMN IF NOT EXISTS "correlationId" TEX
 ALTER TABLE "efeitos_agenda_outbox" ADD COLUMN IF NOT EXISTS "destinatarioTipo" TEXT NOT NULL DEFAULT 'LEAD';
 ALTER TABLE "efeitos_agenda_outbox" ADD COLUMN IF NOT EXISTS "usuarioDestinoId" TEXT;
 ALTER TABLE "efeitos_agenda_outbox" DROP CONSTRAINT IF EXISTS "efeitos_agenda_outbox_chaveComando_key";
+DROP INDEX IF EXISTS "efeitos_agenda_outbox_chaveComando_key";
 
 CREATE INDEX IF NOT EXISTS "atividades_lead_status_agendado_idx"
   ON "atividades"("leadId", "statusAgendamento", "agendadoPara");

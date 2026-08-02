@@ -1,4 +1,4 @@
-import { createAgendaTestClock } from '../../../test/helpers/agenda-clock';
+import { createAgendaTestClock } from './helpers/agenda-clock';
 import { avaliarAgendaPolicy, obterAgendaPolicy } from '../agenda-policy';
 
 const inicio = new Date('2026-08-03T11:01:00.000Z');
