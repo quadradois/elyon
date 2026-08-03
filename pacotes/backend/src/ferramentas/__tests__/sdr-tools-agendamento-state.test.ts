@@ -21,6 +21,9 @@ const mockPrisma = {
     create: jest.fn(),
     update: jest.fn(),
   },
+  usuario: {
+    findUnique: jest.fn(),
+  },
   $transaction: jest.fn((callback: any) => callback(tx)),
 };
 
@@ -60,7 +63,12 @@ jest.mock('../../servicos/google-calendar', () => ({
   },
 }));
 
-import { agendarReuniaoCloserTool, cancelarAgendamentoTool, enviarLinkAgendamentoTool } from '../sdr-tools-agents';
+import {
+  agendarReuniaoCloserTool,
+  cancelarAgendamentoTool,
+  consultarStatusAgendamentoTool,
+  enviarLinkAgendamentoTool,
+} from '../sdr-tools-agents';
 
 describe('agendamento SDR — regressão de estado e fallback', () => {
   beforeEach(() => {
@@ -68,6 +76,7 @@ describe('agendamento SDR — regressão de estado e fallback', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-31T22:00:00.000Z'));
     mockPrisma.$transaction.mockImplementation((callback: any) => callback(tx));
     mockPrisma.atividade.findFirst.mockResolvedValue(null);
+    mockPrisma.usuario.findUnique.mockResolvedValue({ nome: 'Guilherme' });
     mockPrisma.lead.findFirst.mockResolvedValue({ status: 'NOVO' });
     mockPrisma.atividade.create.mockResolvedValue({ id: 'nota-tool-1' });
     tx.atividade.create.mockResolvedValue({ id: 'atividade-agenda-1' });
@@ -217,6 +226,72 @@ describe('agendamento SDR — regressão de estado e fallback', () => {
       expectedVersion: 3,
       requestIdentity: { source: 'INBOUND_BATCH', id: 'inbound-batch:lote-cancel-1:agenda-cancel' },
     }));
+  });
+
+  it('consulta no banco um agendamento confirmado e retorna os dados canônicos', async () => {
+    mockPrisma.lead.findUnique.mockResolvedValueOnce({ id: 'lead-agenda-123', tenantId: 'tenant-1' });
+    mockPrisma.atividade.findFirst.mockResolvedValueOnce({
+      id: 'atividade-agenda-1',
+      tipo: 'REUNIAO',
+      agendadoPara: new Date('2026-08-03T13:00:00.000Z'),
+      statusAgendamento: 'CONFIRMADO',
+      statusConfirmacaoCorretor: 'CONFIRMADO',
+      corretorAtualId: 'usuario-especialista-1',
+      corretorOriginalId: null,
+      canceladoEm: null,
+      motivoCancelamento: null,
+    });
+
+    const raw = await (consultarStatusAgendamentoTool as any).execute({
+      contatoId: 'lead-agenda-123',
+    }, { context: { tenantId: 'tenant-1' } });
+
+    expect(JSON.parse(raw)).toMatchObject({
+      success: true,
+      temAgendamentoAtivo: true,
+      situacao: 'CONFIRMADO',
+      agendamento: {
+        atividadeId: 'atividade-agenda-1',
+        statusAgendamento: 'CONFIRMADO',
+        especialistaNome: 'Guilherme',
+        tipoAtendimento: 'ligacao_telefonica',
+      },
+    });
+    expect(mockPrisma.atividade.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ lead: { tenantId: 'tenant-1' } }),
+    }));
+  });
+
+  it('informa pelo banco que o último agendamento está cancelado', async () => {
+    mockPrisma.lead.findUnique.mockResolvedValueOnce({ id: 'lead-agenda-123', tenantId: 'tenant-1' });
+    mockPrisma.atividade.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'atividade-agenda-1',
+        tipo: 'REUNIAO',
+        agendadoPara: new Date('2026-08-03T12:00:00.000Z'),
+        statusAgendamento: 'CANCELADO',
+        statusConfirmacaoCorretor: 'CONFIRMADO',
+        corretorAtualId: 'usuario-especialista-1',
+        corretorOriginalId: null,
+        canceladoEm: new Date('2026-08-02T15:00:00.000Z'),
+        motivoCancelamento: 'Solicitação do lead',
+      });
+
+    const raw = await (consultarStatusAgendamentoTool as any).execute({
+      contatoId: 'lead-agenda-123',
+    }, { context: { tenantId: 'tenant-1' } });
+
+    expect(JSON.parse(raw)).toMatchObject({
+      success: true,
+      temAgendamentoAtivo: false,
+      situacao: 'CANCELADO',
+      ultimoAgendamento: {
+        statusAgendamento: 'CANCELADO',
+        especialistaNome: 'Guilherme',
+        motivoCancelamento: 'Solicitação do lead',
+      },
+    });
   });
 
   it('não confirma cancelamento quando o comando transacional falha', async () => {

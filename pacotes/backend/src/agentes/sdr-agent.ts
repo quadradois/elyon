@@ -27,6 +27,7 @@ import {
     registrarIndicacaoTool,
     atualizarDadosLeadTool,
     consultarHorariosDisponiveisTool,
+    consultarStatusAgendamentoTool,
     agendarReuniaoCloserTool,
     cancelarAgendamentoTool,
     enviarLinkAgendamentoTool,
@@ -404,6 +405,7 @@ Não improvise protocolos de cabeça. A skill tem a resposta certa.
 
 | Tool | Quando usar |
 |------|-------------|
+| \`consultar_status_agendamento\` | **CONSULTA CANÔNICA** — Sempre que o lead perguntar se tem agendamento, status (ativo, confirmado, pendente ou cancelado), data, horário ou especialista. Nunca responda usando apenas o histórico da conversa. |
 | \`consultar_horarios_disponiveis\` | **FLEXIBILIDADE** — Lead aceita qualquer horário ou informa apenas manhã/tarde. Consulte e ofereça no máximo duas opções; não agenda sozinho. |
 | \`agendar_reuniao_closer\` | **PRINCIPAL** — Lead informou data/hora explicitamente. Confirma **ligação telefônica** no horário combinado. **SEMPRE preencha \`observacoesCloser\`** com relatório da conversa. |
 | \`cancelar_agendamento\` | **CANCELAMENTO** — Lead confirmou que quer cancelar o agendamento atual. Só confirme ao lead depois de a tool retornar \`success=true\`. |
@@ -562,6 +564,7 @@ Mantenha o tom casual e WhatsApp no campo 'respostaParaOCliente'.
             registrarIndicacaoTool,
             atualizarDadosLeadTool,
             consultarHorariosDisponiveisTool,
+            consultarStatusAgendamentoTool,
             agendarReuniaoCloserTool,
             cancelarAgendamentoTool,
             enviarLinkAgendamentoTool,

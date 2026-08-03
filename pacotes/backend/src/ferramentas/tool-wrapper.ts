@@ -347,6 +347,7 @@ export type TipoEfeitoTool = 'READ_ONLY' | 'POSTGRES_MUTATION' | 'EXTERNAL_EFFEC
 const TIPOS_EFEITO_TOOL: Record<string, TipoEfeitoTool> = {
     consultar_preco_mercado: 'READ_ONLY',
     consultar_horarios_disponiveis: 'READ_ONLY',
+    consultar_status_agendamento: 'READ_ONLY',
     qualificar_lead: 'POSTGRES_MUTATION',
     registrar_optout: 'POSTGRES_MUTATION',
     converter_para_lead: 'POSTGRES_MUTATION',

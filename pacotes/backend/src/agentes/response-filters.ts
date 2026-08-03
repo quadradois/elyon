@@ -79,14 +79,41 @@ function aplicarGuardrailConfirmacaoAgenda(resposta: string, nomesToolsSucessoTu
   return resposta;
 }
 
+function leadPerguntouStatusAgenda(ultimaMsgLead?: string): boolean {
+  const texto = normalizarTexto(ultimaMsgLead || '');
+  if (!texto || !/agendamento|atendimento|reuniao|ligacao/.test(texto)) return false;
+
+  return /\bstatus\b/.test(texto)
+    || /\b(?:tenho|ha|existe|possuo)\b.{0,35}\bagendamento\b/.test(texto)
+    || /\bagendamento\b.{0,45}\b(?:ativo|confirmado|cancelado|pendente|solicitado)\b/.test(texto)
+    || /\b(?:esta|foi|ficou)\b.{0,25}\b(?:ativo|confirmado|cancelado|pendente)\b/.test(texto)
+    || /\b(?:qual|quando)\b.{0,45}\b(?:dia|data|horario|especialista|corretor)\b/.test(texto)
+    || /\b(?:dia|data|horario|especialista|corretor)\b.{0,45}\bagendamento\b/.test(texto)
+    || /\bquem\b.{0,35}\b(?:vai\s+me\s+ligar|especialista|corretor)\b/.test(texto);
+}
+
+function aplicarGuardrailConsultaStatusAgenda(
+  resposta: string,
+  nomesToolsSucessoTurno: string[],
+  ultimaMsgLead?: string,
+): string {
+  const consultouViaTool = nomesToolsSucessoTurno.some((nome) => /consultar_status_agendamento/i.test(nome));
+  if (leadPerguntouStatusAgenda(ultimaMsgLead) && !consultouViaTool) {
+    return 'Ainda não consultei o status atualizado no sistema. Vou verificar antes de te confirmar.';
+  }
+  return resposta;
+}
+
 function aplicarGuardrailCancelamentoAgenda(resposta: string, nomesToolsSucessoTurno: string[]): string {
   const normalizada = normalizarTexto(resposta);
-  const cancelouViaTool = nomesToolsSucessoTurno.some((nome) => /cancelar_agendamento/i.test(nome));
+  const possuiEvidenciaViaTool = nomesToolsSucessoTurno.some(
+    (nome) => /cancelar_agendamento|consultar_status_agendamento/i.test(nome)
+  );
   const alegaCancelamento =
     /(?:agendamento|horario|atendimento).{0,45}(?:foi|esta|ficou).{0,20}cancelad/.test(normalizada)
     || /(?:ja\s+)?cancelei|cancelamento.{0,30}(?:feito|concluido|confirmado)/.test(normalizada);
 
-  if (!cancelouViaTool && alegaCancelamento) {
+  if (!possuiEvidenciaViaTool && alegaCancelamento) {
     return 'Ainda não consegui registrar o cancelamento no sistema. Você confirma que deseja cancelar o agendamento atual?';
   }
   return resposta;
@@ -146,6 +173,12 @@ export function aplicarFiltrosRespostaOrchestrator(
   if (respostaAntesGuardrailAgenda !== respostaLimpa) {
     logger.warn('[ORCHESTRATOR] Guardrail bloqueou confirmação de agenda sem registro via tool.');
     fallbackAplicado = 'AGENDA_CONFIRMATION_GUARD';
+  }
+  const respostaAntesGuardrailConsultaAgenda = respostaLimpa;
+  respostaLimpa = aplicarGuardrailConsultaStatusAgenda(respostaLimpa, nomesToolsSucessoTurno, ultimaMsgLead);
+  if (respostaAntesGuardrailConsultaAgenda !== respostaLimpa) {
+    logger.warn('[ORCHESTRATOR] Guardrail bloqueou resposta de status de agenda sem consulta ao banco.');
+    fallbackAplicado = 'AGENDA_STATUS_GUARD';
   }
   const respostaAntesGuardrailCancelamento = respostaLimpa;
   respostaLimpa = aplicarGuardrailCancelamentoAgenda(respostaLimpa, nomesToolsSucessoTurno);
