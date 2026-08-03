@@ -231,14 +231,24 @@ async function garantirAtualizacaoLeadBasicaSeElegivel(params: {
   contatoId: string;
   leadId: string;
   textoConversa: string;
+  ferramentasExecutadasComSucesso?: string[];
 }) {
-  const houveTool = await houveExecucaoToolRecente(params.leadId, 120);
+  const houveToolSucessoNoTurno = (params.ferramentasExecutadasComSucesso?.length || 0) > 0;
+  const houveTool = houveToolSucessoNoTurno
+    ? false
+    : await houveExecucaoToolRecente(params.leadId, 120);
   const podeAtualizar = deveExecutarFallbackAtualizacaoLead({
     leadId: params.leadId,
+    houveToolSucessoNoTurno,
     houveToolExecRecente: houveTool,
     textoConversa: params.textoConversa,
   });
-  if (!podeAtualizar) return;
+  if (!podeAtualizar) {
+    if (houveToolSucessoNoTurno) {
+      console.info(`[OBS] lead_update_fallback_skipped leadId=${params.leadId} reason=tool_success tools=${params.ferramentasExecutadasComSucesso!.join(',')}`);
+    }
+    return;
+  }
 
   const deteccao = detectarInteresseVendaLocacao(params.textoConversa);
 
@@ -1791,7 +1801,8 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         await garantirAtualizacaoLeadBasicaSeElegivel({
                           contatoId: leadIdCanonico,
                           leadId: leadIdAtualizado,
-                          textoConversa: textoConsolidado
+                          textoConversa: textoConsolidado,
+                          ferramentasExecutadasComSucesso: resultado.ferramentasExecutadasComSucesso,
                         });
                       }
 

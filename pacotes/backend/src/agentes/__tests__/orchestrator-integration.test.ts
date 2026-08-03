@@ -698,3 +698,37 @@ describe('Cenário 10: Migração de agente legado', () => {
         expect(result.agenteUsado).toBe('SDR');
     });
 });
+
+describe('Evidência de tools para consumidores do orquestrador', () => {
+    it('propaga tool somente leitura bem-sucedida para impedir fallback mutável no webhook', async () => {
+        mockRunResult = {
+            finalOutput: 'Não há agendamento ativo no momento.',
+            lastAgent: { name: 'sdr_agent_v1' },
+            history: [],
+            newItems: [
+                {
+                    type: 'tool_call_item',
+                    rawItem: { name: 'consultar_status_agendamento', callId: 'call-status-1' },
+                },
+                {
+                    type: 'tool_call_output_item',
+                    rawItem: {
+                        name: 'consultar_status_agendamento',
+                        callId: 'call-status-1',
+                        output: JSON.stringify({ success: true, temAgendamentoAtivo: false }),
+                    },
+                },
+            ],
+        };
+
+        const result = await processarMensagemOrquestrada(
+            [{ role: 'user', content: 'Veja se tenho um agendamento ativo' }],
+            CONFIG_BASE,
+            CONTEXTO_NOVO,
+        );
+
+        expect(result.sucesso).toBe(true);
+        expect(result.ferramentasExecutadas).toEqual(['consultar_status_agendamento']);
+        expect(result.ferramentasExecutadasComSucesso).toEqual(['consultar_status_agendamento']);
+    });
+});
