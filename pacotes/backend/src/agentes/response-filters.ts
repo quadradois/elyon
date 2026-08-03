@@ -3,6 +3,7 @@ import type { EstadoConversa } from './conversation-state';
 import type { TipoAgente } from './agent-chain';
 import { sanitizarRespostaParaCliente } from './client-response-sanitizer';
 import { logger } from '../lib/logger';
+import { ehConsultaStatusAgendamento } from '../servicos/intencao-status-agendamento';
 
 interface AplicarFiltrosRespostaParams {
   respostaFinal: string;
@@ -79,26 +80,13 @@ function aplicarGuardrailConfirmacaoAgenda(resposta: string, nomesToolsSucessoTu
   return resposta;
 }
 
-function leadPerguntouStatusAgenda(ultimaMsgLead?: string): boolean {
-  const texto = normalizarTexto(ultimaMsgLead || '');
-  if (!texto || !/agendamento|atendimento|reuniao|ligacao/.test(texto)) return false;
-
-  return /\bstatus\b/.test(texto)
-    || /\b(?:tenho|ha|existe|possuo)\b.{0,35}\bagendamento\b/.test(texto)
-    || /\bagendamento\b.{0,45}\b(?:ativo|confirmado|cancelado|pendente|solicitado)\b/.test(texto)
-    || /\b(?:esta|foi|ficou)\b.{0,25}\b(?:ativo|confirmado|cancelado|pendente)\b/.test(texto)
-    || /\b(?:qual|quando)\b.{0,45}\b(?:dia|data|horario|especialista|corretor)\b/.test(texto)
-    || /\b(?:dia|data|horario|especialista|corretor)\b.{0,45}\bagendamento\b/.test(texto)
-    || /\bquem\b.{0,35}\b(?:vai\s+me\s+ligar|especialista|corretor)\b/.test(texto);
-}
-
 function aplicarGuardrailConsultaStatusAgenda(
   resposta: string,
   nomesToolsSucessoTurno: string[],
   ultimaMsgLead?: string,
 ): string {
   const consultouViaTool = nomesToolsSucessoTurno.some((nome) => /consultar_status_agendamento/i.test(nome));
-  if (leadPerguntouStatusAgenda(ultimaMsgLead) && !consultouViaTool) {
+  if (ehConsultaStatusAgendamento(ultimaMsgLead) && !consultouViaTool) {
     return 'Ainda não consultei o status atualizado no sistema. Vou verificar antes de te confirmar.';
   }
   return resposta;

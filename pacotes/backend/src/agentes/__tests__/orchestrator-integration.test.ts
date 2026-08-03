@@ -63,6 +63,13 @@ jest.mock('../../lib/db', () => ({
             findUnique: jest.fn().mockResolvedValue(null),
             update: jest.fn().mockResolvedValue(null),
         },
+        atividade: {
+            findMany: jest.fn().mockResolvedValue([]),
+            findFirst: jest.fn().mockResolvedValue(null),
+        },
+        usuario: {
+            findUnique: jest.fn().mockResolvedValue(null),
+        },
         conversa: {
             updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         },
@@ -730,5 +737,73 @@ describe('Evidência de tools para consumidores do orquestrador', () => {
         expect(result.sucesso).toBe(true);
         expect(result.ferramentasExecutadas).toEqual(['consultar_status_agendamento']);
         expect(result.ferramentasExecutadasComSucesso).toEqual(['consultar_status_agendamento']);
+    });
+
+    it('consulta o banco deterministicamente quando o modelo ignora a tool de status', async () => {
+        mockRunResult = {
+            finalOutput: 'Pelo histórico, seu agendamento ainda está ativo.',
+            lastAgent: { name: 'sdr_agent_v1' },
+            history: [],
+            newItems: [],
+        };
+        (prisma.lead.findUnique as jest.Mock).mockResolvedValue({
+            id: 'lead-integ-001',
+            tenantId: 'tenant-test-001',
+        });
+        (prisma.atividade.findFirst as jest.Mock)
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({
+                id: 'agenda-cancelada-1',
+                tipo: 'REUNIAO',
+                agendadoPara: new Date('2026-08-03T12:00:00.000Z'),
+                statusAgendamento: 'CANCELADO',
+                statusConfirmacaoCorretor: 'CANCELADO',
+                corretorAtualId: null,
+                corretorOriginalId: null,
+                canceladoEm: new Date('2026-08-02T20:00:00.000Z'),
+                motivoCancelamento: 'Solicitação do lead',
+            });
+
+        const result = await processarMensagemOrquestrada(
+            [{ role: 'user', content: 'Veja se tenho algum agendamento ativo!' }],
+            CONFIG_BASE,
+            CONTEXTO_NOVO,
+        );
+
+        expect(result.sucesso).toBe(true);
+        expect(result.resposta).toContain('não possui agendamento ativo');
+        expect(result.resposta).toContain('consta como cancelado');
+        expect(result.resposta).not.toContain('ainda está ativo');
+        expect(result.ferramentasExecutadas).toEqual(['consultar_status_agendamento']);
+        expect(result.ferramentasExecutadasComSucesso).toEqual(['consultar_status_agendamento']);
+        for (const [updateArgs] of (prisma.lead.update as jest.Mock).mock.calls) {
+            expect(updateArgs.data).not.toHaveProperty('situacaoAtual');
+            expect(updateArgs.data).not.toHaveProperty('statusProspeccao');
+            expect(updateArgs.data).not.toHaveProperty('temperatura');
+            expect(updateArgs.data).not.toHaveProperty('interesse');
+        }
+
+        (prisma.atividade.findFirst as jest.Mock)
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({
+                id: 'agenda-cancelada-1',
+                tipo: 'REUNIAO',
+                agendadoPara: new Date('2026-08-03T12:00:00.000Z'),
+                statusAgendamento: 'CANCELADO',
+                statusConfirmacaoCorretor: 'CANCELADO',
+                corretorAtualId: null,
+                corretorOriginalId: null,
+                canceladoEm: new Date('2026-08-02T20:00:00.000Z'),
+                motivoCancelamento: 'Solicitação do lead',
+            });
+        const repeticao = await processarMensagemOrquestrada(
+            [
+                { role: 'assistant', content: result.resposta! },
+                { role: 'user', content: 'Veja novamente se tenho algum agendamento ativo.' },
+            ],
+            CONFIG_BASE,
+            CONTEXTO_NOVO,
+        );
+        expect(repeticao.resposta).toBe(result.resposta);
     });
 });

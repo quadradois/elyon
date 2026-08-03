@@ -65,6 +65,11 @@ import { isLearningBankEnabled, isPaolAbEnabled, isPaolShadowEnabled } from './f
 import { gerarInstrucaoPaol, paolPolicyService, type PaolDecision, type PaolModoExecucao } from './paol-policy';
 import { RegistrarOptoutUseCase } from '../casos-de-uso/agentes/registrar-optout.usecase';
 import type { RagFact } from './rag-facts-context';
+import {
+    consultarStatusAgendamentoCanonico,
+    formatarRespostaStatusAgendamento,
+} from '../servicos/consulta-status-agendamento';
+import { ehConsultaStatusAgendamento } from '../servicos/intencao-status-agendamento';
 
 // Re-exports para consumidores existentes (webhook.ts, sdr-tools-agents.ts)
 export { buscarConfiguracaoTenant, buscarContextoConversa, resolverLeadIdCanonico } from './orchestrator-queries';
@@ -723,7 +728,55 @@ Use isso como desempate estratégico na próxima ação.`;
         let respostaLimpa = filtroResposta.respostaLimpa;
         fallbackAplicado = filtroResposta.fallbackAplicado;
 
-        if (respostaRepetePerguntaCritica(respostaLimpa, mensagens)) {
+        // A escolha de tools pelo modelo não é uma garantia. Quando o guardrail
+        // reconhece uma consulta de agenda sem evidência da tool, executamos a
+        // mesma consulta canônica de forma determinística e somente leitura.
+        if (fallbackAplicado === 'AGENDA_STATUS_GUARD') {
+            const leadIdConsulta = contexto.leadId || contexto.contatoId;
+            if (leadIdConsulta) {
+                const inicioConsulta = Date.now();
+                try {
+                    await contexto.assertFencing?.();
+                    const statusAgendamento = await consultarStatusAgendamentoCanonico({
+                        leadId: leadIdConsulta,
+                        tenantId: config.tenantId,
+                    });
+                    await contexto.assertFencing?.();
+
+                    nomesToolsTurno = [...new Set([...nomesToolsTurno, 'consultar_status_agendamento'])];
+                    if (statusAgendamento.success) {
+                        nomesToolsSucessoTurno = [...new Set([
+                            ...nomesToolsSucessoTurno,
+                            'consultar_status_agendamento',
+                        ])];
+                        respostaLimpa = formatarRespostaStatusAgendamento(statusAgendamento);
+                        fallbackAplicado = 'AGENDA_STATUS_DETERMINISTIC_QUERY';
+                    }
+
+                    logger[statusAgendamento.success ? 'info' : 'warn']({
+                        tool: 'consultar_status_agendamento',
+                        fase: 'fallback-deterministico',
+                        result: {
+                            success: statusAgendamento.success,
+                            reasonCode: statusAgendamento.reasonCode,
+                            situacao: statusAgendamento.situacao,
+                        },
+                        duracaoMs: Date.now() - inicioConsulta,
+                    }, `[TOOL_AUDIT] consultar_status_agendamento ${statusAgendamento.success ? 'OK' : 'FALHOU'} (${Date.now() - inicioConsulta}ms)`);
+                } catch (error) {
+                    logger.error({
+                        tool: 'consultar_status_agendamento',
+                        fase: 'fallback-deterministico',
+                        erro: error instanceof Error ? error.message : error,
+                        duracaoMs: Date.now() - inicioConsulta,
+                    }, '[TOOL_AUDIT] consultar_status_agendamento ERRO no fallback determinístico');
+                }
+            }
+        }
+
+        const respondeuConsultaStatusCanonica = ehConsultaStatusAgendamento(ultimaMsgLeadTexto)
+            && nomesToolsSucessoTurno.includes('consultar_status_agendamento');
+        if (!respondeuConsultaStatusCanonica && respostaRepetePerguntaCritica(respostaLimpa, mensagens)) {
             logger.warn('[ORCHESTRATOR] ⚠️ Guarda anti-repetição acionada. Resposta repetia pergunta crítica já feita.');
             fallbackAplicado = 'ANTI_REPEAT_GUARD';
 
