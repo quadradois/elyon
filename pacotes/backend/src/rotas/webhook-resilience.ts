@@ -1,3 +1,5 @@
+import { ehConsultaStatusAgendamento } from '../servicos/intencao-status-agendamento';
+
 export const STATUS_ELEGIVEIS_AUTO_RETORNO_IA = new Set(['DOCUMENTACAO', 'EM_NEGOCIACAO', 'ONBOARDING']);
 
 export function extrairSinaisNegociacaoHumana(texto: string): {
@@ -42,6 +44,7 @@ export function deveExecutarFallbackAtualizacaoLead(params: {
   textoConversa: string;
 }): boolean {
   if (!params.leadId) return false;
+  if (ehConsultaStatusAgendamento(params.textoConversa)) return false;
   if (params.houveToolSucessoNoTurno) return false;
   if (params.houveToolExecRecente) return false;
   return (params.textoConversa || '').trim().length >= 8;

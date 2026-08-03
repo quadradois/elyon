@@ -53,5 +53,12 @@ describe('webhook-resilience', () => {
       houveToolExecRecente: false,
       textoConversa: 'veja se tenho um agendamento ativo',
     })).toBe(false);
+
+    expect(deveExecutarFallbackAtualizacaoLead({
+      leadId: 'lead-1',
+      houveToolSucessoNoTurno: false,
+      houveToolExecRecente: false,
+      textoConversa: 'Veja se tenho algum agendamento ativo!',
+    })).toBe(false);
   });
 });
