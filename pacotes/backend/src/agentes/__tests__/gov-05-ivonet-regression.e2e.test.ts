@@ -32,6 +32,10 @@ describe('GOV-05 — Regressão E2E Ivonet', () => {
     jest.clearAllMocks();
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('limpa vazamento interno e mantém apenas texto para cliente', () => {
     const estadoBase: EstadoConversa = {
       intencao: 'vender',
@@ -229,6 +233,8 @@ Qual valor você espera pelo seu apartamento?
   });
 
   it('não traduz ausência de especialista como conflito de horário', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-02T12:00:00.000Z'));
+
     const wrapped = wrapToolExecute('agendar_reuniao_closer', async () => {
       return JSON.stringify({
         success: false,
