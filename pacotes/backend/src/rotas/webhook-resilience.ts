@@ -37,10 +37,12 @@ export function deveExecutarFallbackConversao(params: {
 
 export function deveExecutarFallbackAtualizacaoLead(params: {
   leadId?: string | null;
+  houveToolSucessoNoTurno?: boolean;
   houveToolExecRecente: boolean;
   textoConversa: string;
 }): boolean {
   if (!params.leadId) return false;
+  if (params.houveToolSucessoNoTurno) return false;
   if (params.houveToolExecRecente) return false;
   return (params.textoConversa || '').trim().length >= 8;
 }

@@ -126,6 +126,8 @@ export interface ResultadoProcessamento {
     sucesso: boolean;
     resposta?: string;
     agenteUsado?: string;
+    ferramentasExecutadas?: string[];
+    ferramentasExecutadasComSucesso?: string[];
     guardrailAcionado?: GuardrailResult;
     erro?: string;
 }
@@ -869,7 +871,9 @@ Use isso como desempate estratégico na próxima ação.`;
         return {
             sucesso: true,
             resposta: respostaLimpa,
-            agenteUsado: agenteQueRespondeuFormatado
+            agenteUsado: agenteQueRespondeuFormatado,
+            ferramentasExecutadas: nomesToolsTurno,
+            ferramentasExecutadasComSucesso: nomesToolsSucessoTurno,
         };
 
     } catch (error: unknown) {

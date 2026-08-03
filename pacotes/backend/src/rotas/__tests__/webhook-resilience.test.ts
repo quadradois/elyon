@@ -28,20 +28,30 @@ describe('webhook-resilience', () => {
   it('fallback de atualizacao do lead so roda quando ha lead, sem tool recente e com texto suficiente', () => {
     expect(deveExecutarFallbackAtualizacaoLead({
       leadId: 'lead-1',
+      houveToolSucessoNoTurno: false,
       houveToolExecRecente: false,
       textoConversa: 'estou querendo vender e está parado',
     })).toBe(true);
 
     expect(deveExecutarFallbackAtualizacaoLead({
       leadId: null,
+      houveToolSucessoNoTurno: false,
       houveToolExecRecente: false,
       textoConversa: 'texto válido',
     })).toBe(false);
 
     expect(deveExecutarFallbackAtualizacaoLead({
       leadId: 'lead-1',
+      houveToolSucessoNoTurno: false,
       houveToolExecRecente: true,
       textoConversa: 'texto válido',
+    })).toBe(false);
+
+    expect(deveExecutarFallbackAtualizacaoLead({
+      leadId: 'lead-1',
+      houveToolSucessoNoTurno: true,
+      houveToolExecRecente: false,
+      textoConversa: 'veja se tenho um agendamento ativo',
     })).toBe(false);
   });
 });
