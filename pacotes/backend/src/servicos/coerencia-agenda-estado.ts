@@ -57,7 +57,14 @@ type AgendaCommandNotification = {
 };
 
 export type CancelarAgendaCommand = BaseCommand & { operacao: 'CANCELAR' };
-export type ReagendarAgendaCommand = BaseCommand & { operacao: 'REAGENDAR'; novoHorario: Date; novoTitulo?: string; novaDescricao?: string; responsavelId?: string };
+export type ReagendarAgendaCommand = BaseCommand & {
+  operacao: 'REAGENDAR';
+  novoHorario: Date;
+  novoTitulo?: string;
+  novaDescricao?: string;
+  responsavelId?: string;
+  confirmarResponsavel?: boolean;
+};
 export type NoShowLeaseReference = { owner: string; fencingToken: number; leaseAte: Date };
 export type MarcarNoShowCommand = BaseCommand & {
   operacao: 'NO_SHOW';
@@ -158,6 +165,7 @@ function fingerprint(command: AgendaCommand): string {
     command.operacao === 'CORRIGIR' ? `${command.estadoCorrigido}:${normalizar(command.justificativa)}` : '',
     command.operacao === 'CONFIRMAR_ATRIBUICAO' ? command.responsavelId || '' : '',
     command.operacao === 'REAGENDAR' ? command.responsavelId || '' : '',
+    command.operacao === 'REAGENDAR' ? String(Boolean(command.confirmarResponsavel)) : '',
     normalizar(command.motivo), command.policyVersion, normalizar(command.ator), normalizar(command.origem),
     String(command.expectedVersion), command.notificacao?.tipo || '',
     command.notificacao ? hash(['agenda-notification-v1', command.notificacao.mensagem]) : '',
@@ -302,12 +310,17 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
       duracao: atividade.duracao,
       agendadoPara: command.novoHorario,
       criadoPor: command.ator,
-      statusAgendamento: 'SOLICITADO',
+      statusAgendamento: command.confirmarResponsavel ? 'CONFIRMADO' : 'SOLICITADO',
       tokenConfirmacao: randomUUID(),
-      statusConfirmacaoCorretor: atividade.tipo === 'REUNIAO' ? 'PENDENTE' : null,
+      statusConfirmacaoCorretor: atividade.tipo === 'REUNIAO'
+        ? command.confirmarResponsavel ? 'CONFIRMADO' : 'PENDENTE'
+        : null,
       tokenConfirmacaoCorretor: atividade.tipo === 'REUNIAO' ? randomUUID() : null,
       corretorOriginalId: command.responsavelId || atividade.corretorOriginalId,
       corretorAtualId: command.responsavelId || atividade.corretorAtualId,
+      confirmadoPor: command.confirmarResponsavel ? command.ator : null,
+      confirmadoEm: command.confirmarResponsavel ? command.ocorridoEm : null,
+      confirmadoCorretorEm: command.confirmarResponsavel ? command.ocorridoEm : null,
       estadoAgendaAtualizadoEm: command.ocorridoEm,
     } });
     replacementId = substituta.id;
@@ -327,7 +340,7 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
     const novoHorario = command.novoHorario;
     const updated = await tx.atividade.updateMany({
       where: { id: atividade.id, leadId: command.leadId, versao: command.expectedVersion,
-        statusAgendamento: { in: ['PENDENTE', 'SOLICITADO', 'PROPOSTO'] } },
+        statusAgendamento: { in: ['PENDENTE', 'SOLICITADO', 'PROPOSTO', ...(command.operacao === 'SOLICITAR' ? ['CONFIRMADO' as const] : [])] } },
       data: { statusAgendamento, agendadoPara: novoHorario || atividade.agendadoPara,
         corretorOriginalId: command.operacao === 'SOLICITAR' ? command.responsavelId || atividade.corretorOriginalId : atividade.corretorOriginalId,
         corretorAtualId: command.operacao === 'SOLICITAR' ? command.responsavelId || atividade.corretorAtualId : atividade.corretorAtualId,

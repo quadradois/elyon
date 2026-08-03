@@ -1,6 +1,7 @@
 const mockPrisma = {
   atividade: { findMany: jest.fn(), update: jest.fn() },
   sessaoWhatsapp: { findFirst: jest.fn() },
+  conviteEspecialistaAgenda: { updateMany: jest.fn() },
 };
 
 const mockWhatsapp = { enviarMensagemTexto: jest.fn() };
@@ -32,6 +33,7 @@ describe('fluxo integração confirmação corretor', () => {
     });
     mockRemanejar.mockResolvedValue({ sucesso: true, motivo: 'REMANEJADO' });
     mockPrisma.sessaoWhatsapp.findFirst.mockResolvedValue({ instanceName: 'inst1' });
+    mockPrisma.conviteEspecialistaAgenda.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('executa convite -> lembrete -> cutoff/remanejamento', async () => {

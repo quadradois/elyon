@@ -23,6 +23,8 @@ import { obterAgendaEffectsRollout, obterAgendaLifecycleRollout } from '../servi
 import { enviarWhatsappAgendamento, montarMensagemLigacaoConfirmada } from '../servicos/notificacao-agendamento';
 import { remanejarCorretorAtividade } from '../servicos/remanejamento-corretor';
 import { calcularPrazoConfirmacaoCorretor } from '../servicos/prazo-confirmacao-corretor';
+import { executarDecisaoEspecialista } from '../servicos/specialist-appointment-decision';
+import { hashTokenConvite } from '../servicos/specialist-copilot-context';
 
 const router = Router();
 
@@ -2145,6 +2147,48 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
 
     const agora = new Date();
     const cutoff = calcularPrazoConfirmacaoCorretor(atividade as any);
+
+    // Convites do Copilot e o link público convergem no mesmo comando determinístico.
+    // O fluxo legado abaixo permanece intacto para convites anteriores ao rollout.
+    const conviteCopilot = (atividade as any).corretorAtualId
+      ? await (prisma.conviteEspecialistaAgenda as any).findFirst({
+          where: {
+            tenantId: atividade.lead.tenantId,
+            atividadeId,
+            usuarioId: (atividade as any).corretorAtualId,
+            tokenHash: hashTokenConvite(token),
+            status: 'PENDENTE',
+          },
+          orderBy: { tentativa: 'desc' },
+        })
+      : null;
+    if (conviteCopilot && atividade.agendadoPara) {
+      const decisao = await executarDecisaoEspecialista({
+        context: {
+          conviteId: conviteCopilot.id,
+          atividadeId,
+          usuarioId: (atividade as any).corretorAtualId,
+          tenantId: atividade.lead.tenantId,
+          tentativa: conviteCopilot.tentativa,
+          prazoEm: conviteCopilot.prazoEm,
+          leadId: atividade.lead.id,
+          leadNome: atividade.lead.nome,
+          agendadoPara: atividade.agendadoPara,
+          versaoAtividade: atividade.versao,
+        },
+        decision: acao === 'confirmar' ? 'CONFIRMAR' : 'RECUSAR',
+        providerEventId: `${token}:${acao}`,
+        channel: 'LINK_PUBLICO',
+        motivo: motivoRecusa,
+        ocorreuEm: agora,
+      });
+      if (!decisao.success) return responderErro(res, decisao.reasonCode === 'INVITE_EXPIRED' ? 409 : 409, decisao.message);
+      return res.json({
+        sucesso: true,
+        mensagem: decisao.message,
+        statusConfirmacaoCorretor: acao === 'confirmar' ? 'CONFIRMADO' : 'PENDENTE',
+      });
+    }
 
     if (acao === 'confirmar') {
       if (cutoff && agora > cutoff) {

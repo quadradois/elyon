@@ -1,0 +1,7 @@
+{
+  "feature": "002-specialist-copilot",
+  "branch": "codex/specialist-copilot",
+  "spec": "specs/002-specialist-copilot/spec.md",
+  "status": "implemented-awaiting-pilot-smoke",
+  "createdAt": "2026-08-03"
+}

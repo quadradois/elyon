@@ -4,6 +4,7 @@ import {
   executarCutoffRemanejamentoCorretor,
   executarLembretesConfirmacaoCorretor,
 } from '../jobs/job-confirmacao-corretor';
+import { executarLembretesProximidadeAgendamento } from '../jobs/job-lembretes-agendamento';
 
 const INTERVALO_PADRAO_MS = 60_000;
 
@@ -38,8 +39,9 @@ export class SchedulerConfirmacaoCorretor {
         const convites = await executarConvitesConfirmacaoCorretor();
         const lembretes = await executarLembretesConfirmacaoCorretor();
         const cutoff = await executarCutoffRemanejamentoCorretor();
+        const lembretesAtendimento = await executarLembretesProximidadeAgendamento();
 
-        if (convites.processados || lembretes.processados || cutoff.processados) {
+        if (convites.processados || lembretes.processados || cutoff.processados || lembretesAtendimento.processados) {
           console.log('[ConfirmacaoCorretor] Ciclo concluído', { convites, lembretes, cutoff });
         }
       });

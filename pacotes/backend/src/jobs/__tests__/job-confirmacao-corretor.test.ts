@@ -2,6 +2,7 @@ const mockPrisma = {
   atividade: { findMany: jest.fn(), update: jest.fn() },
   sessaoWhatsapp: { findFirst: jest.fn() },
   usuario: { findFirst: jest.fn() },
+  conviteEspecialistaAgenda: { findFirst: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
 };
 
 const mockWhatsapp = { enviarMensagemTexto: jest.fn() };
@@ -19,12 +20,14 @@ import {
   executarConvitesConfirmacaoCorretor,
   executarCutoffRemanejamentoCorretor,
   executarLembretesConfirmacaoCorretor,
+  templateConvite,
 } from '../job-confirmacao-corretor';
 
 describe('job-confirmacao-corretor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockRemanejar.mockResolvedValue({ sucesso: true, motivo: 'REMANEJADO' });
+    mockPrisma.conviteEspecialistaAgenda.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('expira e remaneja reunião pendente', async () => {
@@ -85,6 +88,20 @@ describe('job-confirmacao-corretor', () => {
     expect(chamada.orderBy).toEqual({ criadoEm: 'asc' });
   });
 
+  it('monta convite conversacional com contexto e link apenas como alternativa', () => {
+    const mensagem = templateConvite({
+      especialistaNome: 'Guilherme', leadNome: 'Ivonet',
+      horario: new Date('2026-08-04T15:00:00Z'), prazo: new Date('2026-08-03T22:00:00Z'),
+      modalidade: 'Ligação telefônica', imovel: 'Residencial Reserva Buriti',
+      resumo: 'Lead quer vender e pediu avaliação.', link: 'https://elyon.test/confirmar', conversacional: true,
+    });
+    expect(mensagem).toContain('Olá, Guilherme');
+    expect(mensagem).toContain('*Imóvel:* Residencial Reserva Buriti');
+    expect(mensagem).toContain('*Resumo do atendimento:* Lead quer vender');
+    expect(mensagem).toContain('Posso confirmar este horário ou prefere sugerir outro?');
+    expect(mensagem).toContain('Se preferir, use o link:');
+  });
+
   it('envia convite ao especialista atual da atividade após remanejamento', async () => {
     mockPrisma.atividade.findMany.mockResolvedValue([{
       id: 'a-remanejada',
@@ -105,6 +122,7 @@ describe('job-confirmacao-corretor', () => {
     expect(mockWhatsapp.enviarMensagemTexto).toHaveBeenCalledWith(
       '556285919018',
       expect.stringContaining('/confirmar-corretor/a-remanejada/token-novo'),
+      'specialist-invite:a-remanejada:0:u-julia',
     );
   });
 });
