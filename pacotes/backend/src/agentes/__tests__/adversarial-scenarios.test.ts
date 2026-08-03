@@ -39,6 +39,7 @@ jest.mock('../../ferramentas/sdr-tools-agents', () => ({
     registrarIndicacaoTool: 'registrarIndicacaoTool',
     atualizarDadosLeadTool: 'atualizarDadosLeadTool',
     consultarHorariosDisponiveisTool: 'consultarHorariosDisponiveisTool',
+    consultarStatusAgendamentoTool: 'consultarStatusAgendamentoTool',
     agendarAvaliacaoTool: 'agendarAvaliacaoTool',
     agendarReuniaoCloserTool: 'agendarReuniaoCloserTool',
     cancelarAgendamentoTool: 'cancelarAgendamentoTool',

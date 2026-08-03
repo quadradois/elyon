@@ -27,37 +27,37 @@ interface GuiaPerguntasFase {
 const REGRAS_FASE: Record<FaseRoteiroSdr, RegraFase> = {
   MEIO_CAMPO: {
     objetivo: 'Abertura e sondagem inicial de interesse',
-    toolsPermitidas: ['registrar_optout', 'registrar_indicacao', 'ler_skill'],
+    toolsPermitidas: ['consultar_status_agendamento', 'registrar_optout', 'registrar_indicacao', 'ler_skill'],
     regraAvanco: 'Se o lead indicar interesse proprio, avance para DESCOBERTA.',
   },
   DESCOBERTA: {
     objetivo: 'Coletar dados minimos obrigatorios (intencao, valor, metragem, ocupacao, status e origem do anuncio)',
-    toolsPermitidas: ['converter_para_lead', 'qualificar_lead', 'ler_skill', 'agendar_followup'],
+    toolsPermitidas: ['consultar_status_agendamento', 'converter_para_lead', 'qualificar_lead', 'ler_skill', 'agendar_followup'],
     regraAvanco: 'Nao avance para DIAGNOSTICO_SPIN sem descoberta minima completa e converter_para_lead.',
   },
   DIAGNOSTICO_SPIN: {
     objetivo: 'Mapear dores explicitas em SPIN com perguntas abertas curtas',
-    toolsPermitidas: ['qualificar_lead', 'atualizar_dados_lead', 'ler_skill', 'consultar_preco_mercado'],
+    toolsPermitidas: ['consultar_status_agendamento', 'qualificar_lead', 'atualizar_dados_lead', 'ler_skill', 'consultar_preco_mercado'],
     regraAvanco: 'Avance para PITCH somente com 2 dores explicitas do lead.',
   },
   PITCH: {
     objetivo: 'Apresentar diferencial conectado as dores mapeadas',
-    toolsPermitidas: ['qualificar_lead', 'mover_para_fase', 'ler_skill'],
+    toolsPermitidas: ['consultar_status_agendamento', 'qualificar_lead', 'mover_para_fase', 'ler_skill'],
     regraAvanco: 'Avance para AGENDAMENTO apenas apos aceite explicito do lead.',
   },
   AGENDAMENTO: {
     objetivo: 'Validar interesse explicito no agendamento e so entao coletar dia/horario sem inventar datas',
-    toolsPermitidas: ['consultar_horarios_disponiveis', 'agendar_reuniao_closer', 'enviar_link_agendamento', 'agendar_followup', 'mover_para_fase'],
-    regraAvanco: 'Antes de pedir horario, confirme interesse no agendamento. Se o lead aceitar qualquer horario, consulte opcoes e ofereca no maximo duas. Se pedir tempo, registre follow-up com data combinada. Chame agendar_reuniao_closer somente com data+hora escolhidas pelo lead.',
+    toolsPermitidas: ['consultar_status_agendamento', 'consultar_horarios_disponiveis', 'agendar_reuniao_closer', 'cancelar_agendamento', 'enviar_link_agendamento', 'agendar_followup', 'mover_para_fase'],
+    regraAvanco: 'Se o lead perguntar status, data, horario, especialista ou se existe agendamento ativo, consulte consultar_status_agendamento e nunca infira pelo historico. Antes de pedir horario, confirme interesse no agendamento. Se o lead aceitar qualquer horario, consulte opcoes e ofereca no maximo duas. Se pedir tempo, registre follow-up com data combinada. Chame agendar_reuniao_closer somente com data+hora escolhidas pelo lead.',
   },
   FOLLOW_UP: {
     objetivo: 'Registrar recontato quando lead pede tempo',
-    toolsPermitidas: ['agendar_followup'],
+    toolsPermitidas: ['consultar_status_agendamento', 'agendar_followup'],
     regraAvanco: 'Encerrar cordialmente apos registrar follow-up.',
   },
   RECUO: {
     objetivo: 'Conter hostilidade e respeitar opt-out',
-    toolsPermitidas: ['registrar_optout', 'agendar_followup'],
+    toolsPermitidas: ['consultar_status_agendamento', 'registrar_optout', 'agendar_followup'],
     regraAvanco: 'Encerrar cordialmente e nao insistir sem nova abertura do lead.',
   },
 };

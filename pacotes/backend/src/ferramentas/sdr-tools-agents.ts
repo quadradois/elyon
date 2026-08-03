@@ -30,7 +30,7 @@ import { avaliarPolicyAcaoSensivel, isAutoCaptadoAfterCrmEnabled } from './sensi
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
 import { interpretarAgendamentoTemporal, mensagemContemDataHoraExplicita } from '../servicos/agenda-temporal';
 import { resolverEspecialistaCampanha } from '../servicos/resolucao-especialista-campanha';
-import { montarMensagemSolicitacaoLigacao } from '../servicos/notificacao-agendamento';
+import { formatarDataHoraAgenda, montarMensagemSolicitacaoLigacao } from '../servicos/notificacao-agendamento';
 import {
     formatarSugestaoHorario,
     gerarSlotsComerciaisLocais,
@@ -1300,7 +1300,139 @@ O backend resolverá datas relativas de forma determinística em America/Sao_Pau
 });
 
 // ====================================
-// TOOL 17: Cancelar Agendamento Ativo
+// TOOL 17: Consultar Status do Agendamento
+// ====================================
+
+const STATUS_AGENDAMENTO_ATIVOS = ['PROPOSTO', 'SOLICITADO', 'PENDENTE', 'CONFIRMADO'] as const;
+
+async function resolverNomeEspecialistaAgendamento(atividade: {
+    corretorAtualId?: string | null;
+    corretorOriginalId?: string | null;
+}): Promise<string | null> {
+    const usuarioId = atividade.corretorAtualId || atividade.corretorOriginalId;
+    if (!usuarioId) return null;
+
+    const usuario = await prisma.usuario.findUnique({
+        where: { id: usuarioId },
+        select: { nome: true },
+    });
+    return usuario?.nome || null;
+}
+
+export const consultarStatusAgendamentoTool = tool({
+    name: 'consultar_status_agendamento',
+    description: `Use SEMPRE que o lead perguntar se possui agendamento, se ele está ativo, confirmado, pendente ou cancelado, ou perguntar data, horário ou especialista do atendimento.
+
+Esta tool consulta o estado atual no banco e não altera dados. NUNCA responda essas perguntas usando apenas o histórico da conversa.`,
+
+    parameters: z.object({
+        contatoId: z.string().describe('ID do contato/lead informado no contexto do sistema'),
+    }),
+
+    execute: wrapToolExecute('consultar_status_agendamento', async (args, runContext?: any) => {
+        const tenantId = resolverTenantIdDoContexto(runContext);
+        const ownership = await validarOwnershipLeadPorTenant({
+            leadId: args.contatoId,
+            tenantId,
+            toolName: 'consultar_status_agendamento',
+        });
+        if (!ownership.ok) {
+            return JSON.stringify({ success: false, reasonCode: 'TENANT_OWNERSHIP_DENIED', error: ownership.error });
+        }
+
+        const agora = new Date();
+        const selecao = {
+            id: true,
+            tipo: true,
+            agendadoPara: true,
+            statusAgendamento: true,
+            statusConfirmacaoCorretor: true,
+            corretorAtualId: true,
+            corretorOriginalId: true,
+            canceladoEm: true,
+            motivoCancelamento: true,
+        } as const;
+
+        const atividadeAtiva = await prisma.atividade.findFirst({
+            where: {
+                leadId: args.contatoId,
+                tipo: { in: ['REUNIAO', 'AVALIACAO'] },
+                completadoEm: null,
+                statusAgendamento: { in: [...STATUS_AGENDAMENTO_ATIVOS] },
+                agendadoPara: { gt: agora },
+                lead: { tenantId },
+            },
+            orderBy: { agendadoPara: 'asc' },
+            select: selecao,
+        });
+
+        if (atividadeAtiva) {
+            const especialistaNome = await resolverNomeEspecialistaAgendamento(atividadeAtiva);
+            const confirmado = atividadeAtiva.statusAgendamento === 'CONFIRMADO';
+            return JSON.stringify({
+                success: true,
+                temAgendamentoAtivo: true,
+                situacao: confirmado ? 'CONFIRMADO' : 'AGUARDANDO_CONFIRMACAO_ESPECIALISTA',
+                agendamento: {
+                    atividadeId: atividadeAtiva.id,
+                    statusAgendamento: atividadeAtiva.statusAgendamento,
+                    statusConfirmacaoEspecialista: atividadeAtiva.statusConfirmacaoCorretor,
+                    dataHora: formatarDataHoraAgenda(atividadeAtiva.agendadoPara),
+                    dataHoraIso: atividadeAtiva.agendadoPara?.toISOString() || null,
+                    especialistaNome,
+                    tipoAtendimento: atividadeAtiva.tipo === 'REUNIAO' ? 'ligacao_telefonica' : 'avaliacao',
+                },
+                instrucaoParaAgente: confirmado
+                    ? 'Informe que o agendamento está confirmado e use somente data, horário e especialista retornados pela tool.'
+                    : 'Informe que o agendamento está solicitado e aguarda confirmação do especialista. Use somente os dados retornados pela tool.',
+            });
+        }
+
+        const ultimaAtividade = await prisma.atividade.findFirst({
+            where: {
+                leadId: args.contatoId,
+                tipo: { in: ['REUNIAO', 'AVALIACAO'] },
+                lead: { tenantId },
+            },
+            orderBy: { criadoEm: 'desc' },
+            select: selecao,
+        });
+
+        if (!ultimaAtividade) {
+            return JSON.stringify({
+                success: true,
+                temAgendamentoAtivo: false,
+                situacao: 'SEM_AGENDAMENTO',
+                instrucaoParaAgente: 'Informe que não há agendamento registrado no sistema.',
+            });
+        }
+
+        const especialistaNome = await resolverNomeEspecialistaAgendamento(ultimaAtividade);
+        const horarioPassouSemDesfecho = STATUS_AGENDAMENTO_ATIVOS.includes(ultimaAtividade.statusAgendamento as any);
+        return JSON.stringify({
+            success: true,
+            temAgendamentoAtivo: false,
+            situacao: horarioPassouSemDesfecho ? 'HORARIO_PASSADO_PENDENTE_RESULTADO' : ultimaAtividade.statusAgendamento,
+            ultimoAgendamento: {
+                atividadeId: ultimaAtividade.id,
+                statusAgendamento: ultimaAtividade.statusAgendamento,
+                statusConfirmacaoEspecialista: ultimaAtividade.statusConfirmacaoCorretor,
+                dataHora: formatarDataHoraAgenda(ultimaAtividade.agendadoPara),
+                dataHoraIso: ultimaAtividade.agendadoPara?.toISOString() || null,
+                especialistaNome,
+                canceladoEm: ultimaAtividade.canceladoEm?.toISOString() || null,
+                motivoCancelamento: ultimaAtividade.motivoCancelamento || null,
+                tipoAtendimento: ultimaAtividade.tipo === 'REUNIAO' ? 'ligacao_telefonica' : 'avaliacao',
+            },
+            instrucaoParaAgente: horarioPassouSemDesfecho
+                ? 'O horário já passou, mas o resultado ainda não foi registrado. Não diga que o agendamento continua ativo nem presuma cancelamento ou realização.'
+                : `Informe que não há agendamento ativo e que o último consta como ${ultimaAtividade.statusAgendamento}.`,
+        });
+    }),
+});
+
+// ====================================
+// TOOL 18: Cancelar Agendamento Ativo
 // ====================================
 
 export const cancelarAgendamentoTool = tool({
@@ -1434,7 +1566,7 @@ REGRA ABSOLUTA: nunca afirme que o agendamento foi cancelado antes de esta tool 
 });
 
 // ====================================
-// TOOL 18: Enviar Link de Agendamento (Fallback)
+// TOOL 19: Enviar Link de Agendamento (Fallback)
 // Quando o lead não decide horário na conversa.
 // ====================================
 

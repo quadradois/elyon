@@ -357,7 +357,7 @@ Qual valor você espera pelo seu apartamento?
     expect(result.respostaLimpa).toContain('não consigo confirmar');
   });
 
-  it('bloqueia confirmação de cancelamento sem execução da tool', () => {
+  it('trata pergunta sobre cancelamento como consulta de status', () => {
     const result = aplicarFiltrosRespostaOrchestrator({
       respostaFinal: 'Sim, o agendamento foi cancelado. 😊',
       houveHandoff: false,
@@ -370,8 +370,8 @@ Qual valor você espera pelo seu apartamento?
       ultimaMsgLead: 'O agendamento foi cancelado?',
     });
 
-    expect(result.fallbackAplicado).toBe('AGENDA_CANCELLATION_GUARD');
-    expect(result.respostaLimpa).toContain('não consegui registrar');
+    expect(result.fallbackAplicado).toBe('AGENDA_STATUS_GUARD');
+    expect(result.respostaLimpa).toContain('não consultei o status atualizado');
     expect(result.respostaLimpa).not.toContain('foi cancelado');
   });
 
@@ -409,5 +409,42 @@ Qual valor você espera pelo seu apartamento?
 
     expect(result.fallbackAplicado).toBe('AGENDA_CANCELLATION_GUARD');
     expect(result.respostaLimpa).toContain('não consegui registrar');
+  });
+
+  it('bloqueia resposta de status baseada apenas no histórico da conversa', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Seu agendamento está confirmado para 03/08/2026 às 09:00 com Guilherme.',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: [],
+      nomesToolsSucessoTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Veja primeiro se está ativo o agendamento.',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_STATUS_GUARD');
+    expect(result.respostaLimpa).toContain('não consultei o status atualizado');
+    expect(result.respostaLimpa).not.toContain('03/08/2026');
+  });
+
+  it('mantém resposta de cancelamento quando veio da consulta canônica', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Não há agendamento ativo. O último consta como cancelado no sistema.',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['consultar_status_agendamento'],
+      nomesToolsSucessoTurno: ['consultar_status_agendamento'],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Meu agendamento foi cancelado?',
+    });
+
+    expect(result.fallbackAplicado).toBe('NONE');
+    expect(result.respostaLimpa).toContain('consta como cancelado');
   });
 });
