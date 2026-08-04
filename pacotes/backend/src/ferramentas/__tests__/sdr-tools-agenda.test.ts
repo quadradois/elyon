@@ -51,4 +51,42 @@ describe('cancelar_agendamento temporal', () => {
     expect(JSON.parse(raw)).toMatchObject({ success: false, reasonCode: 'STALE_EVENT' });
     expect(raw).toContain('Não confirme o cancelamento');
   });
+
+  it('cancela solicitação futura antes de considerar compromisso passado', async () => {
+    mockPrisma.atividade.findFirst.mockResolvedValueOnce({
+      id: 'atividade-futura',
+      versao: 2,
+      agendadoPara: new Date('2026-08-05T15:00:00.000Z'),
+    });
+    mockExecutarComandoAgenda.mockResolvedValue({
+      success: true,
+      reasonCode: 'CANCELLED',
+      atividadeId: 'atividade-futura',
+    });
+
+    const raw = await (cancelarAgendamentoTool as any).execute({
+      contatoId: 'lead-1',
+      motivo: 'Especialista ainda não confirmou',
+    }, {
+      context: { tenantId: 'tenant-1', durableExecutionId: 'exec-solicitada' },
+    });
+
+    expect(JSON.parse(raw)).toMatchObject({
+      success: true,
+      atividadeId: 'atividade-futura',
+      statusAgendamento: 'CANCELADO',
+    });
+    expect(mockPrisma.atividade.findFirst).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      where: expect.objectContaining({
+        statusAgendamento: { in: ['PROPOSTO', 'SOLICITADO', 'PENDENTE', 'CONFIRMADO'] },
+        agendadoPara: { gt: expect.any(Date) },
+      }),
+      orderBy: { agendadoPara: 'asc' },
+    }));
+    expect(mockExecutarComandoAgenda).toHaveBeenCalledWith(expect.objectContaining({
+      operacao: 'CANCELAR',
+      atividadeId: 'atividade-futura',
+      expectedVersion: 2,
+    }));
+  });
 });
