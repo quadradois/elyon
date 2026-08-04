@@ -379,9 +379,10 @@ services:
       POSTGRES_USER: ${DB_USER:-elyon_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD}
       SCHEDULE: "0 3 * * *"
-      BACKUP_KEEP_DAYS: 7
-      BACKUP_KEEP_WEEKS: 4
-      BACKUP_KEEP_MONTHS: 6
+      BACKUP_KEEP_MINS: 180
+      BACKUP_KEEP_DAYS: 3
+      BACKUP_KEEP_WEEKS: 14
+      BACKUP_KEEP_MONTHS: 62
       HEALTHCHECK_PORT: 8080
     volumes:
       - ./backups:/backups

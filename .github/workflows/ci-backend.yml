@@ -354,10 +354,14 @@ jobs:
       - name: Validar scripts de backup e restore
         run: |
           bash -n scripts/ops/backup-offhost-r2.sh
+          bash -n scripts/ops/prune-local-storage.sh
+          bash scripts/ops/tests/prune-local-storage.test.sh
           bash -n scripts/ops/restore-drill-r2.sh
           bash -n scripts/ops/install-offhost-backup.sh
           test -f ops/systemd/elyon-offhost-backup.service
           test -f ops/systemd/elyon-offhost-backup.timer
+          test -f ops/systemd/elyon-storage-maintenance.service
+          test -f ops/systemd/elyon-storage-maintenance.timer
 
       - name: Validar runbooks e topologia operacional
         run: bash scripts/ops/verify-runbooks.sh

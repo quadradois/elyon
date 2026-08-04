@@ -182,6 +182,8 @@ do_update() {
 
   scripts/ops/install-offhost-backup.sh || fail "Instalação do backup off-host falhou."
 
+  scripts/ops/prune-local-storage.sh || fail "Manutenção preventiva de espaço falhou."
+
   if ! docker exec elyon_backup /backup.sh; then
     fail "Backup pré-deploy falhou; release cancelado."
   fi
@@ -208,6 +210,7 @@ do_update() {
 
   record_deployment "$expected"
   cleanup_old_rollback_tags "$rollback_tag"
+  scripts/ops/prune-local-storage.sh || true
   echo -e "${GREEN}Deploy concluído no commit $expected.${NC}"
 }
 
