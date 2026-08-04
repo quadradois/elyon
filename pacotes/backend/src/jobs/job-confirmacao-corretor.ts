@@ -10,7 +10,7 @@ import {
 } from '../servicos/prazo-confirmacao-corretor';
 import { obterSpecialistCopilotRollout } from '../servicos/agenda-lifecycle-rollout';
 import { hashTokenConvite } from '../servicos/specialist-copilot-context';
-import { montarIdentificacaoImovel, sanitizarContextoEspecialista } from '../servicos/specialist-copilot-privacy';
+import { extrairResumoAtendimentoEspecialista, montarIdentificacaoImovel } from '../servicos/specialist-copilot-privacy';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost';
 const STATUS_AGENDAMENTO_ATIVOS = ['PENDENTE', 'SOLICITADO', 'PROPOSTO', 'CONFIRMADO'];
@@ -173,10 +173,11 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
         enderecoImovel: atividade.lead.enderecoImovel,
         empreendimentoNome: atividade.lead.campanhaOrigem?.empreendimento?.nome || atividade.lead.campanhaOrigem?.nomeEmpreendimento,
       });
-      const resumo = sanitizarContextoEspecialista(
-        atividade.lead.briefingCloser || atividade.lead.observacoesSpin || '',
-        500,
-      );
+      const resumo = extrairResumoAtendimentoEspecialista({
+        descricaoAtividade: atividade.descricao,
+        briefingCloser: atividade.lead.briefingCloser,
+        observacoesSpin: atividade.lead.observacoesSpin,
+      }, 500);
       const msg = templateConvite({
         especialistaNome: especialista.nome,
         leadNome: atividade.lead.nome,

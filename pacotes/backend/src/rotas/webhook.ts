@@ -260,7 +260,6 @@ async function garantirAtualizacaoLeadBasicaSeElegivel(params: {
     interesse: deteccao?.tipoInteresse || 'VENDA',
     timeline: deteccao?.timeline || undefined,
     situacaoAtual: params.textoConversa,
-    observacoes: 'Fallback técnico: atualização automática por ausência de TOOL_EXEC no turno'
   });
 
   console.info(`[OBS] lead_update_fallback_executed contatoId=${params.contatoId} leadId=${params.leadId} success=${resultado?.success ? 'true' : 'false'}`);

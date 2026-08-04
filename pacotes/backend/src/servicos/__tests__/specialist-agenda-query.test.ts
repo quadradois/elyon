@@ -50,4 +50,20 @@ describe('specialist agenda query', () => {
     expect(formatarAgendaEspecialista(result)).toContain('Ivonet');
     expect(formatarAgendaEspecialista(result)).not.toContain('undefined');
   });
+
+  it('usa o contexto da atividade e descarta diagnóstico técnico do lead', async () => {
+    mockPrisma.atividade.findMany.mockResolvedValue([{
+      id: 'a2', canal: 'TELEFONE', statusAgendamento: 'PENDENTE', agendadoPara: new Date('2026-08-05T15:00:00Z'),
+      descricao: 'Ligação | Contexto: Ivonet quer vender o Reserva Buriti para quitar o imóvel novo.',
+      lead: {
+        nome: 'Ivonet', nomeEdificio: 'Reserva Buriti', enderecoImovel: null, briefingCloser: null,
+        observacoesSpin: 'Fallback técnico: ausência de TOOL_EXEC no turno', campanhaOrigem: null,
+      },
+    }]);
+
+    const result = await consultarAgendaEspecialista({ tenantId: 'tenant-a', usuarioId: 'user-a' });
+
+    expect(result[0].resumo).toBe('Ivonet quer vender o Reserva Buriti para quitar o imóvel novo.');
+    expect(result[0].resumo).not.toContain('TOOL_EXEC');
+  });
 });
