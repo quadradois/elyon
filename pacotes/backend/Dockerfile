@@ -22,8 +22,9 @@ COPY . .
 ENV DATABASE_URL="postgresql://user:password@localhost:5432/db?schema=public"
 RUN npx prisma generate --schema=./prisma/schema.prisma
 
-# Build TypeScript
-RUN npm run build
+# Build TypeScript. O backend privado nao publica tipos, e o projeto ja excede
+# o heap padrao do Node em builders com menos folga de memoria (como a VPS).
+RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
 # ==================================
 # Production Stage
