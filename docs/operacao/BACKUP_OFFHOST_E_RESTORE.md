@@ -7,8 +7,10 @@
 - **RPO provisório:** 1 hora.
 - **RTO provisório:** 4 horas.
 - **Retenção remota:** 48 snapshots horários, 30 diários e 6 mensais.
-- **Retenção local:** dois dumps horários mais recentes; configurável por
-  `ELYON_OFFHOST_LOCAL_KEEP`.
+- **Retenção local off-host:** nenhum dump duplicado após confirmação do
+  snapshot no R2; configurável por `ELYON_OFFHOST_LOCAL_KEEP`.
+- **Retenção local de restauração rápida:** 2 backups pré-deploy, 3 diários,
+  2 semanais e 2 mensais.
 - **Revisão:** trimestral e após mudança relevante de banco ou storage.
 
 As credenciais ficam somente em `/root/backup_r2.env`, modo `0600`. O arquivo
@@ -17,7 +19,8 @@ deve definir `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `RESTIC_REPOSITORY` e
 
 ## Instalação e agenda
 
-O deploy instala `elyon-offhost-backup.timer`, remove apenas a entrada legada de
+O deploy instala `elyon-offhost-backup.timer` e
+`elyon-storage-maintenance.timer`, remove apenas a entrada legada de
 `/root/backup_r2.sh` do crontab e preserva os demais jobs. O timer persistente
 executa no minuto 05 de cada hora:
 
@@ -28,9 +31,12 @@ journalctl -u elyon-offhost-backup.service --since=-2h
 ```
 
 Cada execução cria um `pg_dump` consistente, testa o gzip, calcula SHA-256 e
-envia dump e checksum ao Restic com a tag `elyon-db-hourly`. A limpeza local
-preserva somente os dois dumps mais recentes; a retenção histórica é aplicada
-pelo Restic no R2. Às 03:05 UTC também
+envia dump e checksum ao Restic com a tag `elyon-db-hourly`. Depois que o
+snapshot remoto é confirmado, o dump horário local é removido; a retenção
+histórica é aplicada pelo Restic no R2. O timer de manutenção limita os backups
+locais, remove parciais interrompidos, limita o journal a 500 MB e, somente a
+partir de 85% de uso do disco, limpa cache de build e imagens Docker dangling.
+Às 03:05 UTC o backup também
 executa `prune` e uma leitura amostral de integridade do repositório.
 
 Para disparo controlado fora da agenda:
