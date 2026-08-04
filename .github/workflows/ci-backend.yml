@@ -340,6 +340,17 @@ jobs:
       - name: Validar Docker Compose
         run: docker compose -f docker-compose.yml config --quiet
 
+      - name: Validar propagacao das flags de Agenda
+        env:
+          AGENDA_LIFECYCLE_POLICY_ENABLED: "true"
+          AGENDA_LIFECYCLE_COMMANDS_ENABLED: "true"
+          AGENDA_EFFECTS_ENABLED: "true"
+          AGENDA_NO_SHOW_ENABLED: "true"
+          AGENDA_SPECIALIST_COPILOT_ENABLED: "true"
+        run: >-
+          docker compose -f docker-compose.yml config --format json
+          | node scripts/ops/verify-compose-agenda-flags.mjs
+
       - name: Validar scripts de backup e restore
         run: |
           bash -n scripts/ops/backup-offhost-r2.sh
