@@ -1,5 +1,6 @@
 import type { AgentInputItem } from '@openai/agents';
 import { logger } from '../lib/logger';
+import { sanitizarRespostaParaCliente } from './client-response-sanitizer';
 
 type GenericRecord = Record<string, unknown>;
 
@@ -54,6 +55,26 @@ export function sanitizeHistoryForToolProtocol(
     const role = readString(rec.role);
     const type = readString(rec.type);
 
+    if (role === 'assistant' && !Array.isArray(rec.tool_calls)) {
+      const content = rec.content;
+      if (typeof content === 'string' && !sanitizarRespostaParaCliente(content)) {
+        removed += 1;
+        continue;
+      }
+
+      if (Array.isArray(content)) {
+        const blocosVisiveis = content.filter((bloco) => {
+          if (!bloco || typeof bloco !== 'object') return true;
+          const texto = readString((bloco as GenericRecord).text);
+          return !texto || Boolean(sanitizarRespostaParaCliente(texto));
+        });
+        if (blocosVisiveis.length === 0) {
+          removed += 1;
+          continue;
+        }
+      }
+    }
+
     for (const id of extractAssistantToolCallIds(item)) {
       validToolCallIds.add(id);
     }
@@ -81,7 +102,7 @@ export function sanitizeHistoryForToolProtocol(
   }
 
   if (removed > 0) {
-    logger.warn(`[HISTORY-SANITIZER] ⚠️ ${context}: removidos ${removed} item(ns) de tool órfãos do histórico SDK.`);
+    logger.warn(`[HISTORY-SANITIZER] ⚠️ ${context}: removidos ${removed} item(ns) inválido(s) do histórico SDK.`);
   }
 
   return sanitized;

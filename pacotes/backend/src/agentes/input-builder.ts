@@ -8,6 +8,7 @@ import { sanitizeHistoryForToolProtocol } from './history-tool-sanitizer';
 import { buildTemporalFactsContext, type TemporalFactsStats } from './temporal-facts';
 import { isTemporalFactsEnabled } from './feature-flags';
 import { formatRagFactsForPrompt, type RagFact } from './rag-facts-context';
+import { sanitizarRespostaParaCliente } from './client-response-sanitizer';
 
 export interface MensagemConversa {
   role: 'user' | 'assistant';
@@ -222,10 +223,12 @@ Responda à última mensagem do proprietário com continuidade conversacional.`;
         content: [{ type: 'input_text', text: msg.content }]
       });
     } else if (msg.role === 'assistant') {
+      const respostaHistoricaSanitizada = sanitizarRespostaParaCliente(msg.content);
+      if (!respostaHistoricaSanitizada) continue;
       inputItems.push({
         type: 'message',
         role: 'assistant' as const,
-        content: [{ type: 'output_text', text: msg.content }],
+        content: [{ type: 'output_text', text: respostaHistoricaSanitizada }],
         status: 'completed'
       });
     }

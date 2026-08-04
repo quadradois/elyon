@@ -31,12 +31,8 @@ import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../serv
 import { interpretarAgendamentoTemporal, mensagemContemDataHoraExplicita } from '../servicos/agenda-temporal';
 import { resolverEspecialistaCampanha } from '../servicos/resolucao-especialista-campanha';
 import { formatarDataHoraAgenda, montarMensagemSolicitacaoLigacao } from '../servicos/notificacao-agendamento';
-import {
-    formatarSugestaoHorario,
-    gerarSlotsComerciaisLocais,
-    selecionarSugestoesDeHorario,
-} from '../servicos/sugestao-horarios-agenda';
 import { consultarStatusAgendamentoCanonico } from '../servicos/consulta-status-agendamento';
+import { consultarHorariosDisponiveisCanonico } from '../servicos/consulta-horarios-disponiveis';
 
 async function registrarExecucaoTool(params: {
     leadId?: string;
@@ -928,111 +924,25 @@ Exemplos: "qualquer horário", "pode escolher", "quando vocês puderem", "pra mi
 
 Esta tool NÃO agenda e NÃO confirma nada. Ela retorna no máximo duas opções para você fazer uma pergunta simples ao lead. Apresente as opções e aguarde a escolha ou confirmação antes de chamar agendar_reuniao_closer.
 
-Se o lead disser apenas um período, preserve a preferência: manhã ou tarde. NÃO volte a perguntar de forma aberta "qual dia e horário?" depois que ele já informou que possui flexibilidade.`,
+Se o lead disser apenas um período, preserve a preferência: manhã ou tarde. Se disser hoje, amanhã ou uma data específica, preencha dataPreferida em YYYY-MM-DD. NÃO volte a perguntar de forma aberta "qual dia e horário?" depois que ele já informou que possui flexibilidade.`,
 
     parameters: z.object({
         contatoId: z.string().describe('ID do contato (mesmo usado nas outras tools)'),
         periodoPreferido: z.enum(['qualquer', 'manha', 'tarde']).default('qualquer')
             .describe('Período indicado pelo lead; use qualquer quando ele não restringir'),
+        dataPreferida: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+            .describe('Data local YYYY-MM-DD quando o lead pedir hoje, amanhã ou uma data específica'),
     }),
 
     execute: wrapToolExecute('consultar_horarios_disponiveis', async (args, runContext?: any) => {
         const tenantId = resolverTenantIdDoContexto(runContext);
-        const ownership = await validarOwnershipLeadPorTenant({
+        const resultado = await consultarHorariosDisponiveisCanonico({
             leadId: args.contatoId,
             tenantId,
-            toolName: 'consultar_horarios_disponiveis',
-        });
-        if (!ownership.ok) {
-            return JSON.stringify({ success: false, reasonCode: 'TENANT_OWNERSHIP_DENIED', error: ownership.error });
-        }
-
-        const contato = await prisma.lead.findUnique({
-            where: { id: args.contatoId },
-            select: { id: true, campanhaOrigemId: true },
-        });
-        if (!contato?.campanhaOrigemId) {
-            return JSON.stringify({
-                success: false,
-                reasonCode: 'CAMPAIGN_NOT_FOUND',
-                instrucaoParaAgente: 'Não repita a pergunta de data e hora. Diga que vai verificar a agenda do especialista e retornar com opções.',
-            });
-        }
-
-        const especialista = await resolverEspecialistaCampanha({
-            tenantId: tenantId!,
-            campanhaId: contato.campanhaOrigemId,
-        });
-        if (!especialista) {
-            return JSON.stringify({
-                success: false,
-                reasonCode: 'SPECIALIST_NOT_CONFIGURED',
-                instrucaoParaAgente: 'Não repita a pergunta de data e hora. Diga que vai verificar a agenda do especialista e retornar com opções.',
-            });
-        }
-
-        const agora = new Date();
-        const fimConsulta = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000);
-        const conflitosLocais = especialista.usuarioId
-            ? await prisma.atividade.findMany({
-                where: {
-                    corretorAtualId: especialista.usuarioId,
-                    tipo: 'REUNIAO',
-                    completadoEm: null,
-                    statusAgendamento: { in: ['PENDENTE', 'SOLICITADO', 'PROPOSTO', 'CONFIRMADO'] },
-                    agendadoPara: { gte: agora, lte: fimConsulta },
-                    lead: { tenantId: tenantId! },
-                },
-                select: { agendadoPara: true, duracao: true },
-            })
-            : [];
-
-        let slots = gerarSlotsComerciaisLocais(agora, 7);
-        let fonte: 'GOOGLE_CALENDAR_E_LOCAL' | 'AGENDA_LOCAL' = 'AGENDA_LOCAL';
-        try {
-            const { googleCalendarService } = require('../servicos/google-calendar');
-            if (googleCalendarService.isConfigurado()) {
-                slots = await googleCalendarService.consultarSlotsLivres({
-                    dataInicio: agora,
-                    dataFim: fimConsulta,
-                });
-                fonte = 'GOOGLE_CALENDAR_E_LOCAL';
-            }
-        } catch (error: any) {
-            logger.warn({ error: error?.message }, '[TOOL] consultar_horarios_disponiveis usando agenda local');
-        }
-
-        const sugestoes = selecionarSugestoesDeHorario({
-            slots,
-            conflitosLocais: conflitosLocais
-                .filter((item: any) => item.agendadoPara)
-                .map((item: any) => ({ agendadoPara: item.agendadoPara, duracao: item.duracao })),
             periodoPreferido: args.periodoPreferido,
-            limite: 2,
-            agora,
-        }).map((slot) => ({
-            dataHora: formatarSugestaoHorario(slot),
-            inicioUtc: slot.inicio,
-        }));
-
-        if (sugestoes.length === 0) {
-            return JSON.stringify({
-                success: false,
-                reasonCode: 'NO_SLOTS_FOUND',
-                especialista: especialista.nome,
-                instrucaoParaAgente: 'Não pressione o lead nem repita a pergunta. Diga que vai verificar a agenda do especialista e retornar com opções.',
-            });
-        }
-
-        return JSON.stringify({
-            success: true,
-            especialista: especialista.nome,
-            fonte,
-            sugestoes,
-            instrucaoParaAgente: sugestoes.length === 1
-                ? `Pergunte apenas: "Perfeito. Posso solicitar ${sugestoes[0].dataHora} para você?"`
-                : `Ofereça somente estas opções e aguarde a escolha: ${sugestoes.map((item) => item.dataHora).join(' ou ')}.`,
+            dataPreferida: args.dataPreferida,
         });
+        return JSON.stringify(resultado);
     }),
 });
 

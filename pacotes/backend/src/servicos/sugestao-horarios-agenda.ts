@@ -62,6 +62,7 @@ export function selecionarSugestoesDeHorario(params: {
   slots: SlotAgenda[];
   conflitosLocais?: ConflitoAgendaLocal[];
   periodoPreferido?: PeriodoPreferido;
+  dataLocal?: string;
   limite?: number;
   agora?: Date;
 }): SlotAgenda[] {
@@ -71,6 +72,8 @@ export function selecionarSugestoesDeHorario(params: {
   const conflitos = params.conflitosLocais || [];
   const elegiveis = params.slots
     .filter((slot) => new Date(slot.inicio).getTime() > agora.getTime())
+    .filter((slot) => !params.dataLocal
+      || formatInTimeZone(new Date(slot.inicio), TIMEZONE_AGENDA, 'yyyy-MM-dd') === params.dataLocal)
     .filter((slot) => periodo === 'qualquer' || periodoDoSlot(slot) === periodo)
     .filter((slot) => !conflitaComAgendaLocal(slot, conflitos))
     .sort((a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime());

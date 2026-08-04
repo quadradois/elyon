@@ -447,4 +447,41 @@ Qual valor você espera pelo seu apartamento?
     expect(result.fallbackAplicado).toBe('NONE');
     expect(result.respostaLimpa).toContain('consta como cancelado');
   });
+
+  it('bloqueia planejamento interno quando faltou consultar horários', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: "The user is asking for available times tomorrow. I need to use consultar_horarios_disponiveis.",
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: [],
+      nomesToolsSucessoTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Quais horarios temos amanha ?',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_AVAILABILITY_GUARD');
+    expect(result.respostaLimpa).toContain('consultar agora os horários livres');
+    expect(result.respostaLimpa).not.toContain('The user');
+  });
+
+  it('preserva resposta quando a consulta de horários retornou sucesso', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Tenho 05/08/2026 às 08:00 ou 05/08/2026 às 12:00. Qual funciona melhor?',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['consultar_horarios_disponiveis'],
+      nomesToolsSucessoTurno: ['consultar_horarios_disponiveis'],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Quais horarios temos amanha ?',
+    });
+
+    expect(result.fallbackAplicado).toBe('NONE');
+    expect(result.respostaLimpa).toContain('05/08/2026');
+  });
 });
