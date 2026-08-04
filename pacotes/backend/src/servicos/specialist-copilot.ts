@@ -51,11 +51,17 @@ export async function processarInboundEspecialista(params: {
 
   let convites = await buscarConvitesAcionaveis(especialista, agora);
   const intencao = interpretarIntencaoEspecialista(params.texto, agora);
+  const consultarAgendaSolicitada = async () => consultarAgendaEspecialista({
+    tenantId: params.tenantId,
+    usuarioId: especialista.id,
+    inicio: intencao.periodoConsulta?.inicio,
+    fim: intencao.periodoConsulta?.fim,
+  });
   if (!convites.length && (intencao.name === 'CANCELAR_PARTICIPACAO' || intencao.name === 'CONSULTAR')) {
     convites = await buscarCompromissosConfirmadosEspecialista(especialista, agora);
   }
   if (!convites.length && intencao.name === 'CONSULTAR') {
-    const agenda = await consultarAgendaEspecialista({ tenantId: params.tenantId, usuarioId: especialista.id });
+    const agenda = await consultarAgendaSolicitada();
     await (prisma.interacaoEspecialistaAgenda as any).create({
       data: {
         tenantId: params.tenantId, usuarioId: especialista.id, webhookEventoId: params.providerEventId,
@@ -64,7 +70,7 @@ export async function processarInboundEspecialista(params: {
       },
     });
     registrarSpecialistCopilotEvento(intencao.name, 'QUERY_SUCCESS');
-    return { handled: true, reason: 'QUERY_SUCCESS', response: formatarAgendaEspecialista(agenda) };
+    return { handled: true, reason: 'QUERY_SUCCESS', response: formatarAgendaEspecialista(agenda, intencao.periodoConsulta) };
   }
   if (!convites.length && intencao.name === 'CANCELAR_PARTICIPACAO') {
     return { handled: true, reason: 'NO_ACTIVE_APPOINTMENT', response: 'Você não possui atendimento ativo que possa ser cancelado por aqui.' };
@@ -87,9 +93,10 @@ export async function processarInboundEspecialista(params: {
   });
 
   if (!convite && intencao.name === 'CONSULTAR') {
-    const agenda = await consultarAgendaEspecialista({ tenantId: params.tenantId, usuarioId: especialista.id });
+    const agenda = await consultarAgendaSolicitada();
     await (prisma.interacaoEspecialistaAgenda as any).update({ where: { id: interacao.id }, data: { resultado: 'QUERY_SUCCESS' } });
-    return { handled: true, reason: 'QUERY_SUCCESS', response: formatarAgendaEspecialista(agenda) };
+    registrarSpecialistCopilotEvento(intencao.name, 'QUERY_SUCCESS');
+    return { handled: true, reason: 'QUERY_SUCCESS', response: formatarAgendaEspecialista(agenda, intencao.periodoConsulta) };
   }
   if (!convite) {
     await (prisma.interacaoEspecialistaAgenda as any).update({ where: { id: interacao.id }, data: { resultado: 'DESAMBIGUACAO_NECESSARIA' } });
@@ -155,9 +162,10 @@ export async function processarInboundEspecialista(params: {
   }
 
   if (intencao.name === 'CONSULTAR') {
-    const agenda = await consultarAgendaEspecialista({ tenantId: params.tenantId, usuarioId: especialista.id });
+    const agenda = await consultarAgendaSolicitada();
     await (prisma.interacaoEspecialistaAgenda as any).update({ where: { id: interacao.id }, data: { resultado: 'QUERY_SUCCESS' } });
-    return { handled: true, reason: 'QUERY_SUCCESS', response: formatarAgendaEspecialista(agenda) };
+    registrarSpecialistCopilotEvento(intencao.name, 'QUERY_SUCCESS');
+    return { handled: true, reason: 'QUERY_SUCCESS', response: formatarAgendaEspecialista(agenda, intencao.periodoConsulta) };
   }
 
   await (prisma.interacaoEspecialistaAgenda as any).update({ where: { id: interacao.id }, data: { resultado: 'INTENT_NOT_ACTIONABLE' } });
