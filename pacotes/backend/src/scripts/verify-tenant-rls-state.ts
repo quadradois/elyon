@@ -18,19 +18,31 @@ async function main(): Promise<void> {
       (
         SELECT count(*)
         FROM pg_class
-        WHERE oid IN ('public.leads'::regclass, 'public.campanhas'::regclass)
+        WHERE oid IN (
+          'public.leads'::regclass,
+          'public.campanhas'::regclass,
+          'public.convites_especialista_agenda'::regclass,
+          'public.interacoes_especialista_agenda'::regclass,
+          'public.contrapropostas_agenda'::regclass
+        )
           AND relrowsecurity
       ) AS tables_enabled,
       (
         SELECT count(*)
         FROM pg_policies
         WHERE schemaname = 'public'
-          AND tablename IN ('leads', 'campanhas')
+          AND tablename IN (
+            'leads',
+            'campanhas',
+            'convites_especialista_agenda',
+            'interacoes_especialista_agenda',
+            'contrapropostas_agenda'
+          )
           AND policyname = 'elyon_tenant_isolation'
       ) AS policies
   `;
 
-  const habilitado = estado.role_exists && estado.tables_enabled === 2n && estado.policies === 2n;
+  const habilitado = estado.role_exists && estado.tables_enabled === 5n && estado.policies === 5n;
   const desabilitado = !estado.role_exists && estado.tables_enabled === 0n && estado.policies === 0n;
   const valido = esperado === 'enabled' ? habilitado : desabilitado;
 

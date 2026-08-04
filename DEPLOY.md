@@ -37,3 +37,7 @@ Para rollback, desligue somente `AGENDA_SPECIALIST_COPILOT_ENABLED`. O webhook
 deixa de interceptar respostas de especialistas e o link publico continua sendo
 o caminho operacional. As tabelas novas permanecem inertes e nao devem ser
 removidas durante rollback da aplicacao.
+
+Se for necessario executar o rollback operacional de RLS, reaplique depois o
+isolamento completo com `prisma/rls/apply-tenant-rls.sql`; esse script cobre as
+tabelas centrais e as tres tabelas tenant-safe do Copilot.
