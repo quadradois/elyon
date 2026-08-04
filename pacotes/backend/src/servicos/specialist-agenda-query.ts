@@ -1,6 +1,10 @@
 import { prisma } from '../lib/db';
 import { formatarDataHoraAgenda } from './notificacao-agendamento';
-import { montarIdentificacaoImovel, sanitizarContextoEspecialista } from './specialist-copilot-privacy';
+import {
+  extrairResumoAtendimentoEspecialista,
+  montarIdentificacaoImovel,
+  sanitizarContextoEspecialista,
+} from './specialist-copilot-privacy';
 import type { SpecialistQueryPeriod } from './specialist-copilot-intent';
 
 export async function consultarAgendaEspecialista(params: {
@@ -47,7 +51,11 @@ export async function consultarAgendaEspecialista(params: {
       enderecoImovel: atividade.lead.enderecoImovel,
       empreendimentoNome: atividade.lead.campanhaOrigem?.empreendimento?.nome || atividade.lead.campanhaOrigem?.nomeEmpreendimento,
     }),
-    resumo: sanitizarContextoEspecialista(atividade.lead.briefingCloser || atividade.lead.observacoesSpin || '', 300),
+    resumo: extrairResumoAtendimentoEspecialista({
+      descricaoAtividade: atividade.descricao,
+      briefingCloser: atividade.lead.briefingCloser,
+      observacoesSpin: atividade.lead.observacoesSpin,
+    }, 300),
     status: atividade.statusAgendamento || 'PENDENTE',
   }] : []);
 }
