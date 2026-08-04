@@ -23,6 +23,18 @@ export const agendaNoShowEventos = new Counter({
   registers: [metricsRegistry],
 });
 
+export const specialistCopilotEventos = new Counter({
+  name: 'elyon_specialist_copilot_events_total',
+  help: 'Eventos agregados do Copilot do especialista, sem telefone, tenant ou conteudo.',
+  labelNames: ['intencao', 'resultado'] as const,
+  registers: [metricsRegistry],
+});
+
+export function registrarSpecialistCopilotEvento(intencao: string, resultado: string): void {
+  const safe = (value: string) => /^[A-Z0-9_]{1,64}$/.test(value) ? value.toLowerCase() : 'unknown';
+  specialistCopilotEventos.inc({ intencao: safe(intencao), resultado: safe(resultado) });
+}
+
 export const agendaLifecycleDecisions = new Counter({
   name: 'elyon_agenda_lifecycle_decisions_total',
   help: 'Decisoes agregadas da politica de ciclo de vida, sem identidade ou PII.',
@@ -97,5 +109,10 @@ export function registrarAgendaPilotConfig(config: AgendaPilotConfig): void {
     recurso: 'no_show',
     status: config.noShow.enabled ? 'enabled' : 'disabled',
     reason_code: config.noShow.reason.toLowerCase(),
+  }, 1);
+  agendaPilotGate.set({
+    recurso: 'specialist_copilot',
+    status: config.specialistCopilot?.enabled ? 'enabled' : 'disabled',
+    reason_code: (config.specialistCopilot?.reason || 'FLAG_DISABLED').toLowerCase(),
   }, 1);
 }

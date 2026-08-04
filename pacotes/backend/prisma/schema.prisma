@@ -90,20 +90,23 @@ model Tenant {
   transacoes    Transacao[]
   renovacoesLog RenovacaoLog[]
 
-  usuarios           Usuario[]
-  leads              Lead[]
-  campanhas          Campanha[]
-  listas             Lista[]
-  empreendimentos    EmpreendimentoConhecimento[]
-  agentes            ConfiguracaoAgente[] // 1:N - Múltiplos agentes por tenant
-  sessoesWhatsapp    SessaoWhatsapp[] // 1:N - Múltiplas sessões por tenant
-  telefonesBlacklist TelefoneBlacklist[]
-  pesquisasManus     PesquisaManus[]
-  contratos          Contrato[]
-  clientes           Cliente[]
-  integracoes        ConfiguracaoIntegracao[]
-  lotesInbound       LoteMensagemInbound[]
-  followupsOutbound  FollowupOutbound[]
+  usuarios                     Usuario[]
+  leads                        Lead[]
+  campanhas                    Campanha[]
+  listas                       Lista[]
+  empreendimentos              EmpreendimentoConhecimento[]
+  agentes                      ConfiguracaoAgente[] // 1:N - Múltiplos agentes por tenant
+  sessoesWhatsapp              SessaoWhatsapp[] // 1:N - Múltiplas sessões por tenant
+  telefonesBlacklist           TelefoneBlacklist[]
+  pesquisasManus               PesquisaManus[]
+  contratos                    Contrato[]
+  clientes                     Cliente[]
+  integracoes                  ConfiguracaoIntegracao[]
+  lotesInbound                 LoteMensagemInbound[]
+  followupsOutbound            FollowupOutbound[]
+  convitesEspecialistaAgenda   ConviteEspecialistaAgenda[]
+  interacoesEspecialistaAgenda InteracaoEspecialistaAgenda[]
+  contrapropostasAgenda        ContrapropostaAgenda[]
 
   criadoEm                    DateTime                     @default(now())
   atualizadoEm                DateTime                     @updatedAt
@@ -352,22 +355,24 @@ enum StatusConexao {
 // ====================================
 
 model Usuario {
-  id                   String         @id @default(uuid())
+  id                   String                        @id @default(uuid())
   tenantId             String
-  tenant               Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant               Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   email                String
   nome                 String
   senha                String
-  papel                PapelUsuario   @default(CORRETOR)
+  papel                PapelUsuario                  @default(CORRETOR)
   avatar               String?
   telefone             String?
-  estaAtivo            Boolean        @default(true)
-  criadoEm             DateTime       @default(now())
-  atualizadoEm         DateTime       @updatedAt
+  estaAtivo            Boolean                       @default(true)
+  criadoEm             DateTime                      @default(now())
+  atualizadoEm         DateTime                      @updatedAt
   ultimoLoginEm        DateTime?
   LogAuditoria         LogAuditoria[]
-  campanhasResponsavel Campanha[]     @relation("CampanhaResponsavel")
-  campanhasFallback    Campanha[]     @relation("CampanhaFallback")
+  campanhasResponsavel Campanha[]                    @relation("CampanhaResponsavel")
+  campanhasFallback    Campanha[]                    @relation("CampanhaFallback")
+  convitesAgenda       ConviteEspecialistaAgenda[]
+  interacoesAgenda     InteracaoEspecialistaAgenda[]
 
   @@unique([tenantId, email])
   @@index([email])
@@ -1375,16 +1380,16 @@ model Geo360LoteAlias {
 /// Fila operacional agregada das buscas atendidas exclusivamente pelo legado.
 /// Não possui relação com as tabelas antigas para não criar dependência permanente.
 model Geo360BuscaFallback {
-  id                String    @id @default(uuid()) @db.Uuid
-  termoHash         String    @unique @map("termo_hash")
-  termoNormalizado  String    @map("termo_normalizado")
+  id               String    @id @default(uuid()) @db.Uuid
+  termoHash        String    @unique @map("termo_hash")
+  termoNormalizado String    @map("termo_normalizado")
   resultadosLegado Json      @map("resultados_legado")
-  ocorrencias       Int       @default(1)
-  status            String    @default("PENDENTE")
-  primeiroEm        DateTime  @default(now()) @map("primeiro_em") @db.Timestamptz(6)
-  ultimoEm          DateTime  @default(now()) @map("ultimo_em") @db.Timestamptz(6)
-  resolvidoEm       DateTime? @map("resolvido_em") @db.Timestamptz(6)
-  observacao        String?
+  ocorrencias      Int       @default(1)
+  status           String    @default("PENDENTE")
+  primeiroEm       DateTime  @default(now()) @map("primeiro_em") @db.Timestamptz(6)
+  ultimoEm         DateTime  @default(now()) @map("ultimo_em") @db.Timestamptz(6)
+  resolvidoEm      DateTime? @map("resolvido_em") @db.Timestamptz(6)
+  observacao       String?
 
   @@index([status, ultimoEm])
   @@map("geo360_buscas_fallback")
@@ -1547,8 +1552,8 @@ model Atividade {
   // ====================================
   // CONFIRMAÇÃO OPERACIONAL DO CORRETOR (handoff)
   // ====================================
-  statusConfirmacaoCorretor       StatusConfirmacaoCorretor? @default(PENDENTE)
-  tokenConfirmacaoCorretor        String?                    @unique
+  statusConfirmacaoCorretor       StatusConfirmacaoCorretor?    @default(PENDENTE)
+  tokenConfirmacaoCorretor        String?                       @unique
   confirmacaoCorretorSolicitadaEm DateTime?
   lembreteCorretorEnviadoEm       DateTime?
   confirmadoCorretorEm            DateTime?
@@ -1556,6 +1561,10 @@ model Atividade {
   remanejadoCorretorEm            DateTime?
   corretorOriginalId              String?
   corretorAtualId                 String?
+  convitesEspecialista            ConviteEspecialistaAgenda[]
+  interacoesEspecialista          InteracaoEspecialistaAgenda[]
+  contrapropostasOrigem           ContrapropostaAgenda[]        @relation("ContrapropostaOrigem")
+  contrapropostasResultado        ContrapropostaAgenda[]        @relation("ContrapropostaResultado")
 
   @@index([leadId])
   @@index([tipo])
@@ -1646,6 +1655,80 @@ model EfeitoAgendaOutbox {
   @@index([chaveComando, criadoEm], map: "efeitos_agenda_command_idx")
   @@index([usuarioDestinoId, criadoEm], map: "efeitos_agenda_user_destination_idx")
   @@map("efeitos_agenda_outbox")
+}
+
+model ConviteEspecialistaAgenda {
+  id               String                        @id @default(uuid())
+  tenantId         String
+  atividadeId      String
+  usuarioId        String
+  tentativa        Int
+  status           String                        @default("PENDENTE")
+  tokenHash        String?                       @unique
+  solicitadoEm     DateTime
+  prazoEm          DateTime
+  respondidoEm     DateTime?
+  origemResposta   String?
+  messageIdConvite String?
+  criadoEm         DateTime                      @default(now())
+  atualizadoEm     DateTime                      @updatedAt
+  tenant           Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  atividade        Atividade                     @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  usuario          Usuario                       @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  interacoes       InteracaoEspecialistaAgenda[]
+  contrapropostas  ContrapropostaAgenda[]
+
+  @@unique([atividadeId, tentativa])
+  @@index([tenantId, usuarioId, status, prazoEm], map: "convites_especialista_contexto_idx")
+  @@index([atividadeId, status], map: "convites_especialista_atividade_idx")
+  @@map("convites_especialista_agenda")
+}
+
+model InteracaoEspecialistaAgenda {
+  id               String                     @id @default(uuid())
+  tenantId         String
+  atividadeId      String?
+  usuarioId        String
+  conviteId        String?
+  webhookEventoId  String                     @unique
+  direcao          String
+  intencao         String
+  resumoSanitizado String?                    @db.Text
+  parametros       Json?
+  resultado        String
+  criadoEm         DateTime                   @default(now())
+  tenant           Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  atividade        Atividade?                 @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
+  usuario          Usuario                    @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  convite          ConviteEspecialistaAgenda? @relation(fields: [conviteId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, usuarioId, criadoEm], map: "interacoes_especialista_contexto_idx")
+  @@index([atividadeId, criadoEm], map: "interacoes_especialista_atividade_idx")
+  @@map("interacoes_especialista_agenda")
+}
+
+model ContrapropostaAgenda {
+  id                    String                     @id @default(uuid())
+  tenantId              String
+  atividadeId           String
+  conviteId             String?
+  propostaPorTipo       String
+  propostaPorId         String
+  horarioProposto       DateTime
+  status                String                     @default("AGUARDANDO_LEAD")
+  respondidaEm          DateTime?
+  atividadeResultanteId String?
+  versaoAtividadeOrigem Int
+  criadoEm              DateTime                   @default(now())
+  atualizadoEm          DateTime                   @updatedAt
+  tenant                Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  atividade             Atividade                  @relation("ContrapropostaOrigem", fields: [atividadeId], references: [id], onDelete: Cascade)
+  convite               ConviteEspecialistaAgenda? @relation(fields: [conviteId], references: [id], onDelete: SetNull)
+  atividadeResultante   Atividade?                 @relation("ContrapropostaResultado", fields: [atividadeResultanteId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, atividadeId, status], map: "contrapropostas_agenda_atividade_idx")
+  @@index([tenantId, propostaPorId, status], map: "contrapropostas_agenda_autor_idx")
+  @@map("contrapropostas_agenda")
 }
 
 enum TipoAtividade {

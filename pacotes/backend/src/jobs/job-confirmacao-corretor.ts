@@ -8,6 +8,9 @@ import {
   obterAntecedenciaLembreteCorretorMinutos,
   obterPrazoConfirmacaoCorretorMinutos,
 } from '../servicos/prazo-confirmacao-corretor';
+import { obterSpecialistCopilotRollout } from '../servicos/agenda-lifecycle-rollout';
+import { hashTokenConvite } from '../servicos/specialist-copilot-context';
+import { montarIdentificacaoImovel, sanitizarContextoEspecialista } from '../servicos/specialist-copilot-privacy';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost';
 const STATUS_AGENDAMENTO_ATIVOS = ['PENDENTE', 'SOLICITADO', 'PROPOSTO', 'CONFIRMADO'];
@@ -30,7 +33,38 @@ function formatarHorario(data: Date): string {
   return new Date(data).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 }
 
-function templateConvite(params: { leadNome: string; horario: Date; prazo: Date; link: string }): string {
+export function templateConvite(params: {
+  especialistaNome?: string | null;
+  leadNome: string;
+  horario: Date;
+  prazo: Date;
+  link: string;
+  modalidade?: string | null;
+  imovel?: string | null;
+  resumo?: string | null;
+  conversacional?: boolean;
+}): string {
+  if (params.conversacional) {
+    const detalhes = [
+      params.imovel ? `*Imóvel:* ${params.imovel}` : null,
+      params.resumo ? `*Resumo do atendimento:* ${params.resumo}` : null,
+    ].filter(Boolean);
+    return [
+      'Elyon | Convite de confirmação',
+      '',
+      `Olá, ${params.especialistaNome?.trim() || 'especialista'}! Você tem uma nova solicitação de atendimento.`,
+      '',
+      `*Lead:* ${params.leadNome}`,
+      `*Data e horário:* ${formatarHorario(params.horario)}`,
+      `*Modalidade:* ${params.modalidade || 'Ligação telefônica'}`,
+      ...(detalhes.length ? ['', '*Detalhes:*', ...detalhes] : []),
+      '',
+      'Posso confirmar este horário ou prefere sugerir outro?',
+      `Responda em até ${obterPrazoConfirmacaoCorretorMinutos()} minutos (prazo: ${formatarHorario(params.prazo)}).`,
+      '',
+      `Se preferir, use o link: ${params.link}`,
+    ].join('\n');
+  }
   return [
     'Elyon | Convite de confirmação',
     `Lead: ${params.leadNome}`,
@@ -103,7 +137,13 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
       tokenConfirmacaoCorretor: { not: null },
     },
     include: {
-      lead: { select: { id: true, nome: true, tenantId: true, campanhaOrigemId: true } }
+      lead: {
+        select: {
+          id: true, nome: true, tenantId: true, campanhaOrigemId: true,
+          nomeEdificio: true, enderecoImovel: true, briefingCloser: true, observacoesSpin: true,
+          campanhaOrigem: { select: { nomeEmpreendimento: true, empreendimento: { select: { nome: true } } } },
+        }
+      }
     },
     orderBy: { criadoEm: 'asc' },
     take: 100
@@ -123,16 +163,55 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
       const telefone = normalizarTelefoneParaWaMe(especialista.telefone);
       const link = linkConfirmacaoCorretor(atividade.id, atividade.tokenConfirmacaoCorretor!);
       const solicitadoEm = new Date();
+      const prazoEm = new Date(Math.min(
+        atividade.agendadoPara.getTime(),
+        solicitadoEm.getTime() + obterPrazoConfirmacaoCorretorMinutos() * 60 * 1000,
+      ));
+      const copilot = await obterSpecialistCopilotRollout(atividade.lead.tenantId, solicitadoEm);
+      const imovel = montarIdentificacaoImovel({
+        nomeEdificio: atividade.lead.nomeEdificio,
+        enderecoImovel: atividade.lead.enderecoImovel,
+        empreendimentoNome: atividade.lead.campanhaOrigem?.empreendimento?.nome || atividade.lead.campanhaOrigem?.nomeEmpreendimento,
+      });
+      const resumo = sanitizarContextoEspecialista(
+        atividade.lead.briefingCloser || atividade.lead.observacoesSpin || '',
+        500,
+      );
       const msg = templateConvite({
+        especialistaNome: especialista.nome,
         leadNome: atividade.lead.nome,
         horario: atividade.agendadoPara,
-        prazo: new Date(Math.min(
-          atividade.agendadoPara.getTime(),
-          solicitadoEm.getTime() + obterPrazoConfirmacaoCorretorMinutos() * 60 * 1000,
-        )),
+        prazo: prazoEm,
         link,
+        modalidade: atividade.canal === 'VISITA' ? 'Visita presencial' : 'Ligação telefônica',
+        imovel,
+        resumo,
+        conversacional: copilot.enabled,
       });
-      await whatsapp.enviarMensagemTexto(telefone, msg);
+      const envio = await whatsapp.enviarMensagemTexto(
+        telefone,
+        msg,
+        `specialist-invite:${atividade.id}:${atividade.versao || 0}:${especialista.usuarioId || telefone}`,
+      );
+
+      if (copilot.enabled && especialista.usuarioId) {
+        const tentativaAnterior = await (prisma.conviteEspecialistaAgenda as any).findFirst({
+          where: { atividadeId: atividade.id }, orderBy: { tentativa: 'desc' }, select: { tentativa: true },
+        });
+        await (prisma.conviteEspecialistaAgenda as any).create({
+          data: {
+            tenantId: atividade.lead.tenantId,
+            atividadeId: atividade.id,
+            usuarioId: especialista.usuarioId,
+            tentativa: (tentativaAnterior?.tentativa || 0) + 1,
+            status: 'PENDENTE',
+            tokenHash: hashTokenConvite(atividade.tokenConfirmacaoCorretor),
+            solicitadoEm,
+            prazoEm,
+            messageIdConvite: envio?.key?.id || envio?.id || null,
+          },
+        });
+      }
 
       await (prisma.atividade as any).update({
         where: { id: atividade.id },
@@ -272,6 +351,10 @@ export async function executarCutoffRemanejamentoCorretor(): Promise<{ processad
           versao: { increment: 1 },
           estadoAgendaAtualizadoEm: estadoAtualizadoEm,
         }
+      });
+      await (prisma.conviteEspecialistaAgenda as any).updateMany({
+        where: { atividadeId: atividade.id, status: 'PENDENTE' },
+        data: { status: 'EXPIRADO', respondidoEm: estadoAtualizadoEm, origemResposta: 'JOB' },
       });
       ServicoAuditoria.registrar({
         tenantId: atividade.lead.tenantId,

@@ -168,7 +168,7 @@ jobs:
         working-directory: pacotes/backend
         run: >-
           npx prisma db execute
-          --file prisma/migrations/20260714130000_tenant_rls_pilot/migration.sql
+          --file prisma/rls/apply-tenant-rls.sql
           --schema prisma/schema.prisma
 
       - name: Verificar estado RLS reaplicado

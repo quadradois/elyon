@@ -3,6 +3,8 @@ import { Request, Response, Router } from 'express';
 import { prisma } from '../lib/db';
 import { getWhatsAppService } from '../servicos/whatsapp';
 import { normalizarTelefone } from '../utils/telefone';
+import { processarInboundEspecialista } from '../servicos/specialist-copilot';
+import { processarRespostaLeadContraproposta } from '../servicos/specialist-counterproposal';
 // 🔄 Redis cache helpers (substitui Maps em memória)
 import {
   marcarMensagemComoVista,
@@ -1343,6 +1345,26 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
             if (conteudoEntrada || isMedia) {
               console.log(`[Webhook] Mensagem recebida: tipo=${tipoMensagemEntrada} possuiMidia=${isMedia}`);
 
+              // O Copilot do especialista é um canal operacional de agenda. Ele roda antes
+              // da resolução de Lead, mas somente sob gate tenant-safe e com convite acionável.
+              const eventoEspecialistaId = `specialist:${instanceName}:${messageId || registroId || hashPayload(req.body)}`;
+              const especialistaInbound = await processarInboundEspecialista({
+                tenantId: sessaoConfiavel.tenantId,
+                telefone,
+                texto: conteudoEntrada,
+                providerEventId: eventoEspecialistaId,
+              });
+              if (especialistaInbound.handled) {
+                if (especialistaInbound.response) {
+                  await getWhatsAppService(instanceName).enviarMensagemTexto(
+                    telefone,
+                    especialistaInbound.response,
+                    `${eventoEspecialistaId}:response`,
+                  );
+                }
+                continue;
+              }
+
               // ====================================
               // 1. RESOLVER LEAD ID CANÔNICO (tenant-safe)
               // ====================================
@@ -1390,6 +1412,38 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
 
               if (estaBloqueado) {
                 registrarIgnorado(telefone, 'blacklist', leadIdCanonico);
+                continue;
+              }
+
+              const respostaContraproposta = await processarRespostaLeadContraproposta({
+                tenantId: sessaoConfiavel.tenantId,
+                leadId: leadIdCanonico,
+                texto: conteudoEntrada,
+                providerEventId: `lead-counterproposal:${instanceName}:${messageId || registroId || hashPayload(req.body)}`,
+              });
+              if (respostaContraproposta.handled) {
+                await prisma.mensagemProspeccao.create({
+                  data: {
+                    leadId: leadIdCanonico,
+                    direcao: 'ENTRADA',
+                    conteudo: conteudoEntrada,
+                    tipo: tipoMensagemEntrada,
+                    telefone,
+                    messageId: messageId || null,
+                    processadaPorIA: false,
+                    toolsChamadas: [{
+                      nome: 'responder_contraproposta_especialista',
+                      resultado: respostaContraproposta.reasonCode,
+                    }],
+                  },
+                });
+                if (respostaContraproposta.response) {
+                  await getWhatsAppService(instanceName).enviarMensagemTexto(
+                    telefone,
+                    respostaContraproposta.response,
+                    `lead-counterproposal:${messageId || registroId}:response`,
+                  );
+                }
                 continue;
               }
 

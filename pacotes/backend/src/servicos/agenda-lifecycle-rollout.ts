@@ -19,6 +19,11 @@ export interface AgendaEffectsRollout {
   effectsReason: AgendaLifecycleRolloutReason;
 }
 
+export interface SpecialistCopilotRollout {
+  enabled: boolean;
+  reason: AgendaLifecycleRolloutReason;
+}
+
 let configPromise: Promise<AgendaPilotConfig> | undefined;
 
 export function avaliarAgendaLifecycleRollout(
@@ -95,6 +100,17 @@ export async function obterAgendaEffectsRollout(
 ): Promise<AgendaEffectsRollout> {
   configPromise ??= resolverAgendaPilotConfig();
   return avaliarAgendaEffectsRollout(await configPromise, tenantId, instant);
+}
+
+export async function obterSpecialistCopilotRollout(
+  tenantId: string,
+  instant = new Date(),
+): Promise<SpecialistCopilotRollout> {
+  const config = await (configPromise ??= resolverAgendaPilotConfig());
+  if (!config.scope) return { enabled: false, reason: config.specialistCopilot?.requested ? 'SCOPE_UNAVAILABLE' : 'FLAG_DISABLED' };
+  if (config.scope.tenantId !== tenantId) return { enabled: false, reason: 'TENANT_OUT_OF_SCOPE' };
+  if (instant.getTime() < new Date(config.scope.startedAtUtc).getTime()) return { enabled: false, reason: 'BEFORE_CUTOFF' };
+  return { enabled: Boolean(config.specialistCopilot?.enabled), reason: config.specialistCopilot?.enabled ? 'ENABLED' : 'FLAG_DISABLED' };
 }
 
 export function resetAgendaLifecycleRolloutCacheForTests(): void {

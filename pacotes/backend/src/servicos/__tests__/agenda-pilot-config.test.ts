@@ -13,6 +13,7 @@ describe('agenda pilot tenant-safe config', () => {
       lifecycleCommands: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
       effects: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
       noShow: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
+      specialistCopilot: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
     });
     expect(activeTenant.findTenant).not.toHaveBeenCalled();
   });
@@ -129,7 +130,23 @@ describe('agenda pilot tenant-safe config', () => {
       lifecycleCommands: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
       effects: { requested: true, enabled: true, reason: 'ENABLED' },
       noShow: { requested: true, enabled: true, reason: 'ENABLED' },
+      specialistCopilot: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
       noShowGraceMinutes: 45,
     });
+  });
+
+  it('habilita o Copilot somente com política, comandos e efeitos ativos', async () => {
+    const incompleto = await resolverAgendaPilotConfig({
+      AGENDA_SPECIALIST_COPILOT_ENABLED: 'true', AGENDA_EFFECTS_ENABLED: 'true',
+      AGENDA_PILOT_TENANT_ID: TENANT, AGENDA_PILOT_STARTED_AT: STARTED_AT,
+    }, activeTenant);
+    expect(incompleto.specialistCopilot).toEqual({ requested: true, enabled: false, reason: 'POLICY_REQUIRED' });
+
+    const completo = await resolverAgendaPilotConfig({
+      AGENDA_SPECIALIST_COPILOT_ENABLED: 'true', AGENDA_EFFECTS_ENABLED: 'true',
+      AGENDA_LIFECYCLE_POLICY_ENABLED: 'true', AGENDA_LIFECYCLE_COMMANDS_ENABLED: 'true',
+      AGENDA_PILOT_TENANT_ID: TENANT, AGENDA_PILOT_STARTED_AT: STARTED_AT,
+    }, activeTenant);
+    expect(completo.specialistCopilot).toEqual({ requested: true, enabled: true, reason: 'ENABLED' });
   });
 });
