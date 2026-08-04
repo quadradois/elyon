@@ -1,4 +1,8 @@
-import { extrairHorarioProposto, interpretarIntencaoEspecialista } from '../specialist-copilot-intent';
+import {
+  extrairHorarioProposto,
+  extrairPeriodoConsulta,
+  interpretarIntencaoEspecialista,
+} from '../specialist-copilot-intent';
 
 describe('specialist copilot deterministic intent', () => {
   const agora = new Date('2026-08-03T18:00:00.000Z'); // 15:00 em Goiânia
@@ -25,5 +29,38 @@ describe('specialist copilot deterministic intent', () => {
 
   it('recusa horário passado', () => {
     expect(extrairHorarioProposto('Posso hoje às 10h', agora)).toBeUndefined();
+  });
+
+  it('restringe consulta de amanhã ao dia local de Goiânia', () => {
+    const intent = interpretarIntencaoEspecialista('Quais atendimentos tenho amanhã?', agora);
+    expect(intent).toMatchObject({
+      name: 'CONSULTAR',
+      periodoConsulta: {
+        descricao: 'amanha',
+        dataLocal: '2026-08-04',
+      },
+    });
+    expect(intent.periodoConsulta?.inicio.toISOString()).toBe('2026-08-04T03:00:00.000Z');
+    expect(intent.periodoConsulta?.fim.toISOString()).toBe('2026-08-05T02:59:59.999Z');
+  });
+
+  it('resolve amanhã corretamente perto da meia-noite local', () => {
+    const pertoDaMeiaNoite = new Date('2026-08-04T02:30:00.000Z'); // 03/08 23:30 em Goiânia
+    const periodo = extrairPeriodoConsulta('Minha agenda amanhã', pertoDaMeiaNoite);
+    expect(periodo?.dataLocal).toBe('2026-08-04');
+    expect(periodo?.inicio.toISOString()).toBe('2026-08-04T03:00:00.000Z');
+  });
+
+  it('suporta hoje, data explícita e próximos sete dias', () => {
+    expect(extrairPeriodoConsulta('atendimentos hoje', agora)).toMatchObject({ descricao: 'hoje', dataLocal: '2026-08-03' });
+    expect(extrairPeriodoConsulta('agenda do dia 05/08/2026', agora)).toMatchObject({ descricao: 'data_explicita', dataLocal: '2026-08-05' });
+    expect(extrairPeriodoConsulta('agenda dos próximos 7 dias', agora)).toMatchObject({ descricao: 'proximos_sete_dias' });
+  });
+
+  it('mantém a janela padrão quando a consulta não informa período', () => {
+    expect(interpretarIntencaoEspecialista('Quais são meus atendimentos?', agora)).toMatchObject({
+      name: 'CONSULTAR',
+      periodoConsulta: undefined,
+    });
   });
 });

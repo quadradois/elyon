@@ -8,10 +8,36 @@ describe('specialist agenda query', () => {
 
   it('sempre restringe por usuário e tenant', async () => {
     mockPrisma.atividade.findMany.mockResolvedValue([]);
-    await consultarAgendaEspecialista({ tenantId: 'tenant-a', usuarioId: 'user-a' });
+    const inicio = new Date('2026-08-04T03:00:00.000Z');
+    const fim = new Date('2026-08-05T02:59:59.999Z');
+    await consultarAgendaEspecialista({ tenantId: 'tenant-a', usuarioId: 'user-a', inicio, fim });
     expect(mockPrisma.atividade.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ corretorAtualId: 'user-a', lead: { tenantId: 'tenant-a' } }),
+      where: expect.objectContaining({
+        corretorAtualId: 'user-a',
+        lead: { tenantId: 'tenant-a' },
+        agendadoPara: { gte: inicio, lte: fim },
+      }),
     }));
+  });
+
+  it('explica o período consultado quando não há atendimentos', () => {
+    const periodo = {
+      inicio: new Date('2026-08-04T03:00:00.000Z'),
+      fim: new Date('2026-08-05T02:59:59.999Z'),
+      descricao: 'amanha' as const,
+      dataLocal: '2026-08-04',
+    };
+    expect(formatarAgendaEspecialista([], periodo)).toBe('Você não possui atendimentos ativos amanhã.');
+  });
+
+  it('formata uma data explícita na resposta', () => {
+    const periodo = {
+      inicio: new Date('2026-08-05T03:00:00.000Z'),
+      fim: new Date('2026-08-06T02:59:59.999Z'),
+      descricao: 'data_explicita' as const,
+      dataLocal: '2026-08-05',
+    };
+    expect(formatarAgendaEspecialista([], periodo)).toBe('Você não possui atendimentos ativos em 05/08/2026.');
   });
 
   it('não inventa imóvel ausente e formata somente dados retornados', async () => {

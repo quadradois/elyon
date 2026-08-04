@@ -1,6 +1,7 @@
 import { prisma } from '../lib/db';
 import { formatarDataHoraAgenda } from './notificacao-agendamento';
 import { montarIdentificacaoImovel, sanitizarContextoEspecialista } from './specialist-copilot-privacy';
+import type { SpecialistQueryPeriod } from './specialist-copilot-intent';
 
 export async function consultarAgendaEspecialista(params: {
   tenantId: string;
@@ -51,10 +52,24 @@ export async function consultarAgendaEspecialista(params: {
   }] : []);
 }
 
-export function formatarAgendaEspecialista(itens: Awaited<ReturnType<typeof consultarAgendaEspecialista>>): string {
-  if (!itens.length) return 'Você não possui atendimentos ativos nos próximos sete dias.';
+function descreverPeriodo(periodo?: SpecialistQueryPeriod): string {
+  if (periodo?.descricao === 'hoje') return 'hoje';
+  if (periodo?.descricao === 'amanha') return 'amanhã';
+  if (periodo?.descricao === 'data_explicita' && periodo.dataLocal) {
+    const [ano, mes, dia] = periodo.dataLocal.split('-');
+    return `em ${dia}/${mes}/${ano}`;
+  }
+  return 'nos próximos sete dias';
+}
+
+export function formatarAgendaEspecialista(
+  itens: Awaited<ReturnType<typeof consultarAgendaEspecialista>>,
+  periodo?: SpecialistQueryPeriod,
+): string {
+  const descricaoPeriodo = descreverPeriodo(periodo);
+  if (!itens.length) return `Você não possui atendimentos ativos ${descricaoPeriodo}.`;
   return [
-    'Seus próximos atendimentos:',
+    `Seus atendimentos ${descricaoPeriodo}:`,
     ...itens.map((item, index) => [
       `${index + 1}. ${item.leadNome} — ${formatarDataHoraAgenda(item.horario)}`,
       `   ${item.modalidade}${item.imovel ? ` | ${item.imovel}` : ''} | ${item.status}`,
