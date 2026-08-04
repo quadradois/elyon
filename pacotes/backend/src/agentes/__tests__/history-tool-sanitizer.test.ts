@@ -39,5 +39,15 @@ describe('sanitizeHistoryForToolProtocol', () => {
     const result = sanitizeHistoryForToolProtocol(history, 'teste');
     expect(result).toEqual(history);
   });
+  it('remove planejamento interno persistido como mensagem do assistente', () => {
+    const history = [
+      { role: 'assistant', content: 'The user is asking for available times tomorrow. I need to use consultar_horarios_disponiveis.' },
+      { role: 'user', content: 'Pode verificar?' },
+    ] as any;
+
+    const result = sanitizeHistoryForToolProtocol(history, 'teste');
+
+    expect(result).toEqual([{ role: 'user', content: 'Pode verificar?' }]);
+  });
 });
 

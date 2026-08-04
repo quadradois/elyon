@@ -4,6 +4,7 @@ import type { TipoAgente } from './agent-chain';
 import { sanitizarRespostaParaCliente } from './client-response-sanitizer';
 import { logger } from '../lib/logger';
 import { ehConsultaStatusAgendamento } from '../servicos/intencao-status-agendamento';
+import { ehConsultaDisponibilidadeAgendamento } from '../servicos/intencao-disponibilidade-agendamento';
 
 interface AplicarFiltrosRespostaParams {
   respostaFinal: string;
@@ -92,6 +93,20 @@ function aplicarGuardrailConsultaStatusAgenda(
   return resposta;
 }
 
+function aplicarGuardrailConsultaDisponibilidade(
+  resposta: string,
+  nomesToolsSucessoTurno: string[],
+  ultimaMsgLead?: string,
+): string {
+  const consultouViaTool = nomesToolsSucessoTurno.some(
+    (nome) => /consultar_horarios_disponiveis/i.test(nome)
+  );
+  if (ehConsultaDisponibilidadeAgendamento(ultimaMsgLead) && !consultouViaTool) {
+    return 'Vou consultar agora os horários livres do especialista antes de te oferecer opções.';
+  }
+  return resposta;
+}
+
 function aplicarGuardrailCancelamentoAgenda(resposta: string, nomesToolsSucessoTurno: string[]): string {
   const normalizada = normalizarTexto(resposta);
   const possuiEvidenciaViaTool = nomesToolsSucessoTurno.some(
@@ -167,6 +182,16 @@ export function aplicarFiltrosRespostaOrchestrator(
   if (respostaAntesGuardrailConsultaAgenda !== respostaLimpa) {
     logger.warn('[ORCHESTRATOR] Guardrail bloqueou resposta de status de agenda sem consulta ao banco.');
     fallbackAplicado = 'AGENDA_STATUS_GUARD';
+  }
+  const respostaAntesGuardrailDisponibilidade = respostaLimpa;
+  respostaLimpa = aplicarGuardrailConsultaDisponibilidade(
+    respostaLimpa,
+    nomesToolsSucessoTurno,
+    ultimaMsgLead,
+  );
+  if (respostaAntesGuardrailDisponibilidade !== respostaLimpa) {
+    logger.warn('[ORCHESTRATOR] Guardrail exigiu consulta de horários antes de responder ao lead.');
+    fallbackAplicado = 'AGENDA_AVAILABILITY_GUARD';
   }
   const respostaAntesGuardrailCancelamento = respostaLimpa;
   respostaLimpa = aplicarGuardrailCancelamentoAgenda(respostaLimpa, nomesToolsSucessoTurno);

@@ -70,6 +70,11 @@ import {
     formatarRespostaStatusAgendamento,
 } from '../servicos/consulta-status-agendamento';
 import { ehConsultaStatusAgendamento } from '../servicos/intencao-status-agendamento';
+import { interpretarConsultaDisponibilidadeAgendamento } from '../servicos/intencao-disponibilidade-agendamento';
+import {
+    consultarHorariosDisponiveisCanonico,
+    formatarRespostaHorariosDisponiveis,
+} from '../servicos/consulta-horarios-disponiveis';
 
 // Re-exports para consumidores existentes (webhook.ts, sdr-tools-agents.ts)
 export { buscarConfiguracaoTenant, buscarContextoConversa, resolverLeadIdCanonico } from './orchestrator-queries';
@@ -770,6 +775,60 @@ Use isso como desempate estratégico na próxima ação.`;
                         erro: error instanceof Error ? error.message : error,
                         duracaoMs: Date.now() - inicioConsulta,
                     }, '[TOOL_AUDIT] consultar_status_agendamento ERRO no fallback determinístico');
+                }
+            }
+        }
+
+        // Consulta de disponibilidade também é um read model canônico. Se o
+        // modelo apenas narrar que chamaria a tool, o backend executa a mesma
+        // consulta tenant-safe e preserva data/período pedidos pelo lead.
+        if (fallbackAplicado === 'AGENDA_AVAILABILITY_GUARD') {
+            const leadIdConsulta = contexto.leadId || contexto.contatoId;
+            const intencaoDisponibilidade = interpretarConsultaDisponibilidadeAgendamento(ultimaMsgLeadTexto);
+            if (leadIdConsulta && intencaoDisponibilidade) {
+                const inicioConsulta = Date.now();
+                try {
+                    await contexto.assertFencing?.();
+                    const horarios = await consultarHorariosDisponiveisCanonico({
+                        leadId: leadIdConsulta,
+                        tenantId: config.tenantId,
+                        periodoPreferido: intencaoDisponibilidade.periodoPreferido,
+                        dataPreferida: intencaoDisponibilidade.dataPreferida,
+                    });
+                    await contexto.assertFencing?.();
+
+                    nomesToolsTurno = [...new Set([...nomesToolsTurno, 'consultar_horarios_disponiveis'])];
+                    if (horarios.success) {
+                        nomesToolsSucessoTurno = [...new Set([
+                            ...nomesToolsSucessoTurno,
+                            'consultar_horarios_disponiveis',
+                        ])];
+                    }
+                    respostaLimpa = formatarRespostaHorariosDisponiveis(horarios);
+                    fallbackAplicado = horarios.success
+                        ? 'AGENDA_AVAILABILITY_DETERMINISTIC_QUERY'
+                        : 'AGENDA_AVAILABILITY_DETERMINISTIC_FAILURE';
+
+                    logger[horarios.success ? 'info' : 'warn']({
+                        tool: 'consultar_horarios_disponiveis',
+                        fase: 'fallback-deterministico',
+                        result: {
+                            success: horarios.success,
+                            reasonCode: horarios.reasonCode,
+                            sugestoes: horarios.sugestoes?.length || 0,
+                            dataPreferidaConfigurada: Boolean(intencaoDisponibilidade.dataPreferida),
+                        },
+                        duracaoMs: Date.now() - inicioConsulta,
+                    }, `[TOOL_AUDIT] consultar_horarios_disponiveis ${horarios.success ? 'OK' : 'FALHOU'} (${Date.now() - inicioConsulta}ms)`);
+                } catch (error) {
+                    respostaLimpa = 'Não consegui consultar a agenda do especialista agora. Vou verificar antes de te oferecer um horário.';
+                    fallbackAplicado = 'AGENDA_AVAILABILITY_DETERMINISTIC_ERROR';
+                    logger.error({
+                        tool: 'consultar_horarios_disponiveis',
+                        fase: 'fallback-deterministico',
+                        erro: error instanceof Error ? error.message : error,
+                        duracaoMs: Date.now() - inicioConsulta,
+                    }, '[TOOL_AUDIT] consultar_horarios_disponiveis ERRO no fallback determinístico');
                 }
             }
         }

@@ -35,4 +35,14 @@ describe('sugestão de horários para lead flexível', () => {
       conflitosLocais: [{ agendadoPara: new Date('2026-08-03T12:00:00.000Z'), duracao: 30 }],
     })).toEqual([slots[1]]);
   });
+
+  it('restringe sugestoes a data local solicitada', () => {
+    const outroDia = slot('2026-08-04T12:00:00.000Z');
+    expect(selecionarSugestoesDeHorario({
+      slots: [...slots, outroDia],
+      agora,
+      dataLocal: '2026-08-04',
+      periodoPreferido: 'qualquer',
+    })).toEqual([outroDia]);
+  });
 });

@@ -304,7 +304,7 @@ ${perguntasRoteiroMarkdown}
 - Em DIAGNOSTICO_SPIN, as perguntas devem ser abertas e curtas (máx 1 linha), sem listar hipóteses.
 - Em PITCH, chame \`ler_skill\` com ID \`diagnostico/pitch-rede-parceiros\` antes de iniciar.
 - Em AGENDAMENTO, só chame \`agendar_reuniao_closer\` com dia+hora explícitos ou com uma opção que o lead acabou de confirmar.
-- Se o lead disser "qualquer horário", "pode escolher", "quando tiver vaga", "tanto faz" ou equivalente, chame \`consultar_horarios_disponiveis\`. Ofereça no máximo duas opções e faça uma pergunta de escolha/aceite; não repita "qual dia e horário?".
+- Se o lead disser "qualquer horário", perguntar quais horários existem, "pode escolher", "quando tiver vaga", "tanto faz" ou equivalente, chame \`consultar_horarios_disponiveis\`. Preserve hoje, amanhã ou a data específica em \`dataPreferida\`. Ofereça no máximo duas opções e faça uma pergunta de escolha/aceite; não repita "qual dia e horário?".
 - \`consultar_horarios_disponiveis\` nunca agenda sozinho. Aguarde o lead escolher ou confirmar uma opção e então chame \`agendar_reuniao_closer\` com a data/hora escolhida.
 - Em AGENDAMENTO, o atendimento inicial é **ligação telefônica** (não prometa videochamada, Meet ou Zoom).
 - "sim/pode ser/fechou" após um convite genérico não são datas: pergunte a preferência. Como resposta direta a uma opção exata recém-oferecida, confirmam aquela opção.
