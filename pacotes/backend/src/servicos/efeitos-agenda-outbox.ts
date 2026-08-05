@@ -101,17 +101,32 @@ export async function executarProximoEfeitoAgenda(
     if (!destination?.telefone || !session?.instanceName) throw new Error('AGENDA_EFFECT_DESTINATION_UNAVAILABLE');
     const sent = await sender.send(session.instanceName, destination.telefone, effect.mensagem, effect.chaveIdempotencia);
     const confirmationTime = new Date();
-    const confirmed = await prisma.efeitoAgendaOutbox.updateMany({
-      where: {
-        id: effect.id, status: 'RESERVADA', leaseOwner: owner, fencingToken: effect.fencingToken,
-        leaseAte: { gt: confirmationTime },
-      },
-      data: {
-        status: 'CONCLUIDA', concluidoEm: confirmationTime, leaseOwner: null, leaseAte: null,
-        resultado: sent.providerId || 'CONFIRMED', reasonCode: null,
-      },
+    await prisma.$transaction(async (tx) => {
+      const confirmed = await tx.efeitoAgendaOutbox.updateMany({
+        where: {
+          id: effect.id, status: 'RESERVADA', leaseOwner: owner, fencingToken: effect.fencingToken,
+          leaseAte: { gt: confirmationTime },
+        },
+        data: {
+          status: 'CONCLUIDA', concluidoEm: confirmationTime, leaseOwner: null, leaseAte: null,
+          resultado: sent.providerId || 'CONFIRMED', reasonCode: null,
+        },
+      });
+      if (confirmed.count !== 1) throw new Error('AGENDA_EFFECT_CONFIRMATION_FENCE_LOST');
+      if (effect.tipo === 'FEEDBACK_POS_ATENDIMENTO' && effect.usuarioDestinoId) {
+        await tx.feedbackPosAtendimentoAgenda.updateMany({
+          where: {
+            tenantId: effect.tenantId, atividadeId: effect.atividadeId,
+            usuarioId: effect.usuarioDestinoId, status: 'AGUARDANDO_ENVIO',
+          },
+          data: {
+            status: 'AGUARDANDO_RESPOSTA', enviadoEm: confirmationTime,
+            expiraEm: new Date(confirmationTime.getTime() + 24 * 60 * 60_000),
+            providerMessageId: sent.providerId,
+          },
+        });
+      }
     });
-    if (confirmed.count !== 1) throw new Error('AGENDA_EFFECT_CONFIRMATION_FENCE_LOST');
     agendaEfeitosEventos.inc({ resultado: 'concluida' });
   } catch (error) {
     await prisma.efeitoAgendaOutbox.updateMany({

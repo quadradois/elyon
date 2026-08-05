@@ -5,6 +5,7 @@ import {
   executarLembretesConfirmacaoCorretor,
 } from '../jobs/job-confirmacao-corretor';
 import { executarLembretesProximidadeAgendamento } from '../jobs/job-lembretes-agendamento';
+import { executarFeedbacksPosAtendimento } from '../jobs/job-post-appointment-feedback';
 
 const INTERVALO_PADRAO_MS = 60_000;
 
@@ -40,9 +41,14 @@ export class SchedulerConfirmacaoCorretor {
         const lembretes = await executarLembretesConfirmacaoCorretor();
         const cutoff = await executarCutoffRemanejamentoCorretor();
         const lembretesAtendimento = await executarLembretesProximidadeAgendamento();
+        const feedbacksPosAtendimento = await executarFeedbacksPosAtendimento();
 
-        if (convites.processados || lembretes.processados || cutoff.processados || lembretesAtendimento.processados) {
-          console.log('[ConfirmacaoCorretor] Ciclo concluído', { convites, lembretes, cutoff });
+        if (convites.processados || lembretes.processados || cutoff.processados
+          || lembretesAtendimento.processados || feedbacksPosAtendimento.elegiveis
+          || feedbacksPosAtendimento.lembretes || feedbacksPosAtendimento.pendencias) {
+          console.log('[ConfirmacaoCorretor] Ciclo concluído', {
+            convites, lembretes, cutoff, feedbacksPosAtendimento,
+          });
         }
       });
     } catch (error) {
