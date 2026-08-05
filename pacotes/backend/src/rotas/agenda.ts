@@ -9,20 +9,35 @@ import { obterAgendaPolicy, type AgendaPolicyAction } from '../servicos/agenda-p
 import { obterAgendaLifecycleRollout, type AgendaLifecycleRollout } from '../servicos/agenda-lifecycle-rollout';
 import { agendaLifecycleExpiredPending, agendaLifecycleOperationalQueueAgeSeconds } from '../observabilidade/agenda-comercial-metrics';
 import { formatarDataHoraAgenda, montarMensagemLigacaoConfirmada } from '../servicos/notificacao-agendamento';
+import {
+    atorPolicyAgenda,
+    filtrarAcoesAgendaPorAcesso,
+    obterEscopoLeituraAgenda,
+    podeExecutarComandoAgenda,
+} from '../servicos/agenda-access-policy';
+import { remanejarCorretorAtividade } from '../servicos/remanejamento-corretor';
 
 const router = Router();
 
 const LEGACY_VISIBLE_ACTIONS: AgendaPolicyAction[] = ['CANCELAR', 'REAGENDAR'];
 
+function usuarioPodeAlterarAgenda(papel: string | undefined): boolean {
+    return papel !== 'VISUALIZADOR';
+}
+
 function obterAcoesVisiveis(
     policyActions: AgendaPolicyAction[],
     rollout: AgendaLifecycleRollout,
+    access: { papel: string; usuarioId: string; responsavelId?: string | null },
 ): AgendaPolicyAction[] {
-    if (rollout.commandsEnabled) return policyActions;
-    if (rollout.policyEnabled) {
-        return policyActions.filter((action) => action === 'CANCELAR' || action === 'REAGENDAR');
+    let visibleActions: AgendaPolicyAction[];
+    if (rollout.commandsEnabled) visibleActions = policyActions;
+    else if (rollout.policyEnabled) {
+        visibleActions = policyActions.filter((action) => action === 'CANCELAR' || action === 'REAGENDAR');
+    } else {
+        visibleActions = LEGACY_VISIBLE_ACTIONS;
     }
-    return LEGACY_VISIBLE_ACTIONS;
+    return filtrarAcoesAgendaPorAcesso(visibleActions, access);
 }
 
 async function obterAgoraBanco(): Promise<Date> {
@@ -40,14 +55,22 @@ const AgendaCommandSchema = z.object({
     responsibleId: z.string().uuid().optional(),
     correctedStatus: z.enum(['REALIZADO', 'NAO_COMPARECEU', 'CANCELADO']).optional(),
     leadManifestation: z.enum(['HORARIO_ESCOLHIDO', 'HORARIO_ACEITO']).optional(),
+    absentParty: z.enum(['LEAD', 'ESPECIALISTA']).optional(),
+    notifyLead: z.boolean().optional().default(true),
 });
 
-async function obterVisaoAgenda(id: string, tenantId: string, ator: 'ADMIN' | 'OPERADOR' | 'PUBLICO' = 'OPERADOR') {
+async function obterVisaoAgenda(
+    id: string,
+    tenantId: string,
+    usuario: { id: string; papel: string },
+) {
     const atividade = await prisma.atividade.findFirst({
         where: { id, lead: { tenantId } },
         include: { lead: { select: { id: true } } },
     });
     if (!atividade) return null;
+    const scope = obterEscopoLeituraAgenda({ papel: usuario.papel, usuarioId: usuario.id });
+    if (scope.tipo === 'PROPRIA' && atividade.corretorAtualId !== scope.responsavelId) return null;
     const agora = await obterAgoraBanco();
     const rollout = await obterAgendaLifecycleRollout(tenantId, agora);
     const policy = obterAgendaPolicy({
@@ -55,7 +78,7 @@ async function obterVisaoAgenda(id: string, tenantId: string, ator: 'ADMIN' | 'O
         agendadoPara: atividade.agendadoPara,
         duracaoMinutos: atividade.duracao,
         agora,
-        ator,
+        ator: atorPolicyAgenda(usuario.papel),
     });
     return {
         id: atividade.id,
@@ -63,7 +86,11 @@ async function obterVisaoAgenda(id: string, tenantId: string, ator: 'ADMIN' | 'O
         status: atividade.statusAgendamento,
         temporalPhase: policy.faseTemporal,
         version: atividade.versao,
-        allowedActions: obterAcoesVisiveis(policy.allowedActions, rollout),
+        allowedActions: obterAcoesVisiveis(policy.allowedActions, rollout, {
+            papel: usuario.papel,
+            usuarioId: usuario.id,
+            responsavelId: atividade.corretorAtualId,
+        }),
         blockedReasons: !rollout.policyEnabled || policy.reasonCode === 'ALLOWED'
             ? {} : { lifecycle: policy.reasonCode },
         lifecyclePolicyEnabled: rollout.policyEnabled,
@@ -81,6 +108,8 @@ router.get('/', verificarAutenticacao, async (req, res) => {
     try {
         const tenantId = req.tenantId; // Injetado pelo middleware
         if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        const usuario = req.usuario!;
+        const scope = obterEscopoLeituraAgenda({ papel: usuario.papel, usuarioId: usuario.id });
 
         // Filtros de data (obrigatórios para boa performance)
         const start = req.query.start ? new Date(req.query.start as string) : new Date();
@@ -96,7 +125,8 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                     lte: end
                 },
                 // Exclui cancelados
-                statusAgendamento: { not: 'CANCELADO' }
+                statusAgendamento: { not: 'CANCELADO' },
+                ...(scope.tipo === 'PROPRIA' ? { corretorAtualId: scope.responsavelId } : {}),
             },
             include: {
                 lead: {
@@ -120,7 +150,7 @@ router.get('/', verificarAutenticacao, async (req, res) => {
         // Formatar para FullCalendar / Frontend Standard
         const agora = await obterAgoraBanco();
         const rollout = await obterAgendaLifecycleRollout(tenantId, agora);
-        const atorPolicy = req.usuario?.papel === 'ADMIN' ? 'ADMIN' as const : 'OPERADOR' as const;
+        const atorPolicy = atorPolicyAgenda(usuario.papel);
         const eventos = atividades.map(a => {
             const policy = obterAgendaPolicy({
                 status: a.statusAgendamento,
@@ -149,7 +179,11 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                 statusConfirmacaoCorretor: a.statusConfirmacaoCorretor || null,
                 versao: a.versao,
                 faseTemporal: policy.faseTemporal,
-                allowedActions: obterAcoesVisiveis(policy.allowedActions, rollout),
+                allowedActions: obterAcoesVisiveis(policy.allowedActions, rollout, {
+                    papel: usuario.papel,
+                    usuarioId: usuario.id,
+                    responsavelId: a.corretorAtualId,
+                }),
                 policyReasonCode: rollout.policyEnabled ? policy.reasonCode : 'LEGACY_COMPATIBILITY',
                 lifecyclePolicyEnabled: rollout.policyEnabled,
                 lifecycleCommandsEnabled: rollout.commandsEnabled,
@@ -184,6 +218,7 @@ router.post('/bloqueio', verificarAutenticacao, async (req, res) => {
     try {
         const tenantId = req.tenantId;
         if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        if (!usuarioPodeAlterarAgenda(req.usuario?.papel)) return responderErro(res, 403, 'Agenda disponível somente para leitura');
 
         const body = BloqueioSchema.parse(req.body);
         const dataInicio = new Date(body.inicio);
@@ -280,6 +315,7 @@ router.delete('/bloqueio/:id', verificarAutenticacao, async (req, res) => {
         const { id } = req.params;
         const tenantId = req.tenantId;
         if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        if (!usuarioPodeAlterarAgenda(req.usuario?.papel)) return responderErro(res, 403, 'Agenda disponível somente para leitura');
 
         // Verificar se bloqueio existe e pertence ao tenant
         const bloqueio = await prisma.atividade.findFirst({
@@ -362,8 +398,7 @@ router.get('/conflitos', verificarAutenticacao, async (req, res) => {
 router.get('/:id([0-9a-fA-F-]{36})', verificarAutenticacao, async (req, res) => {
     const tenantId = req.tenantId;
     if (!tenantId) return responderErro(res, 401, 'Não autorizado');
-    const ator = req.usuario?.papel === 'ADMIN' ? 'ADMIN' : 'OPERADOR';
-    const appointment = await obterVisaoAgenda(req.params.id, tenantId, ator);
+    const appointment = await obterVisaoAgenda(req.params.id, tenantId, req.usuario!);
     if (!appointment) return responderErro(res, 404, 'Agendamento não encontrado');
     return res.json(appointment);
 });
@@ -372,6 +407,8 @@ router.get('/pendencias/vencidas', verificarAutenticacao, async (req, res) => {
     try {
         const tenantId = req.tenantId;
         if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        const usuario = req.usuario!;
+        const scope = obterEscopoLeituraAgenda({ papel: usuario.papel, usuarioId: usuario.id });
         const agora = await obterAgoraBanco();
         const rollout = await obterAgendaLifecycleRollout(tenantId, agora);
         if (!rollout.commandsEnabled) return res.json([]);
@@ -381,15 +418,18 @@ router.get('/pendencias/vencidas', verificarAutenticacao, async (req, res) => {
                 tipo: { in: ['AVALIACAO', 'REUNIAO'] },
                 statusAgendamento: { in: ['PENDENTE', 'SOLICITADO', 'PROPOSTO', 'CONFIRMADO'] },
                 agendadoPara: { lt: agora },
+                ...(scope.tipo === 'PROPRIA' ? { corretorAtualId: scope.responsavelId } : {}),
             },
             include: { lead: { select: { nome: true } } },
             orderBy: { agendadoPara: 'asc' },
         });
-        const ator = req.usuario?.papel === 'ADMIN' ? 'ADMIN' as const : 'OPERADOR' as const;
-        agendaLifecycleExpiredPending.set(atividades.length);
-        const oldest = atividades[0]?.agendadoPara;
-        agendaLifecycleOperationalQueueAgeSeconds.set(oldest
-            ? Math.max(0, Math.floor((agora.getTime() - oldest.getTime()) / 1_000)) : 0);
+        const ator = atorPolicyAgenda(usuario.papel);
+        if (scope.tipo === 'TENANT') {
+            agendaLifecycleExpiredPending.set(atividades.length);
+            const oldest = atividades[0]?.agendadoPara;
+            agendaLifecycleOperationalQueueAgeSeconds.set(oldest
+                ? Math.max(0, Math.floor((agora.getTime() - oldest.getTime()) / 1_000)) : 0);
+        }
         return res.json(atividades.map((atividade) => {
             const policy = obterAgendaPolicy({
                 status: atividade.statusAgendamento, agendadoPara: atividade.agendadoPara,
@@ -402,7 +442,11 @@ router.get('/pendencias/vencidas', verificarAutenticacao, async (req, res) => {
                 status: atividade.statusAgendamento,
                 version: atividade.versao,
                 temporalPhase: policy.faseTemporal,
-                allowedActions: policy.allowedActions,
+                allowedActions: filtrarAcoesAgendaPorAcesso(policy.allowedActions, {
+                    papel: usuario.papel,
+                    usuarioId: usuario.id,
+                    responsavelId: atividade.corretorAtualId,
+                }),
                 pendingAgeMinutes: atividade.agendadoPara
                     ? Math.max(0, Math.floor((agora.getTime() - atividade.agendadoPara.getTime()) / 60_000))
                     : 0,
@@ -429,20 +473,40 @@ router.post('/:id/commands', verificarAutenticacao, async (req, res) => {
             return responderErro(res, 400, 'Idempotency-Key inválida');
         }
         const body = AgendaCommandSchema.parse(req.body || {});
-        if (body.command === 'CORRIGIR' && req.usuario?.papel !== 'ADMIN') {
+        if (body.command === 'CORRIGIR' && !['ADMIN', 'SUPER_ADMIN'].includes(req.usuario?.papel || '')) {
             return responderErro(res, 403, 'Correção exige papel administrativo');
         }
         if (body.command === 'CORRIGIR' && (!body.justification || body.justification.length < 10 || !body.correctedStatus)) {
             return responderErro(res, 400, 'JUSTIFICATION_REQUIRED');
         }
+        if (body.command === 'CORRIGIR' && body.correctedStatus === 'NAO_COMPARECEU' && !body.absentParty) {
+            return responderErro(res, 400, 'absentParty é obrigatório para corrigir como não comparecimento');
+        }
         const atividade = await prisma.atividade.findFirst({
             where: { id: req.params.id, lead: { tenantId } },
-            select: { id: true, leadId: true },
+            select: {
+                id: true,
+                leadId: true,
+                agendadoPara: true,
+                corretorAtualId: true,
+                lead: { select: { nome: true } },
+            },
         });
         if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
+        if (!podeExecutarComandoAgenda({
+            papel: req.usuario!.papel,
+            usuarioId: req.usuario!.id,
+            responsavelId: atividade.corretorAtualId,
+            command: body.command,
+        })) {
+            return responderErro(res, 403, 'Ação não autorizada para este usuário e compromisso');
+        }
+        if (body.command === 'NAO_COMPARECEU' && !body.absentParty) {
+            return responderErro(res, 400, 'absentParty é obrigatório para não comparecimento');
+        }
         const ocorridoEm = new Date();
         const scheduledFor = body.scheduledFor ? new Date(body.scheduledFor) : undefined;
-        const ator = `${req.usuario?.papel === 'ADMIN' ? 'admin' : 'operador'}:${req.usuario?.email || 'usuario'}`;
+        const ator = `${req.usuario!.papel.toLowerCase()}:${req.usuario?.email || 'usuario'}`;
         const base = {
             tenantId, leadId: atividade.leadId, atividadeId: atividade.id,
             requestIdentity: { source: 'MANUAL_API' as const, id: idempotencyKey },
@@ -455,7 +519,15 @@ router.post('/:id/commands', verificarAutenticacao, async (req, res) => {
         switch (body.command) {
             case 'REAGENDAR':
                 if (!scheduledFor) return responderErro(res, 400, 'scheduledFor é obrigatório');
-                command = { ...base, operacao: 'REAGENDAR', novoHorario: scheduledFor };
+                command = {
+                    ...base,
+                    operacao: 'REAGENDAR',
+                    novoHorario: scheduledFor,
+                    notificacao: body.notifyLead ? {
+                        tipo: 'REAGENDAMENTO',
+                        mensagem: `📅 *Reagendamento de atendimento*\n\nOlá, ${atividade.lead.nome}.\nSeu atendimento foi reagendado para:\n${formatarDataHoraAgenda(scheduledFor)}\n\nPode me confirmar se esse horário funciona para você?`,
+                    } : undefined,
+                };
                 break;
             case 'PROPOR':
                 if (!scheduledFor) return responderErro(res, 400, 'scheduledFor é obrigatório');
@@ -475,24 +547,44 @@ router.post('/:id/commands', verificarAutenticacao, async (req, res) => {
                 command = { ...base, operacao: 'REALIZAR' };
                 break;
             case 'NAO_COMPARECEU':
-                command = { ...base, operacao: 'NO_SHOW', parteAusente: 'LEAD' };
+                command = { ...base, operacao: 'NO_SHOW', parteAusente: body.absentParty === 'ESPECIALISTA' ? 'CORRETOR' : 'LEAD' };
                 break;
             case 'CORRIGIR':
-                command = { ...base, operacao: 'CORRIGIR', estadoCorrigido: body.correctedStatus!, justificativa: body.justification! };
+                command = {
+                    ...base,
+                    operacao: 'CORRIGIR',
+                    estadoCorrigido: body.correctedStatus!,
+                    justificativa: body.justification!,
+                    parteAusente: body.absentParty === 'ESPECIALISTA' ? 'CORRETOR' : body.absentParty,
+                };
                 break;
             default:
-                command = { ...base, operacao: 'CANCELAR' };
+                command = {
+                    ...base,
+                    operacao: 'CANCELAR',
+                    notificacao: body.notifyLead ? {
+                        tipo: 'CANCELAMENTO',
+                        mensagem: `⚠️ *Atualização do agendamento*\n\nOlá, ${atividade.lead.nome}.\nSeu atendimento de ${formatarDataHoraAgenda(atividade.agendadoPara)} foi cancelado.\n\nSe quiser, já te proponho novos horários para reagendar.`,
+                    } : undefined,
+                };
         }
         const result = await executarComandoAgenda(command);
-        const appointment = await obterVisaoAgenda(atividade.id, tenantId, req.usuario?.papel === 'ADMIN' ? 'ADMIN' : 'OPERADOR');
         if (!result.success) {
+            const appointment = await obterVisaoAgenda(atividade.id, tenantId, req.usuario!);
             return res.status(result.transient ? 503 : 409).json({ code: result.reasonCode, message: result.reasonCode, appointment });
         }
+        const reassignment = body.command === 'RECUSAR' && !result.replay
+            ? await remanejarCorretorAtividade({ atividadeId: atividade.id, origem: 'RECUSA_EXPLICITA' })
+            : undefined;
         const resultingId = result.atividadeResultanteId || atividade.id;
-        const resultingAppointment = resultingId === atividade.id
-            ? appointment
-            : await obterVisaoAgenda(resultingId, tenantId, req.usuario?.papel === 'ADMIN' ? 'ADMIN' : 'OPERADOR');
-        return res.json({ applied: !result.replay, replayed: Boolean(result.replay), correlationId: command.correlationId, appointment: resultingAppointment });
+        const resultingAppointment = await obterVisaoAgenda(resultingId, tenantId, req.usuario!);
+        return res.json({
+            applied: !result.replay,
+            replayed: Boolean(result.replay),
+            correlationId: command.correlationId,
+            appointment: resultingAppointment,
+            reassignment,
+        });
     } catch (error) {
         if (error instanceof z.ZodError) return responderErro(res, 400, 'Dados inválidos', { detalhes: error.errors });
         console.error('[Agenda] Erro no comando canônico:', error);
@@ -524,6 +616,14 @@ router.post('/:id/aprovar', verificarAutenticacao, async (req, res) => {
         // Verificar se pertence ao tenant
         if (atividade.lead.tenantId !== tenantId) {
             return responderErro(res, 403, 'Sem permissão para este agendamento');
+        }
+        if (!podeExecutarComandoAgenda({
+            papel: req.usuario!.papel,
+            usuarioId: req.usuario!.id,
+            responsavelId: atividade.corretorAtualId,
+            command: 'CONFIRMAR_ATRIBUICAO',
+        })) {
+            return responderErro(res, 403, 'Ação não autorizada para este usuário e compromisso');
         }
 
         if ((atividade as any).statusConfirmacaoCorretor === 'CONFIRMADO') {
@@ -592,6 +692,12 @@ router.post('/:id/cancelar', verificarAutenticacao, async (req, res) => {
         });
         if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
         if (atividade.lead.tenantId !== tenantId) return responderErro(res, 403, 'Sem permissão para este agendamento');
+        if (!podeExecutarComandoAgenda({
+            papel: req.usuario!.papel,
+            usuarioId: req.usuario!.id,
+            responsavelId: atividade.corretorAtualId,
+            command: 'CANCELAR',
+        })) return responderErro(res, 403, 'Ação não autorizada para este usuário e compromisso');
 
         const mensagemNotificacao = `⚠️ *Atualização do agendamento*
 
@@ -643,6 +749,12 @@ router.post('/:id/reagendar', verificarAutenticacao, async (req, res) => {
         });
         if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
         if (atividade.lead.tenantId !== tenantId) return responderErro(res, 403, 'Sem permissão para este agendamento');
+        if (!podeExecutarComandoAgenda({
+            papel: req.usuario!.papel,
+            usuarioId: req.usuario!.id,
+            responsavelId: atividade.corretorAtualId,
+            command: 'REAGENDAR',
+        })) return responderErro(res, 403, 'Ação não autorizada para este usuário e compromisso');
 
         const mensagemNotificacao = `📅 *Reagendamento de atendimento*
 
@@ -692,6 +804,12 @@ router.post('/:id/propor-horario', verificarAutenticacao, async (req, res) => {
         });
         if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
         if (atividade.lead.tenantId !== tenantId) return responderErro(res, 403, 'Sem permissão para este agendamento');
+        if (!podeExecutarComandoAgenda({
+            papel: req.usuario!.papel,
+            usuarioId: req.usuario!.id,
+            responsavelId: atividade.corretorAtualId,
+            command: 'PROPOR',
+        })) return responderErro(res, 403, 'Ação não autorizada para este usuário e compromisso');
 
         const mensagem = body.mensagem?.trim() || `Oi, ${atividade.lead.nome}! 😊
 
@@ -771,6 +889,7 @@ router.put('/expediente', verificarAutenticacao, async (req, res) => {
     try {
         const tenantId = req.tenantId;
         if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        if (!usuarioPodeAlterarAgenda(req.usuario?.papel)) return responderErro(res, 403, 'Agenda disponível somente para leitura');
 
         const { dias, almocoAtivo, almocoInicio, almocoFim } = req.body;
 

@@ -23,7 +23,8 @@ export interface EventoAgenda {
         statusConfirmacaoCorretor?: string | null;
         versao: number;
         faseTemporal?: 'FUTURO' | 'INICIADO' | 'ENCERRADO' | null;
-        allowedActions?: Array<'CANCELAR' | 'REAGENDAR' | 'REALIZAR' | 'NAO_COMPARECEU' | 'CORRIGIR'>;
+        allowedActions?: Array<'SOLICITAR' | 'PROPOR' | 'ACEITAR' | 'RECUSAR' | 'CONFIRMAR_ATRIBUICAO'
+            | 'CANCELAR' | 'REAGENDAR' | 'REALIZAR' | 'NAO_COMPARECEU' | 'CORRIGIR'>;
         policyReasonCode?: string;
         lifecyclePolicyEnabled?: boolean;
         lifecycleCommandsEnabled?: boolean;
@@ -45,6 +46,8 @@ export async function executarComandoAgenda(
         justification?: string;
         correctedStatus?: 'REALIZADO' | 'NAO_COMPARECEU' | 'CANCELADO';
         leadManifestation?: 'HORARIO_ESCOLHIDO' | 'HORARIO_ACEITO';
+        absentParty?: 'LEAD' | 'ESPECIALISTA';
+        notifyLead?: boolean;
     },
     idempotencyKey = crypto.randomUUID(),
 ) {
@@ -54,6 +57,19 @@ export async function executarComandoAgenda(
         scheduledFor: payload.scheduledFor?.toISOString(),
     }, { headers: { 'Idempotency-Key': idempotencyKey } });
     return response.data;
+}
+
+export interface PendenciaAgenda {
+    id: string;
+    leadNome: string;
+    scheduledFor: string;
+    status: string;
+    version: number;
+    temporalPhase: 'INICIADO' | 'ENCERRADO';
+    allowedActions: AgendaCommandName[];
+    pendingAgeMinutes: number;
+    responsibleId?: string | null;
+    operationalReason: string;
 }
 
 export const agendaService = {
@@ -68,11 +84,7 @@ export const agendaService = {
         }));
     },
 
-    listarPendenciasVencidas: async (): Promise<Array<{
-        id: string; leadNome: string; scheduledFor: string; status: string; version: number;
-        temporalPhase: 'INICIADO' | 'ENCERRADO'; allowedActions: string[];
-        pendingAgeMinutes: number; responsibleId?: string | null; operationalReason: string;
-    }>> => {
+    listarPendenciasVencidas: async (): Promise<PendenciaAgenda[]> => {
         const response = await api.get('/agenda/pendencias/vencidas');
         return response.data;
     },

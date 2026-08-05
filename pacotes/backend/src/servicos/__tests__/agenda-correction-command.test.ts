@@ -21,6 +21,13 @@ describe('correção administrativa compensatória', () => {
     expect(sanitizarJustificativaAgenda('<script>ajuste\u0000 autorizado</script>')).toBe('scriptajuste autorizado/script');
   });
 
+  it('exige a parte ausente ao corrigir o desfecho para não comparecimento', () => {
+    const base = correction('Correção validada pelo supervisor');
+    if (base.operacao !== 'CORRIGIR') throw new Error('fixture inválida');
+    expect(validarComandoAgenda({ ...base, estadoCorrigido: 'NAO_COMPARECEU' })).toBe('INVALID_COMMAND');
+    expect(validarComandoAgenda({ ...base, estadoCorrigido: 'NAO_COMPARECEU', parteAusente: 'CORRETOR' })).toBeNull();
+  });
+
   it('é autorizada somente para administrador em estado terminal', () => {
     const base = {
       status: 'NAO_COMPARECEU', agendadoPara: new Date('2026-08-01T10:00:00Z'),

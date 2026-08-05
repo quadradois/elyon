@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EventoAgenda } from '../servicos/apiAgenda';
-import { acaoAgendaPermitida, ordenarPendenciasVencidas } from './agenda-actions';
+import { acaoAgendaPermitida, ordenarPendenciasVencidas, pendenciaPermiteAcao } from './agenda-actions';
 
 function event(allowedActions: NonNullable<EventoAgenda['extendedProps']>['allowedActions']): EventoAgenda {
   return {
@@ -29,5 +29,7 @@ describe('acoes visiveis da Agenda', () => {
       { id: 'antigo', pendingAgeMinutes: 120, allowedActions: ['REALIZAR', 'NAO_COMPARECEU'] },
     ]);
     expect(queue[0]).toMatchObject({ id: 'antigo', allowedActions: ['REALIZAR', 'NAO_COMPARECEU'] });
+    expect(pendenciaPermiteAcao(queue[0] as { allowedActions: Array<'REALIZAR' | 'NAO_COMPARECEU'> }, 'REALIZAR')).toBe(true);
+    expect(pendenciaPermiteAcao(queue[0] as { allowedActions: Array<'REALIZAR' | 'NAO_COMPARECEU'> }, 'NAO_COMPARECEU')).toBe(true);
   });
 });
