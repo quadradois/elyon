@@ -9,13 +9,14 @@ describe('contrato HTTP canônico da Agenda', () => {
   let tenantId: string;
   let leadId: string;
   let atividadeId: string;
+  let authenticatedUser: { id: string; email: string; papel: string; tenantId: string };
   const app = express();
 
   beforeAll(() => {
     app.use(express.json());
     app.use((req, _res, next) => {
       req.tenantId = tenantId;
-      req.usuario = { id: 'contract-user', email: 'admin@contract.invalid', papel: 'ADMIN', tenantId };
+      req.usuario = authenticatedUser;
       next();
     });
     app.use('/api/agenda', agendaRouter);
@@ -24,6 +25,7 @@ describe('contrato HTTP canônico da Agenda', () => {
   beforeEach(async () => {
     const tenant = await prisma.tenant.create({ data: { nome: 'Agenda Contract', slug: `agenda-contract-${randomUUID()}` } });
     tenantId = tenant.id;
+    authenticatedUser = { id: 'contract-admin', email: 'admin@contract.invalid', papel: 'ADMIN', tenantId };
     process.env.AGENDA_LIFECYCLE_POLICY_ENABLED = 'true';
     process.env.AGENDA_LIFECYCLE_COMMANDS_ENABLED = 'true';
     process.env.AGENDA_PILOT_TENANT_ID = tenantId;
@@ -108,6 +110,60 @@ describe('contrato HTTP canônico da Agenda', () => {
     expect(response.body).toEqual(expect.objectContaining({
       code: 'STALE_EVENT', message: 'STALE_EVENT', appointment: expect.objectContaining({ id: atividadeId, version: 2 }),
     }));
+  });
+
+  it('mantém visualizador somente leitura e rejeita mutação pelo servidor', async () => {
+    authenticatedUser = { id: 'contract-viewer', email: 'viewer@contract.invalid', papel: 'VISUALIZADOR', tenantId };
+    const view = await request(app).get(`/api/agenda/${atividadeId}`).expect(200);
+    expect(view.body.allowedActions).toEqual([]);
+    await request(app)
+      .post(`/api/agenda/${atividadeId}/commands`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ command: 'CANCELAR', expectedVersion: 0, reasonCode: 'VIEWER_DENIED', channel: 'PAINEL' })
+      .expect(403);
+  });
+
+  it('impede corretor de consultar e alterar compromisso atribuído a outro especialista', async () => {
+    const [corretor, outro] = await Promise.all([
+      prisma.usuario.create({ data: {
+        tenantId, nome: 'Corretor A', email: `a-${randomUUID()}@contract.invalid`, senha: 'test', papel: 'CORRETOR',
+      } }),
+      prisma.usuario.create({ data: {
+        tenantId, nome: 'Corretor B', email: `b-${randomUUID()}@contract.invalid`, senha: 'test', papel: 'CORRETOR',
+      } }),
+    ]);
+    await prisma.atividade.update({ where: { id: atividadeId }, data: { corretorAtualId: outro.id } });
+    authenticatedUser = { id: corretor.id, email: corretor.email, papel: 'CORRETOR', tenantId };
+
+    await request(app).get(`/api/agenda/${atividadeId}`).expect(404);
+    await request(app)
+      .post(`/api/agenda/${atividadeId}/commands`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ command: 'RECUSAR', expectedVersion: 0, reasonCode: 'OTHER_SPECIALIST', channel: 'PAINEL' })
+      .expect(403);
+  });
+
+  it('exige e audita a parte ausente no não comparecimento manual', async () => {
+    await prisma.atividade.update({
+      where: { id: atividadeId },
+      data: { agendadoPara: new Date('2026-08-01T10:00:00Z'), statusAgendamento: 'CONFIRMADO' },
+    });
+    await request(app)
+      .post(`/api/agenda/${atividadeId}/commands`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ command: 'NAO_COMPARECEU', expectedVersion: 0, reasonCode: 'OUTCOME_WITHOUT_PARTY', channel: 'PAINEL' })
+      .expect(400);
+
+    await request(app)
+      .post(`/api/agenda/${atividadeId}/commands`)
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        command: 'NAO_COMPARECEU', expectedVersion: 0, reasonCode: 'SPECIALIST_ABSENT',
+        channel: 'PAINEL', absentParty: 'ESPECIALISTA',
+      })
+      .expect(200);
+    expect(await prisma.milestoneAgenda.findFirstOrThrow({ where: { atividadeId } }))
+      .toMatchObject({ tipo: 'VISITA_NAO_COMPARECEU', parteAusente: 'CORRETOR' });
   });
 
   it('serializa duas transições concorrentes sem dupla mutação', async () => {

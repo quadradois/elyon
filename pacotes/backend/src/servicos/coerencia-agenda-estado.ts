@@ -83,6 +83,7 @@ export type CorrigirAgendaCommand = BaseCommand & {
   operacao: 'CORRIGIR';
   estadoCorrigido: 'REALIZADO' | 'NAO_COMPARECEU' | 'CANCELADO';
   justificativa: string;
+  parteAusente?: 'LEAD' | 'CORRETOR';
 };
 export type AgendaCommand = CancelarAgendaCommand | ReagendarAgendaCommand | MarcarNoShowCommand
   | RealizarAgendaCommand | ConfirmarAtribuicaoAgendaCommand | ProporAgendaCommand
@@ -144,6 +145,7 @@ export function validarComandoAgenda(command: AgendaCommand): AgendaReasonCode |
   if (command.operacao === 'PROPOR' && (!Number.isFinite(command.novoHorario?.getTime()) || command.novoHorario <= command.ocorridoEm)) return 'INVALID_COMMAND';
   if (command.operacao === 'SOLICITAR' && command.novoHorario && (!Number.isFinite(command.novoHorario.getTime()) || command.novoHorario <= command.ocorridoEm)) return 'INVALID_COMMAND';
   if (command.operacao === 'CORRIGIR' && normalizar(sanitizarJustificativaAgenda(command.justificativa)).length < 10) return 'JUSTIFICATION_REQUIRED';
+  if (command.operacao === 'CORRIGIR' && command.estadoCorrigido === 'NAO_COMPARECEU' && !command.parteAusente) return 'INVALID_COMMAND';
   return null;
 }
 
@@ -162,7 +164,7 @@ function fingerprint(command: AgendaCommand): string {
     command.operacao === 'SOLICITAR' ? command.manifestacaoLead : '',
     command.operacao === 'SOLICITAR' ? command.responsavelId || '' : '',
     command.operacao === 'SOLICITAR' ? command.tokenConfirmacaoCorretor || '' : '',
-    command.operacao === 'CORRIGIR' ? `${command.estadoCorrigido}:${normalizar(command.justificativa)}` : '',
+    command.operacao === 'CORRIGIR' ? `${command.estadoCorrigido}:${command.parteAusente || ''}:${normalizar(command.justificativa)}` : '',
     command.operacao === 'CONFIRMAR_ATRIBUICAO' ? command.responsavelId || '' : '',
     command.operacao === 'REAGENDAR' ? command.responsavelId || '' : '',
     command.operacao === 'REAGENDAR' ? String(Boolean(command.confirmarResponsavel)) : '',
@@ -440,7 +442,11 @@ async function executarNaTransacao(tx: Prisma.TransactionClient, command: Agenda
     tenantId: command.tenantId, leadId: command.leadId, atividadeId: command.atividadeId,
     atividadeSubstitutaId: replacementId, tipo: milestoneType, ator: command.ator,
     origem: command.origem, motivo: command.operacao === 'CORRIGIR' ? sanitizarJustificativaAgenda(command.justificativa) : command.motivo, reasonCode: result.reasonCode,
-    parteAusente: command.operacao === 'NO_SHOW' ? command.parteAusente : null,
+    parteAusente: command.operacao === 'NO_SHOW'
+      ? command.parteAusente
+      : command.operacao === 'CORRIGIR' && command.estadoCorrigido === 'NAO_COMPARECEU'
+        ? command.parteAusente || null
+        : null,
     ocorridoEm: command.ocorridoEm, chaveIdempotencia: milestoneKey,
   } });
   result = await persistirDecisao(tx, command, key, fp, result);
