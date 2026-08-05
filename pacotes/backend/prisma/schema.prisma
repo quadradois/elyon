@@ -107,6 +107,7 @@ model Tenant {
   convitesEspecialistaAgenda   ConviteEspecialistaAgenda[]
   interacoesEspecialistaAgenda InteracaoEspecialistaAgenda[]
   contrapropostasAgenda        ContrapropostaAgenda[]
+  feedbacksPosAtendimento      FeedbackPosAtendimentoAgenda[]
 
   criadoEm                    DateTime                     @default(now())
   atualizadoEm                DateTime                     @updatedAt
@@ -373,6 +374,7 @@ model Usuario {
   campanhasFallback    Campanha[]                    @relation("CampanhaFallback")
   convitesAgenda       ConviteEspecialistaAgenda[]
   interacoesAgenda     InteracaoEspecialistaAgenda[]
+  feedbacksPosAtendimento FeedbackPosAtendimentoAgenda[]
 
   @@unique([tenantId, email])
   @@index([email])
@@ -1565,6 +1567,7 @@ model Atividade {
   interacoesEspecialista          InteracaoEspecialistaAgenda[]
   contrapropostasOrigem           ContrapropostaAgenda[]        @relation("ContrapropostaOrigem")
   contrapropostasResultado        ContrapropostaAgenda[]        @relation("ContrapropostaResultado")
+  feedbackPosAtendimento          FeedbackPosAtendimentoAgenda?
 
   @@index([leadId])
   @@index([tipo])
@@ -1729,6 +1732,33 @@ model ContrapropostaAgenda {
   @@index([tenantId, atividadeId, status], map: "contrapropostas_agenda_atividade_idx")
   @@index([tenantId, propostaPorId, status], map: "contrapropostas_agenda_autor_idx")
   @@map("contrapropostas_agenda")
+}
+
+model FeedbackPosAtendimentoAgenda {
+  id                 String    @id @default(uuid())
+  tenantId           String
+  atividadeId        String    @unique
+  usuarioId          String
+  versaoAtividade    Int
+  status             String    @default("AGUARDANDO_ENVIO")
+  elegivelEm         DateTime
+  enviadoEm          DateTime?
+  lembreteEm         DateTime?
+  expiraEm           DateTime?
+  respondidoEm       DateTime?
+  desfecho           String?
+  resumoSanitizado   String?   @db.Text
+  sugestoes          Json?
+  providerMessageId  String?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  atividade          Atividade @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  usuario            Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@index([status, elegivelEm], map: "feedback_pos_atendimento_elegibilidade_idx")
+  @@index([tenantId, usuarioId, status, expiraEm], map: "feedback_pos_atendimento_contexto_idx")
+  @@map("feedbacks_pos_atendimento_agenda")
 }
 
 enum TipoAtividade {

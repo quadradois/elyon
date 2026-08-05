@@ -1,7 +1,7 @@
 {
-  "feature": "002-specialist-copilot",
-  "branch": "codex/specialist-copilot",
-  "spec": "specs/002-specialist-copilot/spec.md",
+  "feature": "003-post-appointment-feedback",
+  "branch": "codex/post-appointment-feedback",
+  "spec": "specs/003-post-appointment-feedback/spec.md",
   "status": "implemented-awaiting-pilot-smoke",
-  "createdAt": "2026-08-03"
+  "createdAt": "2026-08-05"
 }

@@ -73,7 +73,7 @@ export interface PendenciaAgenda {
     allowedActions: AgendaCommandName[];
     pendingAgeMinutes: number;
     responsibleId?: string | null;
-    operationalReason: string;
+    operationalReason: 'OUTCOME_PENDING' | 'SPECIALIST_PENDING' | 'FEEDBACK_SPECIALIST_PENDING';
 }
 
 export const agendaService = {

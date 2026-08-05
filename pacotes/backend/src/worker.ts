@@ -96,6 +96,7 @@ async function loop(): Promise<void> {
         ? await executarProximoEfeitoAgenda(agendaPilotConfig.scope)
         : false;
       const processouNoShow = agendaPilotConfig.noShow.enabled
+        && !agendaPilotConfig.postAppointmentFeedback?.enabled
         ? await executarProximoNoShowAgenda(agendaPilotConfig.scope)
         : false;
       if (!evento && !processouLote && !processouFollowup && !processouEfeitoAgenda && !processouNoShow) await esperar(pollMs);
@@ -162,7 +163,9 @@ async function iniciar(): Promise<void> {
     ['lifecycle_commands', agendaPilotConfig.lifecycleCommands],
     ['effects', agendaPilotConfig.effects],
     ['no_show', agendaPilotConfig.noShow],
+    ['post_appointment_feedback', agendaPilotConfig.postAppointmentFeedback],
   ] as const) {
+    if (!gate) continue;
     const contexto = {
       recurso,
       requested: gate.requested,

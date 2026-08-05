@@ -16,6 +16,18 @@ export type SpecialistInviteContext = {
   versaoAtividade: number;
 };
 
+export type SpecialistFeedbackContext = {
+  feedbackId: string;
+  atividadeId: string;
+  usuarioId: string;
+  tenantId: string;
+  leadId: string;
+  leadNome: string;
+  agendadoPara: Date;
+  versaoAtividade: number;
+  status: string;
+};
+
 export function hashTokenConvite(token: string | null | undefined): string | null {
   return token ? createHash('sha256').update(token).digest('hex') : null;
 }
@@ -103,6 +115,42 @@ export function descreverConvitesParaDesambiguacao(convites: SpecialistInviteCon
     return `${index + 1}. ${item.leadNome} — ${horario}`;
   });
   return `Encontrei mais de uma solicitação. Responda com o número correspondente:\n${itens.join('\n')}`;
+}
+
+export async function buscarFeedbacksPosAtendimentoAcionaveis(
+  identity: SpecialistIdentity,
+  agora = new Date(),
+): Promise<SpecialistFeedbackContext[]> {
+  const feedbacks = await prisma.feedbackPosAtendimentoAgenda.findMany({
+    where: {
+      tenantId: identity.tenantId,
+      usuarioId: identity.id,
+      status: { in: ['AGUARDANDO_RESPOSTA', 'PENDENCIA_GESTOR'] },
+      criadoEm: { gte: new Date(agora.getTime() - 7 * 24 * 60 * 60_000) },
+    },
+    include: { atividade: { include: { lead: { select: { id: true, nome: true } } } } },
+    orderBy: { enviadoEm: 'desc' },
+    take: 5,
+  });
+  return feedbacks.flatMap((feedback) => {
+    const atividade = feedback.atividade;
+    if (!atividade.agendadoPara || atividade.corretorAtualId !== identity.id) return [];
+    if (atividade.statusAgendamento !== 'CONFIRMADO' || atividade.versao !== feedback.versaoAtividade) return [];
+    return [{
+      feedbackId: feedback.id, atividadeId: atividade.id, usuarioId: identity.id,
+      tenantId: identity.tenantId, leadId: atividade.lead.id, leadNome: atividade.lead.nome,
+      agendadoPara: atividade.agendadoPara, versaoAtividade: feedback.versaoAtividade,
+      status: feedback.status,
+    }];
+  });
+}
+
+export function descreverFeedbacksParaDesambiguacao(feedbacks: SpecialistFeedbackContext[]): string {
+  const itens = feedbacks.slice(0, 3).map((item, index) => {
+    const horario = item.agendadoPara.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    return `${index + 1}. ${item.leadNome} — ${horario}`;
+  });
+  return `Encontrei mais de um atendimento aguardando feedback. Responda “atendimento 1”, “atendimento 2” ou “atendimento 3” junto com o resultado:\n${itens.join('\n')}`;
 }
 
 export async function buscarCompromissosConfirmadosEspecialista(

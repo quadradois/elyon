@@ -30,6 +30,18 @@ export const specialistCopilotEventos = new Counter({
   registers: [metricsRegistry],
 });
 
+export const postAppointmentFeedbackEventos = new Counter({
+  name: 'elyon_post_appointment_feedback_total',
+  help: 'Eventos agregados do feedback pos-atendimento, sem PII.',
+  labelNames: ['evento', 'resultado'] as const,
+  registers: [metricsRegistry],
+});
+
+export function registrarPostAppointmentFeedbackEvento(evento: string, resultado: string): void {
+  const safe = (value: string) => /^[A-Z0-9_]{1,64}$/.test(value) ? value.toLowerCase() : 'unknown';
+  postAppointmentFeedbackEventos.inc({ evento: safe(evento), resultado: safe(resultado) });
+}
+
 export function registrarSpecialistCopilotEvento(intencao: string, resultado: string): void {
   const safe = (value: string) => /^[A-Z0-9_]{1,64}$/.test(value) ? value.toLowerCase() : 'unknown';
   specialistCopilotEventos.inc({ intencao: safe(intencao), resultado: safe(resultado) });
@@ -114,5 +126,10 @@ export function registrarAgendaPilotConfig(config: AgendaPilotConfig): void {
     recurso: 'specialist_copilot',
     status: config.specialistCopilot?.enabled ? 'enabled' : 'disabled',
     reason_code: (config.specialistCopilot?.reason || 'FLAG_DISABLED').toLowerCase(),
+  }, 1);
+  agendaPilotGate.set({
+    recurso: 'post_appointment_feedback',
+    status: config.postAppointmentFeedback?.enabled ? 'enabled' : 'disabled',
+    reason_code: (config.postAppointmentFeedback?.reason || 'FLAG_DISABLED').toLowerCase(),
   }, 1);
 }

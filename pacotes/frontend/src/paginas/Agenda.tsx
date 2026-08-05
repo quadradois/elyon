@@ -567,7 +567,11 @@ export function Agenda() {
                             <div key={item.id} className="rounded-md border bg-background p-3 text-sm space-y-3">
                                 <p className="font-medium">{item.leadNome}</p>
                                 <p className="text-muted-foreground">
-                                    {item.operationalReason === 'SPECIALIST_PENDING' ? 'Sem especialista atribuído' : 'Aguardando classificação'}
+                                    {item.operationalReason === 'SPECIALIST_PENDING'
+                                        ? 'Sem especialista atribuído'
+                                        : item.operationalReason === 'FEEDBACK_SPECIALIST_PENDING'
+                                            ? 'Especialista não respondeu ao feedback'
+                                            : 'Aguardando classificação'}
                                     {' · '}{item.pendingAgeMinutes} min
                                 </p>
                                 <p className="text-xs text-muted-foreground">

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { prisma } from '../../src/lib/db';
 import agendaRouter from '../../src/rotas/agenda';
 import { resetAgendaLifecycleRolloutCacheForTests } from '../../src/servicos/agenda-lifecycle-rollout';
+import { aplicarFeedbackPosAtendimento } from '../../src/servicos/post-appointment-feedback-response';
 
 describe('contrato HTTP canônico da Agenda', () => {
   let tenantId: string;
@@ -194,5 +195,41 @@ describe('contrato HTTP canônico da Agenda', () => {
     expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeId } })).toMatchObject({
       statusAgendamento: 'CANCELADO', versao: 1,
     });
+  });
+
+  it('registra desfecho e nota append-only na ficha do lead', async () => {
+    const especialista = await prisma.usuario.create({ data: {
+      tenantId, nome: 'Especialista Feedback', email: `feedback-${randomUUID()}@contract.invalid`,
+      senha: 'test', papel: 'CORRETOR',
+    } });
+    const horario = new Date('2026-08-03T12:00:00Z');
+    await prisma.atividade.update({ where: { id: atividadeId }, data: {
+      agendadoPara: horario, statusAgendamento: 'CONFIRMADO', statusConfirmacaoCorretor: 'CONFIRMADO',
+      corretorAtualId: especialista.id,
+    } });
+    const feedback = await prisma.feedbackPosAtendimentoAgenda.create({ data: {
+      tenantId, atividadeId, usuarioId: especialista.id, versaoAtividade: 0,
+      status: 'AGUARDANDO_RESPOSTA', elegivelEm: horario, enviadoEm: horario,
+      expiraEm: new Date(horario.getTime() + 24 * 60 * 60_000),
+    } });
+
+    const result = await aplicarFeedbackPosAtendimento({
+      context: {
+        feedbackId: feedback.id, atividadeId, usuarioId: especialista.id, tenantId,
+        leadId, leadNome: 'Lead Contract', agendadoPara: horario, versaoAtividade: 0,
+        status: feedback.status,
+      },
+      interpretation: { intent: 'REALIZADO', resumo: 'Atendimento realizado; proprietário quer vender.' },
+      providerEventId: randomUUID(), agora: new Date('2026-08-03T12:25:00Z'),
+    });
+
+    expect(result).toMatchObject({ success: true, reasonCode: 'FEEDBACK_REALIZADO' });
+    expect(await prisma.atividade.findUniqueOrThrow({ where: { id: atividadeId } }))
+      .toMatchObject({ statusAgendamento: 'REALIZADO' });
+    const nota = await prisma.atividade.findFirstOrThrow({
+      where: { leadId, tipo: 'NOTA', mensagem: `post-feedback:${feedback.id}` },
+    });
+    expect(nota).toMatchObject({ titulo: 'Feedback pós-atendimento', resultado: 'REALIZADO' });
+    expect(nota.descricao).toContain('proprietário quer vender');
   });
 });

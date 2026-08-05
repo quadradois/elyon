@@ -4,6 +4,8 @@ import { executarDecisaoEspecialista } from './specialist-appointment-decision';
 import {
   buscarConvitesAcionaveis,
   buscarCompromissosConfirmadosEspecialista,
+  buscarFeedbacksPosAtendimentoAcionaveis,
+  descreverFeedbacksParaDesambiguacao,
   descreverConvitesParaDesambiguacao,
   resolverEspecialistaPorTelefone,
   type SpecialistInviteContext,
@@ -16,6 +18,8 @@ import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from './coere
 import crypto from 'node:crypto';
 import { consultarAgendaEspecialista, formatarAgendaEspecialista } from './specialist-agenda-query';
 import { registrarSpecialistCopilotEvento } from '../observabilidade/agenda-comercial-metrics';
+import { interpretarFeedbackPosAtendimento } from './post-appointment-feedback';
+import { aplicarFeedbackPosAtendimento } from './post-appointment-feedback-response';
 
 export type SpecialistCopilotInboundResult = {
   handled: boolean;
@@ -49,8 +53,42 @@ export async function processarInboundEspecialista(params: {
   });
   if (existente) return { handled: true, reason: 'EVENT_REPLAY' };
 
-  let convites = await buscarConvitesAcionaveis(especialista, agora);
   const intencao = interpretarIntencaoEspecialista(params.texto, agora);
+  const feedbacks = await buscarFeedbacksPosAtendimentoAcionaveis(especialista, agora);
+  const feedbackInterpretado = interpretarFeedbackPosAtendimento(params.texto);
+  if (feedbacks.length && (feedbackInterpretado.intent !== 'AMBIGUO' || intencao.name === 'DESCONHECIDA')) {
+    const selecao = params.texto.match(/\batendimento\s+(\d+)\b/i);
+    const feedback = feedbacks.length === 1
+      ? feedbacks[0]
+      : selecao ? feedbacks[Number(selecao[1]) - 1] : null;
+    if (!feedback) {
+      await (prisma.interacaoEspecialistaAgenda as any).create({
+        data: {
+          tenantId: params.tenantId, usuarioId: especialista.id, webhookEventoId: params.providerEventId,
+          direcao: 'ENTRADA', intencao: `FEEDBACK_${feedbackInterpretado.intent}`,
+          resumoSanitizado: sanitizarContextoEspecialista(params.texto, 300), resultado: 'DESAMBIGUACAO_NECESSARIA',
+        },
+      });
+      return { handled: true, reason: 'AMBIGUOUS_FEEDBACK', response: descreverFeedbacksParaDesambiguacao(feedbacks) };
+    }
+    const feedbackResult = await aplicarFeedbackPosAtendimento({
+      context: feedback, interpretation: feedbackInterpretado,
+      providerEventId: params.providerEventId, agora,
+    });
+    await (prisma.interacaoEspecialistaAgenda as any).create({
+      data: {
+        tenantId: params.tenantId, atividadeId: feedback.atividadeId, usuarioId: especialista.id,
+        webhookEventoId: params.providerEventId, direcao: 'ENTRADA',
+        intencao: `FEEDBACK_${feedbackInterpretado.intent}`,
+        resumoSanitizado: feedbackInterpretado.resumo, resultado: feedbackResult.reasonCode,
+        parametros: { feedbackId: feedback.feedbackId },
+      },
+    });
+    registrarSpecialistCopilotEvento(`FEEDBACK_${feedbackInterpretado.intent}`, feedbackResult.reasonCode);
+    return { handled: true, reason: feedbackResult.reasonCode, response: feedbackResult.message };
+  }
+
+  let convites = await buscarConvitesAcionaveis(especialista, agora);
   const consultarAgendaSolicitada = async () => consultarAgendaEspecialista({
     tenantId: params.tenantId,
     usuarioId: especialista.id,

@@ -457,14 +457,27 @@ router.get('/pendencias/vencidas', verificarAutenticacao, async (req, res) => {
             include: { lead: { select: { nome: true } } },
             orderBy: { agendadoPara: 'asc' },
         });
+        const feedbacksPendentes = await prisma.feedbackPosAtendimentoAgenda.findMany({
+            where: {
+                tenantId,
+                status: 'PENDENCIA_GESTOR',
+                ...(scope.tipo === 'PROPRIA' ? { usuarioId: scope.responsavelId } : {}),
+            },
+            include: { atividade: { include: { lead: { select: { nome: true } } } } },
+            orderBy: { expiraEm: 'asc' },
+        });
+        const atividadesComFeedback = new Set(feedbacksPendentes.map((item) => item.atividadeId));
+        const atividadesSemFeedbackDuplicado = atividades.filter((item) => !atividadesComFeedback.has(item.id));
         const ator = atorPolicyAgenda(usuario.papel);
         if (scope.tipo === 'TENANT') {
-            agendaLifecycleExpiredPending.set(atividades.length);
-            const oldest = atividades[0]?.agendadoPara;
+            agendaLifecycleExpiredPending.set(atividadesSemFeedbackDuplicado.length + feedbacksPendentes.length);
+            const oldest = [...atividadesSemFeedbackDuplicado.map((item) => item.agendadoPara),
+                ...feedbacksPendentes.map((item) => item.expiraEm)]
+                .filter((item): item is Date => Boolean(item)).sort((a, b) => a.getTime() - b.getTime())[0];
             agendaLifecycleOperationalQueueAgeSeconds.set(oldest
                 ? Math.max(0, Math.floor((agora.getTime() - oldest.getTime()) / 1_000)) : 0);
         }
-        return res.json(atividades.map((atividade) => {
+        const pendenciasAtividade = atividadesSemFeedbackDuplicado.map((atividade) => {
             const policy = obterAgendaPolicy({
                 status: atividade.statusAgendamento, agendadoPara: atividade.agendadoPara,
                 duracaoMinutos: atividade.duracao, agora, ator,
@@ -487,7 +500,33 @@ router.get('/pendencias/vencidas', verificarAutenticacao, async (req, res) => {
                 responsibleId: atividade.corretorAtualId,
                 operationalReason: atividade.corretorAtualId ? 'OUTCOME_PENDING' : 'SPECIALIST_PENDING',
             };
-        }));
+        });
+        const pendenciasFeedback = feedbacksPendentes.map((feedback) => {
+            const policy = obterAgendaPolicy({
+                status: feedback.atividade.statusAgendamento,
+                agendadoPara: feedback.atividade.agendadoPara,
+                duracaoMinutos: feedback.atividade.duracao,
+                agora,
+                ator,
+            });
+            return {
+                id: feedback.atividade.id,
+                leadNome: feedback.atividade.lead.nome,
+                scheduledFor: feedback.atividade.agendadoPara,
+                status: feedback.atividade.statusAgendamento,
+                version: feedback.atividade.versao,
+                temporalPhase: policy.faseTemporal,
+                allowedActions: filtrarAcoesAgendaPorAcesso(policy.allowedActions, {
+                    papel: usuario.papel,
+                    usuarioId: usuario.id,
+                    responsavelId: feedback.atividade.corretorAtualId,
+                }),
+                pendingAgeMinutes: Math.max(0, Math.floor((agora.getTime() - (feedback.expiraEm || feedback.atualizadoEm).getTime()) / 60_000)),
+                responsibleId: feedback.usuarioId,
+                operationalReason: 'FEEDBACK_SPECIALIST_PENDING',
+            };
+        });
+        return res.json([...pendenciasFeedback, ...pendenciasAtividade]);
     } catch (error) {
         console.error('[Agenda] Erro ao listar pendências vencidas:', error);
         return responderErro(res, 500, 'Erro interno');

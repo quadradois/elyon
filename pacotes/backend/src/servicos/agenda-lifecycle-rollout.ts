@@ -24,6 +24,8 @@ export interface SpecialistCopilotRollout {
   reason: AgendaLifecycleRolloutReason;
 }
 
+export type PostAppointmentFeedbackRollout = SpecialistCopilotRollout;
+
 let configPromise: Promise<AgendaPilotConfig> | undefined;
 
 export function avaliarAgendaLifecycleRollout(
@@ -111,6 +113,18 @@ export async function obterSpecialistCopilotRollout(
   if (config.scope.tenantId !== tenantId) return { enabled: false, reason: 'TENANT_OUT_OF_SCOPE' };
   if (instant.getTime() < new Date(config.scope.startedAtUtc).getTime()) return { enabled: false, reason: 'BEFORE_CUTOFF' };
   return { enabled: Boolean(config.specialistCopilot?.enabled), reason: config.specialistCopilot?.enabled ? 'ENABLED' : 'FLAG_DISABLED' };
+}
+
+export async function obterPostAppointmentFeedbackRollout(
+  tenantId: string,
+  instant = new Date(),
+): Promise<PostAppointmentFeedbackRollout> {
+  const config = await (configPromise ??= resolverAgendaPilotConfig());
+  const gate = config.postAppointmentFeedback;
+  if (!config.scope) return { enabled: false, reason: gate?.requested ? 'SCOPE_UNAVAILABLE' : 'FLAG_DISABLED' };
+  if (config.scope.tenantId !== tenantId) return { enabled: false, reason: 'TENANT_OUT_OF_SCOPE' };
+  if (instant.getTime() < new Date(config.scope.startedAtUtc).getTime()) return { enabled: false, reason: 'BEFORE_CUTOFF' };
+  return { enabled: Boolean(gate?.enabled), reason: gate?.enabled ? 'ENABLED' : 'FLAG_DISABLED' };
 }
 
 export function resetAgendaLifecycleRolloutCacheForTests(): void {

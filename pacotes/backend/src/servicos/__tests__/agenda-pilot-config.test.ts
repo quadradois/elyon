@@ -14,6 +14,7 @@ describe('agenda pilot tenant-safe config', () => {
       effects: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
       noShow: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
       specialistCopilot: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
+      postAppointmentFeedback: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
     });
     expect(activeTenant.findTenant).not.toHaveBeenCalled();
   });
@@ -131,6 +132,7 @@ describe('agenda pilot tenant-safe config', () => {
       effects: { requested: true, enabled: true, reason: 'ENABLED' },
       noShow: { requested: true, enabled: true, reason: 'ENABLED' },
       specialistCopilot: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
+      postAppointmentFeedback: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
       noShowGraceMinutes: 45,
     });
   });
@@ -148,5 +150,24 @@ describe('agenda pilot tenant-safe config', () => {
       AGENDA_PILOT_TENANT_ID: TENANT, AGENDA_PILOT_STARTED_AT: STARTED_AT,
     }, activeTenant);
     expect(completo.specialistCopilot).toEqual({ requested: true, enabled: true, reason: 'ENABLED' });
+  });
+
+  it('habilita feedback pos-atendimento somente sobre o Copilot ativo', async () => {
+    const semCopilot = await resolverAgendaPilotConfig({
+      AGENDA_POST_FEEDBACK_ENABLED: 'true', AGENDA_EFFECTS_ENABLED: 'true',
+      AGENDA_LIFECYCLE_POLICY_ENABLED: 'true', AGENDA_LIFECYCLE_COMMANDS_ENABLED: 'true',
+      AGENDA_PILOT_TENANT_ID: TENANT, AGENDA_PILOT_STARTED_AT: STARTED_AT,
+    }, activeTenant);
+    expect(semCopilot.postAppointmentFeedback).toEqual({
+      requested: true, enabled: false, reason: 'SPECIALIST_COPILOT_REQUIRED',
+    });
+
+    const completo = await resolverAgendaPilotConfig({
+      AGENDA_POST_FEEDBACK_ENABLED: 'true', AGENDA_SPECIALIST_COPILOT_ENABLED: 'true',
+      AGENDA_EFFECTS_ENABLED: 'true', AGENDA_LIFECYCLE_POLICY_ENABLED: 'true',
+      AGENDA_LIFECYCLE_COMMANDS_ENABLED: 'true', AGENDA_PILOT_TENANT_ID: TENANT,
+      AGENDA_PILOT_STARTED_AT: STARTED_AT,
+    }, activeTenant);
+    expect(completo.postAppointmentFeedback).toEqual({ requested: true, enabled: true, reason: 'ENABLED' });
   });
 });
