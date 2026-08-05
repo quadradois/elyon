@@ -147,11 +147,39 @@ router.get('/', verificarAutenticacao, async (req, res) => {
             : [];
         const nomeCorretorPorId = new Map(corretores.map(corretor => [corretor.id, corretor.nome]));
 
+        const atividadesComDesfecho = atividades
+            .filter(atividade => ['REALIZADO', 'NAO_COMPARECEU', 'CANCELADO'].includes(atividade.statusAgendamento || ''))
+            .map(atividade => atividade.id);
+        const milestonesDesfecho = atividadesComDesfecho.length > 0
+            ? await prisma.milestoneAgenda.findMany({
+                where: {
+                    tenantId,
+                    atividadeId: { in: atividadesComDesfecho },
+                    tipo: { in: ['VISITA_REALIZADA', 'VISITA_NAO_COMPARECEU', 'VISITA_CANCELADA', 'CORRECAO_ADMINISTRATIVA'] },
+                },
+                orderBy: { ocorridoEm: 'desc' },
+                select: {
+                    atividadeId: true,
+                    ator: true,
+                    motivo: true,
+                    parteAusente: true,
+                    ocorridoEm: true,
+                },
+            })
+            : [];
+        const ultimoDesfechoPorAtividade = new Map<string, typeof milestonesDesfecho[number]>();
+        for (const milestone of milestonesDesfecho) {
+            if (!ultimoDesfechoPorAtividade.has(milestone.atividadeId)) {
+                ultimoDesfechoPorAtividade.set(milestone.atividadeId, milestone);
+            }
+        }
+
         // Formatar para FullCalendar / Frontend Standard
         const agora = await obterAgoraBanco();
         const rollout = await obterAgendaLifecycleRollout(tenantId, agora);
         const atorPolicy = atorPolicyAgenda(usuario.papel);
         const eventos = atividades.map(a => {
+            const ultimoDesfecho = ultimoDesfechoPorAtividade.get(a.id);
             const policy = obterAgendaPolicy({
                 status: a.statusAgendamento,
                 agendadoPara: a.agendadoPara,
@@ -187,6 +215,12 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                 policyReasonCode: rollout.policyEnabled ? policy.reasonCode : 'LEGACY_COMPATIBILITY',
                 lifecyclePolicyEnabled: rollout.policyEnabled,
                 lifecycleCommandsEnabled: rollout.commandsEnabled,
+                resultadoRegistradoEm: ultimoDesfecho?.ocorridoEm || a.completadoEm || a.canceladoEm || null,
+                resultadoRegistradoPor: ultimoDesfecho?.ator || a.canceladoPor || null,
+                resultadoMotivo: ultimoDesfecho?.motivo || a.motivoCancelamento || a.resultado || null,
+                parteAusente: ultimoDesfecho?.parteAusente === 'CORRETOR'
+                    ? 'ESPECIALISTA'
+                    : ultimoDesfecho?.parteAusente || null,
             },
             // Color coding básico
             backgroundColor:
