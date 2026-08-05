@@ -28,6 +28,10 @@ export interface EventoAgenda {
         policyReasonCode?: string;
         lifecyclePolicyEnabled?: boolean;
         lifecycleCommandsEnabled?: boolean;
+        resultadoRegistradoEm?: string | null;
+        resultadoRegistradoPor?: string | null;
+        resultadoMotivo?: string | null;
+        parteAusente?: 'LEAD' | 'ESPECIALISTA' | null;
     };
 }
 

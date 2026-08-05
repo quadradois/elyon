@@ -18,7 +18,15 @@ import { toast } from 'sonner';
 
 import { agendaService, EventoAgenda, executarComandoAgenda, type PendenciaAgenda } from '../servicos/apiAgenda';
 import { Loader2, Calendar as CalendarIcon, Ban, Check, Clock, Phone, User, Trash2, CalendarX, Settings, XCircle, RefreshCw, MessageSquare } from 'lucide-react';
-import { acaoAgendaPermitida, ordenarPendenciasVencidas, pendenciaPermiteAcao } from './agenda-actions';
+import {
+    acaoAgendaPermitida,
+    corEventoPorStatus,
+    descricaoEstadoDrawerAgenda,
+    obterEstadoDrawerAgenda,
+    ordenarPendenciasVencidas,
+    pendenciaPermiteAcao,
+    rotuloStatusAgenda,
+} from './agenda-actions';
 
 const locales = { 'pt-BR': ptBR };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
@@ -244,6 +252,11 @@ export function Agenda() {
         if (!textoBase) return '';
         return aplicarPlaceholdersMensagem(textoBase);
     })();
+
+    const estadoDrawer = obterEstadoDrawerAgenda(selectedEvent);
+    const permiteCancelar = acaoAgendaPermitida(selectedEvent, 'CANCELAR');
+    const permiteReagendar = acaoAgendaPermitida(selectedEvent, 'REAGENDAR');
+    const exibeResumoDesfecho = estadoDrawer === 'CONCLUIDO' || estadoDrawer === 'CANCELADO';
 
     const handleSalvarBloqueio = async () => {
         if (!selectedSlot || !bloqueioMotivo) {
@@ -498,18 +511,21 @@ export function Agenda() {
     };
 
     const eventStyleGetter = (event: EventoAgenda) => {
-        let backgroundColor = event.backgroundColor || '#3174ad';
+        let backgroundColor = corEventoPorStatus(event);
         if (event.extendedProps?.tipo === 'BLOQUEIO' || event.title.includes('BLOQUEIO')) backgroundColor = '#ef4444';
-        if (event.extendedProps?.status === 'CONFIRMADO') backgroundColor = '#22c55e';
         return { style: { backgroundColor, borderRadius: '4px', opacity: 0.8, color: 'white', border: '0px', display: 'block' } };
     };
 
     const getStatusBadge = (status: string | undefined) => {
         switch (status) {
-            case 'PENDENTE': return <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300"><Clock className="w-3 h-3 mr-1" />Aguardando</Badge>;
+            case 'PENDENTE':
+            case 'SOLICITADO':
+            case 'PROPOSTO': return <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300"><Clock className="w-3 h-3 mr-1" />{rotuloStatusAgenda(status)}</Badge>;
             case 'CONFIRMADO': return <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300"><Check className="w-3 h-3 mr-1" />Confirmado</Badge>;
+            case 'REALIZADO': return <Badge variant="outline" className="bg-slate-100 text-slate-800 border-slate-300"><Check className="w-3 h-3 mr-1" />Realizado</Badge>;
+            case 'NAO_COMPARECEU': return <Badge variant="outline" className="bg-rose-100 text-rose-800 border-rose-300"><CalendarX className="w-3 h-3 mr-1" />Não compareceu</Badge>;
             case 'CANCELADO': return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300"><Ban className="w-3 h-3 mr-1" />Cancelado</Badge>;
-            default: return <Badge variant="outline">{status || 'N/A'}</Badge>;
+            default: return <Badge variant="outline">{rotuloStatusAgenda(status)}</Badge>;
         }
     };
 
@@ -683,7 +699,7 @@ export function Agenda() {
                     <DrawerHeader>
                         <DrawerTitle className="flex items-center gap-2"><CalendarIcon className="h-5 w-5" />{selectedEvent?.title}</DrawerTitle>
                         <DrawerDescription>
-                            Ações de aprovação, cancelamento, reagendamento e proposta de novo horário.
+                            {descricaoEstadoDrawerAgenda(estadoDrawer)}
                         </DrawerDescription>
                     </DrawerHeader>
                     <DrawerBody className="space-y-5">
@@ -703,6 +719,45 @@ export function Agenda() {
                             )}
                         </section>
 
+                        {estadoDrawer === 'VENCIDO_SEM_DESFECHO' && (
+                            <section role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 space-y-1">
+                                <p className="font-semibold">Resultado pendente</p>
+                                <p>O horário deste atendimento já passou. Informe abaixo se ele foi realizado ou quem não compareceu.</p>
+                            </section>
+                        )}
+
+                        {exibeResumoDesfecho && selectedEvent && (
+                            <section aria-label="Resultado do atendimento" className="rounded-lg border bg-slate-50 p-4 text-sm space-y-3">
+                                <div>
+                                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Resultado registrado</p>
+                                    <p className="mt-1 text-base font-semibold text-slate-900">
+                                        {rotuloStatusAgenda(selectedEvent.extendedProps?.status)}
+                                    </p>
+                                </div>
+                                {selectedEvent.extendedProps?.parteAusente && (
+                                    <p><span className="text-slate-500">Parte ausente:</span>{' '}
+                                        <strong>{selectedEvent.extendedProps.parteAusente === 'LEAD' ? 'Lead' : 'Especialista'}</strong>
+                                    </p>
+                                )}
+                                {selectedEvent.extendedProps?.resultadoRegistradoEm && (
+                                    <p><span className="text-slate-500">Registrado em:</span>{' '}
+                                        {new Date(selectedEvent.extendedProps.resultadoRegistradoEm).toLocaleString('pt-BR')}
+                                    </p>
+                                )}
+                                {selectedEvent.extendedProps?.resultadoRegistradoPor && (
+                                    <p><span className="text-slate-500">Registrado por:</span>{' '}
+                                        {selectedEvent.extendedProps.resultadoRegistradoPor}
+                                    </p>
+                                )}
+                                {selectedEvent.extendedProps?.resultadoMotivo && (
+                                    <p><span className="text-slate-500">Motivo ou observação:</span>{' '}
+                                        {selectedEvent.extendedProps.resultadoMotivo}
+                                    </p>
+                                )}
+                            </section>
+                        )}
+
+                        {permiteReagendar && (
                         <section className="space-y-2 w-full min-w-0">
                             <Label htmlFor="novoHorario" className="font-medium">Novo horário</Label>
                             <Input
@@ -713,7 +768,9 @@ export function Agenda() {
                                 onChange={(e) => setNovoHorario(e.target.value)}
                             />
                         </section>
+                        )}
 
+                        {permiteReagendar && (
                         <section className="space-y-2 w-full min-w-0">
                             <Label htmlFor="motivoProposta" className="font-medium">Motivo do reagendamento</Label>
                             <select
@@ -730,9 +787,11 @@ export function Agenda() {
                                 ))}
                             </select>
                         </section>
+                        )}
 
+                        {permiteCancelar && (
                         <section className="space-y-2 w-full min-w-0">
-                            <Label htmlFor="motivoAcao" className="font-medium">Motivo ou observação (obrigatório para cancelar)</Label>
+                            <Label htmlFor="motivoAcao" className="font-medium">Motivo do cancelamento</Label>
                             <Input
                                 id="motivoAcao"
                                 className="w-full max-w-full"
@@ -741,6 +800,7 @@ export function Agenda() {
                                 onChange={(e) => setMotivoAcao(e.target.value)}
                             />
                         </section>
+                        )}
 
                         {selectedEvent && (acaoAgendaPermitida(selectedEvent, 'CANCELAR') || acaoAgendaPermitida(selectedEvent, 'REAGENDAR')) && (
                             <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
@@ -759,7 +819,7 @@ export function Agenda() {
                             </label>
                         )}
 
-                        <section className="space-y-2 w-full min-w-0">
+                        {permiteReagendar && <section className="space-y-2 w-full min-w-0">
                             <Label htmlFor="mensagemProposta" className="font-medium">Mensagem para o cliente (opcional)</Label>
                             <Textarea
                                 id="mensagemProposta"
@@ -769,17 +829,17 @@ export function Agenda() {
                                 value={mensagemProposta}
                                 onChange={(e) => setMensagemProposta(e.target.value)}
                             />
-                        </section>
+                        </section>}
 
-                        <section className="rounded-md border bg-muted/30 p-3 text-xs space-y-1">
+                        {permiteReagendar && <section className="rounded-md border bg-muted/30 p-3 text-xs space-y-1">
                                 <p className="font-medium">Placeholders inteligentes</p>
                                 <p><code>[nome]</code> insere o nome do cliente.</p>
                                 <p><code>[data_hora]</code> (ou <code>[data]</code>) insere data e hora propostas.</p>
                                 <p><code>[dia_semana]</code> insere o dia da semana do novo horário.</p>
                                 <p>Em mensagem personalizada, inclua <code>[data_hora]</code> para manter contexto.</p>
-                        </section>
+                        </section>}
 
-                        {mensagemFinalProposta && (
+                        {permiteReagendar && mensagemFinalProposta && (
                             <section className="rounded-md border bg-emerald-50 p-3 text-sm">
                                 <p className="font-medium mb-1">Preview da mensagem que será enviada</p>
                                 <p className="whitespace-pre-wrap leading-relaxed">{mensagemFinalProposta}</p>
@@ -787,13 +847,6 @@ export function Agenda() {
                         )}
                     </DrawerBody>
                     <DrawerFooter>
-                        {selectedEvent && !acaoAgendaPermitida(selectedEvent, 'CANCELAR')
-                            && !acaoAgendaPermitida(selectedEvent, 'REAGENDAR')
-                            && selectedEvent.extendedProps?.faseTemporal !== 'FUTURO' && (
-                            <p className="mb-2 text-sm text-amber-700">
-                                O horário deste atendimento já chegou ou passou. Cancelar e reagendar não estão mais disponíveis; registre o resultado do atendimento.
-                            </p>
-                        )}
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                             <Button variant="outline" onClick={() => setShowEventModal(false)}>Fechar</Button>
                             {selectedEvent?.extendedProps?.status === 'PENDENTE' && (

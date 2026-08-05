@@ -164,6 +164,23 @@ describe('contrato HTTP canônico da Agenda', () => {
       .expect(200);
     expect(await prisma.milestoneAgenda.findFirstOrThrow({ where: { atividadeId } }))
       .toMatchObject({ tipo: 'VISITA_NAO_COMPARECEU', parteAusente: 'CORRETOR' });
+
+    const agenda = await request(app)
+      .get('/api/agenda')
+      .query({ start: '2026-08-01T00:00:00.000Z', end: '2026-08-02T00:00:00.000Z' })
+      .expect(200);
+    expect(agenda.body).toEqual([
+      expect.objectContaining({
+        id: atividadeId,
+        extendedProps: expect.objectContaining({
+          status: 'NAO_COMPARECEU',
+          parteAusente: 'ESPECIALISTA',
+          resultadoRegistradoPor: 'admin@contract.invalid',
+          resultadoMotivo: 'SPECIALIST_ABSENT',
+          resultadoRegistradoEm: expect.any(String),
+        }),
+      }),
+    ]);
   });
 
   it('serializa duas transições concorrentes sem dupla mutação', async () => {
