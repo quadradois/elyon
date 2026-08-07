@@ -142,7 +142,17 @@ export async function executarProximoNoShowAgenda(
   owner = NO_SHOW_OWNER,
   now = new Date(),
 ): Promise<boolean> {
-  const activity = await reivindicarProximoNoShow(scope, owner, now);
+  let activity;
+  try {
+    activity = await reivindicarProximoNoShow(scope, owner, now);
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === 'P2028' || String((error as Error).message).includes('Unable to start a transaction')) {
+      agendaNoShowEventos.inc({ resultado: 'claim_contention' });
+      return false;
+    }
+    throw error;
+  }
   if (!activity) return false;
   const result = await processarNoShowReivindicado(activity, owner, now);
   agendaNoShowEventos.inc({ resultado: result.reasonCode.toLowerCase() });

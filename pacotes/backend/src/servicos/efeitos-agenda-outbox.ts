@@ -8,6 +8,24 @@ import { getWhatsAppService } from './whatsapp';
 const LEASE_MS = 120_000;
 export const AGENDA_EFFECT_OWNER = `agenda-effect:${process.pid}:${randomUUID()}`;
 
+export function montarMensagemAgendaPorFato(params: {
+  fato: 'SOLICITADA' | 'PENDENTE_ESPECIALISTA' | 'CONFIRMADA';
+  modalidade: 'TELEFONE' | 'VISITA';
+  dataHora: string;
+  especialistaNome?: string | null;
+}): string {
+  const especialista = params.especialistaNome?.trim() || 'um especialista';
+  if (params.fato === 'SOLICITADA') {
+    return `Sua solicitação para ${params.dataHora} foi registrada. Assim que ${especialista} confirmar, avisaremos por aqui.`;
+  }
+  if (params.fato === 'PENDENTE_ESPECIALISTA') {
+    return `Recebemos sua solicitação para ${params.dataHora}, mas ainda estamos definindo o especialista. O atendimento ainda não está confirmado.`;
+  }
+  return params.modalidade === 'TELEFONE'
+    ? `Ligação confirmada para ${params.dataHora}. ${especialista} ligará no horário combinado.`
+    : `Visita confirmada para ${params.dataHora} com ${especialista}.`;
+}
+
 export interface AgendaEffectSender {
   send(instanceName: string, phone: string, message: string, idempotencyKey: string): Promise<{ providerId?: string }>;
 }
@@ -69,28 +87,46 @@ export async function executarProximoEfeitoAgenda(
   const effect = await reivindicarProximoEfeitoAgenda(scope, owner, now);
   if (!effect) return false;
   try {
-    const lead = await prisma.lead.findFirst({
-      where: { id: effect.leadId, tenantId: effect.tenantId },
-      select: { telefone: true },
-    });
+    const destination = effect.destinatarioTipo === 'USUARIO' && effect.usuarioDestinoId
+      ? await prisma.usuario.findFirst({
+          where: { id: effect.usuarioDestinoId, tenantId: effect.tenantId }, select: { telefone: true },
+        })
+      : await prisma.lead.findFirst({
+          where: { id: effect.leadId, tenantId: effect.tenantId }, select: { telefone: true },
+        });
     const session = await prisma.sessaoWhatsapp.findFirst({
       where: { tenantId: effect.tenantId, status: 'CONECTADO' },
       select: { instanceName: true },
     });
-    if (!lead?.telefone || !session?.instanceName) throw new Error('AGENDA_EFFECT_DESTINATION_UNAVAILABLE');
-    const sent = await sender.send(session.instanceName, lead.telefone, effect.mensagem, effect.chaveIdempotencia);
+    if (!destination?.telefone || !session?.instanceName) throw new Error('AGENDA_EFFECT_DESTINATION_UNAVAILABLE');
+    const sent = await sender.send(session.instanceName, destination.telefone, effect.mensagem, effect.chaveIdempotencia);
     const confirmationTime = new Date();
-    const confirmed = await prisma.efeitoAgendaOutbox.updateMany({
-      where: {
-        id: effect.id, status: 'RESERVADA', leaseOwner: owner, fencingToken: effect.fencingToken,
-        leaseAte: { gt: confirmationTime },
-      },
-      data: {
-        status: 'CONCLUIDA', concluidoEm: confirmationTime, leaseOwner: null, leaseAte: null,
-        resultado: sent.providerId || 'CONFIRMED', reasonCode: null,
-      },
+    await prisma.$transaction(async (tx) => {
+      const confirmed = await tx.efeitoAgendaOutbox.updateMany({
+        where: {
+          id: effect.id, status: 'RESERVADA', leaseOwner: owner, fencingToken: effect.fencingToken,
+          leaseAte: { gt: confirmationTime },
+        },
+        data: {
+          status: 'CONCLUIDA', concluidoEm: confirmationTime, leaseOwner: null, leaseAte: null,
+          resultado: sent.providerId || 'CONFIRMED', reasonCode: null,
+        },
+      });
+      if (confirmed.count !== 1) throw new Error('AGENDA_EFFECT_CONFIRMATION_FENCE_LOST');
+      if (effect.tipo === 'FEEDBACK_POS_ATENDIMENTO' && effect.usuarioDestinoId) {
+        await tx.feedbackPosAtendimentoAgenda.updateMany({
+          where: {
+            tenantId: effect.tenantId, atividadeId: effect.atividadeId,
+            usuarioId: effect.usuarioDestinoId, status: 'AGUARDANDO_ENVIO',
+          },
+          data: {
+            status: 'AGUARDANDO_RESPOSTA', enviadoEm: confirmationTime,
+            expiraEm: new Date(confirmationTime.getTime() + 24 * 60 * 60_000),
+            providerMessageId: sent.providerId,
+          },
+        });
+      }
     });
-    if (confirmed.count !== 1) throw new Error('AGENDA_EFFECT_CONFIRMATION_FENCE_LOST');
     agendaEfeitosEventos.inc({ resultado: 'concluida' });
   } catch (error) {
     await prisma.efeitoAgendaOutbox.updateMany({

@@ -116,27 +116,21 @@ export class QualificarLeadUseCase {
         try {
             const db: any = prisma;
 
-            let leadId: string | undefined = undefined;
-            let leadCriado = false;
             const idEntradaResolvido = input.leadId || input.contatoId;
-
-            // Buscar contato quando houver contatoId explícito
-            const contato = input.contatoId
-                ? await db.contato.findUnique({
-                    where: { id: input.contatoId },
-                    include: { campanha: true }
-                })
-                : null;
-
-            if (!contato && idEntradaResolvido) {
-                const leadExistente = await db.lead.findUnique({
-                    where: { id: idEntradaResolvido },
-                    select: { id: true }
-                });
-                if (leadExistente) {
-                    leadId = leadExistente.id;
-                }
+            if (!idEntradaResolvido) {
+                return { success: false, error: 'Lead não informado' };
             }
+
+            // Contato foi unificado em Lead. `contatoId` permanece somente como
+            // alias compatível do contrato da tool, sem depender da tabela legada.
+            const leadBase = await db.lead.findUnique({
+                where: { id: idEntradaResolvido },
+                select: { id: true, enderecoImovel: true, tipoImovel: true }
+            });
+            if (!leadBase) return { success: false, error: 'Lead não encontrado' };
+
+            const leadId: string = idEntradaResolvido;
+            const leadCriado = false;
 
             const areaImovelInformada = temTexto(input.areaImovel) ? input.areaImovel!.trim() : undefined;
             const areaPareceValor = pareceValorMonetario(areaImovelInformada);
@@ -146,110 +140,10 @@ export class QualificarLeadUseCase {
                 : areaPareceValor
                     ? areaImovelInformada
                     : undefined;
-            const enderecoImovelNormalizado = input.enderecoImovel || contato?.enderecoImovel || undefined;
-            const tipoImovelNormalizado = input.tipoImovel || contato?.tipoImovel || undefined;
             const { timelineEhConfiavel, prazoDesejadoNormalizado, urgencia } = normalizarPrazoEUrgencia({
                 timeline: input.timeline,
                 prazoDesejado: input.prazoDesejado
             });
-
-            const schemaUpdatesToolBase: Record<string, unknown> = {
-                temperatura: input.temperatura,
-                interesseEm: input.interesse,
-                prazoDesejado: prazoDesejadoNormalizado,
-                urgencia,
-                situacaoAtual: input.situacaoAtual,
-                tempoDecisao: input.tempoDecisao,
-                tentativasAnteriores: input.tentativasAnteriores,
-                comCorretorAtualmente: valorComEvidencia(input.comCorretorAtualmente, input.comCorretorAtualmenteEvidencia),
-                doresIdentificadas: input.doresIdentificadas?.length ? input.doresIdentificadas : undefined,
-                motivacaoVenda: input.motivacaoVenda,
-                consequencias: input.consequencias,
-                custosAtuais: input.custosAtuais,
-                pressaoTempo: valorComEvidencia(input.pressaoTempo, input.pressaoTempoEvidencia),
-                expectativaServico: input.expectativaServico,
-                objecoes: input.objecoes?.length ? input.objecoes : undefined,
-                interesseAvaliacao: valorComEvidencia(input.interesseAvaliacao, input.interesseAvaliacaoEvidencia),
-                observacoesSpin: input.observacoes,
-                enderecoImovel: input.enderecoImovel,
-                tipoImovel: input.tipoImovel,
-                areaImovel: areaImovelNormalizada,
-                quartosImovel: input.quartosImovel,
-                vagasImovel: input.vagasImovel,
-                valorPretendido: valorPretendidoNormalizado,
-                ocupacaoImovel: input.ocupacaoImovel,
-                estadoConservacao: input.estadoConservacao,
-                situacaoFinanceira: input.situacaoFinanceira,
-                temDividas: valorComEvidencia(input.temDividas, input.temDividasEvidencia),
-            };
-            const schemaUpdatesBriefing: Record<string, unknown> = {
-                enderecoImovel: !input.enderecoImovel ? contato?.enderecoImovel : undefined,
-                tipoImovel: !input.tipoImovel ? contato?.tipoImovel : undefined,
-            };
-
-            // Se contato já tem Lead, usar esse ID
-            if (contato?.leadId) {
-                leadId = contato.leadId;
-            } else if (!leadId) {
-                if (!contato) {
-                    return { success: false, error: 'Contato não encontrado' };
-                }
-                if (!contato?.campanha?.tenantId) {
-                    return { success: false, error: 'Contato sem tenant de campanha' };
-                }
-                // Criar novo Lead com dados enriquecidos
-                const novoLead = await db.lead.create({
-                    data: {
-                        tenantId: contato.campanha.tenantId,
-                        nome: contato.nome,
-                        telefone: contato.telefone,
-                        email: contato.email,
-                        cpf: contato.cpf,
-                        enderecoPrincipal: contato.enderecoImovel || contato.endereco,
-                        origem: 'prospeccao_ativa',
-                        campanhaOrigemId: contato.campanhaId,
-                        // Governança: o status final será definido pela prontidão da qualificação
-                        status: 'NOVO',
-                        temperatura: input.temperatura,
-                        estagio: 'qualificado_sdr',
-                        primeiroContato: contato.criadoEm,
-                        ultimaInteracao: new Date(),
-                        // Dados do imóvel (conversa + fallback Contato)
-                        enderecoImovel: enderecoImovelNormalizado,
-                        tipoImovel: tipoImovelNormalizado,
-                        areaImovel: areaImovelNormalizada || undefined,
-                        quartosImovel: input.quartosImovel || undefined,
-                        vagasImovel: input.vagasImovel || undefined,
-                        valorPretendido: valorPretendidoNormalizado || undefined,
-                        ocupacaoImovel: input.ocupacaoImovel || undefined,
-                        schemaState: mergeSchemaStateComSources(
-                            mergeSchemaStateComSources(
-                                undefined,
-                                schemaUpdatesToolBase,
-                                'tool_confirmada',
-                                'coletado em qualificar_lead'
-                            ),
-                            schemaUpdatesBriefing,
-                            'briefing',
-                            'fallback de dados do contato'
-                        ) as any,
-                    }
-                });
-
-                leadId = novoLead.id;
-                leadCriado = true;
-
-                await db.contato.update({
-                    where: { id: contato.id },
-                    data: {
-                        virouLead: true,
-                        leadId: novoLead.id,
-                        virouLeadEm: new Date(),
-                        statusProspeccao: 'LEAD',
-                        manifestouInteresse: true
-                    }
-                });
-            }
 
             const leadAtual = await db.lead.findUnique({
                 where: { id: leadId },
@@ -286,9 +180,13 @@ export class QualificarLeadUseCase {
                 temperatura: input.temperatura,
                 ultimaInteracao: new Date(),
                 interesseEm: input.interesse,
+                respondeu: true,
+                manifestouInteresse: true,
+                statusProspeccao: 'INTERESSADO',
+                estagio: 'qualificado_sdr',
             };
 
-            const camposAtualizados = ['temperatura', 'interesseEm'];
+            const camposAtualizados = ['temperatura', 'interesseEm', 'respondeu', 'manifestouInteresse', 'statusProspeccao', 'estagio'];
             if (urgencia) {
                 updateData.urgencia = urgencia;
                 camposAtualizados.push('urgencia');
@@ -500,6 +398,8 @@ export class QualificarLeadUseCase {
 
             let statusLead: string = statusAtual || 'NOVO';
             if (prontidaoQualificacao === 'COMPLETA') {
+                await db.lead.update({ where: { id: leadId }, data: { statusProspeccao: 'LEAD' } });
+                if (!camposAtualizados.includes('statusProspeccao')) camposAtualizados.push('statusProspeccao');
                 if (!statusAtual || !statusNaoRebaixar.has(statusAtual)) {
                     statusLead = 'QUALIFICADO';
                 }

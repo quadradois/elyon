@@ -2,8 +2,18 @@ import { prisma } from '../lib/db';
 import { getWhatsAppService } from '../servicos/whatsapp';
 import { ServicoAuditoria } from '../servicos/servico-auditoria';
 import { resolverEspecialistaCampanha } from '../servicos/resolucao-especialista-campanha';
+import { remanejarCorretorAtividade } from '../servicos/remanejamento-corretor';
+import {
+  calcularPrazoConfirmacaoCorretor,
+  obterAntecedenciaLembreteCorretorMinutos,
+  obterPrazoConfirmacaoCorretorMinutos,
+} from '../servicos/prazo-confirmacao-corretor';
+import { obterSpecialistCopilotRollout } from '../servicos/agenda-lifecycle-rollout';
+import { hashTokenConvite } from '../servicos/specialist-copilot-context';
+import { extrairResumoAtendimentoEspecialista, montarIdentificacaoImovel } from '../servicos/specialist-copilot-privacy';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost';
+const STATUS_AGENDAMENTO_ATIVOS = ['PENDENTE', 'SOLICITADO', 'PROPOSTO', 'CONFIRMADO'];
 
 function normalizarTelefoneParaWaMe(telefone?: string | null): string {
   const digits = (telefone || '').replace(/\D/g, '');
@@ -11,35 +21,67 @@ function normalizarTelefoneParaWaMe(telefone?: string | null): string {
   return digits.startsWith('55') ? digits : `55${digits}`;
 }
 
-function minutosAntes(data: Date, minutos: number): Date {
-  return new Date(new Date(data).getTime() - minutos * 60 * 1000);
+function adicionarMinutos(data: Date, minutos: number): Date {
+  return new Date(new Date(data).getTime() + minutos * 60 * 1000);
 }
 
 function linkConfirmacaoCorretor(atividadeId: string, token: string): string {
   return `${FRONTEND_URL}/confirmar-corretor/${atividadeId}/${token}`;
 }
 
-function templateConvite(params: { leadNome: string; horario: Date; link: string }): string {
+function formatarHorario(data: Date): string {
+  return new Date(data).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
+export function templateConvite(params: {
+  especialistaNome?: string | null;
+  leadNome: string;
+  horario: Date;
+  prazo: Date;
+  link: string;
+  modalidade?: string | null;
+  imovel?: string | null;
+  resumo?: string | null;
+  conversacional?: boolean;
+}): string {
+  if (params.conversacional) {
+    const detalhes = [
+      params.imovel ? `*Imóvel:* ${params.imovel}` : null,
+      params.resumo ? `*Resumo do atendimento:* ${params.resumo}` : null,
+    ].filter(Boolean);
+    return [
+      'Elyon | Convite de confirmação',
+      '',
+      `Olá, ${params.especialistaNome?.trim() || 'especialista'}! Você tem uma nova solicitação de atendimento.`,
+      '',
+      `*Lead:* ${params.leadNome}`,
+      `*Data e horário:* ${formatarHorario(params.horario)}`,
+      `*Modalidade:* ${params.modalidade || 'Ligação telefônica'}`,
+      ...(detalhes.length ? ['', '*Detalhes:*', ...detalhes] : []),
+      '',
+      'Posso confirmar este horário ou prefere sugerir outro?',
+      `Responda em até ${obterPrazoConfirmacaoCorretorMinutos()} minutos (prazo: ${formatarHorario(params.prazo)}).`,
+      '',
+      `Se preferir, use o link: ${params.link}`,
+    ].join('\n');
+  }
   return [
     'Elyon | Convite de confirmação',
     `Lead: ${params.leadNome}`,
-    `Reunião: ${new Date(params.horario).toLocaleString('pt-BR')}`,
-    `Confirme até 1h antes: ${params.link}`,
-  ].join('\n');
-}
-
-function templateLembrete(params: { leadNome: string; horario: Date; link: string }): string {
-  return [
-    'Elyon | Lembrete de confirmação (T-90)',
-    `Lead: ${params.leadNome}`,
-    `Reunião: ${new Date(params.horario).toLocaleString('pt-BR')}`,
-    `Prazo de confirmação: até T-60`,
+    `Reunião: ${formatarHorario(params.horario)}`,
+    `Responda em até ${obterPrazoConfirmacaoCorretorMinutos()} minutos (prazo: ${formatarHorario(params.prazo)}).`,
     params.link,
   ].join('\n');
 }
 
-function templateRemanejamentoLead(params: { especialistaNome: string; especialistaCargo: string }): string {
-  return `Atualização: seu atendimento será conduzido por ${params.especialistaNome} (${params.especialistaCargo}). Seguimos no horário combinado.`;
+function templateLembrete(params: { leadNome: string; horario: Date; prazo: Date; link: string }): string {
+  return [
+    'Elyon | Lembrete de confirmação',
+    `Lead: ${params.leadNome}`,
+    `Reunião: ${formatarHorario(params.horario)}`,
+    `Seu prazo termina às ${formatarHorario(params.prazo)}. Sem resposta, o atendimento será oferecido ao especialista fallback.`,
+    params.link,
+  ].join('\n');
 }
 
 async function buscarSessaoConectadaTenant(tenantId: string): Promise<string | null> {
@@ -51,22 +93,59 @@ async function buscarSessaoConectadaTenant(tenantId: string): Promise<string | n
   return sessao?.instanceName || null;
 }
 
+async function resolverEspecialistaAtividade(atividade: any): Promise<any | null> {
+  if (atividade.corretorAtualId) {
+    const atual = await prisma.usuario.findFirst({
+      where: {
+        id: atividade.corretorAtualId,
+        tenantId: atividade.lead.tenantId,
+        estaAtivo: true,
+        telefone: { not: null },
+      },
+      select: { id: true, nome: true, telefone: true, email: true, papel: true },
+    });
+    if (atual && normalizarTelefoneParaWaMe(atual.telefone).length >= 12) {
+      return {
+        usuarioId: atual.id,
+        nome: atual.nome,
+        telefone: atual.telefone,
+        email: atual.email || undefined,
+        cargo: atual.papel === 'ADMIN' ? 'Especialista Comercial' : 'Corretor Especialista',
+        origem: 'RESPONSAVEL_ATIVIDADE',
+      };
+    }
+  }
+
+  if (!atividade.lead?.campanhaOrigemId) return null;
+  return resolverEspecialistaCampanha({
+    tenantId: atividade.lead.tenantId,
+    campanhaId: atividade.lead.campanhaOrigemId,
+  });
+}
+
 export async function executarConvitesConfirmacaoCorretor(): Promise<{ processados: number; enviados: number; erros: number }> {
   const agora = new Date();
-  const janelaInicio = minutosAntes(agora, -120); // agora +120
-  const janelaFim = minutosAntes(agora, -110); // agora +110
 
   const atividades = await (prisma.atividade as any).findMany({
     where: {
       tipo: 'REUNIAO',
+      statusAgendamento: { in: STATUS_AGENDAMENTO_ATIVOS },
       statusConfirmacaoCorretor: 'PENDENTE',
-      agendadoPara: { gte: janelaFim, lte: janelaInicio },
+      // O convite nasce com o pedido; o scheduler também recupera convites perdidos após reinício.
+      agendadoPara: { gt: agora },
       confirmacaoCorretorSolicitadaEm: null,
       tokenConfirmacaoCorretor: { not: null },
     },
     include: {
-      lead: { select: { id: true, nome: true, tenantId: true, campanhaOrigemId: true } }
+      lead: {
+        select: {
+          id: true, nome: true, tenantId: true, campanhaOrigemId: true,
+          nomeEdificio: true, enderecoImovel: true, briefingCloser: true, observacoesSpin: true,
+          campanhaOrigem: { select: { nomeEmpreendimento: true, empreendimento: { select: { nome: true } } } },
+        }
+      }
     },
+    orderBy: { criadoEm: 'asc' },
     take: 100
   });
 
@@ -74,11 +153,7 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
   let erros = 0;
   for (const atividade of atividades) {
     try {
-      if (!atividade.lead?.campanhaOrigemId) continue;
-      const especialista = await resolverEspecialistaCampanha({
-        tenantId: atividade.lead.tenantId,
-        campanhaId: atividade.lead.campanhaOrigemId
-      });
+      const especialista = await resolverEspecialistaAtividade(atividade);
       if (!especialista?.telefone) continue;
 
       const instanceName = await buscarSessaoConectadaTenant(atividade.lead.tenantId);
@@ -87,17 +162,62 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
       const whatsapp = getWhatsAppService(instanceName);
       const telefone = normalizarTelefoneParaWaMe(especialista.telefone);
       const link = linkConfirmacaoCorretor(atividade.id, atividade.tokenConfirmacaoCorretor!);
+      const solicitadoEm = new Date();
+      const prazoEm = new Date(Math.min(
+        atividade.agendadoPara.getTime(),
+        solicitadoEm.getTime() + obterPrazoConfirmacaoCorretorMinutos() * 60 * 1000,
+      ));
+      const copilot = await obterSpecialistCopilotRollout(atividade.lead.tenantId, solicitadoEm);
+      const imovel = montarIdentificacaoImovel({
+        nomeEdificio: atividade.lead.nomeEdificio,
+        enderecoImovel: atividade.lead.enderecoImovel,
+        empreendimentoNome: atividade.lead.campanhaOrigem?.empreendimento?.nome || atividade.lead.campanhaOrigem?.nomeEmpreendimento,
+      });
+      const resumo = extrairResumoAtendimentoEspecialista({
+        descricaoAtividade: atividade.descricao,
+        briefingCloser: atividade.lead.briefingCloser,
+        observacoesSpin: atividade.lead.observacoesSpin,
+      }, 500);
       const msg = templateConvite({
+        especialistaNome: especialista.nome,
         leadNome: atividade.lead.nome,
         horario: atividade.agendadoPara,
+        prazo: prazoEm,
         link,
+        modalidade: atividade.canal === 'VISITA' ? 'Visita presencial' : 'Ligação telefônica',
+        imovel,
+        resumo,
+        conversacional: copilot.enabled,
       });
-      await whatsapp.enviarMensagemTexto(telefone, msg);
+      const envio = await whatsapp.enviarMensagemTexto(
+        telefone,
+        msg,
+        `specialist-invite:${atividade.id}:${atividade.versao || 0}:${especialista.usuarioId || telefone}`,
+      );
+
+      if (copilot.enabled && especialista.usuarioId) {
+        const tentativaAnterior = await (prisma.conviteEspecialistaAgenda as any).findFirst({
+          where: { atividadeId: atividade.id }, orderBy: { tentativa: 'desc' }, select: { tentativa: true },
+        });
+        await (prisma.conviteEspecialistaAgenda as any).create({
+          data: {
+            tenantId: atividade.lead.tenantId,
+            atividadeId: atividade.id,
+            usuarioId: especialista.usuarioId,
+            tentativa: (tentativaAnterior?.tentativa || 0) + 1,
+            status: 'PENDENTE',
+            tokenHash: hashTokenConvite(atividade.tokenConfirmacaoCorretor),
+            solicitadoEm,
+            prazoEm,
+            messageIdConvite: envio?.key?.id || envio?.id || null,
+          },
+        });
+      }
 
       await (prisma.atividade as any).update({
         where: { id: atividade.id },
         data: {
-          confirmacaoCorretorSolicitadaEm: new Date(),
+          confirmacaoCorretorSolicitadaEm: solicitadoEm,
           corretorAtualId: especialista.usuarioId || (atividade as any).corretorAtualId || null,
           corretorOriginalId: (atividade as any).corretorOriginalId || especialista.usuarioId || null,
         }
@@ -121,15 +241,19 @@ export async function executarConvitesConfirmacaoCorretor(): Promise<{ processad
 
 export async function executarLembretesConfirmacaoCorretor(): Promise<{ processados: number; enviados: number; erros: number }> {
   const agora = new Date();
-  const janelaInicio = minutosAntes(agora, -90); // agora +90
-  const janelaFim = minutosAntes(agora, -80); // agora +80
+  const prazoMinutos = obterPrazoConfirmacaoCorretorMinutos();
+  const antecedenciaMinutos = obterAntecedenciaLembreteCorretorMinutos();
+  const inicioJanela = adicionarMinutos(agora, -(prazoMinutos - antecedenciaMinutos));
+  const fimJanela = adicionarMinutos(agora, -prazoMinutos);
 
   const atividades = await (prisma.atividade as any).findMany({
     where: {
       tipo: 'REUNIAO',
+      statusAgendamento: { in: STATUS_AGENDAMENTO_ATIVOS },
       statusConfirmacaoCorretor: 'PENDENTE',
-      agendadoPara: { gte: janelaFim, lte: janelaInicio },
-      confirmacaoCorretorSolicitadaEm: { not: null },
+      // Lembra perto do fim do SLA, sem reenviar depois que o prazo venceu.
+      agendadoPara: { gt: agora },
+      confirmacaoCorretorSolicitadaEm: { not: null, gt: fimJanela, lte: inicioJanela },
       lembreteCorretorEnviadoEm: null,
       tokenConfirmacaoCorretor: { not: null },
     },
@@ -143,11 +267,7 @@ export async function executarLembretesConfirmacaoCorretor(): Promise<{ processa
   let erros = 0;
   for (const atividade of atividades) {
     try {
-      if (!atividade.lead?.campanhaOrigemId) continue;
-      const especialista = await resolverEspecialistaCampanha({
-        tenantId: atividade.lead.tenantId,
-        campanhaId: atividade.lead.campanhaOrigemId
-      });
+      const especialista = await resolverEspecialistaAtividade(atividade);
       if (!especialista?.telefone) continue;
 
       const instanceName = await buscarSessaoConectadaTenant(atividade.lead.tenantId);
@@ -159,6 +279,7 @@ export async function executarLembretesConfirmacaoCorretor(): Promise<{ processa
       const msg = templateLembrete({
         leadNome: atividade.lead.nome,
         horario: atividade.agendadoPara,
+        prazo: calcularPrazoConfirmacaoCorretor(atividade)!,
         link,
       });
       await whatsapp.enviarMensagemTexto(telefone, msg);
@@ -185,12 +306,20 @@ export async function executarLembretesConfirmacaoCorretor(): Promise<{ processa
 
 export async function executarCutoffRemanejamentoCorretor(): Promise<{ processados: number; remanejados: number; expirados: number; erros: number }> {
   const agora = new Date();
+  const prazoVencidoEm = adicionarMinutos(agora, -obterPrazoConfirmacaoCorretorMinutos());
 
   const atividades = await (prisma.atividade as any).findMany({
     where: {
       tipo: 'REUNIAO',
-      statusConfirmacaoCorretor: 'PENDENTE',
-      agendadoPara: { lte: minutosAntes(agora, -60) },
+      statusAgendamento: { in: STATUS_AGENDAMENTO_ATIVOS },
+      agendadoPara: { gt: agora },
+      OR: [
+        { statusConfirmacaoCorretor: 'RECUSADO' },
+        {
+          statusConfirmacaoCorretor: 'PENDENTE',
+          confirmacaoCorretorSolicitadaEm: { not: null, lte: prazoVencidoEm },
+        },
+      ],
       tokenConfirmacaoCorretor: { not: null },
     },
     include: {
@@ -224,6 +353,10 @@ export async function executarCutoffRemanejamentoCorretor(): Promise<{ processad
           estadoAgendaAtualizadoEm: estadoAtualizadoEm,
         }
       });
+      await (prisma.conviteEspecialistaAgenda as any).updateMany({
+        where: { atividadeId: atividade.id, status: 'PENDENTE' },
+        data: { status: 'EXPIRADO', respondidoEm: estadoAtualizadoEm, origemResposta: 'JOB' },
+      });
       ServicoAuditoria.registrar({
         tenantId: atividade.lead.tenantId,
         acao: 'EXPIRACAO_CONFIRMACAO_CORRETOR',
@@ -233,61 +366,11 @@ export async function executarCutoffRemanejamentoCorretor(): Promise<{ processad
         detalhes: { leadId: atividade.lead.id }
       });
 
-      if (!atividade.lead?.campanhaOrigemId) continue;
-      const especialista = await resolverEspecialistaCampanha({
-        tenantId: atividade.lead.tenantId,
-        campanhaId: atividade.lead.campanhaOrigemId
+      const remanejamento = await remanejarCorretorAtividade({
+        atividadeId: atividade.id,
+        origem: 'CUTOFF',
       });
-
-      if (!especialista) continue;
-
-      await (prisma.atividade as any).update({
-        where: { id: atividade.id },
-        data: {
-          statusConfirmacaoCorretor: 'REMANEJADO',
-          remanejadoCorretorEm: new Date(),
-          corretorAtualId: especialista.usuarioId || null,
-          versao: { increment: 1 },
-          estadoAgendaAtualizadoEm: new Date(),
-        }
-      });
-
-      const instanceName = await buscarSessaoConectadaTenant(atividade.lead.tenantId);
-      if (instanceName) {
-        const whatsapp = getWhatsAppService(instanceName);
-        const telCorretor = normalizarTelefoneParaWaMe(especialista.telefone);
-        const telLead = normalizarTelefoneParaWaMe(atividade.lead.telefone || '');
-
-        if (telCorretor) {
-          await whatsapp.enviarMensagemTexto(
-            telCorretor,
-            `Você foi designado para reunião remanejada.\nLead: ${atividade.lead.nome}\nHorário: ${new Date(atividade.agendadoPara).toLocaleString('pt-BR')}`
-          );
-        }
-        if (telLead) {
-          await whatsapp.enviarMensagemTexto(
-            telLead,
-            templateRemanejamentoLead({
-              especialistaNome: especialista.nome,
-              especialistaCargo: especialista.cargo
-            })
-          );
-        }
-      }
-
-      ServicoAuditoria.registrar({
-        tenantId: atividade.lead.tenantId,
-        acao: 'REMANEJAMENTO_CORRETOR_AUTO',
-        entidade: 'Atividade',
-        entidadeId: atividade.id,
-        ip: '127.0.0.1',
-        detalhes: {
-          leadId: atividade.lead.id,
-          corretorAtualId: especialista.usuarioId || null,
-          origem: especialista.origem
-        }
-      });
-      remanejados++;
+      if (remanejamento.sucesso) remanejados++;
     } catch (e) {
       erros++;
     }

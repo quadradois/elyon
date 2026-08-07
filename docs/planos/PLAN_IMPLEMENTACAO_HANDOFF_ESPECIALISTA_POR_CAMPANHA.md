@@ -3,11 +3,11 @@
 ## Contexto
 - Objetivo: usar a base de corretores do `/dashboard/equipe`, definir responsável por campanha e implementar confirmação com SLA.
 - Regras alinhadas:
-  - Convite: `T-120`
-  - Lembrete: `T-90`
-  - Cutoff: `T-60`
-  - Sem confirmação até `T-60`: remanejamento automático
-  - Confirmação após cutoff: não reassume automaticamente
+  - Convite: imediatamente após o registro do pedido
+  - SLA do responsável: no máximo `60 minutos` após o envio do convite
+  - Lembrete: `15 minutos` antes do vencimento do SLA
+  - Sem confirmação no prazo: remanejamento imediato para o fallback, com novo convite e novo SLA
+  - Confirmação após o vencimento: não reassume automaticamente
 
 ---
 
@@ -26,18 +26,18 @@
 - `PENDENTE`: convite enviado e aguardando ação do corretor.
 - `CONFIRMADO`: corretor confirmou dentro da janela válida.
 - `RECUSADO`: corretor recusou/indicou ausência explicitamente.
-- `EXPIRADO`: prazo de confirmação (`T-60`) passou sem confirmação.
+- `EXPIRADO`: SLA de confirmação passou sem resposta.
 - `REMANEJADO`: reunião atribuída a outro corretor após `RECUSADO` ou `EXPIRADO`.
 
 Transições válidas:
 - `PENDENTE -> CONFIRMADO` (confirmação no prazo)
-- `PENDENTE -> RECUSADO` (recusa explícita antes do cutoff)
-- `PENDENTE -> EXPIRADO` (job de cutoff em `T-60`)
+- `PENDENTE -> RECUSADO` (recusa explícita antes do prazo)
+- `PENDENTE -> EXPIRADO` (job ao vencer o SLA)
 - `RECUSADO -> REMANEJADO` (remanejamento imediato ou assíncrono)
 - `EXPIRADO -> REMANEJADO` (remanejamento automático)
 
 Regras complementares:
-- Confirmação após `T-60` é registrada como evento tardio e não reverte automaticamente `REMANEJADO`.
+- Confirmação após o SLA é tratada como tardia e não reverte automaticamente `REMANEJADO`.
 - `REMANEJADO` é estado terminal da atribuição original.
 
 ### Contrato 0.2 — Indisponibilidade Operacional
@@ -105,10 +105,10 @@ Critérios operacionais derivados:
   - [x] Garantir idempotência
   - [x] Registrar auditoria
   - Critério de aceite: link altera estado corretamente e registra trilha
-  - Observação: implementado em `leads.ts` nas rotas públicas `/confirmar-corretor/:atividadeId/:token` (GET/POST), com regra de cutoff `T-60` para confirmação.
+  - Observação: implementado em `leads.ts` nas rotas públicas `/confirmar-corretor/:atividadeId/:token` (GET/POST), com SLA contado do envio do convite.
 
 - [x] **2.4 Implementar cutoff/remanejamento**
-  - [x] Expirar em `T-60`
+  - [x] Expirar 60 minutos após o envio do convite
   - [x] Remanejar automaticamente para fallback
   - [x] Marcar confirmação tardia sem reassumir automaticamente
   - Critério de aceite: pendências no cutoff nunca ficam sem dono
@@ -117,17 +117,17 @@ Critérios operacionais derivados:
 ---
 
 ## Fase 3 — Jobs e Orquestração Temporal
-- [x] **3.1 Job de convite (T-120)**
+- [x] **3.1 Job de convite imediato**
   - [x] Selecionar reuniões elegíveis
   - [x] Enviar convite com token
   - [x] Registrar `confirmacaoSolicitadaEm`
   - Critério de aceite: envio no tempo correto e sem duplicidade
 
-- [x] **3.2 Job de lembrete (T-90)**
+- [x] **3.2 Job de lembrete (15 minutos antes do prazo)**
   - [x] Enviar lembrete para reuniões `PENDENTE`
   - Critério de aceite: um lembrete por reunião pendente
 
-- [x] **3.3 Job de expiração/remanejamento (T-60)**
+- [x] **3.3 Job de expiração/remanejamento por SLA**
   - [x] Expirar reuniões pendentes
   - [x] Remanejar para fallback
   - [x] Notificar corretor novo + lead
@@ -160,7 +160,7 @@ Critérios operacionais derivados:
   - [x] Mensagem com contexto + link de confirmação
 
 - [x] **5.2 Template lembrete**
-  - [x] Mensagem curta para `T-90`
+  - [x] Mensagem curta 15 minutos antes do vencimento
 
 - [x] **5.3 Template remanejamento**
   - [x] Mensagem ao lead com novo especialista + contato

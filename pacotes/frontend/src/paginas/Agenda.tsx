@@ -16,8 +16,17 @@ import { PageHeader } from '../componentes/ui/page-header';
 import { EmptyStateInline } from '../componentes/ui/empty-state';
 import { toast } from 'sonner';
 
-import { agendaService, EventoAgenda } from '../servicos/apiAgenda';
+import { agendaService, EventoAgenda, executarComandoAgenda, type PendenciaAgenda } from '../servicos/apiAgenda';
 import { Loader2, Calendar as CalendarIcon, Ban, Check, Clock, Phone, User, Trash2, CalendarX, Settings, XCircle, RefreshCw, MessageSquare } from 'lucide-react';
+import {
+    acaoAgendaPermitida,
+    corEventoPorStatus,
+    descricaoEstadoDrawerAgenda,
+    obterEstadoDrawerAgenda,
+    ordenarPendenciasVencidas,
+    pendenciaPermiteAcao,
+    rotuloStatusAgenda,
+} from './agenda-actions';
 
 const locales = { 'pt-BR': ptBR };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
@@ -65,6 +74,8 @@ const TEMPLATE_MENSAGEM_POR_MOTIVO: Record<MotivoReagendamento, string> = {
 };
 
 export function Agenda() {
+    const usuarioLogado = JSON.parse(localStorage.getItem('elyon_usuario') || '{}') as { papel?: string };
+    const somenteLeitura = usuarioLogado.papel === 'VISUALIZADOR';
     const [events, setEvents] = useState<EventoAgenda[]>([]);
     const [loading, setLoading] = useState(false);
     const [view, setView] = useState<View>(Views.WEEK);
@@ -72,6 +83,7 @@ export function Agenda() {
 
     const [bloqueios, setBloqueios] = useState<Bloqueio[]>([]);
     const [loadingBloqueios, setLoadingBloqueios] = useState(false);
+    const [pendenciasVencidas, setPendenciasVencidas] = useState<PendenciaAgenda[]>([]);
 
     const [showModal, setShowModal] = useState(false);
     const [selectedSlot, setSelectedSlot] = useState<{ start: Date; end: Date } | null>(null);
@@ -87,6 +99,13 @@ export function Agenda() {
     const [motivoAcao, setMotivoAcao] = useState('');
     const [motivoProposta, setMotivoProposta] = useState<MotivoReagendamento | ''>('');
     const [mensagemProposta, setMensagemProposta] = useState('');
+    const [avisarCliente, setAvisarCliente] = useState(true);
+    const [absenceTarget, setAbsenceTarget] = useState<{
+        id: string;
+        version: number;
+        leadNome: string;
+        source: 'EVENTO' | 'PENDENCIA';
+    } | null>(null);
     const commandRequestIds = useRef(new Map<string, string>());
     const requestIdFor = (key: string) => {
         const existing = commandRequestIds.current.get(key);
@@ -105,6 +124,7 @@ export function Agenda() {
     useEffect(() => {
         fetchEvents();
         fetchBloqueios();
+        fetchPendenciasVencidas();
     }, [date, view]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const fetchEvents = async () => {
@@ -119,6 +139,16 @@ export function Agenda() {
             toast.error('Não foi possível carregar a agenda.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchPendenciasVencidas = async () => {
+        try {
+            const items = await agendaService.listarPendenciasVencidas();
+            setPendenciasVencidas(ordenarPendenciasVencidas(items));
+        } catch (error) {
+            console.error('Erro ao carregar pendências vencidas:', error);
+            toast.error('Não foi possível carregar as pendências de desfecho.');
         }
     };
 
@@ -190,6 +220,7 @@ export function Agenda() {
         setMotivoAcao('');
         setMotivoProposta('');
         setMensagemProposta('');
+        setAvisarCliente(true);
         setShowEventModal(true);
     };
 
@@ -221,6 +252,11 @@ export function Agenda() {
         if (!textoBase) return '';
         return aplicarPlaceholdersMensagem(textoBase);
     })();
+
+    const estadoDrawer = obterEstadoDrawerAgenda(selectedEvent);
+    const permiteCancelar = acaoAgendaPermitida(selectedEvent, 'CANCELAR');
+    const permiteReagendar = acaoAgendaPermitida(selectedEvent, 'REAGENDAR');
+    const exibeResumoDesfecho = estadoDrawer === 'CONCLUIDO' || estadoDrawer === 'CANCELADO';
 
     const handleSalvarBloqueio = async () => {
         if (!selectedSlot || !bloqueioMotivo) {
@@ -279,17 +315,27 @@ export function Agenda() {
 
     const handleCancelarAgendamento = async () => {
         if (!selectedEvent) return;
+        if (!motivoAcao.trim()) {
+            toast.warning('Informe o motivo do cancelamento.');
+            return;
+        }
+        const confirmado = window.confirm(
+            `Cancelar este compromisso? ${avisarCliente ? 'O lead será notificado pelo WhatsApp.' : 'O lead não será notificado automaticamente.'}`,
+        );
+        if (!confirmado) return;
         setActionLoading(true);
         try {
-            await agendaService.cancelarAgendamento(selectedEvent.id, {
-                motivo: motivoAcao || undefined,
-                avisarCliente: true,
-                requestId: requestIdFor(`${selectedEvent.id}:${selectedEvent.extendedProps?.versao ?? 0}:cancelar`),
+            await executarComandoAgenda(selectedEvent.id, {
+                command: 'CANCELAR',
                 expectedVersion: selectedEvent.extendedProps?.versao ?? 0,
-            });
-            toast.success('Agendamento cancelado.');
+                reasonCode: motivoAcao.trim(),
+                notifyLead: avisarCliente,
+            }, requestIdFor(`${selectedEvent.id}:${selectedEvent.extendedProps?.versao ?? 0}:cancelar`));
+            toast.success(avisarCliente
+                ? 'Agendamento cancelado; a notificação do lead foi enfileirada.'
+                : 'Agendamento cancelado sem notificar o lead.');
             setShowEventModal(false);
-            fetchEvents();
+            await Promise.all([fetchEvents(), fetchPendenciasVencidas()]);
         } catch (error) {
             console.error('Erro ao cancelar agendamento:', error);
             toast.error('Erro ao cancelar agendamento.');
@@ -304,18 +350,24 @@ export function Agenda() {
             toast.warning('Informe o novo horário para reagendar.');
             return;
         }
+        const confirmado = window.confirm(
+            `Reagendar para ${new Date(novoHorario).toLocaleString('pt-BR')}? ${avisarCliente ? 'O lead será notificado pelo WhatsApp.' : 'O lead não será notificado automaticamente.'}`,
+        );
+        if (!confirmado) return;
         setActionLoading(true);
         try {
-            await agendaService.reagendarAgendamento(selectedEvent.id, {
-                novoHorario: new Date(novoHorario),
-                motivo: motivoAcao || undefined,
-                avisarCliente: true,
-                requestId: requestIdFor(`${selectedEvent.id}:${selectedEvent.extendedProps?.versao ?? 0}:reagendar:${novoHorario}`),
+            await executarComandoAgenda(selectedEvent.id, {
+                command: 'REAGENDAR',
                 expectedVersion: selectedEvent.extendedProps?.versao ?? 0,
-            });
-            toast.success('Agendamento reagendado.');
+                reasonCode: motivoAcao.trim() || 'Reagendamento pelo gestor',
+                scheduledFor: new Date(novoHorario),
+                notifyLead: avisarCliente,
+            }, requestIdFor(`${selectedEvent.id}:${selectedEvent.extendedProps?.versao ?? 0}:reagendar:${novoHorario}`));
+            toast.success(avisarCliente
+                ? 'Agendamento reagendado; a notificação do lead foi enfileirada.'
+                : 'Agendamento reagendado sem notificar o lead.');
             setShowEventModal(false);
-            fetchEvents();
+            await Promise.all([fetchEvents(), fetchPendenciasVencidas()]);
         } catch (error) {
             console.error('Erro ao reagendar:', error);
             toast.error('Erro ao reagendar agendamento.');
@@ -351,7 +403,8 @@ export function Agenda() {
         try {
             await agendaService.proporNovoHorario(selectedEvent.id, {
                 horarioProposto: new Date(novoHorario),
-                mensagem: mensagemFinalProposta
+                mensagem: mensagemFinalProposta,
+                expectedVersion: selectedEvent.extendedProps?.versao ?? 0,
             });
             toast.success('Horário proposto ao cliente.');
             setShowEventModal(false);
@@ -364,19 +417,115 @@ export function Agenda() {
         }
     };
 
+    const handleRegistrarResultado = async (
+        target: { id: string; version: number; source: 'EVENTO' | 'PENDENCIA' },
+        command: 'REALIZAR' | 'NAO_COMPARECEU',
+        absentParty?: 'LEAD' | 'ESPECIALISTA',
+    ) => {
+        setActionLoading(true);
+        try {
+            await executarComandoAgenda(target.id, {
+                command,
+                expectedVersion: target.version,
+                reasonCode: command === 'REALIZAR'
+                    ? 'Atendimento realizado'
+                    : absentParty === 'ESPECIALISTA' ? 'Especialista não compareceu' : 'Lead não compareceu',
+                absentParty,
+                notifyLead: false,
+            }, requestIdFor(`${target.id}:${target.version}:${command}:${absentParty || 'NA'}`));
+            toast.success(command === 'REALIZAR'
+                ? 'Atendimento marcado como realizado.'
+                : `Ausência do ${absentParty === 'ESPECIALISTA' ? 'especialista' : 'lead'} registrada.`);
+            if (target.source === 'EVENTO') setShowEventModal(false);
+            setAbsenceTarget(null);
+            await Promise.all([fetchEvents(), fetchPendenciasVencidas()]);
+        } catch (error) {
+            console.error('Erro ao registrar resultado:', error);
+            toast.error('Não foi possível registrar o resultado.');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleRecusarParticipacao = async () => {
+        if (!selectedEvent) return;
+        setActionLoading(true);
+        try {
+            const result = await executarComandoAgenda(selectedEvent.id, {
+                command: 'RECUSAR',
+                expectedVersion: selectedEvent.extendedProps?.versao ?? 0,
+                reasonCode: motivoAcao.trim() || 'Indisponibilidade do especialista',
+                notifyLead: false,
+            }, requestIdFor(`${selectedEvent.id}:${selectedEvent.extendedProps?.versao ?? 0}:recusar`));
+            const remanejado = result?.reassignment?.sucesso;
+            toast.success(remanejado
+                ? `Participação recusada; ${result.reassignment.especialistaNome || 'o fallback'} recebeu a solicitação.`
+                : 'Participação recusada. A operação recebeu a pendência porque não há fallback elegível.');
+            setShowEventModal(false);
+            await Promise.all([fetchEvents(), fetchPendenciasVencidas()]);
+        } catch (error) {
+            console.error('Erro ao recusar participação:', error);
+            toast.error('Não foi possível registrar a indisponibilidade do especialista.');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleCorrigirResultado = async () => {
+        if (!selectedEvent) return;
+        const correctedStatus = window.prompt('Novo desfecho: REALIZADO, NAO_COMPARECEU ou CANCELADO')?.trim().toUpperCase();
+        if (!['REALIZADO', 'NAO_COMPARECEU', 'CANCELADO'].includes(correctedStatus || '')) {
+            toast.warning('Informe um desfecho válido.');
+            return;
+        }
+        const justification = window.prompt('Justificativa administrativa (mínimo de 10 caracteres)')?.trim();
+        if (!justification || justification.length < 10) {
+            toast.warning('A justificativa é obrigatória.');
+            return;
+        }
+        let absentParty: 'LEAD' | 'ESPECIALISTA' | undefined;
+        if (correctedStatus === 'NAO_COMPARECEU') {
+            const selectedParty = window.prompt('Parte ausente: LEAD ou ESPECIALISTA')?.trim().toUpperCase();
+            if (!['LEAD', 'ESPECIALISTA'].includes(selectedParty || '')) {
+                toast.warning('Informe quem não compareceu: LEAD ou ESPECIALISTA.');
+                return;
+            }
+            absentParty = selectedParty as 'LEAD' | 'ESPECIALISTA';
+        }
+        setActionLoading(true);
+        try {
+            await executarComandoAgenda(selectedEvent.id, {
+                command: 'CORRIGIR', expectedVersion: selectedEvent.extendedProps?.versao ?? 0,
+                reasonCode: 'CORRECAO_ADMINISTRATIVA', justification,
+                correctedStatus: correctedStatus as 'REALIZADO' | 'NAO_COMPARECEU' | 'CANCELADO', absentParty,
+            });
+            toast.success('Correção registrada sem apagar o histórico.');
+            setShowEventModal(false);
+            fetchEvents();
+        } catch (error) {
+            console.error('Erro ao corrigir resultado:', error);
+            toast.error('Não foi possível registrar a correção.');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     const eventStyleGetter = (event: EventoAgenda) => {
-        let backgroundColor = event.backgroundColor || '#3174ad';
+        let backgroundColor = corEventoPorStatus(event);
         if (event.extendedProps?.tipo === 'BLOQUEIO' || event.title.includes('BLOQUEIO')) backgroundColor = '#ef4444';
-        if (event.extendedProps?.status === 'CONFIRMADO') backgroundColor = '#22c55e';
         return { style: { backgroundColor, borderRadius: '4px', opacity: 0.8, color: 'white', border: '0px', display: 'block' } };
     };
 
     const getStatusBadge = (status: string | undefined) => {
         switch (status) {
-            case 'PENDENTE': return <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300"><Clock className="w-3 h-3 mr-1" />Aguardando</Badge>;
+            case 'PENDENTE':
+            case 'SOLICITADO':
+            case 'PROPOSTO': return <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300"><Clock className="w-3 h-3 mr-1" />{rotuloStatusAgenda(status)}</Badge>;
             case 'CONFIRMADO': return <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300"><Check className="w-3 h-3 mr-1" />Confirmado</Badge>;
+            case 'REALIZADO': return <Badge variant="outline" className="bg-slate-100 text-slate-800 border-slate-300"><Check className="w-3 h-3 mr-1" />Realizado</Badge>;
+            case 'NAO_COMPARECEU': return <Badge variant="outline" className="bg-rose-100 text-rose-800 border-rose-300"><CalendarX className="w-3 h-3 mr-1" />Não compareceu</Badge>;
             case 'CANCELADO': return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300"><Ban className="w-3 h-3 mr-1" />Cancelado</Badge>;
-            default: return <Badge variant="outline">{status || 'N/A'}</Badge>;
+            default: return <Badge variant="outline">{rotuloStatusAgenda(status)}</Badge>;
         }
     };
 
@@ -388,21 +537,79 @@ export function Agenda() {
                 icon={<CalendarIcon className="w-5 h-5" />}
                 actions={(
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={handleOpenConfig}>
-                        <Settings className="mr-2 h-4 w-4" />
-                        Configurar Horários
-                    </Button>
+                    {!somenteLeitura && (
+                        <Button variant="outline" onClick={handleOpenConfig}>
+                            <Settings className="mr-2 h-4 w-4" />
+                            Configurar Horários
+                        </Button>
+                    )}
                     <Button variant="outline" onClick={() => { fetchEvents(); fetchBloqueios(); }} disabled={loading}>
                         {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarIcon className="mr-2 h-4 w-4" />}
                         Atualizar
                     </Button>
-                    <Button onClick={() => { setSelectedSlot({ start: new Date(), end: new Date() }); setShowModal(true); }}>
-                        <Ban className="mr-2 h-4 w-4" />
-                        Bloquear Horário
-                    </Button>
+                    {!somenteLeitura && (
+                        <Button onClick={() => { setSelectedSlot({ start: new Date(), end: new Date() }); setShowModal(true); }}>
+                            <Ban className="mr-2 h-4 w-4" />
+                            Bloquear Horário
+                        </Button>
+                    )}
                 </div>
                 )}
             />
+
+            {pendenciasVencidas.length > 0 && (
+                <Card className="border-amber-300 bg-amber-50/50">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-base">Pendências de desfecho ({pendenciasVencidas.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                        {pendenciasVencidas.map((item) => (
+                            <div key={item.id} className="rounded-md border bg-background p-3 text-sm space-y-3">
+                                <p className="font-medium">{item.leadNome}</p>
+                                <p className="text-muted-foreground">
+                                    {item.operationalReason === 'SPECIALIST_PENDING'
+                                        ? 'Sem especialista atribuído'
+                                        : item.operationalReason === 'FEEDBACK_SPECIALIST_PENDING'
+                                            ? 'Especialista não respondeu ao feedback'
+                                            : 'Aguardando classificação'}
+                                    {' · '}{item.pendingAgeMinutes} min
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    {new Date(item.scheduledFor).toLocaleString('pt-BR')}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    {pendenciaPermiteAcao(item, 'REALIZAR') && (
+                                        <Button
+                                            size="sm"
+                                            onClick={() => handleRegistrarResultado({
+                                                id: item.id, version: item.version, source: 'PENDENCIA',
+                                            }, 'REALIZAR')}
+                                            disabled={actionLoading}
+                                        >
+                                            <Check className="mr-1 h-4 w-4" />Realizado
+                                        </Button>
+                                    )}
+                                    {pendenciaPermiteAcao(item, 'NAO_COMPARECEU') && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => setAbsenceTarget({
+                                                id: item.id,
+                                                version: item.version,
+                                                leadNome: item.leadNome,
+                                                source: 'PENDENCIA',
+                                            })}
+                                            disabled={actionLoading}
+                                        >
+                                            <CalendarX className="mr-1 h-4 w-4" />Registrar ausência
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <Card className="lg:col-span-1">
@@ -425,9 +632,11 @@ export function Agenda() {
                                             <p className="text-sm font-medium">{new Date(b.agendadoPara).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}</p>
                                             <p className="text-xs text-muted-foreground">{new Date(b.agendadoPara).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                                         </div>
-                                        <Button variant="ghost" size="icon" aria-label="Excluir bloqueio de agenda" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-100" onClick={() => handleExcluirBloqueio(b.id)}>
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        {!somenteLeitura && (
+                                            <Button variant="ghost" size="icon" aria-label="Excluir bloqueio de agenda" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-100" onClick={() => handleExcluirBloqueio(b.id)}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             ))
@@ -450,8 +659,8 @@ export function Agenda() {
                                 date={date}
                                 onNavigate={setDate}
                                 culture='pt-BR'
-                                selectable
-                                onSelectSlot={handleSelectSlot}
+                                selectable={!somenteLeitura}
+                                onSelectSlot={somenteLeitura ? undefined : handleSelectSlot}
                                 onSelectEvent={handleSelectEvent}
                                 eventPropGetter={eventStyleGetter}
                                 messages={{ next: "Próximo", previous: "Anterior", today: "Hoje", month: "Mês", week: "Semana", day: "Dia", agenda: "Lista", date: "Data", time: "Hora", event: "Evento", noEventsInRange: "Sem eventos." }}
@@ -494,7 +703,7 @@ export function Agenda() {
                     <DrawerHeader>
                         <DrawerTitle className="flex items-center gap-2"><CalendarIcon className="h-5 w-5" />{selectedEvent?.title}</DrawerTitle>
                         <DrawerDescription>
-                            Ações de aprovação, cancelamento, reagendamento e proposta de novo horário.
+                            {descricaoEstadoDrawerAgenda(estadoDrawer)}
                         </DrawerDescription>
                     </DrawerHeader>
                     <DrawerBody className="space-y-5">
@@ -506,8 +715,53 @@ export function Agenda() {
                             <div className="flex items-center gap-2 text-sm"><Clock className="h-4 w-4 text-muted-foreground" /><span>{selectedEvent?.start instanceof Date ? selectedEvent.start.toLocaleString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : 'N/A'}</span></div>
                             {selectedEvent?.extendedProps?.leadNome && <div className="flex items-center gap-2 text-sm"><User className="h-4 w-4 text-muted-foreground" /><span>{selectedEvent.extendedProps.leadNome}</span></div>}
                             {selectedEvent?.extendedProps?.leadTelefone && <div className="flex items-center gap-2 text-sm"><Phone className="h-4 w-4 text-muted-foreground" /><span>{selectedEvent.extendedProps.leadTelefone}</span></div>}
+                            {selectedEvent?.extendedProps?.especialistaNome && (
+                                <div className="flex items-center gap-2 text-sm">
+                                    <User className="h-4 w-4 text-muted-foreground" />
+                                    <span>Responsável: <strong>{selectedEvent.extendedProps.especialistaNome}</strong></span>
+                                </div>
+                            )}
                         </section>
 
+                        {estadoDrawer === 'VENCIDO_SEM_DESFECHO' && (
+                            <section role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 space-y-1">
+                                <p className="font-semibold">Resultado pendente</p>
+                                <p>O horário deste atendimento já passou. Informe abaixo se ele foi realizado ou quem não compareceu.</p>
+                            </section>
+                        )}
+
+                        {exibeResumoDesfecho && selectedEvent && (
+                            <section aria-label="Resultado do atendimento" className="rounded-lg border bg-slate-50 p-4 text-sm space-y-3">
+                                <div>
+                                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Resultado registrado</p>
+                                    <p className="mt-1 text-base font-semibold text-slate-900">
+                                        {rotuloStatusAgenda(selectedEvent.extendedProps?.status)}
+                                    </p>
+                                </div>
+                                {selectedEvent.extendedProps?.parteAusente && (
+                                    <p><span className="text-slate-500">Parte ausente:</span>{' '}
+                                        <strong>{selectedEvent.extendedProps.parteAusente === 'LEAD' ? 'Lead' : 'Especialista'}</strong>
+                                    </p>
+                                )}
+                                {selectedEvent.extendedProps?.resultadoRegistradoEm && (
+                                    <p><span className="text-slate-500">Registrado em:</span>{' '}
+                                        {new Date(selectedEvent.extendedProps.resultadoRegistradoEm).toLocaleString('pt-BR')}
+                                    </p>
+                                )}
+                                {selectedEvent.extendedProps?.resultadoRegistradoPor && (
+                                    <p><span className="text-slate-500">Registrado por:</span>{' '}
+                                        {selectedEvent.extendedProps.resultadoRegistradoPor}
+                                    </p>
+                                )}
+                                {selectedEvent.extendedProps?.resultadoMotivo && (
+                                    <p><span className="text-slate-500">Motivo ou observação:</span>{' '}
+                                        {selectedEvent.extendedProps.resultadoMotivo}
+                                    </p>
+                                )}
+                            </section>
+                        )}
+
+                        {permiteReagendar && (
                         <section className="space-y-2 w-full min-w-0">
                             <Label htmlFor="novoHorario" className="font-medium">Novo horário</Label>
                             <Input
@@ -518,7 +772,9 @@ export function Agenda() {
                                 onChange={(e) => setNovoHorario(e.target.value)}
                             />
                         </section>
+                        )}
 
+                        {permiteReagendar && (
                         <section className="space-y-2 w-full min-w-0">
                             <Label htmlFor="motivoProposta" className="font-medium">Motivo do reagendamento</Label>
                             <select
@@ -535,9 +791,11 @@ export function Agenda() {
                                 ))}
                             </select>
                         </section>
+                        )}
 
+                        {permiteCancelar && (
                         <section className="space-y-2 w-full min-w-0">
-                            <Label htmlFor="motivoAcao" className="font-medium">Observação interna (opcional)</Label>
+                            <Label htmlFor="motivoAcao" className="font-medium">Motivo do cancelamento</Label>
                             <Input
                                 id="motivoAcao"
                                 className="w-full max-w-full"
@@ -546,8 +804,26 @@ export function Agenda() {
                                 onChange={(e) => setMotivoAcao(e.target.value)}
                             />
                         </section>
+                        )}
 
-                        <section className="space-y-2 w-full min-w-0">
+                        {selectedEvent && (acaoAgendaPermitida(selectedEvent, 'CANCELAR') || acaoAgendaPermitida(selectedEvent, 'REAGENDAR')) && (
+                            <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={avisarCliente}
+                                    onChange={(event) => setAvisarCliente(event.target.checked)}
+                                    className="mt-0.5 h-4 w-4"
+                                />
+                                <span>
+                                    <strong>Notificar o lead pelo WhatsApp</strong>
+                                    <span className="block text-muted-foreground">
+                                        Desmarque somente quando a comunicação será feita manualmente por outro canal.
+                                    </span>
+                                </span>
+                            </label>
+                        )}
+
+                        {permiteReagendar && <section className="space-y-2 w-full min-w-0">
                             <Label htmlFor="mensagemProposta" className="font-medium">Mensagem para o cliente (opcional)</Label>
                             <Textarea
                                 id="mensagemProposta"
@@ -557,17 +833,17 @@ export function Agenda() {
                                 value={mensagemProposta}
                                 onChange={(e) => setMensagemProposta(e.target.value)}
                             />
-                        </section>
+                        </section>}
 
-                        <section className="rounded-md border bg-muted/30 p-3 text-xs space-y-1">
+                        {permiteReagendar && <section className="rounded-md border bg-muted/30 p-3 text-xs space-y-1">
                                 <p className="font-medium">Placeholders inteligentes</p>
                                 <p><code>[nome]</code> insere o nome do cliente.</p>
                                 <p><code>[data_hora]</code> (ou <code>[data]</code>) insere data e hora propostas.</p>
                                 <p><code>[dia_semana]</code> insere o dia da semana do novo horário.</p>
                                 <p>Em mensagem personalizada, inclua <code>[data_hora]</code> para manter contexto.</p>
-                        </section>
+                        </section>}
 
-                        {mensagemFinalProposta && (
+                        {permiteReagendar && mensagemFinalProposta && (
                             <section className="rounded-md border bg-emerald-50 p-3 text-sm">
                                 <p className="font-medium mb-1">Preview da mensagem que será enviada</p>
                                 <p className="whitespace-pre-wrap leading-relaxed">{mensagemFinalProposta}</p>
@@ -583,22 +859,88 @@ export function Agenda() {
                                     Aprovar
                                 </Button>
                             )}
-                            <Button variant="destructive" onClick={handleCancelarAgendamento} disabled={actionLoading}>
-                                {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
-                                Cancelar
-                            </Button>
-                            <Button variant="outline" onClick={handleReagendarAgendamento} disabled={actionLoading}>
-                                {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                                Reagendar
-                            </Button>
-                            <Button onClick={handleProporHorario} disabled={actionLoading}>
-                                {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}
-                                Propor Horário
-                            </Button>
+                            {acaoAgendaPermitida(selectedEvent, 'CANCELAR') && (
+                                <Button variant="destructive" onClick={handleCancelarAgendamento} disabled={actionLoading}>
+                                    {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
+                                    Cancelar
+                                </Button>
+                            )}
+                            {acaoAgendaPermitida(selectedEvent, 'REAGENDAR') && (
+                                <>
+                                    <Button variant="outline" onClick={handleReagendarAgendamento} disabled={actionLoading}>
+                                        {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                                        Reagendar
+                                    </Button>
+                                    <Button onClick={handleProporHorario} disabled={actionLoading}>
+                                        {actionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}
+                                        Propor Horário
+                                    </Button>
+                                </>
+                            )}
+                            {acaoAgendaPermitida(selectedEvent, 'REALIZAR') && (
+                                <Button onClick={() => selectedEvent && handleRegistrarResultado({
+                                    id: selectedEvent.id,
+                                    version: selectedEvent.extendedProps?.versao ?? 0,
+                                    source: 'EVENTO',
+                                }, 'REALIZAR')} disabled={actionLoading}>
+                                    <Check className="mr-2 h-4 w-4" />Realizado
+                                </Button>
+                            )}
+                            {acaoAgendaPermitida(selectedEvent, 'NAO_COMPARECEU') && (
+                                <Button variant="outline" onClick={() => selectedEvent && setAbsenceTarget({
+                                    id: selectedEvent.id,
+                                    version: selectedEvent.extendedProps?.versao ?? 0,
+                                    leadNome: selectedEvent.extendedProps?.leadNome || 'Lead',
+                                    source: 'EVENTO',
+                                })} disabled={actionLoading}>
+                                    <CalendarX className="mr-2 h-4 w-4" />Registrar ausência
+                                </Button>
+                            )}
+                            {acaoAgendaPermitida(selectedEvent, 'RECUSAR') && (
+                                <Button variant="outline" onClick={handleRecusarParticipacao} disabled={actionLoading}>
+                                    <User className="mr-2 h-4 w-4" />
+                                    {usuarioLogado.papel === 'CORRETOR' ? 'Não poderei atender' : 'Marcar especialista indisponível'}
+                                </Button>
+                            )}
+                            {acaoAgendaPermitida(selectedEvent, 'CORRIGIR') && (
+                                <Button variant="outline" onClick={handleCorrigirResultado} disabled={actionLoading}>
+                                    <RefreshCw className="mr-2 h-4 w-4" />Corrigir desfecho
+                                </Button>
+                            )}
                         </div>
                     </DrawerFooter>
                 </DrawerContent>
             </Drawer>
+
+            <Dialog open={Boolean(absenceTarget)} onOpenChange={(open) => !open && !actionLoading && setAbsenceTarget(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Quem não compareceu?</DialogTitle>
+                        <DialogDescription>
+                            Selecione a parte ausente no atendimento de {absenceTarget?.leadNome}. Essa informação ficará registrada no histórico.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <Button
+                            variant="outline"
+                            disabled={!absenceTarget || actionLoading}
+                            onClick={() => absenceTarget && handleRegistrarResultado(absenceTarget, 'NAO_COMPARECEU', 'LEAD')}
+                        >
+                            <User className="mr-2 h-4 w-4" />O lead não compareceu
+                        </Button>
+                        <Button
+                            variant="outline"
+                            disabled={!absenceTarget || actionLoading}
+                            onClick={() => absenceTarget && handleRegistrarResultado(absenceTarget, 'NAO_COMPARECEU', 'ESPECIALISTA')}
+                        >
+                            <Phone className="mr-2 h-4 w-4" />O especialista não compareceu
+                        </Button>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setAbsenceTarget(null)} disabled={actionLoading}>Voltar</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Modal Configuração de Expediente */}
             <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>

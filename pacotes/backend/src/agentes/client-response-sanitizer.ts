@@ -173,6 +173,17 @@ export function sanitizarRespostaParaCliente(texto: string): string {
   resposta = limparBlocoInternoStructuredOutput(resposta);
   resposta = removerBlocoMetadadosInternos(resposta);
   resposta = removerAspasEnvolventes(resposta);
+
+  const planejamentoInterno = [
+    /\bthe user is asking\b/i,
+    /\bi (?:need|should|must|will|'ll) (?:to )?(?:use|call|invoke|check|present|ask)\b/i,
+    /\bthen i(?:'ll| will)\b/i,
+    /\b(?:use|call|invoke)\s+[a-z][a-z0-9_]+\s+(?:tool|function)\b/i,
+    /\bo usu[aá]rio est[aá] pedindo\b.{0,160}\b(?:preciso|devo|vou)\b/i,
+    /\b(?:preciso|devo) (?:usar|chamar|invocar) (?:a )?(?:tool|ferramenta)\b/i,
+  ];
+  if (planejamentoInterno.some((padrao) => padrao.test(resposta))) return '';
+
   resposta = normalizarTermosComerciaisSensveis(resposta);
 
   return resposta.trim();

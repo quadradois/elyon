@@ -5,6 +5,16 @@ import { mapaService } from '../mapa';
 jest.mock('../../lib/db', () => ({
   prisma: {
     $queryRaw: jest.fn<any>(),
+    edificio: {
+      findMany: jest.fn<any>()
+    },
+    imovel: {
+      findMany: jest.fn<any>(),
+      count: jest.fn<any>()
+    },
+    geo360BuscaFallback: {
+      upsert: jest.fn<any>()
+    },
     imovelRancho: {
       count: jest.fn<any>(),
       findMany: jest.fn<any>()
@@ -15,6 +25,7 @@ jest.mock('../../lib/db', () => ({
 describe('MapaService - descoberta GEO360', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (prisma.geo360BuscaFallback.upsert as any).mockResolvedValue({});
   });
 
   it('retorna referência tipada quando encontra um alias validado', async () => {
@@ -24,6 +35,7 @@ describe('MapaService - descoberta GEO360', () => {
         id_lote: 405683,
         nome: 'WISH VACA BRAVA',
         endereco_oficial: 'R T-53, SETOR BUENO',
+        bairro: 'S BUENO',
         total_unidades: 287,
         encontrado_por: 'alias'
       }
@@ -52,6 +64,64 @@ describe('MapaService - descoberta GEO360', () => {
     const chamada = (prisma.$queryRaw as any).mock.calls[0];
     expect(chamada).toContain('%CONDOMINIOLAGOAZUL%');
     expect(chamada).toContain('CONDOMINIOLAGOAZUL');
+  });
+
+  it('não mistura o legado quando a GEO360 encontra o empreendimento', async () => {
+    (prisma.$queryRaw as any).mockResolvedValue([
+      {
+        cidade: 'goiania',
+        id_lote: 22366,
+        nome: 'GRAN CANÁRIA',
+        endereco_oficial: 'R DA DIVISA AP 402-BL03, BAIRRO S MORADA DO SOL',
+        bairro: 'S MORADA DO SOL',
+        total_unidades: 112,
+        encontrado_por: 'nome_oficial'
+      }
+    ]);
+
+    const resultado = await mapaService.buscarEdificiosPorNome('Gran Canaria', 20);
+
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0]).toEqual(expect.objectContaining({
+      idLote: 22366,
+      fonte: 'geo360',
+      nome: 'GRAN CANÁRIA',
+      logradouro: 'R DA DIVISA, BAIRRO S MORADA DO SOL'
+    }));
+    expect(prisma.edificio.findMany).not.toHaveBeenCalled();
+    expect(prisma.imovel.findMany).not.toHaveBeenCalled();
+  });
+
+  it('usa o legado somente como fallback quando a GEO360 não encontra resultados', async () => {
+    (prisma.$queryRaw as any).mockResolvedValue([]);
+    (prisma.edificio.findMany as any).mockResolvedValue([
+      {
+        codigo: 9001,
+        nome: 'EDIFÍCIO SOMENTE LEGADO',
+        logradouro: 'R TESTE',
+        bairro: null
+      }
+    ]);
+    (prisma.imovel.findMany as any)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const resultado = await mapaService.buscarEdificiosPorNome('Somente Legado', 20);
+
+    expect(resultado).toEqual([
+      expect.objectContaining({
+        codigo: 9001,
+        fonte: 'legado',
+        encontradoPor: 'legado'
+      })
+    ]);
+    expect(prisma.geo360BuscaFallback.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          termoNormalizado: 'SOMENTE LEGADO'
+        })
+      })
+    );
   });
 
   it('lista unidades pelo par cidade e idLote, sem usar codigoEdificio', async () => {

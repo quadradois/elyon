@@ -1,8 +1,12 @@
 import axios from 'axios';
 import { prisma } from '../lib/db';
+import { registrarMetricaBuscaEmpreendimento } from '../observabilidade/geo360-busca-metrics';
+import { registrarBuscaFallbackLegado } from './geo360-busca-monitoramento';
+import { formatarEnderecoEmpreendimento } from './geo360-endereco';
 
 const MAPA_API_URL = 'https://portalmapa.goiania.go.gov.br/servicogyn/rest/services/MapaServer/Feature_BaseTeste/FeatureServer/3/query';
 const MODO_BASE_LOCAL_ONLY = process.env.MINERACAO_LOCAL_ONLY !== 'false';
+const LEGADO_FALLBACK_HABILITADO = process.env.MINERACAO_LEGADO_FALLBACK !== 'false';
 
 interface BuscaParams {
   nmedificio?: string;
@@ -66,6 +70,7 @@ interface EmpreendimentoGeo360Row {
   id_lote: number;
   nome: string;
   endereco_oficial: string | null;
+  bairro: string | null;
   total_unidades: number;
   encontrado_por: 'alias' | 'nome_oficial' | 'endereco';
 }
@@ -102,6 +107,7 @@ export class MapaService {
             'LOTE ' || g.id_lote::text
           ) AS nome,
           g.endereco_oficial,
+          g.bairro,
           g.total_unidades,
           CASE
             WHEN alias_encontrado.nome IS NOT NULL THEN 'alias'
@@ -238,7 +244,7 @@ export class MapaService {
       return lotes.map((lote) => ({
         codigo: lote.id_lote,
         nome: lote.nome,
-        logradouro: lote.endereco_oficial || '',
+        logradouro: formatarEnderecoEmpreendimento(lote.endereco_oficial, lote.bairro),
         fonte: 'geo360',
         cidade: lote.cidade,
         idLote: lote.id_lote,
@@ -819,6 +825,18 @@ export class MapaService {
 
     const empreendimentosGeo360 = await this.buscarEmpreendimentosGeo360(termo, limite);
 
+    // GEO360 é a fonte canônica. O legado só participa quando a fonte primária
+    // não encontra nenhum resultado, evitando duplicar o mesmo empreendimento.
+    if (empreendimentosGeo360.length > 0) {
+      registrarMetricaBuscaEmpreendimento('geo360');
+      return empreendimentosGeo360.slice(0, limite);
+    }
+
+    if (!LEGADO_FALLBACK_HABILITADO) {
+      registrarMetricaBuscaEmpreendimento('legado_desabilitado');
+      return [];
+    }
+
     try {
       const termoUpper = termo.toUpperCase();
 
@@ -873,31 +891,29 @@ export class MapaService {
         });
       }
 
-      // Não deduplicar apenas pelo nome: empreendimentos homônimos podem existir
-      // em lotes/endereço distintos. A identidade canônica GEO360 é cidade + id_lote.
       const locaisLegado = Array.from(mapaEdificios.values());
 
-      if (empreendimentosGeo360.length > 0 || locaisLegado.length > 0) {
+      if (locaisLegado.length > 0) {
         const legadoEnriquecido = await this.enriquecerEdificiosComResumo(locaisLegado);
-        return [
-          ...empreendimentosGeo360,
-          ...legadoEnriquecido.map((item) => ({
-            ...item,
-            fonte: 'legado' as const,
-            encontradoPor: 'legado' as const
-          }))
-        ].slice(0, limite);
+        const resultadoLegado = legadoEnriquecido.map((item) => ({
+          ...item,
+          fonte: 'legado' as const,
+          encontradoPor: 'legado' as const
+        })).slice(0, limite);
+
+        registrarMetricaBuscaEmpreendimento('legado_local');
+        await registrarBuscaFallbackLegado(termo, resultadoLegado);
+        return resultadoLegado;
       }
 
       if (MODO_BASE_LOCAL_ONLY) {
+        registrarMetricaBuscaEmpreendimento('vazio');
         return [];
       }
     } catch (error) {
       console.error('[MapaService] Erro ao buscar edifícios na base local:', error);
-      if (empreendimentosGeo360.length > 0) {
-        return empreendimentosGeo360;
-      }
       if (MODO_BASE_LOCAL_ONLY) {
+        registrarMetricaBuscaEmpreendimento('vazio');
         return [];
       }
     }
@@ -908,6 +924,8 @@ export class MapaService {
       console.log(`[MapaService] ✅ ${doCache.length} edifícios encontrados no CACHE`);
       // Tentar atualizar cache em background (não bloqueia)
       this.atualizarCacheEdificiosBackground(termo, limite).catch(() => { });
+      registrarMetricaBuscaEmpreendimento('legado_local');
+      await registrarBuscaFallbackLegado(termo, doCache);
       return doCache;
     }
 
@@ -956,14 +974,19 @@ export class MapaService {
         console.error('[MapaService] Erro ao salvar cache de edifícios:', err)
       );
 
-      return this.enriquecerEdificiosComResumo(edificios);
+      const resultadoLegado = await this.enriquecerEdificiosComResumo(edificios);
+      registrarMetricaBuscaEmpreendimento('legado_api');
+      await registrarBuscaFallbackLegado(termo, resultadoLegado);
+      return resultadoLegado;
 
     } catch (error) {
       console.error('[MapaService] ❌ Erro na API externa:', error);
       console.log('[MapaService] API indisponível e cache vazio - retornando mock');
 
       // 3. Fallback Final: Mock de edifícios conhecidos
-      return this.mockEdificiosPorNome(termo);
+      const resultadoMock = this.mockEdificiosPorNome(termo);
+      registrarMetricaBuscaEmpreendimento(resultadoMock.length > 0 ? 'mock' : 'vazio');
+      return resultadoMock;
     }
   }
 

@@ -1,15 +1,18 @@
 const mockPrisma = {
   atividade: { findMany: jest.fn(), update: jest.fn() },
   sessaoWhatsapp: { findFirst: jest.fn() },
+  conviteEspecialistaAgenda: { updateMany: jest.fn() },
 };
 
 const mockWhatsapp = { enviarMensagemTexto: jest.fn() };
 const mockResolver = jest.fn();
+const mockRemanejar = jest.fn();
 const mockAuditoria = { registrar: jest.fn() };
 
 jest.mock('../../lib/db', () => ({ prisma: mockPrisma }));
 jest.mock('../../servicos/whatsapp', () => ({ getWhatsAppService: () => mockWhatsapp }));
 jest.mock('../../servicos/resolucao-especialista-campanha', () => ({ resolverEspecialistaCampanha: (...args: any[]) => mockResolver(...args) }));
+jest.mock('../../servicos/remanejamento-corretor', () => ({ remanejarCorretorAtividade: (...args: any[]) => mockRemanejar(...args) }));
 jest.mock('../../servicos/servico-auditoria', () => ({ ServicoAuditoria: mockAuditoria }));
 
 import {
@@ -28,7 +31,9 @@ describe('fluxo integração confirmação corretor', () => {
       usuarioId: 'u1',
       origem: 'RESPONSAVEL_CAMPANHA'
     });
+    mockRemanejar.mockResolvedValue({ sucesso: true, motivo: 'REMANEJADO' });
     mockPrisma.sessaoWhatsapp.findFirst.mockResolvedValue({ instanceName: 'inst1' });
+    mockPrisma.conviteEspecialistaAgenda.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('executa convite -> lembrete -> cutoff/remanejamento', async () => {

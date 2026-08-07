@@ -10,9 +10,12 @@ command -v restic >/dev/null || { echo 'restic não está instalado.' >&2; exit 
 
 install -d -m 0750 "$ROOT_DIR/backups/offhost"
 install -d -m 0755 "$ROOT_DIR/backups/status" /var/lib/elyon/restore-drills
-chmod 0700 "$ROOT_DIR/scripts/ops/backup-offhost-r2.sh" "$ROOT_DIR/scripts/ops/restore-drill-r2.sh"
+chmod 0700 "$ROOT_DIR/scripts/ops/backup-offhost-r2.sh" "$ROOT_DIR/scripts/ops/restore-drill-r2.sh" \
+  "$ROOT_DIR/scripts/ops/prune-local-storage.sh"
 install -m 0644 "$ROOT_DIR/ops/systemd/elyon-offhost-backup.service" /etc/systemd/system/
 install -m 0644 "$ROOT_DIR/ops/systemd/elyon-offhost-backup.timer" /etc/systemd/system/
+install -m 0644 "$ROOT_DIR/ops/systemd/elyon-storage-maintenance.service" /etc/systemd/system/
+install -m 0644 "$ROOT_DIR/ops/systemd/elyon-storage-maintenance.timer" /etc/systemd/system/
 
 if crontab -l 2>/dev/null | grep -qF '/root/backup_r2.sh'; then
   crontab -l 2>/dev/null | grep -vF '/root/backup_r2.sh' | crontab -
@@ -20,6 +23,9 @@ fi
 
 systemctl daemon-reload
 systemctl enable --now elyon-offhost-backup.timer
+systemctl enable --now elyon-storage-maintenance.timer
 systemctl is-enabled --quiet elyon-offhost-backup.timer
 systemctl is-active --quiet elyon-offhost-backup.timer
+systemctl is-enabled --quiet elyon-storage-maintenance.timer
+systemctl is-active --quiet elyon-storage-maintenance.timer
 echo 'Timer de backup off-host instalado e ativo.'

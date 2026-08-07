@@ -1,0 +1,7 @@
+{
+  "feature": "003-post-appointment-feedback",
+  "branch": "codex/post-appointment-feedback",
+  "spec": "specs/003-post-appointment-feedback/spec.md",
+  "status": "implemented-awaiting-pilot-smoke",
+  "createdAt": "2026-08-05"
+}

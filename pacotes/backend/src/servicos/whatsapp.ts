@@ -24,6 +24,15 @@ export interface WhatsAppConnectionResult {
   status?: string;
 }
 
+// A Evolution Go inicia a conexão antes de disponibilizar o QR. Esta janela
+// limitada evita transformar esse estado transitório em erro imediato sem
+// manter a requisição presa indefinidamente.
+const QR_POLL_DELAYS_MS = [1000, 1000, 1500, 1500, 2000, 2000, 2500, 2500, 3000, 3000] as const;
+
+function aguardar(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * WhatsAppService - Gerencia conexão com o Evolution GO (whatsmeow).
  *
@@ -31,8 +40,8 @@ export interface WhatsAppConnectionResult {
  * Evolution GO, um instanceId (uuid) + token próprio.
  *
  * Modelo de autenticação do Evolution GO:
- * - chave global (EVOLUTION_API_KEY): gerenciar instâncias
- *   (/instance/create, /instance/all, /instance/delete)
+ * - chave do tenant (EVOLUTION_TENANT_API_KEY + EVOLUTION_TENANT_ID): criar,
+ *   listar e excluir instâncias (/instance/*) e executar reconciliação
  * - token da instância (header apikey): operações da instância
  *   (/instance/connect, /status, /qr, /send/*, /message/*)
  *
@@ -55,16 +64,24 @@ export class WhatsAppService {
     return (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
   }
 
-  private get globalKey(): string {
-    return process.env.EVOLUTION_API_KEY || '';
+  private get tenantApiKey(): string {
+    return process.env.EVOLUTION_TENANT_API_KEY || '';
+  }
+
+  private get evolutionTenantId(): string {
+    return process.env.EVOLUTION_TENANT_ID || '';
   }
 
   get instanceName(): string {
     return this._instanceName;
   }
 
-  private get headersGlobais() {
-    return { 'Content-Type': 'application/json', apikey: this.globalKey };
+  private get headersTenant() {
+    return {
+      'Content-Type': 'application/json',
+      apikey: this.tenantApiKey,
+      'X-Tenant-ID': this.evolutionTenantId,
+    };
   }
 
   private headersInstancia() {
@@ -79,8 +96,13 @@ export class WhatsAppService {
     return { 'Content-Type': 'application/json', apikey: this._token };
   }
 
-  private validarConfiguracao(stage: EvolutionStage, exigirChaveGlobal = false): void {
-    if (this.apiUrl && (!exigirChaveGlobal || this.globalKey)) return;
+  private validarConfiguracao(
+    stage: EvolutionStage,
+    authScope: 'base' | 'tenant' = 'base',
+  ): void {
+    const authConfigurada = authScope === 'base'
+      || (authScope === 'tenant' && !!this.tenantApiKey && !!this.evolutionTenantId);
+    if (this.apiUrl && authConfigurada) return;
     throw new EvolutionIntegrationError({
       message: 'Configuracao da Evolution Go ausente',
       stage: 'configuracao',
@@ -169,12 +191,12 @@ export class WhatsAppService {
 
   async criarInstancia(): Promise<any> {
     await this.carregarCredenciais();
-    this.validarConfiguracao('instance/create', true);
+    this.validarConfiguracao('instance/create', 'tenant');
 
     const token = this._token || crypto.randomBytes(32).toString('hex');
 
     try {
-      console.log(`[WhatsApp] Criando instância ${this._instanceName} no Evolution GO (${this.apiUrl})...`);
+      logger.info({ stage: 'instance/create' }, '[WhatsApp] Criando instância no Evolution Go');
       const response = await axios.post(
         `${this.apiUrl}/instance/create`,
         {
@@ -182,7 +204,7 @@ export class WhatsAppService {
           token,
           advancedSettings: { ignoreGroups: true },
         },
-        { headers: this.headersGlobais },
+        { headers: this.headersTenant },
       );
 
       const criada = response.data?.data || response.data;
@@ -199,13 +221,19 @@ export class WhatsAppService {
       }
 
       await this.salvarCredenciais(instanceId, instanceToken);
-      console.log(`[WhatsApp] ✅ Instância ${this._instanceName} criada (id=${instanceId})`);
+      logger.info(
+        { stage: 'instance/create', remoteIdPresent: true, instanceAuthPresent: true },
+        '[WhatsApp] Instância criada',
+      );
       return criada;
     } catch (error: any) {
       // Instância já existe no Evolution GO — adota o id/token existentes.
       const detalhe = error?.response?.data?.error || error?.message || '';
       if (axios.isAxiosError(error) && /already exists/i.test(String(detalhe))) {
-        console.log(`[WhatsApp] Instância ${this._instanceName} já existe no Evolution GO, adotando...`);
+        logger.info(
+          { stage: 'instance/create', instanceAlreadyExisted: true },
+          '[WhatsApp] Instância remota existente será reconciliada',
+        );
         const existente = await this.buscarDetalhesInstancia();
         if (existente?.id && existente?.token) {
           await this.salvarCredenciais(existente.id, existente.token);
@@ -276,37 +304,80 @@ export class WhatsAppService {
       throw falha;
     }
 
-    // Busca o QR Code (data:image/png;base64,...). Se já logado, retorna status open.
-    try {
-      const qrResp = await axios.get(
-        `${this.apiUrl}/instance/qr`,
-        { headers: this.headersInstancia() },
-      );
-      const dados = qrResp.data?.data || qrResp.data || {};
-      const qrcode = dados.Qrcode || dados.qrcode;
-      return { base64: qrcode, qrcode, code: dados.Code || dados.code, count: 0 };
-    } catch (error: any) {
-      const detalhe = error?.response?.data?.error || error?.message || '';
-      if (/already logged in/i.test(String(detalhe))) {
-        return { status: 'open', count: 0 };
+    return this.aguardarQrCode(instanceAlreadyExisted);
+  }
+
+  private async aguardarQrCode(instanceAlreadyExisted: boolean): Promise<WhatsAppConnectionResult> {
+    for (let tentativa = 0; tentativa <= QR_POLL_DELAYS_MS.length; tentativa += 1) {
+      try {
+        const qrResp = await axios.get(
+          `${this.apiUrl}/instance/qr`,
+          { headers: this.headersInstancia() },
+        );
+        const dados = qrResp.data?.data || qrResp.data || {};
+        const qrcode = dados.Qrcode || dados.qrcode;
+        if (qrcode) {
+          return { base64: qrcode, qrcode, code: dados.Code || dados.code, count: tentativa };
+        }
+      } catch (error: any) {
+        const detalhe = String(error?.response?.data?.error || error?.message || '');
+        if (/already logged in/i.test(detalhe)) {
+          return { status: 'open', count: tentativa };
+        }
+
+        const qrAindaIndisponivel = error?.response?.status === 400
+          && /no qr code available/i.test(detalhe);
+        if (!qrAindaIndisponivel) {
+          const falha = toEvolutionIntegrationError(error, {
+            stage: 'instance/qr',
+            route: '/instance/qr',
+            instanceAlreadyExisted,
+          });
+          logger.error(
+            {
+              ...this.contextoSeguro(instanceAlreadyExisted),
+              stage: falha.stage,
+              route: falha.route,
+              upstreamStatus: falha.upstreamStatus,
+              reasonCode: falha.reasonCode,
+            },
+            '[WhatsApp] Erro ao obter QR Code',
+          );
+          throw falha;
+        }
       }
-      const falha = toEvolutionIntegrationError(error, {
-        stage: 'instance/qr',
-        route: '/instance/qr',
-        instanceAlreadyExisted,
-      });
-      logger.error(
-        {
-          ...this.contextoSeguro(instanceAlreadyExisted),
-          stage: falha.stage,
-          route: falha.route,
-          upstreamStatus: falha.upstreamStatus,
-          reasonCode: falha.reasonCode,
-        },
-        '[WhatsApp] Erro ao obter QR Code',
-      );
-      throw falha;
+
+      const status = await this.verificarStatus();
+      if (status?.instance?.state === 'open') {
+        return { status: 'open', count: tentativa };
+      }
+
+      if (tentativa < QR_POLL_DELAYS_MS.length) {
+        await aguardar(QR_POLL_DELAYS_MS[tentativa]);
+      }
     }
+
+    const falha = new EvolutionIntegrationError({
+      message: 'QR Code não disponibilizado pela Evolution Go no prazo esperado',
+      stage: 'instance/qr',
+      route: '/instance/qr',
+      upstreamStatus: 400,
+      reasonCode: 'WHATSAPP_QR_TIMEOUT',
+      httpStatus: 502,
+      instanceAlreadyExisted,
+    });
+    logger.error(
+      {
+        ...this.contextoSeguro(instanceAlreadyExisted),
+        stage: falha.stage,
+        route: falha.route,
+        upstreamStatus: falha.upstreamStatus,
+        reasonCode: falha.reasonCode,
+        attempts: QR_POLL_DELAYS_MS.length + 1,
+      },
+      '[WhatsApp] QR Code indisponível após polling',
+    );
+    throw falha;
   }
 
   async verificarStatus(): Promise<{ instance: EvolutionInstance } | null> {
@@ -387,7 +458,7 @@ export class WhatsAppService {
       );
       return response.data;
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao enviar áudio:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao enviar áudio');
       throw error;
     }
   }
@@ -416,7 +487,7 @@ export class WhatsAppService {
       );
       return response.data;
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao enviar documento:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao enviar documento');
       throw error;
     }
   }
@@ -446,7 +517,7 @@ export class WhatsAppService {
       );
       return response.data;
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao enviar contato:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao enviar contato');
       throw error;
     }
   }
@@ -464,7 +535,7 @@ export class WhatsAppService {
       // Mantém a chave groupsIgnore esperada pelo restante do código.
       return { ...dados, groupsIgnore: dados.ignoreGroups ?? dados.groupsIgnore ?? false };
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao buscar configurações:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao buscar configurações');
       throw error;
     }
   }
@@ -480,7 +551,7 @@ export class WhatsAppService {
       );
       return response.data;
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao atualizar configurações:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao atualizar configurações');
       throw error;
     }
   }
@@ -503,29 +574,44 @@ export class WhatsAppService {
       );
       return response.data;
     } catch (error: any) {
-      console.error('[WhatsApp] Erro ao configurar webhook:', error?.response?.data || error?.message);
+      logger.error('[WhatsApp] Erro ao configurar webhook');
       throw error;
     }
   }
 
-  /** Busca os detalhes da instância via /instance/all (chave global). */
-  async buscarDetalhesInstancia(lancarErro = false): Promise<any> {
+  /** Busca os detalhes da instância via /instance/all (escopo tenant). */
+  async buscarDetalhesInstancia(
+    lancarErro = false,
+    failureStage: EvolutionStage = 'instance/create',
+    remoteId?: string,
+  ): Promise<any> {
     try {
-      this.validarConfiguracao('instance/create', true);
+      this.validarConfiguracao(failureStage, 'tenant');
       const response = await axios.get(
         `${this.apiUrl}/instance/all`,
-        { headers: this.headersGlobais },
+        { headers: this.headersTenant },
       );
       const instancias = response.data?.data || response.data || [];
-      const instancia = Array.isArray(instancias)
-        ? instancias.find((i: any) => i.name === this._instanceName)
-        : null;
+      if (!Array.isArray(instancias)) {
+        if (lancarErro) {
+          throw toEvolutionIntegrationError(new Error('Resposta sem lista de instâncias'), {
+            stage: failureStage,
+            route: '/instance/all',
+            instanceAlreadyExisted: true,
+            contractInvalid: true,
+          });
+        }
+        return null;
+      }
+      const instancia = remoteId
+        ? instancias.find((i: any) => i.id === remoteId)
+        : instancias.find((i: any) => i.name === this._instanceName);
       if (!instancia) return null;
       return { ...instancia, ownerJid: instancia.jid, profileName: instancia.client_name || instancia.name };
     } catch (error: any) {
       if (lancarErro) {
         throw toEvolutionIntegrationError(error, {
-          stage: 'instance/create',
+          stage: failureStage,
           route: '/instance/all',
           instanceAlreadyExisted: true,
         });
@@ -543,12 +629,13 @@ export class WhatsAppService {
   }
 
   /**
-   * Deleta a instância no Evolution GO (chave global).
+   * Deleta a instância no Evolution GO (escopo tenant).
    * Retorna 'deletada' se removida no servidor, ou 'inexistente' se já não
    * existia lá. Lança erro em falhas reais (rede/5xx) para que o chamador
    * NÃO apague o registro local e evite criar instâncias órfãs no Evolution GO.
    */
   async deletarInstancia(): Promise<'deletada' | 'inexistente'> {
+    this.validarConfiguracao('instance/delete', 'tenant');
     await this.carregarCredenciais();
 
     // Se o id não está persistido, tenta resolvê-lo pelo nome no próprio
@@ -556,7 +643,7 @@ export class WhatsAppService {
     // instâncias criadas fora do fluxo normal.
     let instanceId = this._instanceId;
     if (!instanceId) {
-      const detalhes = await this.buscarDetalhesInstancia();
+      const detalhes = await this.buscarDetalhesInstancia(true, 'instance/delete');
       instanceId = detalhes?.id;
     }
     if (!instanceId) return 'inexistente';
@@ -564,7 +651,7 @@ export class WhatsAppService {
     try {
       await axios.delete(
         `${this.apiUrl}/instance/delete/${instanceId}`,
-        { headers: this.headersGlobais },
+        { headers: this.headersTenant },
       );
       return 'deletada';
     } catch (error: any) {
@@ -572,11 +659,30 @@ export class WhatsAppService {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
         return 'inexistente';
       }
-      console.error(
-        `[WhatsApp] Falha ao deletar instância ${this._instanceName} (id=${instanceId}) no Evolution GO:`,
-        error?.response?.data || error?.message,
+      if (axios.isAxiosError(error) && error.response?.status === 500) {
+        const aindaExiste = await this.buscarDetalhesInstancia(
+          true,
+          'instance/delete',
+          instanceId,
+        );
+        if (!aindaExiste) return 'inexistente';
+      }
+      const falha = toEvolutionIntegrationError(error, {
+        stage: 'instance/delete',
+        route: '/instance/delete/:id',
+        instanceAlreadyExisted: true,
+      });
+      logger.error(
+        {
+          stage: falha.stage,
+          route: falha.route,
+          upstreamStatus: falha.upstreamStatus,
+          reasonCode: falha.reasonCode,
+          remoteIdPresent: true,
+        },
+        '[WhatsApp] Falha ao deletar instância no Evolution Go',
       );
-      throw error;
+      throw falha;
     }
   }
 
@@ -626,37 +732,77 @@ export function limparCacheWhatsApp(instanceName: string): void {
 // HELPERS ADMINISTRATIVOS (reconciliação)
 // ============================================
 
-const apiUrlGlobal = () => (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
-const headersGlobaisModulo = () => ({
+const apiUrlEvolution = () => (process.env.EVOLUTION_API_URL || '').replace(/\/$/, '');
+const headersTenantModulo = () => ({
   'Content-Type': 'application/json',
-  apikey: process.env.EVOLUTION_API_KEY || '',
+  apikey: process.env.EVOLUTION_TENANT_API_KEY || '',
+  'X-Tenant-ID': process.env.EVOLUTION_TENANT_ID || '',
 });
 
-/**
- * Lista TODAS as instâncias do Evolution GO (chave global).
- * O servidor é compartilhado entre projetos — o chamador deve filtrar pelas
- * que pertencem ao Elyon (prefixo `elyon_`).
- */
-export async function listarInstanciasEvolution(): Promise<any[]> {
-  const response = await axios.get(`${apiUrlGlobal()}/instance/all`, {
-    headers: headersGlobaisModulo(),
+function validarConfiguracaoTenantModulo(): void {
+  if (
+    apiUrlEvolution()
+    && process.env.EVOLUTION_TENANT_API_KEY
+    && process.env.EVOLUTION_TENANT_ID
+  ) return;
+  throw new EvolutionIntegrationError({
+    message: 'Configuracao tenant da Evolution Go ausente',
+    stage: 'configuracao',
+    reasonCode: 'EVOLUTION_CONFIG_MISSING',
+    httpStatus: 503,
   });
-  const dados = response.data?.data || response.data || [];
-  return Array.isArray(dados) ? dados : [];
 }
 
 /**
- * Deleta uma instância no Evolution GO pelo id (chave global).
+ * Lista as instâncias do tenant Elyon.
+ */
+export async function listarInstanciasEvolution(
+  failureStage: EvolutionStage = 'instance/list',
+): Promise<any[]> {
+  validarConfiguracaoTenantModulo();
+  try {
+    const response = await axios.get(`${apiUrlEvolution()}/instance/all`, {
+      headers: headersTenantModulo(),
+    });
+    const dados = response.data?.data || response.data || [];
+    if (!Array.isArray(dados)) {
+      throw toEvolutionIntegrationError(new Error('Resposta sem lista de instancias'), {
+        stage: failureStage,
+        route: '/instance/all',
+        contractInvalid: true,
+      });
+    }
+    return dados;
+  } catch (error) {
+    throw toEvolutionIntegrationError(error, {
+      stage: failureStage,
+      route: '/instance/all',
+    });
+  }
+}
+
+/**
+ * Deleta uma instância no Evolution GO pelo id (escopo tenant).
  * Usado na reconciliação para remover órfãs que não têm sessão no Elyon.
- * Trata 404 como sucesso (já removida).
+ * Trata 404 como sucesso. Para o 500 conhecido do deployment, confirma a
+ * ausência do ID por listagem tenant-scoped antes de concluir.
  */
 export async function deletarInstanciaEvolutionPorId(instanceId: string): Promise<void> {
+  validarConfiguracaoTenantModulo();
   try {
-    await axios.delete(`${apiUrlGlobal()}/instance/delete/${instanceId}`, {
-      headers: headersGlobaisModulo(),
+    await axios.delete(`${apiUrlEvolution()}/instance/delete/${instanceId}`, {
+      headers: headersTenantModulo(),
     });
   } catch (error: any) {
     if (axios.isAxiosError(error) && error.response?.status === 404) return;
-    throw error;
+    if (axios.isAxiosError(error) && error.response?.status === 500) {
+      const instancias = await listarInstanciasEvolution('instance/delete');
+      if (!instancias.some((instancia: any) => instancia?.id === instanceId)) return;
+    }
+    throw toEvolutionIntegrationError(error, {
+      stage: 'instance/delete',
+      route: '/instance/delete/:id',
+      instanceAlreadyExisted: true,
+    });
   }
 }

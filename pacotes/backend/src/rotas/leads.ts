@@ -18,9 +18,15 @@ import { withTenantDb } from '../lib/tenant-db';
 import { criarFollowupOutbound, reagendarFollowupOutbound } from '../servicos/followup-outbound';
 import { formatInTimeZone } from 'date-fns-tz';
 import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
+import { obterAgendaPolicy } from '../servicos/agenda-policy';
+import { obterAgendaEffectsRollout, obterAgendaLifecycleRollout } from '../servicos/agenda-lifecycle-rollout';
+import { enviarWhatsappAgendamento, montarMensagemLigacaoConfirmada } from '../servicos/notificacao-agendamento';
+import { remanejarCorretorAtividade } from '../servicos/remanejamento-corretor';
+import { calcularPrazoConfirmacaoCorretor } from '../servicos/prazo-confirmacao-corretor';
+import { executarDecisaoEspecialista } from '../servicos/specialist-appointment-decision';
+import { hashTokenConvite } from '../servicos/specialist-copilot-context';
 
 const router = Router();
-
 
 const normalizarTelefone = (telefone?: string): string | null => {
   if (!telefone) return null;
@@ -1645,7 +1651,7 @@ router.patch('/:id/atividades/:atividadeId', async (req, res) => {
       return responderErro(res, 404, 'Atividade não encontrada');
     }
 
-    if (['cancelar', 'reagendar', 'nao_compareceu'].includes(acao)) {
+    if (['cancelar', 'reagendar', 'nao_compareceu', 'completar'].includes(acao)) {
       if (typeof requestId !== 'string' || !Number.isInteger(expectedVersion)) {
         return responderErro(res, 400, 'requestId e expectedVersion sao obrigatorios');
       }
@@ -1662,37 +1668,18 @@ router.patch('/:id/atividades/:atividadeId', async (req, res) => {
         ? { ...base, operacao: 'REAGENDAR' as const, novoHorario: new Date(novaData) }
         : acao === 'cancelar'
           ? { ...base, operacao: 'CANCELAR' as const }
-          : { ...base, operacao: 'NO_SHOW' as const, parteAusente: 'LEAD' as const };
+          : acao === 'completar'
+            ? { ...base, operacao: 'REALIZAR' as const }
+            : { ...base, operacao: 'NO_SHOW' as const, parteAusente: 'LEAD' as const };
       const result = await executarComandoAgenda(comando);
       if (!result.success) return responderErro(res, result.transient ? 503 : result.reasonCode === 'REQUEST_ID_CONFLICT' ? 409 : 422, result.reasonCode);
-      const mensagemResultado = acao === 'reagendar' ? 'Atividade reagendada' : acao === 'cancelar' ? 'Atividade cancelada' : 'Marcado como nao compareceu';
+      const mensagemResultado = acao === 'reagendar' ? 'Atividade reagendada'
+        : acao === 'cancelar' ? 'Atividade cancelada'
+          : acao === 'completar' ? 'Atividade marcada como realizada' : 'Marcado como nao compareceu';
       return res.json({ sucesso: true, mensagem: mensagemResultado, result });
     }
 
-    let dadosAtualizacao: any = {};
-    let mensagem = '';
-
-    switch (acao) {
-      case 'completar':
-        dadosAtualizacao = {
-          completadoEm: new Date(),
-          statusAgendamento: 'REALIZADO',
-          versao: { increment: 1 },
-          estadoAgendaAtualizadoEm: new Date()
-        };
-        mensagem = 'Atividade marcada como realizada';
-        break;
-
-      default:
-        return responderErro(res, 400, 'Ação inválida');
-    }
-
-    await prisma.atividade.update({
-      where: { id: atividadeId },
-      data: dadosAtualizacao
-    });
-
-    res.json({ sucesso: true, mensagem });
+    return responderErro(res, 400, 'Ação inválida');
   } catch (error) {
     console.error('Erro ao atualizar atividade:', error);
     responderErro(res, 500, 'Erro interno');
@@ -1712,6 +1699,10 @@ router.delete('/:id/atividades/:atividadeId', async (req, res) => {
 
     if (!atividade) {
       return responderErro(res, 404, 'Atividade não encontrada');
+    }
+
+    if (atividade.agendadoPara || ['AVALIACAO', 'REUNIAO'].includes(atividade.tipo)) {
+      return responderErro(res, 409, 'Agendamentos não podem ser excluídos; use o comando auditado de cancelamento');
     }
 
     await prisma.atividade.delete({
@@ -1813,6 +1804,17 @@ router.get('/confirmacao-corretor/painel', async (req, res) => {
       take: 200,
     });
 
+    const corretorIds = [...new Set(
+      atividades.map((atividade: any) => atividade.corretorAtualId).filter(Boolean)
+    )] as string[];
+    const corretores = corretorIds.length > 0
+      ? await prisma.usuario.findMany({
+          where: { tenantId, id: { in: corretorIds } },
+          select: { id: true, nome: true },
+        })
+      : [];
+    const nomeCorretorPorId = new Map(corretores.map(corretor => [corretor.id, corretor.nome]));
+
     const statusAlvo = ['PENDENTE', 'CONFIRMADO', 'EXPIRADO', 'REMANEJADO', 'RECUSADO'];
     const totais = {
       pendente: 0,
@@ -1866,6 +1868,9 @@ router.get('/confirmacao-corretor/painel', async (req, res) => {
         remanejadoCorretorEm: atividade.remanejadoCorretorEm,
         corretorOriginalId: atividade.corretorOriginalId,
         corretorAtualId: atividade.corretorAtualId,
+        corretorAtualNome: atividade.corretorAtualId
+          ? nomeCorretorPorId.get(atividade.corretorAtualId) || null
+          : null,
         cutoffEm: cutoff,
       };
     });
@@ -1919,6 +1924,16 @@ router.get('/confirmar/:atividadeId/:token', async (req, res) => {
         {valido: false});
     }
 
+    const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT CURRENT_TIMESTAMP AS "now"`;
+    const rollout = await obterAgendaLifecycleRollout(atividade.lead.tenantId, clock.now);
+    const policy = obterAgendaPolicy({
+      status: atividade.statusAgendamento,
+      agendadoPara: atividade.agendadoPara,
+      duracaoMinutos: atividade.duracao,
+      agora: clock.now,
+      ator: 'PUBLICO',
+    });
+
     res.json({
       valido: true,
       atividade: {
@@ -1927,6 +1942,12 @@ router.get('/confirmar/:atividadeId/:token', async (req, res) => {
         titulo: atividade.titulo,
         agendadoPara: atividade.agendadoPara,
         statusAgendamento: atividade.statusAgendamento,
+        versao: atividade.versao,
+        faseTemporal: policy.faseTemporal,
+        allowedActions: rollout.policyEnabled ? policy.allowedActions : ['ACEITAR', 'CANCELAR'],
+        policyReasonCode: rollout.policyEnabled ? policy.reasonCode : 'LEGACY_COMPATIBILITY',
+        lifecyclePolicyEnabled: rollout.policyEnabled,
+        lifecycleCommandsEnabled: rollout.commandsEnabled,
         lead: {
           nome: atividade.lead.nome,
           telefone: atividade.lead.telefone,
@@ -1963,11 +1984,11 @@ router.post('/confirmar/:atividadeId/:token', async (req, res) => {
     }
 
     // Verificar se já foi confirmado/cancelado
-    if (atividade.statusAgendamento === 'CONFIRMADO') {
+    if (atividade.statusAgendamento === 'CONFIRMADO' || atividade.statusAgendamento === 'SOLICITADO') {
       return res.json({
         sucesso: true,
-        mensagem: 'Este agendamento já foi confirmado anteriormente.',
-        statusAgendamento: 'CONFIRMADO'
+        mensagem: 'Este horário já foi aceito anteriormente.',
+        statusAgendamento: atividade.statusAgendamento
       });
     }
 
@@ -1981,21 +2002,19 @@ router.post('/confirmar/:atividadeId/:token', async (req, res) => {
 
     // Processar ação
     if (acao === 'confirmar') {
-      await prisma.atividade.update({
-        where: { id: atividadeId },
-        data: {
-          statusAgendamento: 'CONFIRMADO',
-          confirmadoPor: 'proprietario',
-          confirmadoEm: new Date(),
-          versao: { increment: 1 },
-          estadoAgendaAtualizadoEm: new Date()
-        }
+      const result = await executarComandoAgenda({
+        operacao: 'SOLICITAR', tenantId: atividade.lead.tenantId, leadId: atividade.lead.id, atividadeId,
+        requestIdentity: { source: 'PUBLIC_TOKEN', id: `${token}:confirmar` },
+        ator: 'proprietario', origem: 'LINK_CONFIRMACAO', motivo: 'Horário aceito pelo Lead',
+        policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION, ocorridoEm: new Date(), expectedVersion: atividade.versao,
+        manifestacaoLead: 'HORARIO_ACEITO',
       });
+      if (!result.success && result.reasonCode !== 'COMMAND_REPLAY') return responderErro(res, result.transient ? 503 : 409, result.reasonCode);
 
       res.json({
         sucesso: true,
         mensagem: 'Agendamento confirmado com sucesso! Aguardamos você.',
-        statusAgendamento: 'CONFIRMADO'
+        statusAgendamento: 'SOLICITADO'
       });
     } else if (acao === 'cancelar') {
       const result = await executarComandoAgenda({
@@ -2041,12 +2060,14 @@ router.get('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
       return responderErro(res, 404, 'Link inválido ou expirado', { valido: false });
     }
 
-    const prazoCutoff = atividade.agendadoPara
-      ? new Date(new Date(atividade.agendadoPara).getTime() - 60 * 60 * 1000)
-      : null;
+    const prazoCutoff = calcularPrazoConfirmacaoCorretor(atividade as any);
 
     res.json({
       valido: true,
+      leadNome: atividade.lead.nome,
+      horario: atividade.agendadoPara,
+      statusConfirmacaoCorretor: (atividade as any).statusConfirmacaoCorretor || 'PENDENTE',
+      prazoCutoff,
       atividade: {
         id: atividade.id,
         tipo: atividade.tipo,
@@ -2085,12 +2106,20 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
         tokenConfirmacaoCorretor: token
       },
       include: {
-        lead: { select: { tenantId: true } }
+        lead: { select: { id: true, tenantId: true, nome: true, telefone: true } }
       }
     });
 
     if (!atividade) {
       return responderErro(res, 404, 'Link inválido ou expirado', { sucesso: false });
+    }
+
+    if (atividade.statusAgendamento === 'CANCELADO') {
+      return res.json({
+        sucesso: false,
+        mensagem: 'Este agendamento foi cancelado e não pode mais ser confirmado.',
+        statusAgendamento: 'CANCELADO'
+      });
     }
 
     const statusAtual = (atividade as any).statusConfirmacaoCorretor || 'PENDENTE';
@@ -2117,9 +2146,49 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
     }
 
     const agora = new Date();
-    const cutoff = atividade.agendadoPara
-      ? new Date(new Date(atividade.agendadoPara).getTime() - 60 * 60 * 1000)
+    const cutoff = calcularPrazoConfirmacaoCorretor(atividade as any);
+
+    // Convites do Copilot e o link público convergem no mesmo comando determinístico.
+    // O fluxo legado abaixo permanece intacto para convites anteriores ao rollout.
+    const conviteCopilot = (atividade as any).corretorAtualId
+      ? await (prisma.conviteEspecialistaAgenda as any).findFirst({
+          where: {
+            tenantId: atividade.lead.tenantId,
+            atividadeId,
+            usuarioId: (atividade as any).corretorAtualId,
+            tokenHash: hashTokenConvite(token),
+            status: 'PENDENTE',
+          },
+          orderBy: { tentativa: 'desc' },
+        })
       : null;
+    if (conviteCopilot && atividade.agendadoPara) {
+      const decisao = await executarDecisaoEspecialista({
+        context: {
+          conviteId: conviteCopilot.id,
+          atividadeId,
+          usuarioId: (atividade as any).corretorAtualId,
+          tenantId: atividade.lead.tenantId,
+          tentativa: conviteCopilot.tentativa,
+          prazoEm: conviteCopilot.prazoEm,
+          leadId: atividade.lead.id,
+          leadNome: atividade.lead.nome,
+          agendadoPara: atividade.agendadoPara,
+          versaoAtividade: atividade.versao,
+        },
+        decision: acao === 'confirmar' ? 'CONFIRMAR' : 'RECUSAR',
+        providerEventId: `${token}:${acao}`,
+        channel: 'LINK_PUBLICO',
+        motivo: motivoRecusa,
+        ocorreuEm: agora,
+      });
+      if (!decisao.success) return responderErro(res, decisao.reasonCode === 'INVITE_EXPIRED' ? 409 : 409, decisao.message);
+      return res.json({
+        sucesso: true,
+        mensagem: decisao.message,
+        statusConfirmacaoCorretor: acao === 'confirmar' ? 'CONFIRMADO' : 'PENDENTE',
+      });
+    }
 
     if (acao === 'confirmar') {
       if (cutoff && agora > cutoff) {
@@ -2131,20 +2200,44 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
         });
         return res.json({
           sucesso: false,
-          mensagem: 'Confirmação fora do prazo de corte (T-60). A reunião pode já ter sido remanejada.',
+          mensagem: 'O prazo de resposta deste convite expirou. O atendimento pode já ter sido oferecido ao especialista fallback.',
           statusConfirmacaoCorretor: statusAtual
         });
       }
 
-      await prisma.atividade.update({
-        where: { id: atividadeId },
-        data: {
-          statusConfirmacaoCorretor: 'CONFIRMADO',
-          confirmadoCorretorEm: agora,
-          versao: { increment: 1 },
-          estadoAgendaAtualizadoEm: agora
-        } as any
+      const corretor = (atividade as any).corretorAtualId
+        ? await prisma.usuario.findFirst({
+            where: { id: (atividade as any).corretorAtualId, tenantId: atividade.lead.tenantId },
+            select: { nome: true }
+          })
+        : null;
+      const mensagemConfirmacao = montarMensagemLigacaoConfirmada({
+          leadNome: atividade.lead.nome,
+          agendadoPara: atividade.agendadoPara,
+          especialistaNome: corretor?.nome,
       });
+      const effectsRollout = await obterAgendaEffectsRollout(atividade.lead.tenantId, agora);
+      const result = await executarComandoAgenda({
+        operacao: 'CONFIRMAR_ATRIBUICAO', tenantId: atividade.lead.tenantId, leadId: atividade.lead.id, atividadeId,
+        requestIdentity: { source: 'PUBLIC_TOKEN', id: `${token}:confirmar-especialista` },
+        ator: `especialista:${(atividade as any).corretorAtualId || 'sem-id'}`, origem: 'LINK_CONFIRMACAO_CORRETOR',
+        motivo: 'Aceite do especialista', policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION,
+        ocorridoEm: agora, expectedVersion: atividade.versao,
+        responsavelId: (atividade as any).corretorAtualId || undefined,
+        notificacao: effectsRollout.effectsEnabled
+          ? { tipo: 'CONFIRMACAO', mensagem: mensagemConfirmacao }
+          : undefined,
+      });
+      if (!result.success && result.reasonCode !== 'COMMAND_REPLAY') return responderErro(res, result.transient ? 503 : 409, result.reasonCode);
+
+      const notificacaoDireta = effectsRollout.effectsEnabled
+        ? { enviado: false, registradoNoHistorico: false }
+        : await enviarWhatsappAgendamento({
+            tenantId: atividade.lead.tenantId,
+            leadId: atividade.lead.id,
+            telefone: atividade.lead.telefone,
+            mensagem: mensagemConfirmacao,
+          });
 
       ServicoAuditoria.registrar({
         tenantId: atividade.lead.tenantId,
@@ -2152,28 +2245,30 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
         entidade: 'Atividade',
         entidadeId: atividadeId,
         ip: req.socket.remoteAddress || '0.0.0.0',
-        detalhes: {
-          tipo: 'confirmar',
-          statusAnterior: statusAtual,
-        }
+        detalhes: { tipo: 'confirmar', statusAnterior: statusAtual }
       });
 
       return res.json({
         sucesso: true,
-        mensagem: 'Presença confirmada com sucesso.',
+        mensagem: effectsRollout.effectsEnabled
+          ? 'Ligação confirmada. A notificação do Lead foi enfileirada com segurança.'
+          : notificacaoDireta.enviado
+            ? 'Ligação confirmada e Lead notificado.'
+            : 'Ligação confirmada, mas não foi possível notificar o Lead automaticamente.',
+        notificacaoLeadEnviada: notificacaoDireta.enviado,
+        notificacaoRegistradaNoHistorico: notificacaoDireta.registradoNoHistorico,
         statusConfirmacaoCorretor: 'CONFIRMADO'
       });
     }
 
-    await prisma.atividade.update({
-      where: { id: atividadeId },
-      data: {
-        statusConfirmacaoCorretor: 'RECUSADO',
-        motivoCancelamento: motivoRecusa || (atividade as any).motivoCancelamento || 'Recusa/Ausência do corretor',
-        versao: { increment: 1 },
-        estadoAgendaAtualizadoEm: agora
-      } as any
+    const recusa = await executarComandoAgenda({
+      operacao: 'RECUSAR', tenantId: atividade.lead.tenantId, leadId: atividade.lead.id, atividadeId,
+      requestIdentity: { source: 'PUBLIC_TOKEN', id: `${token}:${acao}` },
+      ator: `especialista:${(atividade as any).corretorAtualId || 'sem-id'}`, origem: 'LINK_CONFIRMACAO_CORRETOR',
+      motivo: motivoRecusa || 'Recusa/Ausência do corretor', policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION,
+      ocorridoEm: agora, expectedVersion: atividade.versao,
     });
+    if (!recusa.success && recusa.reasonCode !== 'COMMAND_REPLAY') return responderErro(res, recusa.transient ? 503 : 409, recusa.reasonCode);
 
     ServicoAuditoria.registrar({
       tenantId: atividade.lead.tenantId,
@@ -2188,9 +2283,22 @@ router.post('/confirmar-corretor/:atividadeId/:token', async (req, res) => {
       }
     });
 
+    const remanejamento = await remanejarCorretorAtividade({
+      atividadeId,
+      origem: 'RECUSA_EXPLICITA',
+    });
+
+    if (remanejamento.sucesso) {
+      return res.json({
+        sucesso: true,
+        mensagem: `Recusa registrada. ${remanejamento.especialistaNome} recebeu a solicitação de substituição.`,
+        statusConfirmacaoCorretor: 'PENDENTE'
+      });
+    }
+
     return res.json({
       sucesso: true,
-      mensagem: 'Ausência/recusa registrada. O sistema poderá remanejar automaticamente.',
+      mensagem: 'Recusa registrada, mas não há outro especialista disponível. A equipe precisa remanejar o atendimento.',
       statusConfirmacaoCorretor: 'RECUSADO'
     });
   } catch (error) {

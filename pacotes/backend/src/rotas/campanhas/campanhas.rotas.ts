@@ -579,6 +579,102 @@ router.put('/:id/briefing', async (req, res) => {
 });
 
 /**
+ * PATCH /:id/responsaveis
+ * Atualiza o especialista principal e o fallback de uma campanha existente.
+ */
+router.patch('/:id/responsaveis', async (req, res) => {
+  try {
+    const tenantId = getTenantIdFromHeader(req);
+    if (!tenantId) {
+      return responderErro(res, 401, 'Tenant não identificado.');
+    }
+
+    const schema = z.object({
+      responsavelCorretorId: z.string().uuid('Responsável inválido'),
+      fallbackCorretorId: z.string().uuid('Fallback inválido'),
+    }).refine(
+      (dados) => dados.responsavelCorretorId !== dados.fallbackCorretorId,
+      { message: 'Responsável e fallback devem ser pessoas diferentes', path: ['fallbackCorretorId'] }
+    );
+    const dados = schema.parse(req.body);
+
+    const campanhaAtual = await prisma.campanha.findFirst({
+      where: { id: req.params.id, tenantId },
+      select: {
+        id: true,
+        responsavelCorretorId: true,
+        fallbackCorretorId: true,
+      }
+    });
+    if (!campanhaAtual) {
+      return responderErro(res, 404, 'Campanha não encontrada');
+    }
+
+    const responsavelCorretorId = await validarCorretorDoTenant({
+      tenantId,
+      corretorId: dados.responsavelCorretorId,
+      campo: 'responsavelCorretorId',
+    });
+    const fallbackCorretorId = await validarCorretorDoTenant({
+      tenantId,
+      corretorId: dados.fallbackCorretorId,
+      campo: 'fallbackCorretorId',
+    });
+
+    const campanha: any = await (prisma.campanha as any).update({
+      where: { id: campanhaAtual.id },
+      data: {
+        responsavelCorretorId,
+        fallbackCorretorId,
+        editadoPor: (req as any).usuario?.id || req.headers['x-usuario-id'] as string || 'sistema',
+        editadoEm: new Date(),
+      },
+      include: {
+        responsavelCorretor: { select: { id: true, nome: true, estaAtivo: true } },
+        fallbackCorretor: { select: { id: true, nome: true, estaAtivo: true } },
+      }
+    });
+
+    ServicoAuditoria.registrar({
+      tenantId,
+      usuarioId: (req as any).usuario?.id || req.headers['x-usuario-id'] as string || undefined,
+      acao: 'ATUALIZAR_RESPONSAVEIS_CAMPANHA',
+      entidade: 'Campanha',
+      entidadeId: campanha.id,
+      detalhes: {
+        anterior: {
+          responsavelCorretorId: campanhaAtual.responsavelCorretorId,
+          fallbackCorretorId: campanhaAtual.fallbackCorretorId,
+        },
+        atual: { responsavelCorretorId, fallbackCorretorId },
+      },
+      ip: req.socket.remoteAddress || req.headers['x-forwarded-for'] as string,
+    });
+
+    return res.json({
+      sucesso: true,
+      campanha: {
+        id: campanha.id,
+        responsavelCorretorId: campanha.responsavelCorretorId,
+        fallbackCorretorId: campanha.fallbackCorretorId,
+        responsavelCorretor: campanha.responsavelCorretor,
+        fallbackCorretor: campanha.fallbackCorretor,
+      },
+      mensagem: 'Responsáveis da campanha atualizados com sucesso.',
+    });
+  } catch (error: any) {
+    console.error('[Campanhas] Erro ao atualizar responsáveis:', error);
+    if (error?.name === 'ZodError') {
+      return responderErro(res, 400, 'Dados inválidos', { detalhes: error.errors });
+    }
+    if (String(error?.message || '').includes('não pertence ao tenant')) {
+      return responderErro(res, 400, error.message);
+    }
+    return responderErro(res, 500, 'Erro ao atualizar responsáveis da campanha');
+  }
+});
+
+/**
  * PATCH /:id/status
  * Atualizar status da campanha
  */

@@ -302,4 +302,186 @@ Qual valor você espera pelo seu apartamento?
     expect(result.respostaLimpa).not.toContain('parado');
     expect(result.respostaLimpa).toContain('imovel esta anunciado');
   });
+
+  it('bloqueia alegação de confirmação automática por link sem tool de agenda', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Quando você confirma pelo link do Google Calendar, o horário fica travado automaticamente e o especialista já recebe o aviso.',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Já agendei, consegue confirmar?',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_CONFIRMATION_GUARD');
+    expect(result.respostaLimpa).toContain('não consigo confirmar');
+    expect(result.respostaLimpa).not.toContain('fica travado');
+  });
+
+  it('mantém confirmação de agenda quando a tool retornou sucesso', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'O horário fica travado automaticamente no Google Calendar.',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['agendar_reuniao_closer'],
+      nomesToolsSucessoTurno: ['agendar_reuniao_closer'],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Pode ser amanhã às 9h.',
+    });
+
+    expect(result.fallbackAplicado).toBe('NONE');
+    expect(result.respostaLimpa).toContain('fica travado');
+  });
+
+  it('bloqueia confirmação de agenda quando a tool foi chamada mas retornou falha', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'O horário fica travado automaticamente no Google Calendar.',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['agendar_reuniao_closer'],
+      nomesToolsSucessoTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Pode ser amanhã às 9h.',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_CONFIRMATION_GUARD');
+    expect(result.respostaLimpa).toContain('não consigo confirmar');
+  });
+
+  it('trata pergunta sobre cancelamento como consulta de status', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Sim, o agendamento foi cancelado. 😊',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'O agendamento foi cancelado?',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_STATUS_GUARD');
+    expect(result.respostaLimpa).toContain('não consultei o status atualizado');
+    expect(result.respostaLimpa).not.toContain('foi cancelado');
+  });
+
+  it('mantém confirmação de cancelamento quando a tool foi executada', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Sim, o agendamento foi cancelado. 😊',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['cancelar_agendamento'],
+      nomesToolsSucessoTurno: ['cancelar_agendamento'],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Pode cancelar.',
+    });
+
+    expect(result.fallbackAplicado).toBe('NONE');
+    expect(result.respostaLimpa).toContain('foi cancelado');
+  });
+
+  it('bloqueia confirmação quando cancelar_agendamento foi chamada mas retornou falha', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Sim, o agendamento foi cancelado. 😊',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['cancelar_agendamento'],
+      nomesToolsSucessoTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Pode cancelar.',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_CANCELLATION_GUARD');
+    expect(result.respostaLimpa).toContain('não consegui registrar');
+  });
+
+  it('bloqueia resposta de status baseada apenas no histórico da conversa', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Seu agendamento está confirmado para 03/08/2026 às 09:00 com Guilherme.',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: [],
+      nomesToolsSucessoTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Veja primeiro se está ativo o agendamento.',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_STATUS_GUARD');
+    expect(result.respostaLimpa).toContain('não consultei o status atualizado');
+    expect(result.respostaLimpa).not.toContain('03/08/2026');
+  });
+
+  it('mantém resposta de cancelamento quando veio da consulta canônica', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Não há agendamento ativo. O último consta como cancelado no sistema.',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['consultar_status_agendamento'],
+      nomesToolsSucessoTurno: ['consultar_status_agendamento'],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Meu agendamento foi cancelado?',
+    });
+
+    expect(result.fallbackAplicado).toBe('NONE');
+    expect(result.respostaLimpa).toContain('consta como cancelado');
+  });
+
+  it('bloqueia planejamento interno quando faltou consultar horários', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: "The user is asking for available times tomorrow. I need to use consultar_horarios_disponiveis.",
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: [],
+      nomesToolsSucessoTurno: [],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Quais horarios temos amanha ?',
+    });
+
+    expect(result.fallbackAplicado).toBe('AGENDA_AVAILABILITY_GUARD');
+    expect(result.respostaLimpa).toContain('consultar agora os horários livres');
+    expect(result.respostaLimpa).not.toContain('The user');
+  });
+
+  it('preserva resposta quando a consulta de horários retornou sucesso', () => {
+    const result = aplicarFiltrosRespostaOrchestrator({
+      respostaFinal: 'Tenho 05/08/2026 às 08:00 ou 05/08/2026 às 12:00. Qual funciona melhor?',
+      houveHandoff: false,
+      tipoAgente: 'SDR',
+      agenteQueRespondeuFormatado: 'SDR',
+      estadoConversaAtual: estadoBase,
+      cotLog: null,
+      nomesToolsTurno: ['consultar_horarios_disponiveis'],
+      nomesToolsSucessoTurno: ['consultar_horarios_disponiveis'],
+      fallbackAplicadoAtual: 'NONE',
+      ultimaMsgLead: 'Quais horarios temos amanha ?',
+    });
+
+    expect(result.fallbackAplicado).toBe('NONE');
+    expect(result.respostaLimpa).toContain('05/08/2026');
+  });
 });

@@ -72,7 +72,7 @@ function tratarConfusaoAreaValor(args: Record<string, any>, toolName: string): v
 // ====================================
 
 /**
- * Valida que agendar_reuniao_closer só é chamada com data no formato DD/MM/YYYY HH:mm.
+ * Valida que agendar_reuniao_closer recebe data absoluta ou expressão relativa com hora.
  * Bloqueia datas claramente inventadas (passado, muito distante).
  */
 const validarAgendamento: ToolPreValidator = {
@@ -83,10 +83,13 @@ const validarAgendamento: ToolPreValidator = {
             return 'BLOQUEADO: dataHora não informada. Pergunte ao lead qual dia e horário ele prefere.';
         }
 
+        const relativaComHora = /^(?:hoje|amanh[ãa])\s+(?:(?:às?|as)\s*)?\d{1,2}(?::|h)\d{0,2}$/i;
+        if (relativaComHora.test(dataHora.trim())) return null;
+
         // Verificar formato DD/MM/YYYY HH:mm
         const regex = /^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/;
         if (!regex.test(dataHora.trim())) {
-            return `BLOQUEADO: formato de data inválido "${dataHora}". Use DD/MM/YYYY HH:mm.`;
+            return `BLOQUEADO: formato de data inválido "${dataHora}". Use DD/MM/YYYY HH:mm ou preserve "amanhã HH:mm".`;
         }
 
         // Parse e validar que é uma data futura razoável
@@ -231,7 +234,9 @@ const enricherAgendamento: ToolResultEnricher = {
     toolName: 'agendar_reuniao_closer',
     enrich: (result, _args) => {
         if (result.success === false) {
-            if (result.error?.includes('não encontrado')) {
+            if (result.reasonCode === 'SPECIALIST_NOT_CONFIGURED') {
+                result.instrucaoParaAgente = 'NÃO diga que o horário está indisponível ou ocupado. O horário não foi consultado. Diga: "Ainda não consegui confirmar o especialista responsável por esse atendimento. Vou verificar essa disponibilidade antes de confirmar."';
+            } else if (result.error?.includes('não encontrado')) {
                 result.instrucaoParaAgente = 'O contato não foi encontrado. Isso é um erro interno — NÃO diga "problema técnico". Diga: "Me passa seu nome completo pra eu confirmar aqui?" e tente novamente após validar.';
             } else if (result.disponivel === false) {
                 result.instrucaoParaAgente = `Esse horário está OCUPADO. Apresente as alternativas: ${result.alternativas || 'pergunte outro horário ao lead'}.`;
@@ -341,6 +346,8 @@ export type TipoEfeitoTool = 'READ_ONLY' | 'POSTGRES_MUTATION' | 'EXTERNAL_EFFEC
 
 const TIPOS_EFEITO_TOOL: Record<string, TipoEfeitoTool> = {
     consultar_preco_mercado: 'READ_ONLY',
+    consultar_horarios_disponiveis: 'READ_ONLY',
+    consultar_status_agendamento: 'READ_ONLY',
     qualificar_lead: 'POSTGRES_MUTATION',
     registrar_optout: 'POSTGRES_MUTATION',
     converter_para_lead: 'POSTGRES_MUTATION',
@@ -352,6 +359,7 @@ const TIPOS_EFEITO_TOOL: Record<string, TipoEfeitoTool> = {
     salvar_dados_imovel: 'POSTGRES_MUTATION',
     registrar_indicacao: 'POSTGRES_MUTATION',
     enviar_link_agendamento: 'POSTGRES_MUTATION',
+    cancelar_agendamento: 'POSTGRES_MUTATION',
     enviar_para_crm: 'EXTERNAL_EFFECT',
     agendar_reuniao_closer: 'EXTERNAL_EFFECT',
 };

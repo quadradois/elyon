@@ -18,8 +18,62 @@ export interface EventoAgenda {
         leadNome: string;
         leadTelefone: string;
         descricao?: string;
+        especialistaId?: string | null;
+        especialistaNome?: string | null;
+        statusConfirmacaoCorretor?: string | null;
         versao: number;
+        faseTemporal?: 'FUTURO' | 'INICIADO' | 'ENCERRADO' | null;
+        allowedActions?: Array<'SOLICITAR' | 'PROPOR' | 'ACEITAR' | 'RECUSAR' | 'CONFIRMAR_ATRIBUICAO'
+            | 'CANCELAR' | 'REAGENDAR' | 'REALIZAR' | 'NAO_COMPARECEU' | 'CORRIGIR'>;
+        policyReasonCode?: string;
+        lifecyclePolicyEnabled?: boolean;
+        lifecycleCommandsEnabled?: boolean;
+        resultadoRegistradoEm?: string | null;
+        resultadoRegistradoPor?: string | null;
+        resultadoMotivo?: string | null;
+        parteAusente?: 'LEAD' | 'ESPECIALISTA' | null;
     };
+}
+
+export type AgendaCommandName = 'SOLICITAR' | 'PROPOR' | 'RECUSAR' | 'CONFIRMAR_ATRIBUICAO' | 'CANCELAR'
+    | 'REAGENDAR' | 'REALIZAR' | 'NAO_COMPARECEU' | 'CORRIGIR';
+
+export async function executarComandoAgenda(
+    id: string,
+    payload: {
+        command: AgendaCommandName;
+        expectedVersion: number;
+        reasonCode: string;
+        channel?: 'WHATSAPP' | 'PAINEL' | 'LINK_PUBLICO' | 'JOB' | 'INTEGRACAO';
+        scheduledFor?: Date;
+        responsibleId?: string;
+        justification?: string;
+        correctedStatus?: 'REALIZADO' | 'NAO_COMPARECEU' | 'CANCELADO';
+        leadManifestation?: 'HORARIO_ESCOLHIDO' | 'HORARIO_ACEITO';
+        absentParty?: 'LEAD' | 'ESPECIALISTA';
+        notifyLead?: boolean;
+    },
+    idempotencyKey = crypto.randomUUID(),
+) {
+    const response = await api.post(`/agenda/${id}/commands`, {
+        ...payload,
+        channel: payload.channel || 'PAINEL',
+        scheduledFor: payload.scheduledFor?.toISOString(),
+    }, { headers: { 'Idempotency-Key': idempotencyKey } });
+    return response.data;
+}
+
+export interface PendenciaAgenda {
+    id: string;
+    leadNome: string;
+    scheduledFor: string;
+    status: string;
+    version: number;
+    temporalPhase: 'INICIADO' | 'ENCERRADO';
+    allowedActions: AgendaCommandName[];
+    pendingAgeMinutes: number;
+    responsibleId?: string | null;
+    operationalReason: 'OUTCOME_PENDING' | 'SPECIALIST_PENDING' | 'FEEDBACK_SPECIALIST_PENDING';
 }
 
 export const agendaService = {
@@ -32,6 +86,11 @@ export const agendaService = {
             start: new Date(evt.start),
             end: new Date(evt.end)
         }));
+    },
+
+    listarPendenciasVencidas: async (): Promise<PendenciaAgenda[]> => {
+        const response = await api.get('/agenda/pendencias/vencidas');
+        return response.data;
     },
 
     criarBloqueio: async (inicio: Date, fim: Date, motivo: string) => {
@@ -59,7 +118,9 @@ export const agendaService = {
         id: string,
         payload: { motivo?: string; avisarCliente?: boolean; requestId: string; expectedVersion: number }
     ): Promise<{ sucesso: boolean; mensagem: string }> => {
-        const response = await api.post(`/agenda/${id}/cancelar`, payload);
+        const response = await api.post(`/agenda/${id}/cancelar`, payload, {
+            headers: { 'Idempotency-Key': payload.requestId },
+        });
         return response.data;
     },
 
@@ -70,17 +131,18 @@ export const agendaService = {
         const response = await api.post(`/agenda/${id}/reagendar`, {
             ...payload,
             novoHorario: payload.novoHorario.toISOString(),
-        });
+        }, { headers: { 'Idempotency-Key': payload.requestId } });
         return response.data;
     },
 
     proporNovoHorario: async (
         id: string,
-        payload: { horarioProposto: Date; mensagem?: string }
+        payload: { horarioProposto: Date; mensagem?: string; expectedVersion?: number }
     ): Promise<{ sucesso: boolean; mensagem: string }> => {
         const response = await api.post(`/agenda/${id}/propor-horario`, {
-            ...payload,
             horarioProposto: payload.horarioProposto.toISOString(),
+            mensagem: payload.mensagem,
+            expectedVersion: payload.expectedVersion,
         });
         return response.data;
     },

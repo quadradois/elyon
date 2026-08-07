@@ -17,6 +17,7 @@ import { Agent, type RunContext, type Tool } from '@openai/agents';
 import { ElyonContext, criarModeloBYOK } from './elyon-context';
 import type { ElyonAgent } from './types';
 import { z } from 'zod';
+import { formatInTimeZone } from 'date-fns-tz';
 import {
     converterParaLeadTool,
     qualificarLeadTool,
@@ -25,7 +26,10 @@ import {
     moverParaFaseTool,
     registrarIndicacaoTool,
     atualizarDadosLeadTool,
+    consultarHorariosDisponiveisTool,
+    consultarStatusAgendamentoTool,
     agendarReuniaoCloserTool,
+    cancelarAgendamentoTool,
     enviarLinkAgendamentoTool,
 } from '../ferramentas/sdr-tools-agents';
 import { consultarPrecoMercadoTool } from '../ferramentas/consultar-preco-mercado';
@@ -299,14 +303,19 @@ ${perguntasRoteiroMarkdown}
 - Ordem de prioridade: PVAM (descoberta) primeiro; SPIN só inicia após descoberta mínima completa.
 - Em DIAGNOSTICO_SPIN, as perguntas devem ser abertas e curtas (máx 1 linha), sem listar hipóteses.
 - Em PITCH, chame \`ler_skill\` com ID \`diagnostico/pitch-rede-parceiros\` antes de iniciar.
-- Em AGENDAMENTO, só chame \`agendar_reuniao_closer\` com dia+hora explícitos do lead.
+- Em AGENDAMENTO, só chame \`agendar_reuniao_closer\` com dia+hora explícitos ou com uma opção que o lead acabou de confirmar.
+- Se o lead disser "qualquer horário", perguntar quais horários existem, "pode escolher", "quando tiver vaga", "tanto faz" ou equivalente, chame \`consultar_horarios_disponiveis\`. Preserve hoje, amanhã ou a data específica em \`dataPreferida\`. Ofereça no máximo duas opções e faça uma pergunta de escolha/aceite; não repita "qual dia e horário?".
+- \`consultar_horarios_disponiveis\` nunca agenda sozinho. Aguarde o lead escolher ou confirmar uma opção e então chame \`agendar_reuniao_closer\` com a data/hora escolhida.
 - Em AGENDAMENTO, o atendimento inicial é **ligação telefônica** (não prometa videochamada, Meet ou Zoom).
-- "sim/pode ser/fechou" não são datas: após aceite, pergunte dia e horário.
+- "sim/pode ser/fechou" após um convite genérico não são datas: pergunte a preferência. Como resposta direta a uma opção exata recém-oferecida, confirmam aquela opção.
 - Antes de pedir dia/horário, faça pre-CTA de interesse no agendamento (ex.: "faz sentido avançar para uma consultoria gratuita com o especialista?").
 - Em \`agendar_reuniao_closer\`, sempre preencha \`observacoesCloser\`.
+- Quando o lead confirmar que deseja cancelar, chame \`cancelar_agendamento\` imediatamente. Nunca confirme o cancelamento apenas em texto.
+- Só diga que o agendamento foi cancelado depois de \`cancelar_agendamento\` retornar \`success=true\`.
 - Se o lead pedir tempo, priorize combinar data de retorno e registrar \`agendar_followup\`.
-- \`enviar_link_agendamento\` é fallback (somente se o lead não decide horário agora e preferir autoagendamento).
-- Sequência obrigatória: SPIN → PITCH → aceite → pergunta dia/hora → resposta do lead → agendamento.
+- \`enviar_link_agendamento\` é fallback somente para uma futura página de reservas rastreável. Enquanto a tool retornar indisponível, pergunte dia/horário e use \`agendar_reuniao_closer\`.
+- Link de evento pré-preenchido do Google Calendar não reserva horário, não notifica o Elyon e nunca pode ser descrito como confirmado ou "travado".
+- Sequência obrigatória: SPIN → PITCH → aceite → preferência. Se houver data/hora, agende; se houver flexibilidade, consulte opções → lead escolhe/confirma → agende.
 - Se o lead mudar de assunto/perguntar algo, responda primeiro e só depois retome a trilha.
 - Nunca assuma estados sem evidência (ex.: "chateado", "imóvel parado", "ocupado/vago").
 
@@ -392,13 +401,16 @@ O conteúdo retornado é o playbook que você DEVE seguir — não improvise.
 ⚠️ REGRA: Detectou o gatilho → chame \`ler_skill\` PRIMEIRO → só então responda.
 Não improvise protocolos de cabeça. A skill tem a resposta certa.
 
-## 📅 AGENDAMENTO (2 TOOLS)
+## 📅 AGENDAMENTO
 
 | Tool | Quando usar |
 |------|-------------|
+| \`consultar_status_agendamento\` | **CONSULTA CANÔNICA** — Sempre que o lead perguntar se tem agendamento, status (ativo, confirmado, pendente ou cancelado), data, horário ou especialista. Nunca responda usando apenas o histórico da conversa. |
+| \`consultar_horarios_disponiveis\` | **FLEXIBILIDADE** — Lead aceita qualquer horário ou informa apenas manhã/tarde. Consulte e ofereça no máximo duas opções; não agenda sozinho. |
 | \`agendar_reuniao_closer\` | **PRINCIPAL** — Lead informou data/hora explicitamente. Confirma **ligação telefônica** no horário combinado. **SEMPRE preencha \`observacoesCloser\`** com relatório da conversa. |
+| \`cancelar_agendamento\` | **CANCELAMENTO** — Lead confirmou que quer cancelar o agendamento atual. Só confirme ao lead depois de a tool retornar \`success=true\`. |
 | \`agendar_followup\` | **RETOMADA ASSISTIDA** — Lead pede tempo. Combine data de recontato com o lead e registre antes de encerrar. |
-| \`enviar_link_agendamento\` | **FALLBACK** — Lead NÃO consegue decidir agora e prefere escolher sozinho. Envia link do Google Calendar. NUNCA use como primeira opção. |
+| \`enviar_link_agendamento\` | **FALLBACK CONTROLADO** — Só é válido com página de reservas rastreável. Se indisponível, colete dia/horário; nunca envie evento pré-preenchido como se fosse reserva. |
 `;
 }
 
@@ -494,6 +506,7 @@ export function criarSdrAgent(config: {
 
             // Shared behavioral guardrails (espelhamento, anti-contradição, etc.)
             basePrompt += getSharedBehavioralRules();
+            basePrompt += `\n\n[RELÓGIO CONFIÁVEL DO SISTEMA]\nAgora em America/Sao_Paulo: ${formatInTimeZone(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm')}.\nInterprete hoje/amanhã a partir deste relógio. Após uma tool confirmar o agendamento, repita sempre a data absoluta retornada; não a substitua por "hoje" ou "amanhã".`;
 
             // Knowledge base do empreendimento (briefing)
             if (ctx?.knowledgeBase) {
@@ -521,6 +534,7 @@ ID_DO_CONTATO: ${contatoIdStr}
 
 ⚠️ INSTRUÇÃO OBRIGATÓRIA DE IDs (NÃO CONFUNDIR):
 - Para agendar_reuniao_closer → use contatoId='${contatoIdStr}'
+- Para cancelar_agendamento → use contatoId='${ctx.leadId}'
 - Para qualificar_lead → use leadId='${ctx.leadId}' (contatoId apenas legado/compatibilidade)
 - Para mover_para_fase → use leadId='${ctx.leadId}'
 - Para atualizar_dados_lead → use leadId='${ctx.leadId}'
@@ -549,7 +563,10 @@ Mantenha o tom casual e WhatsApp no campo 'respostaParaOCliente'.
             moverParaFaseTool,
             registrarIndicacaoTool,
             atualizarDadosLeadTool,
+            consultarHorariosDisponiveisTool,
+            consultarStatusAgendamentoTool,
             agendarReuniaoCloserTool,
+            cancelarAgendamentoTool,
             enviarLinkAgendamentoTool,
             consultarPrecoMercadoTool,
             ...(config.tools || [])

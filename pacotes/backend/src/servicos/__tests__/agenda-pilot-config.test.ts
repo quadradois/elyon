@@ -9,10 +9,40 @@ describe('agenda pilot tenant-safe config', () => {
 
   it('mantem ambos os recursos desabilitados por default sem consultar tenant', async () => {
     expect(await resolverAgendaPilotConfig({}, activeTenant)).toEqual({
+      lifecyclePolicy: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
+      lifecycleCommands: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
       effects: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
       noShow: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
+      specialistCopilot: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
+      postAppointmentFeedback: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
     });
     expect(activeTenant.findTenant).not.toHaveBeenCalled();
+  });
+
+  it('mantem politica e comandos desligados por default', async () => {
+    const config = await resolverAgendaPilotConfig({}, activeTenant);
+    expect(config.lifecyclePolicy).toEqual({ requested: false, enabled: false, reason: 'FLAG_DISABLED' });
+    expect(config.lifecycleCommands).toEqual({ requested: false, enabled: false, reason: 'FLAG_DISABLED' });
+  });
+
+  it('habilita politica somente para o tenant e cutoff aprovados', async () => {
+    const config = await resolverAgendaPilotConfig({
+      AGENDA_LIFECYCLE_POLICY_ENABLED: 'true',
+      AGENDA_PILOT_TENANT_ID: TENANT,
+      AGENDA_PILOT_STARTED_AT: STARTED_AT,
+    }, activeTenant);
+    expect(config.lifecyclePolicy).toEqual({ requested: true, enabled: true, reason: 'ENABLED' });
+    expect(config.lifecycleCommands).toEqual({ requested: false, enabled: false, reason: 'FLAG_DISABLED' });
+    expect(config.scope).toEqual({ tenantId: TENANT, startedAtUtc: new Date(STARTED_AT).toISOString() });
+  });
+
+  it('recusa comandos centrais enquanto a politica estiver desligada', async () => {
+    const config = await resolverAgendaPilotConfig({
+      AGENDA_LIFECYCLE_COMMANDS_ENABLED: 'true',
+      AGENDA_PILOT_TENANT_ID: TENANT,
+      AGENDA_PILOT_STARTED_AT: STARTED_AT,
+    }, activeTenant);
+    expect(config.lifecycleCommands).toEqual({ requested: true, enabled: false, reason: 'POLICY_REQUIRED' });
   });
 
   it.each([undefined, '', 'tenant-autoafirmado', `${TENANT},${TENANT}`])(
@@ -97,9 +127,47 @@ describe('agenda pilot tenant-safe config', () => {
       AGENDA_PILOT_STARTED_AT: STARTED_AT, AGENDA_NO_SHOW_GRACE_MINUTES: '45',
     }, activeTenant)).toEqual({
       scope: { tenantId: TENANT, startedAtUtc: new Date(STARTED_AT).toISOString() },
+      lifecyclePolicy: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
+      lifecycleCommands: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
       effects: { requested: true, enabled: true, reason: 'ENABLED' },
       noShow: { requested: true, enabled: true, reason: 'ENABLED' },
+      specialistCopilot: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
+      postAppointmentFeedback: { requested: false, enabled: false, reason: 'FLAG_DISABLED' },
       noShowGraceMinutes: 45,
     });
+  });
+
+  it('habilita o Copilot somente com política, comandos e efeitos ativos', async () => {
+    const incompleto = await resolverAgendaPilotConfig({
+      AGENDA_SPECIALIST_COPILOT_ENABLED: 'true', AGENDA_EFFECTS_ENABLED: 'true',
+      AGENDA_PILOT_TENANT_ID: TENANT, AGENDA_PILOT_STARTED_AT: STARTED_AT,
+    }, activeTenant);
+    expect(incompleto.specialistCopilot).toEqual({ requested: true, enabled: false, reason: 'POLICY_REQUIRED' });
+
+    const completo = await resolverAgendaPilotConfig({
+      AGENDA_SPECIALIST_COPILOT_ENABLED: 'true', AGENDA_EFFECTS_ENABLED: 'true',
+      AGENDA_LIFECYCLE_POLICY_ENABLED: 'true', AGENDA_LIFECYCLE_COMMANDS_ENABLED: 'true',
+      AGENDA_PILOT_TENANT_ID: TENANT, AGENDA_PILOT_STARTED_AT: STARTED_AT,
+    }, activeTenant);
+    expect(completo.specialistCopilot).toEqual({ requested: true, enabled: true, reason: 'ENABLED' });
+  });
+
+  it('habilita feedback pos-atendimento somente sobre o Copilot ativo', async () => {
+    const semCopilot = await resolverAgendaPilotConfig({
+      AGENDA_POST_FEEDBACK_ENABLED: 'true', AGENDA_EFFECTS_ENABLED: 'true',
+      AGENDA_LIFECYCLE_POLICY_ENABLED: 'true', AGENDA_LIFECYCLE_COMMANDS_ENABLED: 'true',
+      AGENDA_PILOT_TENANT_ID: TENANT, AGENDA_PILOT_STARTED_AT: STARTED_AT,
+    }, activeTenant);
+    expect(semCopilot.postAppointmentFeedback).toEqual({
+      requested: true, enabled: false, reason: 'SPECIALIST_COPILOT_REQUIRED',
+    });
+
+    const completo = await resolverAgendaPilotConfig({
+      AGENDA_POST_FEEDBACK_ENABLED: 'true', AGENDA_SPECIALIST_COPILOT_ENABLED: 'true',
+      AGENDA_EFFECTS_ENABLED: 'true', AGENDA_LIFECYCLE_POLICY_ENABLED: 'true',
+      AGENDA_LIFECYCLE_COMMANDS_ENABLED: 'true', AGENDA_PILOT_TENANT_ID: TENANT,
+      AGENDA_PILOT_STARTED_AT: STARTED_AT,
+    }, activeTenant);
+    expect(completo.postAppointmentFeedback).toEqual({ requested: true, enabled: true, reason: 'ENABLED' });
   });
 });

@@ -6,9 +6,11 @@ ROOT_DIR=${ELYON_ROOT_DIR:-/root/elyon}
 BACKUP_DIR=${ELYON_OFFHOST_BACKUP_DIR:-$ROOT_DIR/backups/offhost}
 STATUS_DIR=${ELYON_BACKUP_STATUS_DIR:-$ROOT_DIR/backups/status}
 STATUS_FILE=$STATUS_DIR/offhost.env
+LOCAL_BACKUP_KEEP=${ELYON_OFFHOST_LOCAL_KEEP:-0}
 STARTED_AT=$(date +%s)
 LAST_SUCCESS=0
 DUMP_BYTES=0
+DUMP_TMP=''
 
 log() { printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*"; }
 
@@ -38,11 +40,13 @@ write_status() {
 
 on_error() {
   local exit_code=$?
+  trap - ERR
+  [[ -n "$DUMP_TMP" ]] && rm -f -- "$DUMP_TMP"
   log "backup off-host falhou (exit=$exit_code)"
   mkdir -p "$STATUS_DIR"
   LAST_SUCCESS=$(status_value last_success_timestamp)
   LAST_SUCCESS=${LAST_SUCCESS:-0}
-  write_status 0
+  write_status 0 || true
   logger -t elyon-offhost-backup -- "status=failure exit=$exit_code"
   exit "$exit_code"
 }
@@ -57,15 +61,21 @@ for command_name in docker gzip restic sha256sum; do
 done
 : "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY ausente}"
 : "${RESTIC_PASSWORD:?RESTIC_PASSWORD ausente}"
+[[ "$LOCAL_BACKUP_KEEP" =~ ^[0-9]+$ ]] \
+  || { echo 'ELYON_OFFHOST_LOCAL_KEEP deve ser inteiro não negativo.' >&2; exit 1; }
 
 install -d -m 0750 "$BACKUP_DIR"
 install -d -m 0755 "$STATUS_DIR"
+if [[ -x "$ROOT_DIR/scripts/ops/prune-local-storage.sh" ]]; then
+  "$ROOT_DIR/scripts/ops/prune-local-storage.sh"
+fi
 LAST_SUCCESS=$(status_value last_success_timestamp)
 LAST_SUCCESS=${LAST_SUCCESS:-0}
 
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 dump_path="$BACKUP_DIR/elyon-${timestamp}.sql.gz"
 dump_tmp="${dump_path}.tmp"
+DUMP_TMP="$dump_tmp"
 checksum_path="${dump_path}.sha256"
 rm -f "$dump_tmp"
 
@@ -90,7 +100,15 @@ if [[ $(date -u +%H) == 03 ]]; then
   restic check --read-data-subset=1/100
 fi
 
-find "$BACKUP_DIR" -maxdepth 1 -type f -name 'elyon-*.sql.gz*' -mtime +2 -delete
+# O R2/Restic mantém a retenção histórica. Localmente, conservamos apenas os
+# dumps mais recentes para não duplicar dezenas de gigabytes na VPS.
+mapfile -t local_dumps < <(
+  find "$BACKUP_DIR" -maxdepth 1 -type f -name 'elyon-*.sql.gz' -printf '%f\n' | sort -r
+)
+for old_dump in "${local_dumps[@]:$LOCAL_BACKUP_KEEP}"; do
+  rm -f -- "$BACKUP_DIR/$old_dump" "$BACKUP_DIR/$old_dump.sha256"
+done
+DUMP_TMP=''
 LAST_SUCCESS=$(date +%s)
 write_status 1 "$snapshot_id"
 logger -t elyon-offhost-backup -- \

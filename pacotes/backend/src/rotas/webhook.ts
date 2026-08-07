@@ -3,12 +3,14 @@ import { Request, Response, Router } from 'express';
 import { prisma } from '../lib/db';
 import { getWhatsAppService } from '../servicos/whatsapp';
 import { normalizarTelefone } from '../utils/telefone';
+import { processarInboundEspecialista } from '../servicos/specialist-copilot';
+import { processarRespostaLeadContraproposta } from '../servicos/specialist-counterproposal';
 // 🔄 Redis cache helpers (substitui Maps em memória)
 import {
   marcarMensagemComoVista,
   jaVimosMensagem,
   registrarRespostaEnviada,
-  estaNoCooldown,
+  obterCooldownRespostaRestanteMs,
   adquirirMutexContato,
   liberarMutexContato,
   marcarAssinaturaProcessada,
@@ -17,11 +19,13 @@ import {
   obterHashResposta,
   registrarHashRespostaUnicaJanela
 } from '../lib/redis-cache';
+import { aguardarCooldownInbound } from '../servicos/cooldown-inbound';
 // 🆕 Orquestrador dos 4 Agentes de Captação
 import {
   processarMensagemOrquestrada,
   buscarConfiguracaoTenant,
-  buscarContextoConversa
+  buscarContextoConversa,
+  resolverLeadIdCanonico
 } from '../agentes/orchestrator';
 import { ragConversasService } from '../servicos/rag-conversas';
 import { ConverterParaLeadUseCase } from '../casos-de-uso/agentes/converter-para-lead.usecase';
@@ -229,14 +233,24 @@ async function garantirAtualizacaoLeadBasicaSeElegivel(params: {
   contatoId: string;
   leadId: string;
   textoConversa: string;
+  ferramentasExecutadasComSucesso?: string[];
 }) {
-  const houveTool = await houveExecucaoToolRecente(params.leadId, 120);
+  const houveToolSucessoNoTurno = (params.ferramentasExecutadasComSucesso?.length || 0) > 0;
+  const houveTool = houveToolSucessoNoTurno
+    ? false
+    : await houveExecucaoToolRecente(params.leadId, 120);
   const podeAtualizar = deveExecutarFallbackAtualizacaoLead({
     leadId: params.leadId,
+    houveToolSucessoNoTurno,
     houveToolExecRecente: houveTool,
     textoConversa: params.textoConversa,
   });
-  if (!podeAtualizar) return;
+  if (!podeAtualizar) {
+    if (houveToolSucessoNoTurno) {
+      console.info(`[OBS] lead_update_fallback_skipped leadId=${params.leadId} reason=tool_success tools=${params.ferramentasExecutadasComSucesso!.join(',')}`);
+    }
+    return;
+  }
 
   const deteccao = detectarInteresseVendaLocacao(params.textoConversa);
 
@@ -246,7 +260,6 @@ async function garantirAtualizacaoLeadBasicaSeElegivel(params: {
     interesse: deteccao?.tipoInteresse || 'VENDA',
     timeline: deteccao?.timeline || undefined,
     situacaoAtual: params.textoConversa,
-    observacoes: 'Fallback técnico: atualização automática por ausência de TOOL_EXEC no turno'
   });
 
   console.info(`[OBS] lead_update_fallback_executed contatoId=${params.contatoId} leadId=${params.leadId} success=${resultado?.success ? 'true' : 'false'}`);
@@ -1078,11 +1091,6 @@ async function deveEnviarResposta(params: {
   return true;
 }
 
-// ✅ Versões assíncronas usando Redis (substitui Maps em memória)
-async function podeMosResponder(contatoId: string): Promise<boolean> {
-  return !(await estaNoCooldown(contatoId));
-}
-
 async function registrarResposta(contatoId: string): Promise<void> {
   await registrarRespostaEnviada(contatoId);
 }
@@ -1336,154 +1344,227 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
             if (conteudoEntrada || isMedia) {
               console.log(`[Webhook] Mensagem recebida: tipo=${tipoMensagemEntrada} possuiMidia=${isMedia}`);
 
-              // ====================================
-              // 1. VERIFICAR SE É RESPOSTA DE PROSPECÇÃO ATIVA
-              // ====================================
-              const contatoProspeccao = await buscarContatoProspeccao(telefone, sessaoConfiavel.tenantId);
-
-              if (contatoProspeccao) {
-                console.log(`[Webhook] Prospecção ativa: contatoId=${contatoProspeccao.id}`);
-
-                if (!contatoProspeccao.campanhaOrigemId) {
-                  console.log(`[Webhook] ⚠️ Contato ${contatoProspeccao.id} sem campanha vinculada - ignorando inbound`);
-                  registrarIgnorado(telefone, 'sem_campanha_vinculada', contatoProspeccao.id);
-                  continue;
+              // O Copilot do especialista é um canal operacional de agenda. Ele roda antes
+              // da resolução de Lead, mas somente sob gate tenant-safe e com convite acionável.
+              const eventoEspecialistaId = `specialist:${instanceName}:${messageId || registroId || hashPayload(req.body)}`;
+              const especialistaInbound = await processarInboundEspecialista({
+                tenantId: sessaoConfiavel.tenantId,
+                telefone,
+                texto: conteudoEntrada,
+                providerEventId: eventoEspecialistaId,
+              });
+              if (especialistaInbound.handled) {
+                if (especialistaInbound.response) {
+                  await getWhatsAppService(instanceName).enviarMensagemTexto(
+                    telefone,
+                    especialistaInbound.response,
+                    `${eventoEspecialistaId}:response`,
+                  );
                 }
+                continue;
+              }
 
-                // Verificar Blacklist
-                const telefoneNormalizado = telefone.replace(/\D/g, '').slice(-8);
-                const tenantIdContato = contatoProspeccao.campanhaOrigem?.tenantId;
-                const estaBloqueado = await prisma.telefoneBlacklist.findFirst({
-                  where: {
-                    telefone: { contains: telefoneNormalizado },
-                    OR: [{ tenantId: tenantIdContato || '' }, { tenantId: null }]
-                  }
-                });
+              // ====================================
+              // 1. RESOLVER LEAD ID CANÔNICO (tenant-safe)
+              // ====================================
+              const leadIdCanonico = await resolverLeadIdCanonico(telefone, sessaoConfiavel.tenantId);
 
-                if (estaBloqueado) {
-                  registrarIgnorado(telefone, 'blacklist', contatoProspeccao.id);
-                  continue;
-                }
+              if (!leadIdCanonico) {
+                // Falha fechada: sem Lead, ambíguo, ou Contato sem mapeamento válido
+                registrarIgnorado(telefone, 'lead_nao_resolvido_ou_ambiguo', 'unknown');
+                continue;
+              }
 
-                const conteudoDuravel = conteudoEntrada || (isMedia ? resumoMidiaIA : '');
-                const eventoTecnicoDuravel = registroId || `evolution:${instanceName}:${messageId || hashPayload(req.body)}`;
-                if (!processamentoAgendado) {
-                  await registrarFragmentoInbound({
-                    tenantId: sessaoConfiavel.tenantId,
-                    leadId: contatoProspeccao.id,
-                    webhookEventoId: eventoTecnicoDuravel,
-                    messageId,
-                    conteudo: conteudoDuravel,
-                    tipo: tipoMensagemEntrada,
-                    metadata: {
-                      urlMidia: isMedia ? metaMidia.url : undefined,
-                      mimeTypeMidia: isMedia ? metaMidia.mimeType : undefined,
-                      nomeArquivoMidia: isMedia ? metaMidia.fileName : undefined,
+              // Buscar dados do Lead para validações (campanha, blacklist, etc.)
+              const leadDados = await prisma.lead.findUnique({
+                where: { id: leadIdCanonico },
+                include: {
+                  campanhaOrigem: {
+                    include: {
+                      tenant: true,
+                      empreendimento: true,
                     },
-                    recebidoEm: new Date(),
-                    janelaMs: calcularDebounce(conteudoDuravel),
-                  });
-                  continue;
+                  },
+                },
+              });
+
+              if (!leadDados) {
+                registrarIgnorado(telefone, 'lead_nao_encontrado_apos_resolucao', 'unknown');
+                continue;
+              }
+
+              if (!leadDados.campanhaOrigemId) {
+                console.log(`[Webhook] ⚠️ Lead ${leadIdCanonico} sem campanha vinculada - ignorando inbound`);
+                registrarIgnorado(telefone, 'sem_campanha_vinculada', leadIdCanonico);
+                continue;
+              }
+
+              // Verificar Blacklist
+              const telefoneNormalizado = telefone.replace(/\D/g, '').slice(-8);
+              const tenantIdLead = leadDados.campanhaOrigem?.tenantId;
+              const estaBloqueado = await prisma.telefoneBlacklist.findFirst({
+                where: {
+                  telefone: { contains: telefoneNormalizado },
+                  OR: [{ tenantId: tenantIdLead || '' }, { tenantId: null }]
                 }
+              });
 
-                if ((contatoProspeccao as any).modoAtendimento === 'HUMANO'
-                  || (contatoProspeccao as any).modoAtendimento === 'PAUSADO'
-                  || contatoProspeccao.statusProspeccao === 'OPTOUT'
-                  || contatoProspeccao.statusProspeccao === 'OPT_OUT') {
-                  await salvarMensagemProspeccao({
-                    contatoId: contatoProspeccao.id, direcao: 'ENTRADA', conteudo: conteudoDuravel,
-                    tipo: tipoMensagemEntrada, messageId, telefone,
-                  });
-                  const motivo = contatoProspeccao.statusProspeccao === 'OPTOUT' || contatoProspeccao.statusProspeccao === 'OPT_OUT'
-                    ? 'OPT_OUT_BLOCKS_AI' : 'HUMAN_MODE_BLOCKS_AI';
-                  await cancelarLoteInbound(loteIdAgendado!, motivo, ownerLoteAgendado!, fencingTokenAgendado);
-                  continue;
-                }
+              if (estaBloqueado) {
+                registrarIgnorado(telefone, 'blacklist', leadIdCanonico);
+                continue;
+              }
 
-                const chaveMsgProsp = messageId
-                  ? `prosp:${instanceName}:${messageId}`
-                  : `prosp:${instanceName}:${telefone}:${(texto || '').slice(0, 120)}:${message.messageTimestamp || ''}`;
-                const tentativaInbox = Number(req.get('x-elyon-inbox-attempt') || 1);
-                if (tentativaInbox <= 1 && await jaVimosMensagem(chaveMsgProsp)) {
-                  console.log(`[Webhook] ⚠️ Prospecção duplicada detectada, ignorando: ${chaveMsgProsp}`);
-                  continue;
-                }
-                await marcarMensagemComoVista(chaveMsgProsp);
-
-                // Verificar Anti-Flood
-                const messageTimestamp = message.messageTimestamp;
-                const verificacao = await deveProcessarMensagem(messageTimestamp, messageId, contatoProspeccao.id);
-
-                if (!verificacao.processar) {
-                  registrarIgnorado(telefone, `anti-flood: ${verificacao.motivo}`, contatoProspeccao.id);
-                  continue;
-                }
-
-                // Verificar Modo de Atendimento
-                const modoAtendimento = (contatoProspeccao as any).modoAtendimento || 'IA';
-                if (modoAtendimento === 'HUMANO' || modoAtendimento === 'PAUSADO') {
-                  registrarIgnorado(telefone, `modo ${modoAtendimento}`, contatoProspeccao.id);
-                  const conteudoHumano = conteudoEntrada || (isMedia ? resumoMidiaIA : '');
-                  const sinaisNegociacao = extrairSinaisNegociacaoHumana(conteudoHumano);
-                  await salvarMensagemProspeccao({
-                    contatoId: contatoProspeccao.id,
+              const respostaContraproposta = await processarRespostaLeadContraproposta({
+                tenantId: sessaoConfiavel.tenantId,
+                leadId: leadIdCanonico,
+                texto: conteudoEntrada,
+                providerEventId: `lead-counterproposal:${instanceName}:${messageId || registroId || hashPayload(req.body)}`,
+              });
+              if (respostaContraproposta.handled) {
+                await prisma.mensagemProspeccao.create({
+                  data: {
+                    leadId: leadIdCanonico,
                     direcao: 'ENTRADA',
-                    conteudo: conteudoHumano,
+                    conteudo: conteudoEntrada,
                     tipo: tipoMensagemEntrada,
-                    messageId: messageId,
-                    telefone: telefone,
+                    telefone,
+                    messageId: messageId || null,
+                    processadaPorIA: false,
+                    toolsChamadas: [{
+                      nome: 'responder_contraproposta_especialista',
+                      resultado: respostaContraproposta.reasonCode,
+                    }],
+                  },
+                });
+                if (respostaContraproposta.response) {
+                  await getWhatsAppService(instanceName).enviarMensagemTexto(
+                    telefone,
+                    respostaContraproposta.response,
+                    `lead-counterproposal:${messageId || registroId}:response`,
+                  );
+                }
+                continue;
+              }
+
+              const conteudoDuravel = conteudoEntrada || (isMedia ? resumoMidiaIA : '');
+              const eventoTecnicoDuravel = registroId || `evolution:${instanceName}:${messageId || hashPayload(req.body)}`;
+              if (!processamentoAgendado) {
+                await registrarFragmentoInbound({
+                  tenantId: sessaoConfiavel.tenantId,
+                  leadId: leadIdCanonico,
+                  webhookEventoId: eventoTecnicoDuravel,
+                  messageId,
+                  conteudo: conteudoDuravel,
+                  tipo: tipoMensagemEntrada,
+                  metadata: {
                     urlMidia: isMedia ? metaMidia.url : undefined,
                     mimeTypeMidia: isMedia ? metaMidia.mimeType : undefined,
                     nomeArquivoMidia: isMedia ? metaMidia.fileName : undefined,
-                  });
+                  },
+                  recebidoEm: new Date(),
+                  janelaMs: calcularDebounce(conteudoDuravel),
+                });
+                continue;
+              }
 
-                  const resumoNegociacao = [
-                    sinaisNegociacao.tipoAutorizacao ? `tipo=${sinaisNegociacao.tipoAutorizacao}` : '',
-                    sinaisNegociacao.comissaoAcordada ? `comissao=${sinaisNegociacao.comissaoAcordada}` : '',
-                    sinaisNegociacao.prazoTrabalho ? `prazo=${sinaisNegociacao.prazoTrabalho}d` : ''
-                  ].filter(Boolean).join(' | ');
+              // Verificar modo de atendimento no Lead
+              const modoAtendimentoAtual = (leadDados as any).modoAtendimento || 'IA';
+              if (modoAtendimentoAtual === 'HUMANO' || modoAtendimentoAtual === 'PAUSADO'
+                || leadDados.statusProspeccao === 'OPTOUT' || leadDados.statusProspeccao === 'OPT_OUT') {
+                await salvarMensagemProspeccao({
+                  contatoId: leadIdCanonico, direcao: 'ENTRADA', conteudo: conteudoDuravel,
+                  tipo: tipoMensagemEntrada, messageId, telefone,
+                });
+                const motivo = leadDados.statusProspeccao === 'OPTOUT' || leadDados.statusProspeccao === 'OPT_OUT'
+                  ? 'OPT_OUT_BLOCKS_AI' : 'HUMAN_MODE_BLOCKS_AI';
+                await cancelarLoteInbound(loteIdAgendado!, motivo, ownerLoteAgendado!, fencingTokenAgendado);
+                continue;
+              }
 
-                  if (resumoNegociacao) {
-                    await prisma.lead.update({
-                      where: { id: contatoProspeccao.id },
-                      data: {
-                        observacoes: `${((contatoProspeccao as any).observacoes || '').trim()}\n[RESUMO_FASE_HUMANA] ${resumoNegociacao}`.trim()
-                      }
-                    });
-                  }
+              const chaveMsgProsp = messageId
+                ? `prosp:${instanceName}:${messageId}`
+                : `prosp:${instanceName}:${telefone}:${(texto || '').slice(0, 120)}:${message.messageTimestamp || ''}`;
+              const tentativaInbox = Number(req.get('x-elyon-inbox-attempt') || 1);
+              if (tentativaInbox <= 1 && await jaVimosMensagem(chaveMsgProsp)) {
+                console.log(`[Webhook] ⚠️ Prospecção duplicada detectada, ignorando: ${chaveMsgProsp}`);
+                continue;
+              }
+              await marcarMensagemComoVista(chaveMsgProsp);
 
-                  if (!deveAutoRetornarParaIA(contatoProspeccao)) {
-                    continue;
-                  }
+              // Verificar Anti-Flood
+              const messageTimestamp = message.messageTimestamp;
+              const verificacao = await deveProcessarMensagem(messageTimestamp, messageId, leadIdCanonico);
 
-                  await prisma.lead.update({
-                    where: { id: contatoProspeccao.id },
-                    data: {
-                      modoAtendimento: 'IA',
-                      observacoes: `${((contatoProspeccao as any).observacoes || '').trim()}\n[AUTO_RETORNO_IA] ${new Date().toISOString()}`.trim()
-                    }
-                  });
-                  console.info(`[OBS] ia_auto_return_triggered contatoId=${contatoProspeccao.id} statusLead=${contatoProspeccao?.lead?.status || 'N/A'}`);
-                  (contatoProspeccao as any).modoAtendimento = 'IA';
-                  if (resumoNegociacao) {
-                    (contatoProspeccao as any).observacoes = `${((contatoProspeccao as any).observacoes || '').trim()}\n[RESUMO_FASE_HUMANA] ${resumoNegociacao}`.trim();
-                  }
-                  console.log(`[Webhook] 🔄 Auto-retorno para IA aplicado ao contato ${contatoProspeccao.id}`);
-                }
+              if (!verificacao.processar) {
+                registrarIgnorado(telefone, `anti-flood: ${verificacao.motivo}`, leadIdCanonico);
+                continue;
+              }
 
-                // Atualizar status
-                await prisma.lead.update({
-                  where: { id: contatoProspeccao.id },
-                  data: {
-                    respondeu: true,
-                    primeiraResposta: contatoProspeccao.primeiraResposta || new Date(),
-                    statusProspeccao: 'RESPONDEU'
-                  }
+              // Verificar Modo de Atendimento
+              const modoAtendimento = (leadDados as any).modoAtendimento || 'IA';
+              if (modoAtendimento === 'HUMANO' || modoAtendimento === 'PAUSADO') {
+                registrarIgnorado(telefone, `modo ${modoAtendimento}`, leadIdCanonico);
+                const conteudoHumano = conteudoEntrada || (isMedia ? resumoMidiaIA : '');
+                const sinaisNegociacao = extrairSinaisNegociacaoHumana(conteudoHumano);
+                await salvarMensagemProspeccao({
+                  contatoId: leadIdCanonico,
+                  direcao: 'ENTRADA',
+                  conteudo: conteudoHumano,
+                  tipo: tipoMensagemEntrada,
+                  messageId: messageId,
+                  telefone: telefone,
+                  urlMidia: isMedia ? metaMidia.url : undefined,
+                  mimeTypeMidia: isMedia ? metaMidia.mimeType : undefined,
+                  nomeArquivoMidia: isMedia ? metaMidia.fileName : undefined,
                 });
 
-                // ====================================
-                // ⏳ DEBOUNCE / BUFFER DE MENSAGENS
-                // ====================================
+                const resumoNegociacao = [
+                  sinaisNegociacao.tipoAutorizacao ? `tipo=${sinaisNegociacao.tipoAutorizacao}` : '',
+                  sinaisNegociacao.comissaoAcordada ? `comissao=${sinaisNegociacao.comissaoAcordada}` : '',
+                  sinaisNegociacao.prazoTrabalho ? `prazo=${sinaisNegociacao.prazoTrabalho}d` : ''
+                ].filter(Boolean).join(' | ');
+
+                if (resumoNegociacao) {
+                  await prisma.lead.update({
+                    where: { id: leadIdCanonico },
+                    data: {
+                      observacoes: `${((leadDados as any).observacoes || '').trim()}\n[RESUMO_FASE_HUMANA] ${resumoNegociacao}`.trim()
+                    }
+                  });
+                }
+
+                if (!deveAutoRetornarParaIA(leadDados)) {
+                  continue;
+                }
+
+                await prisma.lead.update({
+                  where: { id: leadIdCanonico },
+                  data: {
+                    modoAtendimento: 'IA',
+                    observacoes: `${((leadDados as any).observacoes || '').trim()}\n[AUTO_RETORNO_IA] ${new Date().toISOString()}`.trim()
+                  }
+                });
+                console.info(`[OBS] ia_auto_return_triggered leadId=${leadIdCanonico} statusLead=${leadDados?.status || 'N/A'}`);
+                (leadDados as any).modoAtendimento = 'IA';
+                if (resumoNegociacao) {
+                  (leadDados as any).observacoes = `${((leadDados as any).observacoes || '').trim()}\n[RESUMO_FASE_HUMANA] ${resumoNegociacao}`.trim();
+                }
+                console.log(`[Webhook] 🔄 Auto-retorno para IA aplicado ao lead ${leadIdCanonico}`);
+              }
+
+              // Atualizar status
+              await prisma.lead.update({
+                where: { id: leadIdCanonico },
+                data: {
+                  respondeu: true,
+                  primeiraResposta: leadDados.primeiraResposta || new Date(),
+                  statusProspeccao: 'RESPONDEU'
+                }
+              });
+
+              // ====================================
+              // ⏳ DEBOUNCE / BUFFER DE MENSAGENS
+              // ====================================
 
                 // Feedback imediato — dispara typing antes do debounce para o usuário
                 // saber que a mensagem foi recebida. Fire-and-forget (não bloqueia).
@@ -1505,12 +1586,17 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                 };
 
                 const processarAposDebounce = async (): Promise<boolean> => {
-                  console.log(`[Debounce] Processando contatoId=${contatoProspeccao.id}`);
+                  console.log(`[Debounce] Processando leadId=${leadIdCanonico}`);
                   
-                  // 🔍 VERIFICAR COOLDOWN ANTES DE PROCESSAR
-                  if (!(await podeMosResponder(contatoProspeccao.id))) {
-                    registrarIgnorado(telefone, 'cooldown', contatoProspeccao.id);
-                    return true;
+                  // O cooldown serve apenas para cadenciar respostas. Uma nova mensagem
+                  // inbound já deduplicada nunca pode ser descartada por ele.
+                  const cooldownRestanteMs = await obterCooldownRespostaRestanteMs(leadIdCanonico);
+                  const esperaCooldownMs = await aguardarCooldownInbound({
+                    cooldownRestanteMs,
+                    limiteEsperaMs: COOLDOWN_RESPOSTA_MS,
+                  });
+                  if (esperaCooldownMs > 0) {
+                    console.log(`[Cooldown] ⏳ Lead ${leadIdCanonico}: mensagem preservada e processada após ${esperaCooldownMs}ms`);
                   }
                   
                   // 🔍 VERIFICAR SE MENSAGENS SÃO MUITO RECENTES (< 2 segundos)
@@ -1519,15 +1605,15 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
 
                   try {
                     // Consolidar mensagens
-                    const dadosDebounce = obterMensagensConsolidadas(contatoProspeccao.id);
+                    const dadosDebounce = obterMensagensConsolidadas(leadIdCanonico);
                     const mensagensAcumuladas = dadosDebounce?.mensagens || [mensagemPendente];
                     const textoConsolidado = mensagensAcumuladas.map(m => m.conteudo).join('\n').trim();
-                    const assinaturaLote = gerarAssinaturaLote(contatoProspeccao.id, mensagensAcumuladas);
+                    const assinaturaLote = gerarAssinaturaLote(leadIdCanonico, mensagensAcumuladas);
                     let deveMarcarLoteComoProcessado = false;
                     const instrucaoTurnoSequencial = construirInstrucaoTurnoMensagensSequenciais(mensagensAcumuladas);
 
-                    if (!(await iniciarProcessamentoSerializado(contatoProspeccao.id, assinaturaLote))) {
-                      registrarIgnorado(telefone, 'idempotencia_lote_duplicado', contatoProspeccao.id);
+                    if (!(await iniciarProcessamentoSerializado(leadIdCanonico, assinaturaLote))) {
+                      registrarIgnorado(telefone, 'idempotencia_lote_duplicado', leadIdCanonico);
                       return true;
                     }
 
@@ -1536,7 +1622,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       // Salvar TODAS as mensagens acumuladas
                       for (const msg of mensagensAcumuladas) {
                         await salvarMensagemProspeccao({
-                          contatoId: contatoProspeccao.id,
+                          contatoId: leadIdCanonico,
                           direcao: 'ENTRADA',
                           conteudo: msg.conteudo,
                           tipo: msg.tipo,
@@ -1551,40 +1637,40 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       // ── Captura automática de documentos WhatsApp ──
                       // Fire-and-forget: não bloqueia o fluxo principal
                       const deveCapturarNoAcervo = isImage || isDocument || isVideo || (isAudio && CAPTURA_DOCS_INCLUIR_AUDIO);
-                      if (deveCapturarNoAcervo && contatoProspeccao.leadId) {
-                        const tenantIdCaptura = contatoProspeccao.campanhaOrigem?.tenantId || '';
+                      if (deveCapturarNoAcervo) {
+                        const tenantIdCaptura = leadDados.campanhaOrigem?.tenantId || '';
                         capturarDocumentoWhatsapp({
                           message,
                           messageType,
-                          leadId: contatoProspeccao.leadId,
+                          leadId: leadIdCanonico,
                           tenantId: tenantIdCaptura,
                         }).catch(err =>
                           console.error('[Webhook] Falha silenciosa na captura de doc:', err)
                         );
-                      } else if (isAudio && contatoProspeccao.leadId && !CAPTURA_DOCS_INCLUIR_AUDIO) {
+                      } else if (isAudio && !CAPTURA_DOCS_INCLUIR_AUDIO) {
                         console.log('[Webhook] 🎙️ Áudio recebido (não capturado em DocumentoLead por configuração).');
                       }
 
                       deveMarcarLoteComoProcessado = true;
 
                       // Carregar Histórico
-                      const historicoMensagens = await carregarHistoricoMensagens(contatoProspeccao.id, 50);
+                      const historicoMensagens = await carregarHistoricoMensagens(leadIdCanonico, 50);
 
                       // Configuração do Agente e Processamento
-                      const tenantId = contatoProspeccao.campanhaOrigem?.tenantId;
+                      const tenantId = leadDados.campanhaOrigem?.tenantId;
                       const agenteConfig = await buscarConfiguracaoAgentePorInstancia(instanceName, tenantId);
                       if (!agenteConfig || !agenteConfig.estaAtivo || agenteConfig.status !== 'ATIVO') {
-                        registrarIgnorado(telefone, 'agente_pausado', contatoProspeccao.id);
+                        registrarIgnorado(telefone, 'agente_pausado', leadIdCanonico);
                         return true;
                       }
                       const perfilVendaTenant = (agenteConfig as any)?.tenant?.perfilVenda || {};
                       const respostaEmAudioAtiva = !!perfilVendaTenant?.respostaEmAudioAtiva;
                       const preferenciaAudioEntrada = detectarPermissaoAudioNoTexto(textoConsolidado);
                       let preferenciaAudio = preferenciaAudioEntrada
-                        || preferenciaAudioPorObservacoes((contatoProspeccao as any).observacoes);
+                        || preferenciaAudioPorObservacoes((leadDados as any).observacoes);
 
                       if (preferenciaAudioEntrada) {
-                        await salvarPreferenciaAudioContato(contatoProspeccao.id, preferenciaAudioEntrada);
+                        await salvarPreferenciaAudioContato(leadIdCanonico, preferenciaAudioEntrada);
                         console.log(`[Webhook] Preferência de áudio atualizada: ${preferenciaAudioEntrada}`);
                       }
 
@@ -1600,9 +1686,9 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         : undefined;
 
                       const empreendimentoContexto =
-                        contatoProspeccao.campanhaOrigem?.empreendimento?.nome
-                        || contatoProspeccao.campanhaOrigem?.nomeEmpreendimento
-                        || contatoProspeccao.nomeEdificio
+                        leadDados.campanhaOrigem?.empreendimento?.nome
+                        || leadDados.campanhaOrigem?.nomeEmpreendimento
+                        || leadDados.nomeEdificio
                         || '';
 
                     // Fatos RAG permanecem separados de perfil, briefing e historico.
@@ -1615,12 +1701,12 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       try {
                         const ragResult = await withRagTimeout(ragConversasService.buscarContextoRelevante(
                           tenantId,
-                          contatoProspeccao.id,
+                          leadIdCanonico,
                           queryRag,
                           ['objecao_superada', 'script_eficaz', 'pergunta_frequente']
                         ), 2500);
 
-                        const selecao = selectRagFacts({ candidates: ragResult.facts || [], tenantId, leadId: contatoProspeccao.id });
+                        const selecao = selectRagFacts({ candidates: ragResult.facts || [], tenantId, leadId: leadIdCanonico });
                         fatosRagSelecionados = selecao.facts;
                         recordRagSelection(selecao);
                         recordRagRecovery(ragResult.degraded ? 'degraded' : selecao.facts.length ? 'success' : 'empty');
@@ -1637,28 +1723,28 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       let resposta: string | undefined;
 
                     if (!usarOrquestrador) {
-                      registrarIgnorado(telefone, 'outbound_only:orchestrator_desativado', contatoProspeccao.id);
+                      registrarIgnorado(telefone, 'outbound_only:orchestrator_desativado', leadIdCanonico);
                       return true;
                     }
 
                     const configOrq = await buscarConfiguracaoTenant(tenantId || '');
-                    const contextoOrq = await buscarContextoConversa(telefone, tenantId || '');
+                    const contextoOrq = await buscarContextoConversa(telefone, tenantId || '', leadIdCanonico);
 
                     if (!configOrq) {
-                      registrarIgnorado(telefone, 'outbound_only:config_orchestrator_nao_encontrada', contatoProspeccao.id);
+                      registrarIgnorado(telefone, 'outbound_only:config_orchestrator_nao_encontrada', leadIdCanonico);
                       return true;
                     }
 
-                    const empreendimentoBriefing = contatoProspeccao.campanhaOrigem?.empreendimento as any;
+                    const empreendimentoBriefing = leadDados.campanhaOrigem?.empreendimento as any;
                     const briefingEmpreendimento = empreendimentoBriefing?.briefingCompleto
-                      || contatoProspeccao.campanhaOrigem?.briefingCompleto
+                      || leadDados.campanhaOrigem?.briefingCompleto
                       || undefined;
                     if (briefingEmpreendimento) {
                       configOrq.briefingEmpreendimento = briefingEmpreendimento;
                     }
 
                       const sinaisTurnoHumano = extrairSinaisNegociacaoHumana(textoConsolidado);
-                      const sinaisContextoHumano = extrairSinaisNegociacaoHumana((contatoProspeccao as any).observacoes || '');
+                      const sinaisContextoHumano = extrairSinaisNegociacaoHumana((leadDados as any).observacoes || '');
                       const tipoAutorizacaoContexto = contextoOrq?.tipoAutorizacao
                         || sinaisTurnoHumano.tipoAutorizacao
                         || sinaisContextoHumano.tipoAutorizacao;
@@ -1691,10 +1777,10 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         configOrq,
                         {
                           ...contextoOrq,
-                          contatoId: contatoProspeccao.id,
-                          leadId: contatoProspeccao.id,
+                          contatoId: leadIdCanonico,
+                          leadId: leadIdCanonico,
                           durableExecutionId: processamentoAgendado ? `inbound-batch:${lote.id}` : undefined,
-                          statusLead: contatoProspeccao.lead?.status || undefined,
+                          statusLead: leadDados.status || undefined,
                           empreendimento: empreendimentoContexto,
                           tipoAutorizacao: tipoAutorizacaoContexto,
                           comissaoAcordada: comissaoAcordadaContexto,
@@ -1733,16 +1819,16 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       console.log('[ORQUESTRADOR] Processamento concluído');
 
                       // Fallback técnico:
-                      // No modelo unificado, contatoProspeccao já é um Lead (statusProspeccao != null).
+                      // No modelo unificado, o Lead já é canônico.
                       // A auto-conversão não se aplica; apenas qualificação/atualização pode ocorrer.
                       const leadPosOrquestrador = await prisma.lead.findUnique({
-                        where: { id: contatoProspeccao.id },
+                        where: { id: leadIdCanonico },
                         select: { id: true, statusProspeccao: true }
                       });
                       // Como o registro já é um Lead, virouLead=true e leadId=seu próprio id,
                       // portanto deveExecutarFallbackConversao retornará false (sem ação necessária).
                       if (!leadPosOrquestrador) {
-                        const chaveFallbackConversao = `fallback-conversao:${contatoProspeccao.id}`;
+                        const chaveFallbackConversao = `fallback-conversao:${leadIdCanonico}`;
                         const lockFallbackConversao = await adquirirMutexContato(chaveFallbackConversao);
                         const podeExecutarFallback = deveExecutarFallbackConversao({
                           virouLead: false,
@@ -1752,23 +1838,24 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         if (podeExecutarFallback) {
                           try {
                             await garantirConversaoAutomaticaSeElegivel({
-                              contatoId: contatoProspeccao.id,
+                              contatoId: leadIdCanonico,
                               textoConversa: textoConsolidado
                             });
                           } finally {
                             await liberarMutexContato(chaveFallbackConversao);
                           }
                         } else {
-                          console.info(`[OBS] conversion_race_prevented contatoId=${contatoProspeccao.id} lockAcquired=${lockFallbackConversao}`);
+                          console.info(`[OBS] conversion_race_prevented contatoId=${leadIdCanonico} lockAcquired=${lockFallbackConversao}`);
                         }
                       }
-                      const leadIdAtualizado = leadPosOrquestrador?.id || contatoProspeccao.id || undefined;
+                      const leadIdAtualizado = leadPosOrquestrador?.id || leadIdCanonico || undefined;
                       if (leadIdAtualizado) {
                         if (processamentoAgendado) await assertFencing();
                         await garantirAtualizacaoLeadBasicaSeElegivel({
-                          contatoId: contatoProspeccao.id,
+                          contatoId: leadIdCanonico,
                           leadId: leadIdAtualizado,
-                          textoConversa: textoConsolidado
+                          textoConversa: textoConsolidado,
+                          ferramentasExecutadasComSucesso: resultado.ferramentasExecutadasComSucesso,
                         });
                       }
 
@@ -1780,7 +1867,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       });
                       resposta = respostaPreparada.resposta;
                       if (respostaPreparada.fallbackAplicado) {
-                        registrarIgnorado(telefone, 'fallback_sem_silencio:orquestrador_sem_resposta', contatoProspeccao.id);
+                        registrarIgnorado(telefone, 'fallback_sem_silencio:orquestrador_sem_resposta', leadIdCanonico);
                       }
                       const { leadPediuDocumentoAutorizacao, respostaOfereceuEmail } = respostaPreparada;
 
@@ -1797,7 +1884,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         const documentoEnviado = documentoJaConfirmado || await enviarDocumentoComRetry({
                           instanceName,
                           telefone,
-                          contatoId: contatoProspeccao.id,
+                          contatoId: leadIdCanonico,
                           media: AUTORIZACAO_VENDA_DOC_URL,
                           fileName: AUTORIZACAO_VENDA_DOC_NOME,
                           mimeType: 'application/pdf',
@@ -1809,7 +1896,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                           if (processamentoAgendado && !documentoJaConfirmado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'DOCUMENTO_AUTORIZACAO');
                           if (processamentoAgendado) await assertFencing();
                           await salvarMensagemProspeccao({
-                            contatoId: contatoProspeccao.id,
+                            contatoId: leadIdCanonico,
                             direcao: 'SAIDA',
                             conteudo: `[Documento enviado pelo agente] ${AUTORIZACAO_VENDA_DOC_NOME}`,
                             tipo: 'DOCUMENTO',
@@ -1835,7 +1922,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       resposta = decisaoCanal.resposta;
                       const enviarAudioNesteTurno = decisaoCanal.enviarAudio;
                       if (decisaoCanal.pedirPermissaoAudio) {
-                        salvarPreferenciaAudioContato(contatoProspeccao.id, 'PERGUNTADO')
+                        salvarPreferenciaAudioContato(leadIdCanonico, 'PERGUNTADO')
                           .catch(() => {/* silencioso */});
                       }
 
@@ -1843,11 +1930,11 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       if (resposta) {
                         if (processamentoAgendado) await assertFencing();
                         if (!(await deveEnviarResposta({
-                          contatoId: contatoProspeccao.id,
-                          leadId: contatoProspeccao.leadId || undefined,
+                          contatoId: leadIdCanonico,
+                          leadId: leadIdCanonico,
                           resposta
                         }))) {
-                          registrarIgnorado(telefone, 'resposta_duplicada_janela_curta', contatoProspeccao.id);
+                          registrarIgnorado(telefone, 'resposta_duplicada_janela_curta', leadIdCanonico);
                           return true;
                         }
 
@@ -1874,7 +1961,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                               instanceName,
                               telefone,
                               audioBase64,
-                              contatoId: contatoProspeccao.id,
+                              contatoId: leadIdCanonico,
                               idempotencyKey: intencaoAudio?.chaveIdempotencia,
                             });
                             if (envioOk && processamentoAgendado && !audioJaConfirmado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_AUDIO');
@@ -1896,7 +1983,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                             instanceName,
                             telefone,
                             resposta,
-                            contatoId: contatoProspeccao.id,
+                            contatoId: leadIdCanonico,
                             idempotencyKey: intencaoTexto?.chaveIdempotencia,
                           });
                           if (envioOk && processamentoAgendado && !textoJaConfirmado) await concluirEfeitoLoteInbound(loteIdAgendado!, fencingTokenAgendado, 'RESPOSTA_TEXTO');
@@ -1904,15 +1991,15 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         }
 
                         if (!envioOk) {
-                          registrarIgnorado(telefone, 'falha_envio_whatsapp', contatoProspeccao.id);
+                          registrarIgnorado(telefone, 'falha_envio_whatsapp', leadIdCanonico);
                           return false;
                         }
 
                         if (processamentoAgendado) await assertFencing();
-                        await registrarResposta(contatoProspeccao.id);
+                        await registrarResposta(leadIdCanonico);
                         if (processamentoAgendado) await assertFencing();
                         await salvarMensagemProspeccao({
-                          contatoId: contatoProspeccao.id,
+                          contatoId: leadIdCanonico,
                           direcao: 'SAIDA',
                           conteudo: enviadoComoAudio ? `[Áudio enviado pelo agente] ${resposta}` : resposta,
                           tipo: enviadoComoAudio ? 'AUDIO' : 'TEXTO',
@@ -1920,12 +2007,12 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         });
                       }
                     } finally {
-                      await finalizarProcessamentoSerializado(contatoProspeccao.id, assinaturaLote, deveMarcarLoteComoProcessado);
+                      await finalizarProcessamentoSerializado(leadIdCanonico, assinaturaLote, deveMarcarLoteComoProcessado);
                     }
 
                     // Se chegaram novas mensagens enquanto este lote era processado,
                     // mantém apenas as pendentes para uma nova rodada do debounce.
-                    const filaPosProcessamento = filasDebounce.get(contatoProspeccao.id);
+                    const filaPosProcessamento = filasDebounce.get(leadIdCanonico);
                     if (filaPosProcessamento) {
                       const quantidadeProcessada = mensagensAcumuladas.length;
                       if (filaPosProcessamento.mensagens.length > quantidadeProcessada) {
@@ -1951,7 +2038,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                 if (!processamentoAgendado) {
                   await registrarFragmentoInbound({
                     tenantId: sessaoConfiavel.tenantId,
-                    leadId: contatoProspeccao.id,
+                    leadId: leadIdCanonico,
                     webhookEventoId: eventoTecnicoId,
                     messageId,
                     conteudo: mensagemPendente.conteudo,
@@ -1971,7 +2058,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
 
                 const ownerLote = ownerLoteAgendado!;
                 const lote = await obterLoteReivindicado(loteIdAgendado!, ownerLote, fencingTokenAgendado);
-                if (lote.tenantId !== sessaoConfiavel.tenantId || lote.leadId !== contatoProspeccao.id) {
+                if (lote.tenantId !== sessaoConfiavel.tenantId || lote.leadId !== leadIdCanonico) {
                   throw new Error('TENANT_MISMATCH: lote agendado nao pertence a sessao confiavel');
                 }
                 let leaseValido = true;
@@ -1981,7 +2068,7 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                 };
                 {
                     const leadAtual = await prisma.lead.findFirst({
-                      where: { id: contatoProspeccao.id, tenantId: sessaoConfiavel.tenantId },
+                      where: { id: leadIdCanonico, tenantId: sessaoConfiavel.tenantId },
                       select: { modoAtendimento: true, statusProspeccao: true },
                     });
                     if (!leadAtual) throw new Error('TENANT_MISMATCH: Lead ausente no momento do claim');
@@ -2006,10 +2093,10 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                         nomeArquivoMidia: metadata.nomeArquivoMidia,
                       };
                     });
-                    filasDebounce.set(contatoProspeccao.id, {
+                    filasDebounce.set(leadIdCanonico, {
                       mensagens: mensagensPersistidas,
                       timer: null,
-                      contatoData: contatoProspeccao,
+                      contatoData: leadDados,
                       telefone,
                       reagendado: false,
                     });
@@ -2033,13 +2120,12 @@ export async function processarWebhookEvolution(req: Request, res: Response): Pr
                       throw error;
                     } finally {
                       clearInterval(heartbeatLote);
-                      filasDebounce.delete(contatoProspeccao.id);
+                      filasDebounce.delete(leadIdCanonico);
                     }
                 }
 
                 // IMPORTANTÍSSIMO: Continue aqui impede que caia no fluxo de Lead Inbound
                 continue;
-              }
 
               // ====================================
               // 2. FLUXO NORMAL: LEAD INBOUND (Se não for prospecção)

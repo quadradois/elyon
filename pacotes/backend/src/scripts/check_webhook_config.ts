@@ -7,16 +7,15 @@ dotenv.config({ path: './.env' });
 
 async function checkWebhook() {
   const apiUrl = process.env.EVOLUTION_API_URL;
-  const apiKey = process.env.EVOLUTION_API_KEY;
+  const apiKey = process.env.EVOLUTION_INSTANCE_TOKEN;
   const instanceName = process.env.EVOLUTION_INSTANCE_NAME;
 
   if (!apiUrl || !apiKey || !instanceName) {
-    console.error('Erro: Variáveis de ambiente não encontradas.');
+    console.error('Erro: configuração de instância ausente.');
     return;
   }
 
-  console.log(`Verificando webhook para instância: ${instanceName}`);
-  console.log(`URL da API: ${apiUrl}`);
+  console.log('Verificando webhook da instância configurada');
 
   try {
     const response = await axios.get(
@@ -28,20 +27,16 @@ async function checkWebhook() {
       }
     );
 
-    console.log('--- Configuração Atual do Webhook ---');
-    console.log(JSON.stringify(response.data, null, 2));
-    
     if (response.data.enabled) {
-        console.log(`\n✅ Webhook ATIVADO na URL: ${response.data.url}`);
+        console.log('Webhook ATIVADO');
     } else {
         console.log('\n❌ Webhook DESATIVADO.');
     }
 
   } catch (error: any) {
-    console.error('Erro ao buscar webhook:', error.message);
+    console.error('Erro ao buscar webhook');
     if (error.response) {
       console.error('Status:', error.response.status);
-      console.error('Data:', error.response.data);
     }
   }
 }

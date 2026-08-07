@@ -17,5 +17,10 @@ describe('sanitizarRespostaParaCliente', () => {
     expect(saida.toLowerCase()).not.toContain('duas opções');
     expect(saida.toLowerCase()).not.toContain('contrato simples');
   });
+
+  it('bloqueia planejamento interno em inglês antes do envio ao lead', () => {
+    const entrada = "The user is asking for available times tomorrow. I need to use consultar_horarios_disponiveis. Then I'll present them.";
+    expect(sanitizarRespostaParaCliente(entrada)).toBe('');
+  });
 });
 

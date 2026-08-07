@@ -44,8 +44,11 @@ jest.mock('../../ferramentas/sdr-tools-agents', () => ({
     moverParaFaseTool: 'moverParaFaseTool',
     registrarIndicacaoTool: 'registrarIndicacaoTool',
     atualizarDadosLeadTool: 'atualizarDadosLeadTool',
+    consultarHorariosDisponiveisTool: 'consultarHorariosDisponiveisTool',
+    consultarStatusAgendamentoTool: 'consultarStatusAgendamentoTool',
     agendarAvaliacaoTool: 'agendarAvaliacaoTool',
     agendarReuniaoCloserTool: 'agendarReuniaoCloserTool',
+    cancelarAgendamentoTool: 'cancelarAgendamentoTool',
     encaminharCorretorTool: 'encaminharCorretorTool',
     gerarLinkContratoTool: 'gerarLinkContratoTool',
     salvarDadosImovelTool: 'salvarDadosImovelTool',
@@ -94,7 +97,7 @@ describe('criarSdrAgent', () => {
         expect(criarModeloBYOK).toHaveBeenCalledWith(baseConfig);
     });
 
-    it('inclui todas as 11 tools do SDR unificado', () => {
+    it('inclui todas as 14 tools do SDR unificado', () => {
         const agent = criarSdrAgent(baseConfig);
         expect(agent.tools).toContain('converterParaLeadTool');
         expect(agent.tools).toContain('qualificarLeadTool');
@@ -103,7 +106,10 @@ describe('criarSdrAgent', () => {
         expect(agent.tools).toContain('moverParaFaseTool');
         expect(agent.tools).toContain('registrarIndicacaoTool');
         expect(agent.tools).toContain('atualizarDadosLeadTool');
+        expect(agent.tools).toContain('consultarHorariosDisponiveisTool');
+        expect(agent.tools).toContain('consultarStatusAgendamentoTool');
         expect(agent.tools).toContain('agendarReuniaoCloserTool');
+        expect(agent.tools).toContain('cancelarAgendamentoTool');
         expect(agent.tools).toContain('enviarLinkAgendamentoTool');
         expect(agent.tools).toContain('consultarPrecoMercadoTool');
         expect(agent.tools).toContain('lerSkillTool');

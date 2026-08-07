@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ELYON safe storage maintenance every hour
+
+[Timer]
+OnCalendar=*-*-* *:40:00
+Persistent=true
+AccuracySec=2min
+Unit=elyon-storage-maintenance.service
+
+[Install]
+WantedBy=timers.target

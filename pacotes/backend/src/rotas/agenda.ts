@@ -4,39 +4,101 @@ import { prisma } from '../lib/db';
 import { z } from 'zod';
 import { verificarAutenticacao } from '../middleware/middleware-auth';
 import { googleCalendarService } from '../servicos/google-calendar';
-import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda } from '../servicos/coerencia-agenda-estado';
+import { AGENDA_COMMERCIAL_POLICY_VERSION, executarComandoAgenda, type AgendaCommand } from '../servicos/coerencia-agenda-estado';
+import { obterAgendaPolicy, type AgendaPolicyAction } from '../servicos/agenda-policy';
+import { obterAgendaLifecycleRollout, type AgendaLifecycleRollout } from '../servicos/agenda-lifecycle-rollout';
+import { agendaLifecycleExpiredPending, agendaLifecycleOperationalQueueAgeSeconds } from '../observabilidade/agenda-comercial-metrics';
+import { formatarDataHoraAgenda, montarMensagemLigacaoConfirmada } from '../servicos/notificacao-agendamento';
+import {
+    atorPolicyAgenda,
+    filtrarAcoesAgendaPorAcesso,
+    obterEscopoLeituraAgenda,
+    podeExecutarComandoAgenda,
+} from '../servicos/agenda-access-policy';
+import { remanejarCorretorAtividade } from '../servicos/remanejamento-corretor';
 
 const router = Router();
 
-function formatarDataHoraPtBr(data?: Date | null): string {
-    if (!data) return 'data a confirmar';
-    return new Date(data).toLocaleDateString('pt-BR', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+const LEGACY_VISIBLE_ACTIONS: AgendaPolicyAction[] = ['CANCELAR', 'REAGENDAR'];
+
+function usuarioPodeAlterarAgenda(papel: string | undefined): boolean {
+    return papel !== 'VISUALIZADOR';
 }
 
-async function enviarWhatsappAgenda(params: {
-    tenantId: string;
-    telefone?: string | null;
-    mensagem: string;
-}) {
-    if (!params.telefone) return;
-    const sessaoWhatsapp = await prisma.sessaoWhatsapp.findFirst({
-        where: { tenantId: params.tenantId, status: 'CONECTADO' }
-    });
-    if (!sessaoWhatsapp) return;
-
-    try {
-        const { getWhatsAppService } = await import('../servicos/whatsapp');
-        const whatsapp = getWhatsAppService(sessaoWhatsapp.instanceName);
-        await whatsapp.enviarMensagemTexto(params.telefone, params.mensagem);
-    } catch (error) {
-        console.error('[Agenda] Erro ao enviar WhatsApp:', error);
+function obterAcoesVisiveis(
+    policyActions: AgendaPolicyAction[],
+    rollout: AgendaLifecycleRollout,
+    access: { papel: string; usuarioId: string; responsavelId?: string | null },
+): AgendaPolicyAction[] {
+    let visibleActions: AgendaPolicyAction[];
+    if (rollout.commandsEnabled) visibleActions = policyActions;
+    else if (rollout.policyEnabled) {
+        visibleActions = policyActions.filter((action) => action === 'CANCELAR' || action === 'REAGENDAR');
+    } else {
+        visibleActions = LEGACY_VISIBLE_ACTIONS;
     }
+    return filtrarAcoesAgendaPorAcesso(visibleActions, access);
+}
+
+async function obterAgoraBanco(): Promise<Date> {
+    const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT CURRENT_TIMESTAMP AS "now"`;
+    return clock.now;
+}
+
+const AgendaCommandSchema = z.object({
+    command: z.enum(['SOLICITAR', 'PROPOR', 'RECUSAR', 'CONFIRMAR_ATRIBUICAO', 'CANCELAR', 'REAGENDAR', 'REALIZAR', 'NAO_COMPARECEU', 'CORRIGIR']),
+    expectedVersion: z.number().int().nonnegative(),
+    reasonCode: z.string().trim().min(1).max(100),
+    justification: z.string().trim().max(500).optional(),
+    channel: z.enum(['WHATSAPP', 'PAINEL', 'LINK_PUBLICO', 'JOB', 'INTEGRACAO']),
+    scheduledFor: z.string().datetime().optional(),
+    responsibleId: z.string().uuid().optional(),
+    correctedStatus: z.enum(['REALIZADO', 'NAO_COMPARECEU', 'CANCELADO']).optional(),
+    leadManifestation: z.enum(['HORARIO_ESCOLHIDO', 'HORARIO_ACEITO']).optional(),
+    absentParty: z.enum(['LEAD', 'ESPECIALISTA']).optional(),
+    notifyLead: z.boolean().optional().default(true),
+});
+
+async function obterVisaoAgenda(
+    id: string,
+    tenantId: string,
+    usuario: { id: string; papel: string },
+) {
+    const atividade = await prisma.atividade.findFirst({
+        where: { id, lead: { tenantId } },
+        include: { lead: { select: { id: true } } },
+    });
+    if (!atividade) return null;
+    const scope = obterEscopoLeituraAgenda({ papel: usuario.papel, usuarioId: usuario.id });
+    if (scope.tipo === 'PROPRIA' && atividade.corretorAtualId !== scope.responsavelId) return null;
+    const agora = await obterAgoraBanco();
+    const rollout = await obterAgendaLifecycleRollout(tenantId, agora);
+    const policy = obterAgendaPolicy({
+        status: atividade.statusAgendamento,
+        agendadoPara: atividade.agendadoPara,
+        duracaoMinutos: atividade.duracao,
+        agora,
+        ator: atorPolicyAgenda(usuario.papel),
+    });
+    return {
+        id: atividade.id,
+        leadId: atividade.lead.id,
+        status: atividade.statusAgendamento,
+        temporalPhase: policy.faseTemporal,
+        version: atividade.versao,
+        allowedActions: obterAcoesVisiveis(policy.allowedActions, rollout, {
+            papel: usuario.papel,
+            usuarioId: usuario.id,
+            responsavelId: atividade.corretorAtualId,
+        }),
+        blockedReasons: !rollout.policyEnabled || policy.reasonCode === 'ALLOWED'
+            ? {} : { lifecycle: policy.reasonCode },
+        lifecyclePolicyEnabled: rollout.policyEnabled,
+        lifecycleCommandsEnabled: rollout.commandsEnabled,
+        scheduledFor: atividade.agendadoPara,
+        durationMinutes: atividade.duracao,
+        responsibleId: atividade.corretorAtualId,
+    };
 }
 
 // ====================================
@@ -46,6 +108,8 @@ router.get('/', verificarAutenticacao, async (req, res) => {
     try {
         const tenantId = req.tenantId; // Injetado pelo middleware
         if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        const usuario = req.usuario!;
+        const scope = obterEscopoLeituraAgenda({ papel: usuario.papel, usuarioId: usuario.id });
 
         // Filtros de data (obrigatórios para boa performance)
         const start = req.query.start ? new Date(req.query.start as string) : new Date();
@@ -61,7 +125,8 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                     lte: end
                 },
                 // Exclui cancelados
-                statusAgendamento: { not: 'CANCELADO' }
+                statusAgendamento: { not: 'CANCELADO' },
+                ...(scope.tipo === 'PROPRIA' ? { corretorAtualId: scope.responsavelId } : {}),
             },
             include: {
                 lead: {
@@ -71,8 +136,58 @@ router.get('/', verificarAutenticacao, async (req, res) => {
             orderBy: { agendadoPara: 'asc' }
         });
 
+        const corretorIds = [...new Set(
+            atividades.map(atividade => atividade.corretorAtualId).filter(Boolean)
+        )] as string[];
+        const corretores = corretorIds.length > 0
+            ? await prisma.usuario.findMany({
+                where: { tenantId, id: { in: corretorIds } },
+                select: { id: true, nome: true }
+            })
+            : [];
+        const nomeCorretorPorId = new Map(corretores.map(corretor => [corretor.id, corretor.nome]));
+
+        const atividadesComDesfecho = atividades
+            .filter(atividade => ['REALIZADO', 'NAO_COMPARECEU', 'CANCELADO'].includes(atividade.statusAgendamento || ''))
+            .map(atividade => atividade.id);
+        const milestonesDesfecho = atividadesComDesfecho.length > 0
+            ? await prisma.milestoneAgenda.findMany({
+                where: {
+                    tenantId,
+                    atividadeId: { in: atividadesComDesfecho },
+                    tipo: { in: ['VISITA_REALIZADA', 'VISITA_NAO_COMPARECEU', 'VISITA_CANCELADA', 'CORRECAO_ADMINISTRATIVA'] },
+                },
+                orderBy: { ocorridoEm: 'desc' },
+                select: {
+                    atividadeId: true,
+                    ator: true,
+                    motivo: true,
+                    parteAusente: true,
+                    ocorridoEm: true,
+                },
+            })
+            : [];
+        const ultimoDesfechoPorAtividade = new Map<string, typeof milestonesDesfecho[number]>();
+        for (const milestone of milestonesDesfecho) {
+            if (!ultimoDesfechoPorAtividade.has(milestone.atividadeId)) {
+                ultimoDesfechoPorAtividade.set(milestone.atividadeId, milestone);
+            }
+        }
+
         // Formatar para FullCalendar / Frontend Standard
-        const eventos = atividades.map(a => ({
+        const agora = await obterAgoraBanco();
+        const rollout = await obterAgendaLifecycleRollout(tenantId, agora);
+        const atorPolicy = atorPolicyAgenda(usuario.papel);
+        const eventos = atividades.map(a => {
+            const ultimoDesfecho = ultimoDesfechoPorAtividade.get(a.id);
+            const policy = obterAgendaPolicy({
+                status: a.statusAgendamento,
+                agendadoPara: a.agendadoPara,
+                duracaoMinutos: a.duracao,
+                agora,
+                ator: atorPolicy,
+            });
+            return ({
             id: a.id,
             title: a.titulo, // Ex: "Visita com João", "Bloqueio"
             start: a.agendadoPara,
@@ -85,7 +200,27 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                 leadNome: a.lead?.nome || 'Desconhecido',
                 leadTelefone: a.lead?.telefone || '',
                 descricao: a.descricao,
-                versao: a.versao
+                especialistaId: a.corretorAtualId || null,
+                especialistaNome: a.corretorAtualId
+                    ? nomeCorretorPorId.get(a.corretorAtualId) || null
+                    : null,
+                statusConfirmacaoCorretor: a.statusConfirmacaoCorretor || null,
+                versao: a.versao,
+                faseTemporal: policy.faseTemporal,
+                allowedActions: obterAcoesVisiveis(policy.allowedActions, rollout, {
+                    papel: usuario.papel,
+                    usuarioId: usuario.id,
+                    responsavelId: a.corretorAtualId,
+                }),
+                policyReasonCode: rollout.policyEnabled ? policy.reasonCode : 'LEGACY_COMPATIBILITY',
+                lifecyclePolicyEnabled: rollout.policyEnabled,
+                lifecycleCommandsEnabled: rollout.commandsEnabled,
+                resultadoRegistradoEm: ultimoDesfecho?.ocorridoEm || a.completadoEm || a.canceladoEm || null,
+                resultadoRegistradoPor: ultimoDesfecho?.ator || a.canceladoPor || null,
+                resultadoMotivo: ultimoDesfecho?.motivo || a.motivoCancelamento || a.resultado || null,
+                parteAusente: ultimoDesfecho?.parteAusente === 'CORRETOR'
+                    ? 'ESPECIALISTA'
+                    : ultimoDesfecho?.parteAusente || null,
             },
             // Color coding básico
             backgroundColor:
@@ -93,7 +228,8 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                     a.tipo === 'AVALIACAO' ? '#1890ff' :        // Azul para visitas/avaliação
                         a.tipo === 'REUNIAO' ? '#52c41a' :          // Verde para reuniões
                             '#faad14',                                  // Amarelo para tarefas/outros
-        }));
+            });
+        });
 
         res.json(eventos);
 
@@ -116,6 +252,7 @@ router.post('/bloqueio', verificarAutenticacao, async (req, res) => {
     try {
         const tenantId = req.tenantId;
         if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        if (!usuarioPodeAlterarAgenda(req.usuario?.papel)) return responderErro(res, 403, 'Agenda disponível somente para leitura');
 
         const body = BloqueioSchema.parse(req.body);
         const dataInicio = new Date(body.inicio);
@@ -212,6 +349,7 @@ router.delete('/bloqueio/:id', verificarAutenticacao, async (req, res) => {
         const { id } = req.params;
         const tenantId = req.tenantId;
         if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        if (!usuarioPodeAlterarAgenda(req.usuario?.papel)) return responderErro(res, 403, 'Agenda disponível somente para leitura');
 
         // Verificar se bloqueio existe e pertence ao tenant
         const bloqueio = await prisma.atividade.findFirst({
@@ -227,8 +365,18 @@ router.delete('/bloqueio/:id', verificarAutenticacao, async (req, res) => {
             return responderErro(res, 403, 'Sem permissão');
         }
 
-        // Deletar o bloqueio
-        await prisma.atividade.delete({ where: { id } });
+        // Bloqueios também preservam histórico: a remoção operacional é um cancelamento lógico.
+        await prisma.atividade.update({
+            where: { id },
+            data: {
+                statusAgendamento: 'CANCELADO',
+                canceladoPor: req.usuario?.email || 'operador',
+                canceladoEm: new Date(),
+                motivoCancelamento: 'Bloqueio removido pelo operador',
+                versao: { increment: 1 },
+                estadoAgendaAtualizadoEm: new Date(),
+            },
+        });
 
         res.json({ sucesso: true, mensagem: 'Bloqueio excluído com sucesso' });
     } catch (error) {
@@ -281,6 +429,242 @@ router.get('/conflitos', verificarAutenticacao, async (req, res) => {
 // ====================================
 // POST /api/agenda/:id/aprovar - Aprovar Agendamento
 // ====================================
+router.get('/:id([0-9a-fA-F-]{36})', verificarAutenticacao, async (req, res) => {
+    const tenantId = req.tenantId;
+    if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+    const appointment = await obterVisaoAgenda(req.params.id, tenantId, req.usuario!);
+    if (!appointment) return responderErro(res, 404, 'Agendamento não encontrado');
+    return res.json(appointment);
+});
+
+router.get('/pendencias/vencidas', verificarAutenticacao, async (req, res) => {
+    try {
+        const tenantId = req.tenantId;
+        if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        const usuario = req.usuario!;
+        const scope = obterEscopoLeituraAgenda({ papel: usuario.papel, usuarioId: usuario.id });
+        const agora = await obterAgoraBanco();
+        const rollout = await obterAgendaLifecycleRollout(tenantId, agora);
+        if (!rollout.commandsEnabled) return res.json([]);
+        const atividades = await prisma.atividade.findMany({
+            where: {
+                lead: { tenantId },
+                tipo: { in: ['AVALIACAO', 'REUNIAO'] },
+                statusAgendamento: { in: ['PENDENTE', 'SOLICITADO', 'PROPOSTO', 'CONFIRMADO'] },
+                agendadoPara: { lt: agora },
+                ...(scope.tipo === 'PROPRIA' ? { corretorAtualId: scope.responsavelId } : {}),
+            },
+            include: { lead: { select: { nome: true } } },
+            orderBy: { agendadoPara: 'asc' },
+        });
+        const feedbacksPendentes = await prisma.feedbackPosAtendimentoAgenda.findMany({
+            where: {
+                tenantId,
+                status: 'PENDENCIA_GESTOR',
+                ...(scope.tipo === 'PROPRIA' ? { usuarioId: scope.responsavelId } : {}),
+            },
+            include: { atividade: { include: { lead: { select: { nome: true } } } } },
+            orderBy: { expiraEm: 'asc' },
+        });
+        const atividadesComFeedback = new Set(feedbacksPendentes.map((item) => item.atividadeId));
+        const atividadesSemFeedbackDuplicado = atividades.filter((item) => !atividadesComFeedback.has(item.id));
+        const ator = atorPolicyAgenda(usuario.papel);
+        if (scope.tipo === 'TENANT') {
+            agendaLifecycleExpiredPending.set(atividadesSemFeedbackDuplicado.length + feedbacksPendentes.length);
+            const oldest = [...atividadesSemFeedbackDuplicado.map((item) => item.agendadoPara),
+                ...feedbacksPendentes.map((item) => item.expiraEm)]
+                .filter((item): item is Date => Boolean(item)).sort((a, b) => a.getTime() - b.getTime())[0];
+            agendaLifecycleOperationalQueueAgeSeconds.set(oldest
+                ? Math.max(0, Math.floor((agora.getTime() - oldest.getTime()) / 1_000)) : 0);
+        }
+        const pendenciasAtividade = atividadesSemFeedbackDuplicado.map((atividade) => {
+            const policy = obterAgendaPolicy({
+                status: atividade.statusAgendamento, agendadoPara: atividade.agendadoPara,
+                duracaoMinutos: atividade.duracao, agora, ator,
+            });
+            return {
+                id: atividade.id,
+                leadNome: atividade.lead.nome,
+                scheduledFor: atividade.agendadoPara,
+                status: atividade.statusAgendamento,
+                version: atividade.versao,
+                temporalPhase: policy.faseTemporal,
+                allowedActions: filtrarAcoesAgendaPorAcesso(policy.allowedActions, {
+                    papel: usuario.papel,
+                    usuarioId: usuario.id,
+                    responsavelId: atividade.corretorAtualId,
+                }),
+                pendingAgeMinutes: atividade.agendadoPara
+                    ? Math.max(0, Math.floor((agora.getTime() - atividade.agendadoPara.getTime()) / 60_000))
+                    : 0,
+                responsibleId: atividade.corretorAtualId,
+                operationalReason: atividade.corretorAtualId ? 'OUTCOME_PENDING' : 'SPECIALIST_PENDING',
+            };
+        });
+        const pendenciasFeedback = feedbacksPendentes.map((feedback) => {
+            const policy = obterAgendaPolicy({
+                status: feedback.atividade.statusAgendamento,
+                agendadoPara: feedback.atividade.agendadoPara,
+                duracaoMinutos: feedback.atividade.duracao,
+                agora,
+                ator,
+            });
+            return {
+                id: feedback.atividade.id,
+                leadNome: feedback.atividade.lead.nome,
+                scheduledFor: feedback.atividade.agendadoPara,
+                status: feedback.atividade.statusAgendamento,
+                version: feedback.atividade.versao,
+                temporalPhase: policy.faseTemporal,
+                allowedActions: filtrarAcoesAgendaPorAcesso(policy.allowedActions, {
+                    papel: usuario.papel,
+                    usuarioId: usuario.id,
+                    responsavelId: feedback.atividade.corretorAtualId,
+                }),
+                pendingAgeMinutes: Math.max(0, Math.floor((agora.getTime() - (feedback.expiraEm || feedback.atualizadoEm).getTime()) / 60_000)),
+                responsibleId: feedback.usuarioId,
+                operationalReason: 'FEEDBACK_SPECIALIST_PENDING',
+            };
+        });
+        return res.json([...pendenciasFeedback, ...pendenciasAtividade]);
+    } catch (error) {
+        console.error('[Agenda] Erro ao listar pendências vencidas:', error);
+        return responderErro(res, 500, 'Erro interno');
+    }
+});
+
+router.post('/:id/commands', verificarAutenticacao, async (req, res) => {
+    try {
+        const tenantId = req.tenantId;
+        if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        const rollout = await obterAgendaLifecycleRollout(tenantId, await obterAgoraBanco());
+        if (!rollout.commandsEnabled) {
+            return responderErro(res, 404, 'AGENDA_LIFECYCLE_COMMANDS_DISABLED');
+        }
+        const idempotencyKey = req.header('Idempotency-Key')?.trim();
+        if (!idempotencyKey || idempotencyKey.length < 8 || idempotencyKey.length > 128) {
+            return responderErro(res, 400, 'Idempotency-Key inválida');
+        }
+        const body = AgendaCommandSchema.parse(req.body || {});
+        if (body.command === 'CORRIGIR' && !['ADMIN', 'SUPER_ADMIN'].includes(req.usuario?.papel || '')) {
+            return responderErro(res, 403, 'Correção exige papel administrativo');
+        }
+        if (body.command === 'CORRIGIR' && (!body.justification || body.justification.length < 10 || !body.correctedStatus)) {
+            return responderErro(res, 400, 'JUSTIFICATION_REQUIRED');
+        }
+        if (body.command === 'CORRIGIR' && body.correctedStatus === 'NAO_COMPARECEU' && !body.absentParty) {
+            return responderErro(res, 400, 'absentParty é obrigatório para corrigir como não comparecimento');
+        }
+        const atividade = await prisma.atividade.findFirst({
+            where: { id: req.params.id, lead: { tenantId } },
+            select: {
+                id: true,
+                leadId: true,
+                agendadoPara: true,
+                corretorAtualId: true,
+                lead: { select: { nome: true } },
+            },
+        });
+        if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
+        if (!podeExecutarComandoAgenda({
+            papel: req.usuario!.papel,
+            usuarioId: req.usuario!.id,
+            responsavelId: atividade.corretorAtualId,
+            command: body.command,
+        })) {
+            return responderErro(res, 403, 'Ação não autorizada para este usuário e compromisso');
+        }
+        if (body.command === 'NAO_COMPARECEU' && !body.absentParty) {
+            return responderErro(res, 400, 'absentParty é obrigatório para não comparecimento');
+        }
+        const ocorridoEm = new Date();
+        const scheduledFor = body.scheduledFor ? new Date(body.scheduledFor) : undefined;
+        const ator = `${req.usuario!.papel.toLowerCase()}:${req.usuario?.email || 'usuario'}`;
+        const base = {
+            tenantId, leadId: atividade.leadId, atividadeId: atividade.id,
+            requestIdentity: { source: 'MANUAL_API' as const, id: idempotencyKey },
+            ator, origem: `API_AGENDA_${body.channel}`, motivo: body.reasonCode,
+            policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION, ocorridoEm,
+            expectedVersion: body.expectedVersion,
+            correlationId: req.header('x-correlation-id') || idempotencyKey,
+        };
+        let command: AgendaCommand;
+        switch (body.command) {
+            case 'REAGENDAR':
+                if (!scheduledFor) return responderErro(res, 400, 'scheduledFor é obrigatório');
+                command = {
+                    ...base,
+                    operacao: 'REAGENDAR',
+                    novoHorario: scheduledFor,
+                    notificacao: body.notifyLead ? {
+                        tipo: 'REAGENDAMENTO',
+                        mensagem: `📅 *Reagendamento de atendimento*\n\nOlá, ${atividade.lead.nome}.\nSeu atendimento foi reagendado para:\n${formatarDataHoraAgenda(scheduledFor)}\n\nPode me confirmar se esse horário funciona para você?`,
+                    } : undefined,
+                };
+                break;
+            case 'PROPOR':
+                if (!scheduledFor) return responderErro(res, 400, 'scheduledFor é obrigatório');
+                command = { ...base, operacao: 'PROPOR', novoHorario: scheduledFor, manifestacaoLead: 'PROPOSTA_OPERADOR' };
+                break;
+            case 'SOLICITAR':
+                if (!body.leadManifestation) return responderErro(res, 400, 'leadManifestation é obrigatória');
+                command = { ...base, operacao: 'SOLICITAR', novoHorario: scheduledFor, manifestacaoLead: body.leadManifestation };
+                break;
+            case 'CONFIRMAR_ATRIBUICAO':
+                command = { ...base, operacao: 'CONFIRMAR_ATRIBUICAO', responsavelId: body.responsibleId };
+                break;
+            case 'RECUSAR':
+                command = { ...base, operacao: 'RECUSAR' };
+                break;
+            case 'REALIZAR':
+                command = { ...base, operacao: 'REALIZAR' };
+                break;
+            case 'NAO_COMPARECEU':
+                command = { ...base, operacao: 'NO_SHOW', parteAusente: body.absentParty === 'ESPECIALISTA' ? 'CORRETOR' : 'LEAD' };
+                break;
+            case 'CORRIGIR':
+                command = {
+                    ...base,
+                    operacao: 'CORRIGIR',
+                    estadoCorrigido: body.correctedStatus!,
+                    justificativa: body.justification!,
+                    parteAusente: body.absentParty === 'ESPECIALISTA' ? 'CORRETOR' : body.absentParty,
+                };
+                break;
+            default:
+                command = {
+                    ...base,
+                    operacao: 'CANCELAR',
+                    notificacao: body.notifyLead ? {
+                        tipo: 'CANCELAMENTO',
+                        mensagem: `⚠️ *Atualização do agendamento*\n\nOlá, ${atividade.lead.nome}.\nSeu atendimento de ${formatarDataHoraAgenda(atividade.agendadoPara)} foi cancelado.\n\nSe quiser, já te proponho novos horários para reagendar.`,
+                    } : undefined,
+                };
+        }
+        const result = await executarComandoAgenda(command);
+        if (!result.success) {
+            const appointment = await obterVisaoAgenda(atividade.id, tenantId, req.usuario!);
+            return res.status(result.transient ? 503 : 409).json({ code: result.reasonCode, message: result.reasonCode, appointment });
+        }
+        const reassignment = body.command === 'RECUSAR' && !result.replay
+            ? await remanejarCorretorAtividade({ atividadeId: atividade.id, origem: 'RECUSA_EXPLICITA' })
+            : undefined;
+        const resultingId = result.atividadeResultanteId || atividade.id;
+        const resultingAppointment = await obterVisaoAgenda(resultingId, tenantId, req.usuario!);
+        return res.json({
+            applied: !result.replay,
+            replayed: Boolean(result.replay),
+            correlationId: command.correlationId,
+            appointment: resultingAppointment,
+            reassignment,
+        });
+    } catch (error) {
+        if (error instanceof z.ZodError) return responderErro(res, 400, 'Dados inválidos', { detalhes: error.errors });
+        console.error('[Agenda] Erro no comando canônico:', error);
+        return responderErro(res, 500, 'Erro interno ao executar comando');
+    }
+});
+
 router.post('/:id/aprovar', verificarAutenticacao, async (req, res) => {
     try {
         const { id } = req.params;
@@ -306,37 +690,51 @@ router.post('/:id/aprovar', verificarAutenticacao, async (req, res) => {
         if (atividade.lead.tenantId !== tenantId) {
             return responderErro(res, 403, 'Sem permissão para este agendamento');
         }
+        if (!podeExecutarComandoAgenda({
+            papel: req.usuario!.papel,
+            usuarioId: req.usuario!.id,
+            responsavelId: atividade.corretorAtualId,
+            command: 'CONFIRMAR_ATRIBUICAO',
+        })) {
+            return responderErro(res, 403, 'Ação não autorizada para este usuário e compromisso');
+        }
 
-        // 2. Atualizar status para CONFIRMADO
-        const atividadeAtualizada = await prisma.atividade.update({
-            where: { id },
-            data: {
-                statusAgendamento: 'CONFIRMADO',
-                confirmadoPor: req.usuario?.email || 'corretor',
-                confirmadoEm: new Date(),
-                versao: { increment: 1 },
-                estadoAgendaAtualizadoEm: new Date()
-            }
+        if ((atividade as any).statusConfirmacaoCorretor === 'CONFIRMADO') {
+            return res.json({
+                sucesso: true,
+                mensagem: 'Ligação já confirmada anteriormente',
+                atividade
+            });
+        }
+
+        const corretor = (atividade as any).corretorAtualId
+            ? await prisma.usuario.findFirst({
+                where: { id: (atividade as any).corretorAtualId, tenantId },
+                select: { nome: true }
+            })
+            : null;
+        const mensagemConfirmacao = montarMensagemLigacaoConfirmada({
+            leadNome: atividade.lead.nome,
+            agendadoPara: atividade.agendadoPara,
+            especialistaNome: corretor?.nome,
         });
 
-        const mensagemConfirmacao = `✅ *Visita Confirmada!*
-
-Olá, ${atividade.lead.nome}! 
-
-Sua avaliação foi confirmada pelo corretor para:
-📅 ${formatarDataHoraPtBr(atividade.agendadoPara)}
-
-Aguardamos você! Se precisar reagendar, é só me avisar. 🏡`;
-
-        await enviarWhatsappAgenda({
-            tenantId,
-            telefone: atividade.lead.telefone,
-            mensagem: mensagemConfirmacao
+        const result = await executarComandoAgenda({
+            operacao: 'CONFIRMAR_ATRIBUICAO', tenantId, leadId: atividade.lead.id, atividadeId: id,
+            requestIdentity: { source: 'MANUAL_API', id: req.header('Idempotency-Key') || `legacy-approve:${id}:${atividade.versao}` },
+            ator: req.usuario?.email || 'corretor', origem: 'API_AGENDA_LEGACY', motivo: 'Aceite do especialista',
+            policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION, ocorridoEm: new Date(), expectedVersion: atividade.versao,
+            responsavelId: (atividade as any).corretorAtualId || undefined,
+            notificacao: { tipo: 'CONFIRMACAO', mensagem: mensagemConfirmacao },
         });
+        if (!result.success) return responderErro(res, result.transient ? 503 : 409, result.reasonCode);
+        const atividadeAtualizada = await prisma.atividade.findUniqueOrThrow({ where: { id } });
 
         res.json({
             sucesso: true,
-            mensagem: 'Agendamento aprovado com sucesso',
+            mensagem: 'Agendamento aprovado. A notificação foi enfileirada com segurança.',
+            notificacaoLeadEnviada: false,
+            notificacaoRegistradaNoHistorico: false,
             atividade: atividadeAtualizada
         });
 
@@ -367,11 +765,17 @@ router.post('/:id/cancelar', verificarAutenticacao, async (req, res) => {
         });
         if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
         if (atividade.lead.tenantId !== tenantId) return responderErro(res, 403, 'Sem permissão para este agendamento');
+        if (!podeExecutarComandoAgenda({
+            papel: req.usuario!.papel,
+            usuarioId: req.usuario!.id,
+            responsavelId: atividade.corretorAtualId,
+            command: 'CANCELAR',
+        })) return responderErro(res, 403, 'Ação não autorizada para este usuário e compromisso');
 
         const mensagemNotificacao = `⚠️ *Atualização do agendamento*
 
 Olá, ${atividade.lead.nome}.
-Seu atendimento de ${formatarDataHoraPtBr(atividade.agendadoPara)} foi cancelado.${body.motivo ? `\nMotivo: ${body.motivo}` : ''}
+Seu atendimento de ${formatarDataHoraAgenda(atividade.agendadoPara)} foi cancelado.${body.motivo ? `\nMotivo: ${body.motivo}` : ''}
 
 Se quiser, já te proponho novos horários para reagendar.`;
 
@@ -418,12 +822,18 @@ router.post('/:id/reagendar', verificarAutenticacao, async (req, res) => {
         });
         if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
         if (atividade.lead.tenantId !== tenantId) return responderErro(res, 403, 'Sem permissão para este agendamento');
+        if (!podeExecutarComandoAgenda({
+            papel: req.usuario!.papel,
+            usuarioId: req.usuario!.id,
+            responsavelId: atividade.corretorAtualId,
+            command: 'REAGENDAR',
+        })) return responderErro(res, 403, 'Ação não autorizada para este usuário e compromisso');
 
         const mensagemNotificacao = `📅 *Reagendamento de atendimento*
 
 Olá, ${atividade.lead.nome}.
 Seu atendimento foi reagendado para:
-${formatarDataHoraPtBr(novoHorario)}${body.motivo ? `\nMotivo: ${body.motivo}` : ''}
+${formatarDataHoraAgenda(novoHorario)}${body.motivo ? `\nMotivo: ${body.motivo}` : ''}
 
 Pode me confirmar se esse horário funciona para você?`;
 
@@ -467,27 +877,38 @@ router.post('/:id/propor-horario', verificarAutenticacao, async (req, res) => {
         });
         if (!atividade) return responderErro(res, 404, 'Agendamento não encontrado');
         if (atividade.lead.tenantId !== tenantId) return responderErro(res, 403, 'Sem permissão para este agendamento');
-
-        const atividadeAtualizada = await prisma.atividade.update({
-            where: { id },
-            data: {
-                statusAgendamento: 'PENDENTE',
-                descricao: [atividade.descricao, `Horário proposto ao cliente: ${formatarDataHoraPtBr(horarioProposto)}`].filter(Boolean).join(' | '),
-                versao: { increment: 1 },
-                estadoAgendaAtualizadoEm: new Date()
-            }
-        });
+        if (!podeExecutarComandoAgenda({
+            papel: req.usuario!.papel,
+            usuarioId: req.usuario!.id,
+            responsavelId: atividade.corretorAtualId,
+            command: 'PROPOR',
+        })) return responderErro(res, 403, 'Ação não autorizada para este usuário e compromisso');
 
         const mensagem = body.mensagem?.trim() || `Oi, ${atividade.lead.nome}! 😊
 
 Te proponho este novo horário para o atendimento:
-${formatarDataHoraPtBr(horarioProposto)}
+${formatarDataHoraAgenda(horarioProposto)}
 
 Se não funcionar, me fala que te envio outras opções.`;
 
-        await enviarWhatsappAgenda({ tenantId, telefone: atividade.lead.telefone, mensagem });
+        const result = await executarComandoAgenda({
+            operacao: 'PROPOR', tenantId, leadId: atividade.lead.id, atividadeId: id,
+            requestIdentity: { source: 'MANUAL_API', id: req.header('Idempotency-Key') || `legacy-propose:${id}:${atividade.versao}:${horarioProposto.toISOString()}` },
+            ator: req.usuario?.email || 'corretor', origem: 'API_AGENDA_LEGACY', motivo: 'Proposta de horário pelo operador',
+            policyVersion: AGENDA_COMMERCIAL_POLICY_VERSION, ocorridoEm: new Date(), expectedVersion: atividade.versao,
+            novoHorario: horarioProposto, manifestacaoLead: 'PROPOSTA_OPERADOR',
+            notificacao: { tipo: 'SOLICITACAO', mensagem },
+        });
+        if (!result.success) return responderErro(res, result.transient ? 503 : 409, result.reasonCode);
+        const atividadeAtualizada = await prisma.atividade.findUniqueOrThrow({ where: { id } });
 
-        return res.json({ sucesso: true, mensagem: 'Novo horário proposto ao cliente', atividade: atividadeAtualizada });
+        return res.json({
+            sucesso: true,
+            mensagem: 'Novo horário proposto; notificação enfileirada.',
+            notificacaoLeadEnviada: false,
+            notificacaoRegistradaNoHistorico: false,
+            atividade: atividadeAtualizada,
+        });
     } catch (error) {
         console.error('[Agenda] Erro ao propor novo horário:', error);
         if (error instanceof z.ZodError) return responderErro(res, 400, 'Dados inválidos', { detalhes: error.errors });
@@ -541,6 +962,7 @@ router.put('/expediente', verificarAutenticacao, async (req, res) => {
     try {
         const tenantId = req.tenantId;
         if (!tenantId) return responderErro(res, 401, 'Não autorizado');
+        if (!usuarioPodeAlterarAgenda(req.usuario?.papel)) return responderErro(res, 403, 'Agenda disponível somente para leitura');
 
         const { dias, almocoAtivo, almocoInicio, almocoFim } = req.body;
 

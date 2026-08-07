@@ -322,6 +322,27 @@ describe('Google Calendar Service', () => {
             })).rejects.toThrow('Calendar API Error');
         });
 
+        it('repete sem attendees quando a service account não possui DWD', async () => {
+            mockEventsInsert
+                .mockRejectedValueOnce(new Error('Service accounts cannot invite attendees without Domain-Wide Delegation of Authority.'))
+                .mockResolvedValueOnce({
+                    data: {
+                        id: 'evento-sem-convite', htmlLink: 'https://calendar.google.com/event/sem-convite',
+                        summary: 'Reunião', start: {}, end: {}, conferenceData: null,
+                    }
+                });
+
+            const resultado = await criarEventoComMeet({
+                titulo: 'Reunião',
+                dataHoraInicio: new Date('2026-08-01T17:00:00.000Z'),
+                participantes: ['lead@test.com'],
+            });
+
+            expect(resultado.eventoId).toBe('evento-sem-convite');
+            expect(mockEventsInsert).toHaveBeenCalledTimes(2);
+            expect(mockEventsInsert.mock.calls[1][0].requestBody.attendees).toBeUndefined();
+        });
+
         it('inclui observacoesCloser na descrição do evento', async () => {
             mockEventsInsert.mockResolvedValue({
                 data: { id: 'evt', htmlLink: '', summary: '', start: {}, end: {}, conferenceData: null }

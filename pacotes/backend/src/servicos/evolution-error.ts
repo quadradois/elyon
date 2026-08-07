@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export type EvolutionStage = 'instance/create' | 'instance/connect' | 'instance/qr' | 'banco' | 'configuracao';
+export type EvolutionStage = 'instance/create' | 'instance/list' | 'instance/connect' | 'instance/qr' | 'instance/delete' | 'banco' | 'configuracao';
 
 export type EvolutionReasonCode =
   | 'EVOLUTION_AUTH_REJECTED'
@@ -11,6 +11,7 @@ export type EvolutionReasonCode =
   | 'EVOLUTION_UNAVAILABLE'
   | 'EVOLUTION_UPSTREAM_FAILURE'
   | 'WHATSAPP_DATABASE_FAILURE'
+  | 'WHATSAPP_QR_TIMEOUT'
   | 'WHATSAPP_CONNECTION_FAILED';
 
 interface EvolutionFailureContext {

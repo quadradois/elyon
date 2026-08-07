@@ -3,6 +3,8 @@ import type { EstadoConversa } from './conversation-state';
 import type { TipoAgente } from './agent-chain';
 import { sanitizarRespostaParaCliente } from './client-response-sanitizer';
 import { logger } from '../lib/logger';
+import { ehConsultaStatusAgendamento } from '../servicos/intencao-status-agendamento';
+import { ehConsultaDisponibilidadeAgendamento } from '../servicos/intencao-disponibilidade-agendamento';
 
 interface AplicarFiltrosRespostaParams {
   respostaFinal: string;
@@ -12,6 +14,7 @@ interface AplicarFiltrosRespostaParams {
   estadoConversaAtual: EstadoConversa;
   cotLog?: string | null;
   nomesToolsTurno: string[];
+  nomesToolsSucessoTurno?: string[];
   fallbackAplicadoAtual: string;
   ultimaMsgAssistente?: string;
   ultimaMsgLead?: string;
@@ -66,6 +69,59 @@ function aplicarGuardrailLinguagemGovernanca(resposta: string, ultimaMsgLead?: s
     .trim();
 }
 
+function aplicarGuardrailConfirmacaoAgenda(resposta: string, nomesToolsSucessoTurno: string[]): string {
+  const normalizada = normalizarTexto(resposta);
+  const confirmouViaTool = nomesToolsSucessoTurno.some((nome) => /agendar_reuniao_closer/i.test(nome));
+  const mencionaCalendar = /google\s+calendar|calendario|link/.test(normalizada);
+  const alegaReservaAutomatica = /horario\s+(?:fica|ficou|esta)\s+travad|confirmad[oa]\s+automaticamente|especialista\s+ja\s+(?:recebeu|foi\s+avisado)|nao\s+preciso\s+validar/.test(normalizada);
+
+  if (!confirmouViaTool && mencionaCalendar && alegaReservaAutomatica) {
+    return 'O link apenas abre um evento pré-preenchido no Google Calendar; eu não consigo confirmar por aqui se ele foi salvo nem reservar a agenda do especialista. Qual data e horário você escolheu?';
+  }
+  return resposta;
+}
+
+function aplicarGuardrailConsultaStatusAgenda(
+  resposta: string,
+  nomesToolsSucessoTurno: string[],
+  ultimaMsgLead?: string,
+): string {
+  const consultouViaTool = nomesToolsSucessoTurno.some((nome) => /consultar_status_agendamento/i.test(nome));
+  if (ehConsultaStatusAgendamento(ultimaMsgLead) && !consultouViaTool) {
+    return 'Ainda não consultei o status atualizado no sistema. Vou verificar antes de te confirmar.';
+  }
+  return resposta;
+}
+
+function aplicarGuardrailConsultaDisponibilidade(
+  resposta: string,
+  nomesToolsSucessoTurno: string[],
+  ultimaMsgLead?: string,
+): string {
+  const consultouViaTool = nomesToolsSucessoTurno.some(
+    (nome) => /consultar_horarios_disponiveis/i.test(nome)
+  );
+  if (ehConsultaDisponibilidadeAgendamento(ultimaMsgLead) && !consultouViaTool) {
+    return 'Vou consultar agora os horários livres do especialista antes de te oferecer opções.';
+  }
+  return resposta;
+}
+
+function aplicarGuardrailCancelamentoAgenda(resposta: string, nomesToolsSucessoTurno: string[]): string {
+  const normalizada = normalizarTexto(resposta);
+  const possuiEvidenciaViaTool = nomesToolsSucessoTurno.some(
+    (nome) => /cancelar_agendamento|consultar_status_agendamento/i.test(nome)
+  );
+  const alegaCancelamento =
+    /(?:agendamento|horario|atendimento).{0,45}(?:foi|esta|ficou).{0,20}cancelad/.test(normalizada)
+    || /(?:ja\s+)?cancelei|cancelamento.{0,30}(?:feito|concluido|confirmado)/.test(normalizada);
+
+  if (!possuiEvidenciaViaTool && alegaCancelamento) {
+    return 'Ainda não consegui registrar o cancelamento no sistema. Você confirma que deseja cancelar o agendamento atual?';
+  }
+  return resposta;
+}
+
 /**
  * Filtros de resposta pós-agente.
  * v2.0 — Simplificado após unificação SDR (Opener+Presenter merge).
@@ -81,6 +137,7 @@ export function aplicarFiltrosRespostaOrchestrator(
     agenteQueRespondeuFormatado,
     estadoConversaAtual,
     nomesToolsTurno,
+    nomesToolsSucessoTurno = [],
     fallbackAplicadoAtual,
     ultimaMsgAssistente,
     ultimaMsgLead,
@@ -114,6 +171,34 @@ export function aplicarFiltrosRespostaOrchestrator(
   respostaLimpa = sanitizarRespostaParaCliente(respostaLimpa);
   const respostaAntesGovernanca = respostaLimpa;
   respostaLimpa = aplicarGuardrailLinguagemGovernanca(respostaLimpa, ultimaMsgLead);
+  const respostaAntesGuardrailAgenda = respostaLimpa;
+  respostaLimpa = aplicarGuardrailConfirmacaoAgenda(respostaLimpa, nomesToolsSucessoTurno);
+  if (respostaAntesGuardrailAgenda !== respostaLimpa) {
+    logger.warn('[ORCHESTRATOR] Guardrail bloqueou confirmação de agenda sem registro via tool.');
+    fallbackAplicado = 'AGENDA_CONFIRMATION_GUARD';
+  }
+  const respostaAntesGuardrailConsultaAgenda = respostaLimpa;
+  respostaLimpa = aplicarGuardrailConsultaStatusAgenda(respostaLimpa, nomesToolsSucessoTurno, ultimaMsgLead);
+  if (respostaAntesGuardrailConsultaAgenda !== respostaLimpa) {
+    logger.warn('[ORCHESTRATOR] Guardrail bloqueou resposta de status de agenda sem consulta ao banco.');
+    fallbackAplicado = 'AGENDA_STATUS_GUARD';
+  }
+  const respostaAntesGuardrailDisponibilidade = respostaLimpa;
+  respostaLimpa = aplicarGuardrailConsultaDisponibilidade(
+    respostaLimpa,
+    nomesToolsSucessoTurno,
+    ultimaMsgLead,
+  );
+  if (respostaAntesGuardrailDisponibilidade !== respostaLimpa) {
+    logger.warn('[ORCHESTRATOR] Guardrail exigiu consulta de horários antes de responder ao lead.');
+    fallbackAplicado = 'AGENDA_AVAILABILITY_GUARD';
+  }
+  const respostaAntesGuardrailCancelamento = respostaLimpa;
+  respostaLimpa = aplicarGuardrailCancelamentoAgenda(respostaLimpa, nomesToolsSucessoTurno);
+  if (respostaAntesGuardrailCancelamento !== respostaLimpa) {
+    logger.warn('[ORCHESTRATOR] Guardrail bloqueou confirmação de cancelamento sem registro via tool.');
+    fallbackAplicado = 'AGENDA_CANCELLATION_GUARD';
+  }
   if (respostaAntesGovernanca !== respostaLimpa) {
     logger.debug(`[ORCHESTRATOR] 🛡️ Guardrail de linguagem aplicado. Antes="${respostaAntesGovernanca.substring(0, 80)}" Depois="${respostaLimpa.substring(0, 80)}"`);
   }

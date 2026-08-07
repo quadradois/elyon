@@ -10,6 +10,7 @@ import { executarEventoWebhook } from './servicos/webhook-worker-executor';
 import { schedulerSincronizacaoMapa } from './servicos/scheduler-sincronizacao-mapa';
 import { schedulerLimpezaCache } from './servicos/scheduler-limpeza-cache';
 import { schedulerReconciliacaoWhatsapp } from './servicos/scheduler-reconciliacao-whatsapp';
+import { schedulerConfirmacaoCorretor } from './servicos/scheduler-confirmacao-corretor';
 import { installSecureConsoleBridge, logger } from './lib/logger';
 import { validarConfiguracaoCriptografia } from './lib/crypto';
 import { validarConfiguracaoWebhooks } from './servicos/webhook-seguranca';
@@ -95,6 +96,7 @@ async function loop(): Promise<void> {
         ? await executarProximoEfeitoAgenda(agendaPilotConfig.scope)
         : false;
       const processouNoShow = agendaPilotConfig.noShow.enabled
+        && !agendaPilotConfig.postAppointmentFeedback?.enabled
         ? await executarProximoNoShowAgenda(agendaPilotConfig.scope)
         : false;
       if (!evento && !processouLote && !processouFollowup && !processouEfeitoAgenda && !processouNoShow) await esperar(pollMs);
@@ -145,6 +147,7 @@ async function encerrar(sinal: string): Promise<void> {
   schedulerSincronizacaoMapa.parar();
   schedulerLimpezaCache.parar();
   schedulerReconciliacaoWhatsapp.parar();
+  schedulerConfirmacaoCorretor.parar();
   servidorSaude.close();
   await prisma.$disconnect();
 }
@@ -156,9 +159,13 @@ async function iniciar(): Promise<void> {
   agendaPilotConfig = await resolverAgendaPilotConfig();
   registrarAgendaPilotConfig(agendaPilotConfig);
   for (const [recurso, gate] of [
+    ['lifecycle_policy', agendaPilotConfig.lifecyclePolicy],
+    ['lifecycle_commands', agendaPilotConfig.lifecycleCommands],
     ['effects', agendaPilotConfig.effects],
     ['no_show', agendaPilotConfig.noShow],
+    ['post_appointment_feedback', agendaPilotConfig.postAppointmentFeedback],
   ] as const) {
+    if (!gate) continue;
     const contexto = {
       recurso,
       requested: gate.requested,
@@ -173,6 +180,7 @@ async function iniciar(): Promise<void> {
   schedulerSincronizacaoMapa.iniciar();
   schedulerLimpezaCache.iniciar();
   schedulerReconciliacaoWhatsapp.iniciar();
+  schedulerConfirmacaoCorretor.iniciar();
   servidorSaude.listen(porta, '0.0.0.0', () => logger.info({ porta }, '[WORKER] Health server iniciado'));
   await loop();
 }

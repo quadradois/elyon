@@ -1,4 +1,5 @@
 import { prisma } from '../../../src/lib/db';
+import { createHash } from 'crypto';
 
 export const captured = {
   orchestrator: [] as Array<{ messages: unknown; config: unknown; context: unknown }>,
@@ -26,5 +27,6 @@ export async function deterministicOrchestrator(messages: unknown, config: unkno
       if (captured.failMidCommand) throw new Error('falha determinística no meio do comando');
     }
   });
-  return { sucesso: true, resposta: 'Resposta determinística' };
+  const respostaId = createHash('sha256').update(text).digest('hex').slice(0, 12);
+  return { sucesso: true, resposta: `Resposta determinística ${respostaId}` };
 }

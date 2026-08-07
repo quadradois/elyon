@@ -83,7 +83,11 @@ export function resolverChaveWhisper(tenant: TenantBYOK | null): ResolvedKey {
  * Como só suportamos provedores OpenAI-compatible, a chave principal sempre funciona.
  */
 export function resolverChaveEmbeddings(tenant: TenantBYOK | null): ResolvedKey {
-    if (tenant?.llmApiKeyCriptografada && tenant.llmProvedor) {
+    // O modelo de embeddings atual é nativo da OpenAI. Chaves de provedores
+    // compatíveis apenas com Chat Completions (ex.: OpenRouter) não podem ser
+    // enviadas ao endpoint api.openai.com/v1/embeddings.
+    const provedor = String(tenant?.llmProvedor || '').trim().toLowerCase();
+    if (tenant?.llmApiKeyCriptografada && provedor === 'openai') {
         const apiKey = descriptografarSeguro(tenant.llmApiKeyCriptografada, 'embeddings');
         if (apiKey) {
             return { apiKey, fonte: 'tenant' };

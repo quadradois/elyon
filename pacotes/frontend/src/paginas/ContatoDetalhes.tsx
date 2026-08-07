@@ -36,6 +36,7 @@ import { Textarea } from "../componentes/ui/textarea";
 import { PageHeader } from "../componentes/ui/page-header";
 import { api } from "../servicos/api";
 import { toast } from "sonner";
+import { obterStatusProspeccaoExibicao } from "../lib/status-prospeccao";
 
 // Tipos
 interface Contato {
@@ -98,7 +99,7 @@ interface Contato {
   lote?: string | null;
 
   // Status
-  statusProspeccao: string;
+  statusProspeccao: string | null;
   scoreAssertiva?: number | null;
   scoreQualificacao?: number | null;
   observacoes?: string | null;
@@ -402,7 +403,8 @@ export default function ContatoDetalhes() {
 
   const telefonePrincipal = telefones.find((t: any) => t.principal) || telefones[0];
   const emailPrincipal = emails[0];
-  const statusInfo = statusConfig[contato.statusProspeccao] || statusConfig.AGUARDANDO;
+  const statusProspeccao = obterStatusProspeccaoExibicao(contato);
+  const statusInfo = statusConfig[statusProspeccao] || statusConfig.AGUARDANDO;
 
   const renderTabContent = () => {
     switch (activeTab) {

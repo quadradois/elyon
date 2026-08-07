@@ -16,12 +16,20 @@ STARTED_AT=$(date +%s)
 
 log() { printf '[%s] %s\n' "$(date --iso-8601=seconds)" "$*"; }
 
+on_error() {
+  local exit_code=$? line="${1:-unknown}"
+  trap - ERR
+  log "restore drill falhou (exit=$exit_code, line=$line)" >&2
+  return "$exit_code"
+}
+
 cleanup() {
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   docker volume rm "$VOLUME" >/dev/null 2>&1 || true
   rm -rf "$RESTORE_ROOT"
 }
 trap cleanup EXIT
+trap 'on_error $LINENO' ERR
 
 [[ $(id -u) -eq 0 ]] || { echo 'Execute como root.' >&2; exit 1; }
 [[ -r "$ENV_FILE" ]] || { echo "Credenciais ausentes: $ENV_FILE" >&2; exit 1; }

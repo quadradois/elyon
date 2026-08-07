@@ -77,6 +77,8 @@ export interface ElyonContext {
     durableExecutionId?: string;
     telefone: string;
     ultimaInteracao?: string;
+    /** Texto confiável da mensagem inbound que originou esta execução. */
+    mensagemAtual?: string;
     // toda a ficha CADASTRAL do lead (quando disponível)
     leadRecord?: Lead | null;
 

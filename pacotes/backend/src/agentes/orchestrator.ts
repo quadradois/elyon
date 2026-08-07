@@ -65,9 +65,19 @@ import { isLearningBankEnabled, isPaolAbEnabled, isPaolShadowEnabled } from './f
 import { gerarInstrucaoPaol, paolPolicyService, type PaolDecision, type PaolModoExecucao } from './paol-policy';
 import { RegistrarOptoutUseCase } from '../casos-de-uso/agentes/registrar-optout.usecase';
 import type { RagFact } from './rag-facts-context';
+import {
+    consultarStatusAgendamentoCanonico,
+    formatarRespostaStatusAgendamento,
+} from '../servicos/consulta-status-agendamento';
+import { ehConsultaStatusAgendamento } from '../servicos/intencao-status-agendamento';
+import { interpretarConsultaDisponibilidadeAgendamento } from '../servicos/intencao-disponibilidade-agendamento';
+import {
+    consultarHorariosDisponiveisCanonico,
+    formatarRespostaHorariosDisponiveis,
+} from '../servicos/consulta-horarios-disponiveis';
 
 // Re-exports para consumidores existentes (webhook.ts, sdr-tools-agents.ts)
-export { buscarConfiguracaoTenant, buscarContextoConversa } from './orchestrator-queries';
+export { buscarConfiguracaoTenant, buscarContextoConversa, resolverLeadIdCanonico } from './orchestrator-queries';
 
 // Ativar Tracing para o Dashboard OpenAI (platform.openai.com/traces)
 if (process.env.OPENAI_API_KEY) {
@@ -126,6 +136,8 @@ export interface ResultadoProcessamento {
     sucesso: boolean;
     resposta?: string;
     agenteUsado?: string;
+    ferramentasExecutadas?: string[];
+    ferramentasExecutadasComSucesso?: string[];
     guardrailAcionado?: GuardrailResult;
     erro?: string;
 }
@@ -598,12 +610,14 @@ Use isso como desempate estratégico na próxima ação.`;
             assertFencing: contexto.assertFencing,
             withFencedTransaction: contexto.withFencedTransaction,
             executeExternalEffect: contexto.executeExternalEffect,
+            mensagemAtual: mensagens.filter((mensagem) => mensagem.role === 'user').pop()?.content,
         });
 
         tFases.preContexto = Date.now() - inicioTurno;
 
         // 6. EXECUTAR AGENTE (SDK gerencia handoffs automaticamente)
         let nomesToolsTurno: string[] = [];
+        let nomesToolsSucessoTurno: string[] = [];
         let result: ElyonRunResult;
 
         // Fallback de provedor: se o tenant usa BYOK (chave própria), criamos
@@ -653,6 +667,7 @@ Use isso como desempate estratégico na próxima ação.`;
         if (contexto.contatoId) {
             const persistenciaResult = await persistirHistoricoSdk(contexto.contatoId, result);
             nomesToolsTurno = persistenciaResult.nomesToolsTurno;
+            nomesToolsSucessoTurno = persistenciaResult.nomesToolsSucessoTurno;
             toolCallsTurno = persistenciaResult.toolCallsTurno;
             handoffsTurno = persistenciaResult.handoffsTurno;
         }
@@ -709,6 +724,7 @@ Use isso como desempate estratégico na próxima ação.`;
             estadoConversaAtual,
             cotLog,
             nomesToolsTurno,
+            nomesToolsSucessoTurno,
             fallbackAplicadoAtual: fallbackAplicado,
             ultimaMsgAssistente,
             ultimaMsgLead: ultimaMsgLeadTexto,
@@ -717,7 +733,109 @@ Use isso como desempate estratégico na próxima ação.`;
         let respostaLimpa = filtroResposta.respostaLimpa;
         fallbackAplicado = filtroResposta.fallbackAplicado;
 
-        if (respostaRepetePerguntaCritica(respostaLimpa, mensagens)) {
+        // A escolha de tools pelo modelo não é uma garantia. Quando o guardrail
+        // reconhece uma consulta de agenda sem evidência da tool, executamos a
+        // mesma consulta canônica de forma determinística e somente leitura.
+        if (fallbackAplicado === 'AGENDA_STATUS_GUARD') {
+            const leadIdConsulta = contexto.leadId || contexto.contatoId;
+            if (leadIdConsulta) {
+                const inicioConsulta = Date.now();
+                try {
+                    await contexto.assertFencing?.();
+                    const statusAgendamento = await consultarStatusAgendamentoCanonico({
+                        leadId: leadIdConsulta,
+                        tenantId: config.tenantId,
+                    });
+                    await contexto.assertFencing?.();
+
+                    nomesToolsTurno = [...new Set([...nomesToolsTurno, 'consultar_status_agendamento'])];
+                    if (statusAgendamento.success) {
+                        nomesToolsSucessoTurno = [...new Set([
+                            ...nomesToolsSucessoTurno,
+                            'consultar_status_agendamento',
+                        ])];
+                        respostaLimpa = formatarRespostaStatusAgendamento(statusAgendamento);
+                        fallbackAplicado = 'AGENDA_STATUS_DETERMINISTIC_QUERY';
+                    }
+
+                    logger[statusAgendamento.success ? 'info' : 'warn']({
+                        tool: 'consultar_status_agendamento',
+                        fase: 'fallback-deterministico',
+                        result: {
+                            success: statusAgendamento.success,
+                            reasonCode: statusAgendamento.reasonCode,
+                            situacao: statusAgendamento.situacao,
+                        },
+                        duracaoMs: Date.now() - inicioConsulta,
+                    }, `[TOOL_AUDIT] consultar_status_agendamento ${statusAgendamento.success ? 'OK' : 'FALHOU'} (${Date.now() - inicioConsulta}ms)`);
+                } catch (error) {
+                    logger.error({
+                        tool: 'consultar_status_agendamento',
+                        fase: 'fallback-deterministico',
+                        erro: error instanceof Error ? error.message : error,
+                        duracaoMs: Date.now() - inicioConsulta,
+                    }, '[TOOL_AUDIT] consultar_status_agendamento ERRO no fallback determinístico');
+                }
+            }
+        }
+
+        // Consulta de disponibilidade também é um read model canônico. Se o
+        // modelo apenas narrar que chamaria a tool, o backend executa a mesma
+        // consulta tenant-safe e preserva data/período pedidos pelo lead.
+        if (fallbackAplicado === 'AGENDA_AVAILABILITY_GUARD') {
+            const leadIdConsulta = contexto.leadId || contexto.contatoId;
+            const intencaoDisponibilidade = interpretarConsultaDisponibilidadeAgendamento(ultimaMsgLeadTexto);
+            if (leadIdConsulta && intencaoDisponibilidade) {
+                const inicioConsulta = Date.now();
+                try {
+                    await contexto.assertFencing?.();
+                    const horarios = await consultarHorariosDisponiveisCanonico({
+                        leadId: leadIdConsulta,
+                        tenantId: config.tenantId,
+                        periodoPreferido: intencaoDisponibilidade.periodoPreferido,
+                        dataPreferida: intencaoDisponibilidade.dataPreferida,
+                    });
+                    await contexto.assertFencing?.();
+
+                    nomesToolsTurno = [...new Set([...nomesToolsTurno, 'consultar_horarios_disponiveis'])];
+                    if (horarios.success) {
+                        nomesToolsSucessoTurno = [...new Set([
+                            ...nomesToolsSucessoTurno,
+                            'consultar_horarios_disponiveis',
+                        ])];
+                    }
+                    respostaLimpa = formatarRespostaHorariosDisponiveis(horarios);
+                    fallbackAplicado = horarios.success
+                        ? 'AGENDA_AVAILABILITY_DETERMINISTIC_QUERY'
+                        : 'AGENDA_AVAILABILITY_DETERMINISTIC_FAILURE';
+
+                    logger[horarios.success ? 'info' : 'warn']({
+                        tool: 'consultar_horarios_disponiveis',
+                        fase: 'fallback-deterministico',
+                        result: {
+                            success: horarios.success,
+                            reasonCode: horarios.reasonCode,
+                            sugestoes: horarios.sugestoes?.length || 0,
+                            dataPreferidaConfigurada: Boolean(intencaoDisponibilidade.dataPreferida),
+                        },
+                        duracaoMs: Date.now() - inicioConsulta,
+                    }, `[TOOL_AUDIT] consultar_horarios_disponiveis ${horarios.success ? 'OK' : 'FALHOU'} (${Date.now() - inicioConsulta}ms)`);
+                } catch (error) {
+                    respostaLimpa = 'Não consegui consultar a agenda do especialista agora. Vou verificar antes de te oferecer um horário.';
+                    fallbackAplicado = 'AGENDA_AVAILABILITY_DETERMINISTIC_ERROR';
+                    logger.error({
+                        tool: 'consultar_horarios_disponiveis',
+                        fase: 'fallback-deterministico',
+                        erro: error instanceof Error ? error.message : error,
+                        duracaoMs: Date.now() - inicioConsulta,
+                    }, '[TOOL_AUDIT] consultar_horarios_disponiveis ERRO no fallback determinístico');
+                }
+            }
+        }
+
+        const respondeuConsultaStatusCanonica = ehConsultaStatusAgendamento(ultimaMsgLeadTexto)
+            && nomesToolsSucessoTurno.includes('consultar_status_agendamento');
+        if (!respondeuConsultaStatusCanonica && respostaRepetePerguntaCritica(respostaLimpa, mensagens)) {
             logger.warn('[ORCHESTRATOR] ⚠️ Guarda anti-repetição acionada. Resposta repetia pergunta crítica já feita.');
             fallbackAplicado = 'ANTI_REPEAT_GUARD';
 
@@ -865,7 +983,9 @@ Use isso como desempate estratégico na próxima ação.`;
         return {
             sucesso: true,
             resposta: respostaLimpa,
-            agenteUsado: agenteQueRespondeuFormatado
+            agenteUsado: agenteQueRespondeuFormatado,
+            ferramentasExecutadas: nomesToolsTurno,
+            ferramentasExecutadasComSucesso: nomesToolsSucessoTurno,
         };
 
     } catch (error: unknown) {

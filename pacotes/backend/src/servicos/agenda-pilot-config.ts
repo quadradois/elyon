@@ -9,7 +9,9 @@ export type AgendaPilotGateReason =
   | 'TENANT_INACTIVE'
   | 'STARTED_AT_MISSING'
   | 'STARTED_AT_INVALID'
+  | 'POLICY_REQUIRED'
   | 'EFFECTS_REQUIRED'
+  | 'SPECIALIST_COPILOT_REQUIRED'
   | 'GRACE_PERIOD_MISSING'
   | 'GRACE_PERIOD_INVALID';
 
@@ -26,14 +28,22 @@ export interface AgendaPilotScope {
 
 export interface AgendaPilotConfig {
   scope?: AgendaPilotScope;
+  lifecyclePolicy: AgendaPilotFeatureGate;
+  lifecycleCommands: AgendaPilotFeatureGate;
   effects: AgendaPilotFeatureGate;
   noShow: AgendaPilotFeatureGate;
+  specialistCopilot?: AgendaPilotFeatureGate;
+  postAppointmentFeedback?: AgendaPilotFeatureGate;
   noShowGraceMinutes?: number;
 }
 
 type AgendaPilotEnv = Partial<Record<
-  'AGENDA_EFFECTS_ENABLED'
+  'AGENDA_LIFECYCLE_POLICY_ENABLED'
+  | 'AGENDA_LIFECYCLE_COMMANDS_ENABLED'
+  | 'AGENDA_EFFECTS_ENABLED'
   | 'AGENDA_NO_SHOW_ENABLED'
+  | 'AGENDA_SPECIALIST_COPILOT_ENABLED'
+  | 'AGENDA_POST_FEEDBACK_ENABLED'
   | 'AGENDA_PILOT_TENANT_ID'
   | 'AGENDA_PILOT_STARTED_AT'
   | 'AGENDA_NO_SHOW_GRACE_MINUTES', string | undefined>>;
@@ -69,13 +79,21 @@ function parseUtcInstant(value: string | undefined): { date?: Date; reason?: Age
 }
 
 function commonFailure(
+  lifecyclePolicyRequested: boolean,
+  lifecycleCommandsRequested: boolean,
   effectsRequested: boolean,
   noShowRequested: boolean,
+  specialistCopilotRequested: boolean,
+  postAppointmentFeedbackRequested: boolean,
   reason: AgendaPilotGateReason,
 ): AgendaPilotConfig {
   return {
+    lifecyclePolicy: lifecyclePolicyRequested ? disabled(true, reason) : disabled(false, 'FLAG_DISABLED'),
+    lifecycleCommands: lifecycleCommandsRequested ? disabled(true, reason) : disabled(false, 'FLAG_DISABLED'),
     effects: effectsRequested ? disabled(true, reason) : disabled(false, 'FLAG_DISABLED'),
     noShow: noShowRequested ? disabled(true, reason) : disabled(false, 'FLAG_DISABLED'),
+    specialistCopilot: specialistCopilotRequested ? disabled(true, reason) : disabled(false, 'FLAG_DISABLED'),
+    postAppointmentFeedback: postAppointmentFeedbackRequested ? disabled(true, reason) : disabled(false, 'FLAG_DISABLED'),
   };
 }
 
@@ -83,30 +101,56 @@ export async function resolverAgendaPilotConfig(
   env: AgendaPilotEnv = process.env,
   dependencies: AgendaPilotDependencies = defaultDependencies,
 ): Promise<AgendaPilotConfig> {
+  const lifecyclePolicyRequested = env.AGENDA_LIFECYCLE_POLICY_ENABLED === 'true';
+  const lifecycleCommandsRequested = env.AGENDA_LIFECYCLE_COMMANDS_ENABLED === 'true';
   const effectsRequested = env.AGENDA_EFFECTS_ENABLED === 'true';
   const noShowRequested = env.AGENDA_NO_SHOW_ENABLED === 'true';
-  if (!effectsRequested && !noShowRequested) {
+  const specialistCopilotRequested = env.AGENDA_SPECIALIST_COPILOT_ENABLED === 'true';
+  const postAppointmentFeedbackRequested = env.AGENDA_POST_FEEDBACK_ENABLED === 'true';
+  if (!lifecyclePolicyRequested && !lifecycleCommandsRequested && !effectsRequested && !noShowRequested && !specialistCopilotRequested && !postAppointmentFeedbackRequested) {
     return {
+      lifecyclePolicy: disabled(false, 'FLAG_DISABLED'),
+      lifecycleCommands: disabled(false, 'FLAG_DISABLED'),
       effects: disabled(false, 'FLAG_DISABLED'),
       noShow: disabled(false, 'FLAG_DISABLED'),
+      specialistCopilot: disabled(false, 'FLAG_DISABLED'),
+      postAppointmentFeedback: disabled(false, 'FLAG_DISABLED'),
     };
   }
 
   const tenantId = env.AGENDA_PILOT_TENANT_ID?.trim();
-  if (!tenantId) return commonFailure(effectsRequested, noShowRequested, 'TENANT_ID_MISSING');
-  if (!UUID_PATTERN.test(tenantId)) return commonFailure(effectsRequested, noShowRequested, 'TENANT_ID_INVALID');
+  if (!tenantId) return commonFailure(lifecyclePolicyRequested, lifecycleCommandsRequested, effectsRequested, noShowRequested, specialistCopilotRequested, postAppointmentFeedbackRequested, 'TENANT_ID_MISSING');
+  if (!UUID_PATTERN.test(tenantId)) return commonFailure(lifecyclePolicyRequested, lifecycleCommandsRequested, effectsRequested, noShowRequested, specialistCopilotRequested, postAppointmentFeedbackRequested, 'TENANT_ID_INVALID');
 
   const startedAt = parseUtcInstant(env.AGENDA_PILOT_STARTED_AT);
-  if (!startedAt.date) return commonFailure(effectsRequested, noShowRequested, startedAt.reason!);
+  if (!startedAt.date) return commonFailure(lifecyclePolicyRequested, lifecycleCommandsRequested, effectsRequested, noShowRequested, specialistCopilotRequested, postAppointmentFeedbackRequested, startedAt.reason!);
 
   const tenant = await dependencies.findTenant(tenantId);
-  if (!tenant) return commonFailure(effectsRequested, noShowRequested, 'TENANT_NOT_FOUND');
-  if (tenant.status !== 'ATIVO') return commonFailure(effectsRequested, noShowRequested, 'TENANT_INACTIVE');
+  if (!tenant) return commonFailure(lifecyclePolicyRequested, lifecycleCommandsRequested, effectsRequested, noShowRequested, specialistCopilotRequested, postAppointmentFeedbackRequested, 'TENANT_NOT_FOUND');
+  if (tenant.status !== 'ATIVO') return commonFailure(lifecyclePolicyRequested, lifecycleCommandsRequested, effectsRequested, noShowRequested, specialistCopilotRequested, postAppointmentFeedbackRequested, 'TENANT_INACTIVE');
 
   const scope: AgendaPilotScope = Object.freeze({ tenantId, startedAtUtc: startedAt.date.toISOString() });
+  const lifecyclePolicy = lifecyclePolicyRequested
+    ? { requested: true, enabled: true, reason: 'ENABLED' as const }
+    : disabled(false, 'FLAG_DISABLED');
+  const lifecycleCommands = !lifecycleCommandsRequested
+    ? disabled(false, 'FLAG_DISABLED')
+    : lifecyclePolicy.enabled
+      ? { requested: true, enabled: true, reason: 'ENABLED' as const }
+      : disabled(true, 'POLICY_REQUIRED');
   const effects = effectsRequested
     ? { requested: true, enabled: true, reason: 'ENABLED' as const }
     : disabled(false, 'FLAG_DISABLED');
+  const specialistCopilot = !specialistCopilotRequested
+    ? disabled(false, 'FLAG_DISABLED')
+    : lifecycleCommands.enabled && effects.enabled
+      ? { requested: true, enabled: true, reason: 'ENABLED' as const }
+      : disabled(true, lifecycleCommands.enabled ? 'EFFECTS_REQUIRED' : 'POLICY_REQUIRED');
+  const postAppointmentFeedback = !postAppointmentFeedbackRequested
+    ? disabled(false, 'FLAG_DISABLED')
+    : specialistCopilot.enabled
+      ? { requested: true, enabled: true, reason: 'ENABLED' as const }
+      : disabled(true, 'SPECIALIST_COPILOT_REQUIRED');
 
   let noShow: AgendaPilotFeatureGate;
   let noShowGraceMinutes: number | undefined;
@@ -126,5 +170,5 @@ export async function resolverAgendaPilotConfig(
     }
   }
 
-  return { scope, effects, noShow, noShowGraceMinutes };
+  return { scope, lifecyclePolicy, lifecycleCommands, effects, noShow, specialistCopilot, postAppointmentFeedback, noShowGraceMinutes };
 }

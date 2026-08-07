@@ -10,6 +10,14 @@ jest.mock('../../src/agentes/orchestrator', () => {
     processarMensagemOrquestrada: doubles.deterministicOrchestrator,
     buscarConfiguracaoTenant: jest.fn(async (tenantId: string) => ({ tenantId })),
     buscarContextoConversa: jest.fn(async () => ({ qualificationPolicyVersion: 'spin-candidate-v1' })),
+    resolverLeadIdCanonico: jest.fn(async (telefone: string, tenantId: string) => {
+      const { prisma } = require('../../src/lib/db');
+      const leads = await prisma.lead.findMany({
+        where: { telefone: { contains: telefone.replace(/\D/g, '').slice(-11) }, tenantId },
+        select: { id: true },
+      });
+      return leads.length === 1 ? leads[0].id : null;
+    }),
   };
 });
 jest.mock('../../src/servicos/whatsapp', () => {
@@ -57,6 +65,28 @@ describe('baseline do caminho real inbox → executor → handler Evolution', ()
     await harness.acceptInbound(f, `foreign-${f.runId}`, 'qualificar com evidências', { instanceName: f.instanceB, maliciousTenantId: f.tenantA });
     await expect(harness.runWorkerAndBatch('foreign-worker')).resolves.toBe('CONCLUIDO');
     expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadA, messageId: `foreign-${f.runId}` } })).toBe(0);
+  });
+
+  it('B06 preserva Lead, histórico e resposta única após qualificação', async () => {
+    const f = await harness.seed();
+    await harness.acceptInbound(f, `continuity-1-${f.runId}`, 'primeiro inbound');
+    await harness.runWorkerAndBatch('continuity-worker-1');
+    await prisma.lead.update({
+      where: { id: f.leadA },
+      data: { status: 'CAPTADO', statusProspeccao: null },
+    });
+    // Simula uma nova interacao depois da janela curta de cooldown.
+    await harness.redis.del(`cooldown:resposta:${f.leadA}`);
+
+    await harness.acceptInbound(f, `continuity-2-${f.runId}`, 'próximo inbound');
+    await harness.runWorkerAndBatch('continuity-worker-2');
+
+    expect(await prisma.mensagemProspeccao.count({
+      where: { leadId: f.leadA, direcao: 'ENTRADA' },
+    })).toBe(2);
+    expect(await prisma.mensagemProspeccao.count({ where: { leadId: f.leadB } })).toBe(0);
+    expect(await prisma.conversa.count({ where: { leadId: f.leadA } })).toBe(1);
+    expect(captured.sent).toHaveLength(2);
   });
 
   it('B04 consolida mensagens sequenciais em ordem e executa o agente uma vez', async () => {

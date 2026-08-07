@@ -61,3 +61,6 @@ tmp/
 uploads/
 secrets/
 erros.txt
+
+# Credenciais operacionais locais (nunca versionar)
+docs/seguranca/.elyon_tenant_credentials.json
