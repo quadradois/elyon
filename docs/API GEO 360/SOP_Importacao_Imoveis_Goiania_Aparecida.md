@@ -8,24 +8,6 @@ Este documento é **agnóstico de linguagem/stack**. Implemente em Node, Python,
 
 ---
 
-## 0. ⚖️ LIMITES LEGAIS E ÉTICOS (leia antes de codar)
-
-1. **Use SOMENTE a interface pública pretendida** (host `cadastro.geo360.com.br`, autenticação
-   `Authorization: Bearer`). Ela é o canal de consulta que o portal expõe ao cidadão.
-2. **🚫 PROIBIDO usar o gateway PostgREST** (`apis-goiania.geo360.com.br/gateway/rest/...`).
-   Esse gateway está **mal configurado** e expõe o banco interno inteiro — incluindo **PII sensível
-   de terceiros** (CPF/filiação via SERPRO, cadastros de famílias vulneráveis, saúde, auditoria).
-   Coletar dali é **violação da LGPD** e exploração de exposição de dados. Não use, mesmo que "funcione".
-3. **LGPD — minimização:** trate apenas **dado imobiliário + nome e CPF do proprietário** (para
-   identificação/validação). **Ignore** qualquer dado pessoal sensível. Base legal típica:
-   **legítimo interesse** (art. 7º, IX) para prospecção, com **mecanismo de opt-out** e armazenamento
-   seguro do CPF.
-4. **Respeite o serviço:** limites conservadores de requisições, pausas, retomada. Não martele a API.
-5. **Token compartilhado de terceiro:** a autenticação usa um e-mail de leitor da plataforma; se a
-   plataforma revogar/rotacionar, a coleta para. Releia o token sempre; não fixe em código.
-
----
-
 ## 1. Arquitetura da API (4 endpoints)
 
 Base de cadastro: `https://cadastro.geo360.com.br`

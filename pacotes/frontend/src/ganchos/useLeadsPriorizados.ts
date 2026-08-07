@@ -40,6 +40,7 @@ export interface AtividadePriorizado {
   completadoEm: string | null;
   statusAgendamento: string | null;
   criadoEm: string;
+  versao: number;
 }
 
 export interface LeadPriorizado {

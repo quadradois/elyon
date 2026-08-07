@@ -181,6 +181,7 @@ export interface Atividade {
     completadoEm: string | null;
     statusAgendamento: string | null;
     criadoEm: string;
+    versao: number;
 }
 
 export interface Conversa {
