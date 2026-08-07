@@ -899,20 +899,20 @@ export function Captacao() {
   // ============================================
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-6 w-full max-w-screen-xl mx-auto px-3 sm:px-4 lg:px-6">
       <PageHeader
         title="Wizard de Captação"
         description="Mineração + Campanha em um único fluxo guiado"
         icon={<Sparkles className="w-5 h-5" />}
       />
 
-      {/* Stepper */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
+      {/* Stepper - responsivo com scroll horizontal */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 overflow-x-auto">
         <Stepper etapas={ETAPAS_WIZARD} etapaAtual={etapa - 1} />
       </div>
 
       {/* Conteúdo das Etapas */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
         {/* ETAPA 1: LOCAL */}
         {etapa === 1 && (
           <div className="space-y-6">
@@ -949,10 +949,10 @@ export function Captacao() {
               }}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 mb-6 max-w-lg mx-auto h-auto gap-1">
-                <TabsTrigger value="local">Empreendimentos</TabsTrigger>
-                <TabsTrigger value="bairro">Por Bairro/Condomínio</TabsTrigger>
-                <TabsTrigger value="iptu">Por IPTU</TabsTrigger>
+              <TabsList className="flex gap-1 overflow-x-auto pb-2 mb-6 max-w-lg mx-auto scrollbar-hide">
+                <TabsTrigger value="local" className="whitespace-nowrap">Empreendimentos</TabsTrigger>
+                <TabsTrigger value="bairro" className="whitespace-nowrap">Por Bairro/Condomínio</TabsTrigger>
+                <TabsTrigger value="iptu" className="whitespace-nowrap">Por IPTU</TabsTrigger>
               </TabsList>
 
               <TabsContent value="local" className="space-y-6">
@@ -1344,137 +1344,243 @@ export function Captacao() {
               />
             )}
 
-            {/* Tabela */}
+            {/* Tabela (Desktop) / Cards (Mobile) */}
             {!loading && unidades.length > 0 && (
-              <div className="border rounded-lg overflow-hidden max-h-[400px] overflow-y-auto animate-in fade-in-50 duration-300">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[50px]">
-                        <button
-                          onClick={toggleTodos}
-                          title={`Selecionar todas ${unidadesFiltradas.length} unidades visíveis`}
-                        >
-                          {unidadesFiltradas.length > 0 &&
-                            unidadesFiltradas.every((u) =>
-                              selecionados.includes(u.nrinscr)
-                            ) ? (
-                            <CheckSquare className="w-5 h-5 text-brand" />
-                          ) : (
-                            <Square className="w-5 h-5 text-slate-400" />
-                          )}
-                        </button>
-                      </TableHead>
-                      {localSelecionado?.tipo === "condominio" ? (
-                        <>
-                          <TableHead>Quadra</TableHead>
-                          <TableHead>Lote</TableHead>
-                          <TableHead>Rua</TableHead>
-                          <TableHead>IPTU</TableHead>
-                        </>
-                      ) : (
-                        <>
-                          <TableHead>Unidade</TableHead>
-                          <TableHead>Endereço</TableHead>
-                          <TableHead>IPTU</TableHead>
-                        </>
-                      )}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {unidadesFiltradas.length === 0 && temFiltroAtivo ? (
+              <div className="animate-in fade-in-50 duration-300">
+                {/* Desktop: Tabela */}
+                <div className="hidden lg:block border rounded-lg overflow-hidden max-h-[400px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell
-                          colSpan={
-                            localSelecionado?.tipo === "condominio" ? 5 : 4
-                          }
-                          className="text-center py-8 text-slate-500"
-                        >
-                          <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                          <p>Nenhuma unidade corresponde ao filtro</p>
+                        <TableHead className="w-[50px]">
                           <button
-                            onClick={limparFiltros}
-                            className="text-brand hover:underline text-sm mt-1"
+                            onClick={toggleTodos}
+                            title={`Selecionar todas ${unidadesFiltradas.length} unidades visíveis`}
                           >
-                            Limpar filtros
-                          </button>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      unidadesFiltradas.map((item, index) => {
-                        const isSelected = selecionados.includes(item.nrinscr);
-                        return (
-                          <TableRow
-                            key={`${item.nrinscr}-${index}`}
-                            className={`cursor-pointer hover:bg-indigo-50 transition-colors ${isSelected ? "bg-indigo-50/50" : ""}`}
-                            onClick={() => toggleSelecao(item.nrinscr)}
-                          >
-                            <TableCell>
-                              {isSelected ? (
-                                <CheckSquare className="w-5 h-5 text-brand" />
-                              ) : (
-                                <Square className="w-5 h-5 text-slate-400" />
-                              )}
-                            </TableCell>
-                            {localSelecionado?.tipo === "condominio" ? (
-                              <>
-                                <TableCell className="font-medium">
-                                  {item.nrquadra || "—"}
-                                </TableCell>
-                                <TableCell className="font-medium">
-                                  {item.nrlote || "—"}
-                                </TableCell>
-                                <TableCell className="text-slate-500">
-                                  {item.nmlogradou || "—"}
-                                </TableCell>
-                                <TableCell className="font-mono text-xs">
-                                  {item.nrinscr}
-                                </TableCell>
-                              </>
+                            {unidadesFiltradas.length > 0 &&
+                              unidadesFiltradas.every((u) =>
+                                selecionados.includes(u.nrinscr)
+                              ) ? (
+                              <CheckSquare className="w-5 h-5 text-brand" />
                             ) : (
-                              <>
-                                <TableCell className="font-medium flex items-center gap-2">
-                                  {item.incompl || "—"}
-                                  {item.incompl?.toUpperCase().includes('BOX') && (
-                                    <span title="Unidades do tipo Box costumam ter o mesmo proprietário do apartamento. Desmarcadas por padrão para economizar créditos." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                                      <span className="text-xs">🅿️</span> Box
-                                    </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-slate-500">
-                                  {item.nmlogradou}
-                                </TableCell>
-                                <TableCell className="font-mono text-xs">
-                                  {item.nrinscr}
-                                </TableCell>
-                              </>
+                              <Square className="w-5 h-5 text-slate-400" />
                             )}
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
+                          </button>
+                        </TableHead>
+                        {localSelecionado?.tipo === "condominio" ? (
+                          <>
+                            <TableHead>Quadra</TableHead>
+                            <TableHead>Lote</TableHead>
+                            <TableHead>Rua</TableHead>
+                            <TableHead>IPTU</TableHead>
+                          </>
+                        ) : (
+                          <>
+                            <TableHead>Unidade</TableHead>
+                            <TableHead>Endereço</TableHead>
+                            <TableHead>IPTU</TableHead>
+                          </>
+                        )}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {unidadesFiltradas.length === 0 && temFiltroAtivo ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={
+                              localSelecionado?.tipo === "condominio" ? 5 : 4
+                            }
+                            className="text-center py-8 text-slate-500"
+                          >
+                            <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                            <p>Nenhuma unidade corresponde ao filtro</p>
+                            <button
+                              onClick={limparFiltros}
+                              className="text-brand hover:underline text-sm mt-1"
+                            >
+                              Limpar filtros
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        unidadesFiltradas.map((item, index) => {
+                          const isSelected = selecionados.includes(item.nrinscr);
+                          return (
+                            <TableRow
+                              key={`${item.nrinscr}-${index}`}
+                              className={`cursor-pointer hover:bg-indigo-50 transition-colors ${isSelected ? "bg-indigo-50/50" : ""}`}
+                              onClick={() => toggleSelecao(item.nrinscr)}
+                            >
+                              <TableCell>
+                                {isSelected ? (
+                                  <CheckSquare className="w-5 h-5 text-brand" />
+                                ) : (
+                                  <Square className="w-5 h-5 text-slate-400" />
+                                )}
+                              </TableCell>
+                              {localSelecionado?.tipo === "condominio" ? (
+                                <>
+                                  <TableCell className="font-medium">
+                                    {item.nrquadra || "—"}
+                                  </TableCell>
+                                  <TableCell className="font-medium">
+                                    {item.nrlote || "—"}
+                                  </TableCell>
+                                  <TableCell className="text-slate-500">
+                                    {item.nmlogradou || "—"}
+                                  </TableCell>
+                                  <TableCell className="font-mono text-xs">
+                                    {item.nrinscr}
+                                  </TableCell>
+                                </>
+                              ) : (
+                                <>
+                                  <TableCell className="font-medium flex items-center gap-2">
+                                    {item.incompl || "—"}
+                                    {item.incompl?.toUpperCase().includes('BOX') && (
+                                      <span title="Unidades do tipo Box costumam ter o mesmo proprietário do apartamento. Desmarcadas por padrão para economizar créditos." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                        <span className="text-xs">🅿️</span> Box
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-slate-500">
+                                    {item.nmlogradou}
+                                  </TableCell>
+                                  <TableCell className="font-mono text-xs">
+                                    {item.nrinscr}
+                                  </TableCell>
+                                </>
+                              )}
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Mobile: Cards */}
+                <div className="lg:hidden space-y-2 max-h-[500px] overflow-y-auto">
+                  {unidadesFiltradas.length === 0 && temFiltroAtivo ? (
+                    <div className="text-center py-8 text-slate-500">
+                      <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      <p>Nenhuma unidade corresponde ao filtro</p>
+                      <button
+                        onClick={limparFiltros}
+                        className="text-brand hover:underline text-sm mt-1"
+                      >
+                        Limpar filtros
+                      </button>
+                    </div>
+                  ) : (
+                    unidadesFiltradas.map((item, index) => {
+                      const isSelected = selecionados.includes(item.nrinscr);
+                      const tipoAcessoria = ehUnidadeAcessoria(item.incompl)
+                        ? obterTipoUnidadeAcessoria(item.incompl)
+                        : null;
+                      return (
+                        <div
+                          key={`${item.nrinscr}-${index}`}
+                          className={`p-3 rounded-lg border transition-all ${
+                            isSelected
+                              ? "border-brand bg-indigo-50"
+                              : "border-slate-200 hover:border-indigo-300 hover:bg-slate-50"
+                          }`}
+                          onClick={() => toggleSelecao(item.nrinscr)}
+                        >
+                          <div className="flex items-start gap-3">
+                            {/* Checkbox */}
+                            <div className="flex-shrink-0 mt-1">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  toggleSelecao(item.nrinscr);
+                                }}
+                                aria-label={`Selecionar unidade ${item.nrinscr}`}
+                                className="w-5 h-5 text-brand rounded border-slate-300 focus:ring-2 focus:ring-brand focus:ring-offset-2"
+                              />
+                            </div>
+
+                            {/* Conteúdo */}
+                            <div className="flex-1 min-w-0">
+                              {localSelecionado?.tipo === "condominio" ? (
+                                <>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-medium text-slate-900">
+                                      {item.nrquadra || "—"}
+                                    </span>
+                                    <span className="font-medium text-slate-900">
+                                      {item.nrlote || "—"}
+                                    </span>
+                                    {tipoAcessoria && (
+                                      <span title="Unidade acessória, desmarcada por padrão para evitar consultas e créditos duplicados." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                        <span className="text-xs">🅿️</span>{" "}
+                                        {tipoAcessoria}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-slate-500 truncate">
+                                    {item.nmlogradou || "—"}
+                                  </p>
+                                  <p className="font-mono text-xs text-slate-400">
+                                    {item.nrinscr}
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-medium text-slate-900 truncate">
+                                      {item.incompl || "—"}
+                                    </span>
+                                    {tipoAcessoria && (
+                                      <span title="Unidade acessória, desmarcada por padrão para evitar consultas e créditos duplicados." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                        <span className="text-xs">🅿️</span>{" "}
+                                        {tipoAcessoria}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-slate-500 truncate">
+                                    {item.nmlogradou}
+                                  </p>
+                                  <p className="font-mono text-xs text-slate-400">
+                                    {item.nrinscr}
+                                  </p>
+                                </>
+                              )}
+                            </div>
+
+                            {/* Indicador visual de seleção */}
+                            {isSelected && (
+                              <div className="flex-shrink-0 w-5 h-5 text-brand flex items-center justify-center">
+                                <CheckSquare className="w-5 h-5" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
 
-            {/* Ações */}
-            <div className="flex items-center justify-between pt-4 border-t">
-              <Button variant="outline" onClick={() => setEtapa(1)}>
+            {/* Ações - Responsivo */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t">
+              <Button variant="outline" onClick={() => setEtapa(1)} className="w-full sm:w-auto">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Voltar
               </Button>
 
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-slate-500">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
+                <span className="text-sm text-slate-500 text-center sm:text-left">
                   {selecionados.length} de {unidades.length} selecionadas
                 </span>
                 <Button
                   onClick={() => iniciarProcessamento()}
                   disabled={selecionados.length === 0}
-                  className={
-                    modoTurbo ? "bg-warning hover:bg-amber-600" : ""
-                  }
+                  className={`w-full sm:w-auto ${modoTurbo ? "bg-warning hover:bg-amber-600" : ""}`}
                 >
                   {modoTurbo && <Zap className="w-4 h-4 mr-2" />}
                   Minerar Leads ({selecionados.length})
