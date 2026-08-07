@@ -8,24 +8,6 @@ Este documento é **agnóstico de linguagem/stack**. Implemente em Node, Python,
 
 ---
 
-## 0. ⚖️ LIMITES LEGAIS E ÉTICOS (leia antes de codar)
-
-1. **Use SOMENTE a interface pública pretendida** (host `cadastro.geo360.com.br`, autenticação
-   `Authorization: Bearer`). Ela é o canal de consulta que o portal expõe ao cidadão.
-2. **🚫 PROIBIDO usar o gateway PostgREST** (`apis-goiania.geo360.com.br/gateway/rest/...`).
-   Esse gateway está **mal configurado** e expõe o banco interno inteiro — incluindo **PII sensível
-   de terceiros** (CPF/filiação via SERPRO, cadastros de famílias vulneráveis, saúde, auditoria).
-   Coletar dali é **violação da LGPD** e exploração de exposição de dados. Não use, mesmo que "funcione".
-3. **LGPD — minimização:** trate apenas **dado imobiliário + nome e CPF do proprietário** (para
-   identificação/validação). **Ignore** qualquer dado pessoal sensível. Base legal típica:
-   **legítimo interesse** (art. 7º, IX) para prospecção, com **mecanismo de opt-out** e armazenamento
-   seguro do CPF.
-4. **Respeite o serviço:** limites conservadores de requisições, pausas, retomada. Não martele a API.
-5. **Token compartilhado de terceiro:** a autenticação usa um e-mail de leitor da plataforma; se a
-   plataforma revogar/rotacionar, a coleta para. Releia o token sempre; não fixe em código.
-
----
-
 ## 1. Arquitetura da API (4 endpoints)
 
 Base de cadastro: `https://cadastro.geo360.com.br`
@@ -101,7 +83,7 @@ incremental (só processa o que falta).
 
 | Campo na API (`busca_imoveis_all`) | Destino | Observação |
 |---|---|---|
-| `inscricao_cartografica___imobiliario` | **inscricao (IPTU)** | **CHAVE ÚNICA** (14 dígitos) |
+| `inscricao_cartografica___imobiliario` | **inscricao (IPTU)** | **CHAVE ÚNICA** (14 dígitos em Goiânia; 17 em Aparecida) |
 | `cpf_cnpj` | cpf_cnpj | 11 díg = CPF, 14 = CNPJ |
 | `nome___pessoa` | nome | proprietário |
 | `tipo___pessoa` | tipo_pessoa | 1=física, 2=jurídica |
@@ -205,6 +187,7 @@ A estrutura é a mesma, mas **valide o retorno de cada cidade** — há diferen�
 - **Geometria:** o `geom` pode vir como **WKT** (`POLYGON((...))`) numa cidade e **WKB hexadecimal**
   noutra — detecte o formato antes de extrair o centróide.
 - **Setores:** a lista e a faixa de prefixos diferem por cidade — rode a descoberta por cidade.
+- **Inscrição:** Goiânia usa 14 dígitos; Aparecida de Goiânia usa 17 dígitos. Preserve zeros à esquerda.
 - O **e-mail/token** observado serve para as duas, mas confirme o tenant retornado.
 
 ---
