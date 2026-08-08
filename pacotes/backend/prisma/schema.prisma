@@ -2430,3 +2430,22 @@ model WebhookEvento {
   @@index([status, leaseAte])
   @@map("webhook_eventos")
 }
+
+/// Chaves de API para autenticação máquina-a-máquina (M2M) — Lab Captação+Mineração F1.2.
+/// Somente o hash SHA-256 da chave persiste; o valor em claro é exibido UMA vez na criação.
+/// Escopos fecham as rotas permitidas (allowlist em middleware-api-key.ts).
+model ChaveApi {
+  id           String    @id @default(uuid())
+  nome         String
+  prefixo      String
+  chaveHash    String    @unique
+  escopos      String[]
+  ativa        Boolean   @default(true)
+  expiraEm     DateTime?
+  ultimoUsoEm  DateTime?
+  contadorUso  Int       @default(0)
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  @@map("chaves_api")
+}
