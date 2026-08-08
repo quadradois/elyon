@@ -329,6 +329,12 @@ export function converterParaBriefingEstruturado(dados: BriefingEmpreendimentoJS
       : null,
     tipo_imovel: dados.tipo_imovel,
 
+    // Pedimos estes três à Manus no prompt de pesquisa; sem repassá-los aqui eles
+    // só existiriam no resumo textual, e o knowledge-agent lê o estruturado.
+    construtora: dados.construtora,
+    fase_obra: dados.fase_obra,
+    previsao_entrega: dados.previsao_entrega,
+
     localizacao_detalhes: {
       bairro: dados.endereco?.bairro,
       caracteristica_bairro: dados.localizacao_detalhes?.caracteristica_bairro,
@@ -345,18 +351,21 @@ export function converterParaBriefingEstruturado(dados: BriefingEmpreendimentoJS
       vagas_garagem: dados.condominio?.vagas_garagem,
       torres: dados.condominio?.torres,
       andares: dados.condominio?.andares,
+      unidades_total: dados.condominio?.unidades_total,
       elevador: dados.condominio?.elevador,
     },
 
     faixa_preco: {
       min: dados.faixa_preco?.min,
       max: dados.faixa_preco?.max,
+      valor_m2: dados.faixa_preco?.valor_m2,
       moeda: dados.faixa_preco?.moeda || 'BRL',
       fonte: 'Pesquisa Manus AI',
       confianca: 0.7,
     },
 
     metragens: dados.metragens?.map(m => ({
+      tipo: m.tipo,
       area: m.area,
       quartos: m.quartos,
       preco_medio: m.preco_medio,
@@ -364,6 +373,7 @@ export function converterParaBriefingEstruturado(dados: BriefingEmpreendimentoJS
 
     caracteristicas: dados.caracteristicas?.map(c => ({ item: c, verificado: false })) || [],
     diferenciais: dados.diferenciais || [],
+    programas: dados.programas || [],
     pontos_interesse: dados.localizacao_detalhes?.proximidades
       ? Object.entries(dados.localizacao_detalhes.proximidades).flatMap(([tipo, items]) =>
         (items || []).map(item => ({ nome: item, tipo }))
