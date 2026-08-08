@@ -15,6 +15,7 @@ import {
     obterEscopoLeituraAgenda,
     podeExecutarComandoAgenda,
 } from '../servicos/agenda-access-policy';
+import { motivoDesfechoAgendaParaExibicao } from '../servicos/apresentacao-desfecho-agenda';
 import { remanejarCorretorAtividade } from '../servicos/remanejamento-corretor';
 
 const router = Router();
@@ -217,7 +218,12 @@ router.get('/', verificarAutenticacao, async (req, res) => {
                 lifecycleCommandsEnabled: rollout.commandsEnabled,
                 resultadoRegistradoEm: ultimoDesfecho?.ocorridoEm || a.completadoEm || a.canceladoEm || null,
                 resultadoRegistradoPor: ultimoDesfecho?.ator || a.canceladoPor || null,
-                resultadoMotivo: ultimoDesfecho?.motivo || a.motivoCancelamento || a.resultado || null,
+                resultadoMotivo: motivoDesfechoAgendaParaExibicao({
+                    status: a.statusAgendamento,
+                    tipoAtividade: a.tipo,
+                    parteAusente: ultimoDesfecho?.parteAusente,
+                    motivo: ultimoDesfecho?.motivo || a.motivoCancelamento || a.resultado || null,
+                }),
                 parteAusente: ultimoDesfecho?.parteAusente === 'CORRETOR'
                     ? 'ESPECIALISTA'
                     : ultimoDesfecho?.parteAusente || null,
