@@ -40,7 +40,12 @@ interface BriefingEstruturado {
   nome_empreendimento?: string;
   localizacao_completa?: string;
   tipo_imovel?: string;
-  
+  construtora?: string;
+  fase_obra?: string;
+  previsao_entrega?: string;
+  publico_alvo?: string;
+  programas?: string[];
+
   localizacao_detalhes?: {
     bairro?: string;
     caracteristica_bairro?: string;
@@ -63,18 +68,21 @@ interface BriefingEstruturado {
     vagas_garagem?: string;
     torres?: number;
     andares?: number;
+    unidades_total?: number;
     elevador?: boolean;
   };
-  
+
   faixa_preco?: {
     min?: number;
     max?: number;
+    valor_m2?: number;
     moeda?: string;
     fonte?: string;
     confianca?: number;
   };
-  
+
   metragens?: Array<{
+    tipo?: string;
     area?: string;
     quartos?: number;
     preco_medio?: number;
@@ -470,6 +478,44 @@ export function EditorBriefing({
                     </select>
                   </div>
                 </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Construtora
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
+                      value={briefing.construtora || ''}
+                      onChange={(e) => setBriefing(prev => ({ ...prev, construtora: e.target.value }))}
+                      placeholder="Ex: MRV"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Fase da Obra
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
+                      value={briefing.fase_obra || ''}
+                      onChange={(e) => setBriefing(prev => ({ ...prev, fase_obra: e.target.value }))}
+                      placeholder="Ex: Em construção"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Previsão de Entrega
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
+                      value={briefing.previsao_entrega || ''}
+                      onChange={(e) => setBriefing(prev => ({ ...prev, previsao_entrega: e.target.value }))}
+                      placeholder="Ex: Dezembro/2026"
+                    />
+                  </div>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
                     Localização Completa
@@ -480,6 +526,18 @@ export function EditorBriefing({
                     value={briefing.localizacao_completa || ''}
                     onChange={(e) => setBriefing(prev => ({ ...prev, localizacao_completa: e.target.value }))}
                     placeholder="Ex: Vila Rosa, Goiânia - GO"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Público-Alvo
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand focus:outline-none"
+                    value={briefing.publico_alvo || ''}
+                    onChange={(e) => setBriefing(prev => ({ ...prev, publico_alvo: e.target.value }))}
+                    placeholder="Ex: Jovens casais, famílias, investidores"
                   />
                 </div>
               </CardContent>

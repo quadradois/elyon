@@ -264,6 +264,23 @@ export function PesquisaManusModal({
     }
   };
 
+  // Quebra um campo de texto livre em itens (uma linha ou uma vírgula por item)
+  const emLista = (texto: string): string[] =>
+    texto
+      .split(/[\n;,]+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+
+  // Extrai min/max de um texto como "R$ 250.000 a R$ 400.000".
+  // Só devolve algo quando encontra dois valores — nunca inventa número.
+  const faixaPrecoEmNumeros = (texto: string): { min: number; max: number } | null => {
+    const valores = (texto.match(/\d[\d.]*(?:,\d+)?/g) || [])
+      .map(v => Number(v.replace(/\./g, "").replace(",", ".")))
+      .filter(n => Number.isFinite(n) && n > 0);
+    if (valores.length < 2) return null;
+    return { min: Math.min(...valores), max: Math.max(...valores) };
+  };
+
   // Salvar briefing manual diretamente na campanha
   const salvarBriefingManual = async () => {
     if (!dadosIniciais?.campanhaId) {
@@ -273,7 +290,7 @@ export function PesquisaManusModal({
 
     // Montar o texto do briefing a partir dos campos
     const partes = [];
-    
+
     if (briefingManual.descricao) {
       partes.push(`## Descrição do Empreendimento\n${briefingManual.descricao}`);
     }
@@ -309,13 +326,58 @@ export function PesquisaManusModal({
       return;
     }
 
+    // Além do texto, montar o briefing estruturado — é o que o knowledge-agent lê.
+    // Só mapeamos o que traduz sem ambiguidade; o resto vive no texto acima.
+    const faixa = faixaPrecoEmNumeros(briefingManual.faixaPreco);
+    const briefingEstruturado: Record<string, any> = {
+      // tipo_imovel fica de fora de propósito: o formulário manual não pergunta o
+      // tipo, e chutar "Apartamento" viraria fato na base do SDR. Ele vem da descrição.
+      nome_empreendimento: nomeEmpreendimento.trim(),
+      construtora: construtora.trim() || undefined,
+      previsao_entrega: briefingManual.dataEntrega.trim() || undefined,
+      localizacao_completa: [bairro.trim(), cidade.trim(), estado.trim()]
+        .filter(Boolean)
+        .join(", "),
+      localizacao_detalhes: {
+        bairro: bairro.trim() || undefined,
+        pontos_referencia: emLista(briefingManual.localizacao),
+      },
+      condominio: {
+        areas_lazer: emLista(briefingManual.infraestrutura),
+      },
+      ...(faixa && {
+        faixa_preco: {
+          min: faixa.min,
+          max: faixa.max,
+          moeda: "BRL",
+          fonte: "Preenchimento manual",
+          confianca: 1.0,
+        },
+      }),
+      metragens:
+        briefingManual.tipologia || briefingManual.areaUtil
+          ? [
+              {
+                tipo: briefingManual.tipologia.trim() || undefined,
+                area: briefingManual.areaUtil.trim() || undefined,
+              },
+            ]
+          : [],
+      diferenciais: emLista(briefingManual.diferenciais),
+      publico_alvo: briefingManual.publicoAlvo.trim() || undefined,
+      fontes_consultadas: ["Preenchimento manual"],
+      confiabilidade: 1.0,
+    };
+
     try {
       setAplicando(true);
 
-      // Atualizar campanha com o briefing
-      const response = await api.patch(`/campanhas/${dadosIniciais.campanhaId}`, {
+      // Briefing escrito por humano já nasce validado (SOP §9.3: só o gerado por
+      // IA exige revisão). `validar` é o nome que a rota espera, não briefingValidado.
+      const response = await api.put(`/campanhas/${dadosIniciais.campanhaId}/briefing`, {
         briefingCompleto,
-        briefingValidado: true, // Marcar como validado já que foi preenchido manualmente
+        briefingEstruturado,
+        validar: true,
       });
 
       if (response.data) {
