@@ -44,6 +44,7 @@ import rotaConfiguracaoLLM from './rotas/configuracao-llm';
 import rotaMetricasIA from './rotas/metricas-ia.rotas';
 import rotaUsuarios from './rotas/usuarios';
 import rotaAdminAuditoria from './rotas/admin-auditoria';
+import rotaAdminChavesApi from './rotas/admin-chaves-api';
 
 // Importar Prisma do módulo central (evita dependência circular)
 import { prisma } from './lib/db';
@@ -187,6 +188,7 @@ app.use('/api/configuracao/llm', rotaConfiguracaoLLM);               // Config B
 app.use('/api/metricas-ia', rotaMetricasIA);                          // Métricas da IA (performance agentes, tools, conversões)
 app.use('/api/usuarios', rotaUsuarios);                               // Gestão de usuários da equipe
 app.use('/api/admin/auditoria', rotaAdminAuditoria);                  // Log de Auditoria do sistema (Super Admin)
+app.use('/api/admin/chaves-api', rotaAdminChavesApi);                 // Chaves de API M2M (Super Admin)
 app.use('/webhooks', rotaWebhook);
 app.use('/webhooks', rotaWebhookManus);     // Webhooks do Manus (pesquisa IA)
 
