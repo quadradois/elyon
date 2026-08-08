@@ -94,7 +94,9 @@ snapshot_id=$(restic snapshots --tag elyon-db-hourly --latest 1 --json \
   | sed -n 's/.*"short_id":"\([^"]*\)".*/\1/p' | head -1)
 snapshot_id=${snapshot_id:-unknown}
 
-restic forget --tag elyon-db-hourly --keep-hourly 48 --keep-daily 30 --keep-monthly 6
+# Agrupar por path faria cada dump com nome único virar um grupo separado,
+# impedindo a política de reduzir snapshots antigos no R2.
+restic forget --tag elyon-db-hourly --group-by host,tags --keep-hourly 48 --keep-daily 30 --keep-monthly 6
 if [[ $(date -u +%H) == 03 ]]; then
   restic prune
   restic check --read-data-subset=1/100

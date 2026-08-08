@@ -80,7 +80,7 @@ A evidência sem dados de negócio nem segredos fica em
 
 ```bash
 systemctl show elyon-offhost-backup.timer -p ActiveState -p NextElapseUSecRealtime
-restic snapshots --tag elyon-db-hourly --latest 5
+restic snapshots --tag elyon-db-hourly --group-by host,tags --latest 5
 cat /var/lib/elyon/restore-drills/restore-drill-<UTC>.json
 docker ps -a --filter name=elyon_restore_drill
 docker volume ls --filter name=elyon_restore_drill
