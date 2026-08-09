@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { responderErro } from '../utilitarios/resposta';
+import { autenticarApiKey } from './middleware-api-key';
 import { verificarAutenticacao } from './middleware-auth';
 
 interface RotaPublica {
@@ -77,6 +78,11 @@ export function normalizarContextoTenant(req: Request, res: Response, next: Next
 export function exigirAutenticacaoPorPadrao(req: Request, res: Response, next: NextFunction): void {
   if (ehRotaPublica(req)) {
     next();
+    return;
+  }
+  // Canal M2M: chave presente decide sozinha (401/403 terminal) — nunca cai para o JWT.
+  if (req.headers['x-api-key'] !== undefined) {
+    void autenticarApiKey(req, res, next);
     return;
   }
   void verificarAutenticacao(req, res, () => normalizarContextoTenant(req, res, next));
