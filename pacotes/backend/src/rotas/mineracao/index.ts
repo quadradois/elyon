@@ -11,6 +11,7 @@
 import { Router } from 'express';
 
 import buscaRotas from './busca.rotas';
+import fotosEmpreendimentosRotas from './fotos-empreendimentos.rotas';
 import processamentoRotas from './processamento.rotas';
 import proprietariosBaseRotas from './proprietarios-base.rotas';
 
@@ -21,6 +22,9 @@ router.use('/', buscaRotas);
 
 // Identificação em lote pela base local (M2M, Lab Captação+Mineração)
 router.use('/', proprietariosBaseRotas);
+
+// Fotos de empreendimentos pela base GEO360 (M2M, Lab Captação+Mineração)
+router.use('/', fotosEmpreendimentosRotas);
 
 // Rotas de processamento (scraper, enriquecimento, persistência)
 router.use('/', processamentoRotas);

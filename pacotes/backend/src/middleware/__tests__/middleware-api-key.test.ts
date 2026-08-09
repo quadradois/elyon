@@ -82,7 +82,8 @@ describe('autenticação por API key (M2M)', () => {
     ['GET', '/api/mineracao/condominios'],
     ['GET', '/api/mineracao/casas/789'],
     ['GET', '/api/mineracao/endereco'],
-    ['POST', '/api/mineracao/proprietarios-base']
+    ['POST', '/api/mineracao/proprietarios-base'],
+    ['POST', '/api/mineracao/fotos-empreendimentos']
   ])('escopo mineracao:read cobre %s %s', async (metodo, caminho) => {
     findUnique.mockResolvedValue(chaveValida());
     const agente = request(criarApp());
