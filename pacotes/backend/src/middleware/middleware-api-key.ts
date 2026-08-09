@@ -32,6 +32,7 @@ const ROTAS_POR_ESCOPO: Readonly<Record<string, readonly RotaPermitida[]>> = Obj
     { metodo: 'GET', caminho: /^\/api\/mineracao\/condominios$/ },
     { metodo: 'GET', caminho: /^\/api\/mineracao\/casas\/\d+$/ },
     { metodo: 'GET', caminho: /^\/api\/mineracao\/endereco$/ },
+    { metodo: 'GET', caminho: /^\/api\/mineracao\/unidades-lote$/ },
     { metodo: 'POST', caminho: /^\/api\/mineracao\/proprietarios-base$/ },
     { metodo: 'POST', caminho: /^\/api\/mineracao\/fotos-empreendimentos$/ }
   ])
