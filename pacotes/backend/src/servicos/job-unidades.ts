@@ -23,6 +23,15 @@ export interface JobUnidades {
 const JOB_PREFIX = 'elyon:job:unidades:';
 const JOB_TTL_SECONDS = 3600; // 1 hora
 
+// Teto de seguranca. O cruzamento por NOME do bairro (hack de resiliencia, ver
+// processarJobUnidades) usa `startsWith` sobre texto livre: um nome como "s a"
+// casaria todo bairro iniciado por "s" e o loop pagina ate esgotar, acumulando
+// tudo em memoria e numa unica chave Redis. O teto corta no `count`, antes de
+// qualquer `findMany` — o custo do abuso vira uma contagem.
+// Referencia de tamanho real: o maior condominio horizontal da base tem
+// centenas de unidades, nao dezenas de milhares.
+const LIMITE_UNIDADES_POR_JOB = 20000;
+
 // ============================================
 // FUNÇÕES DO SERVIÇO
 // ============================================
@@ -232,6 +241,18 @@ async function processarJobUnidades(jobId: string): Promise<void> {
             }
 
             const total = await prisma.imovel.count({ where: whereBairro });
+
+            if (total > LIMITE_UNIDADES_POR_JOB) {
+                await atualizarJob(jobId, {
+                    status: 'erro',
+                    total,
+                    mensagem:
+                        `Seleção ampla demais: ${total} unidades (limite ${LIMITE_UNIDADES_POR_JOB}). ` +
+                        'Escolha um condomínio ou bairro específico.'
+                });
+                return;
+            }
+
             await atualizarJob(jobId, { total });
 
             if (total > 0) {
