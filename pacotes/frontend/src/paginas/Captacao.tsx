@@ -16,6 +16,10 @@ import { ModalCreditosInsuficientes } from "../componentes/ModalCreditosInsufici
 import { PageHeader } from "../componentes/ui/page-header";
 import { Switch } from "../componentes/ui/switch";
 import {
+  ehUnidadeAcessoria,
+  obterTipoUnidadeAcessoria,
+} from "../lib/unidades-imobiliarias";
+import {
   Table,
   TableBody,
   TableCell,
@@ -489,10 +493,10 @@ export function Captacao() {
 
       setUnidades(todasUnidades);
       
-      // Desmarca BOXes por padrão para evitar gasto duplo
+      // Desmarca unidades acessórias por padrão para evitar gasto duplo
       setSelecionados(
         todasUnidades
-          .filter((u: Unidade) => !u.incompl?.toUpperCase().includes('BOX'))
+          .filter((u: Unidade) => !ehUnidadeAcessoria(u.incompl))
           .map((u: Unidade) => u.nrinscr)
       );
       setEtapa(2);
@@ -560,10 +564,10 @@ export function Captacao() {
 
       setUnidades(unidadesCarregadas);
       
-      // Desmarca BOXes por padrão para evitar duplicidade
+      // Desmarca unidades acessórias por padrão para evitar duplicidade
       setSelecionados(
         unidadesCarregadas
-          .filter((u: Unidade) => !u.incompl?.toUpperCase().includes('BOX'))
+          .filter((u: Unidade) => !ehUnidadeAcessoria(u.incompl))
           .map((u: Unidade) => u.nrinscr)
       );
       setEtapa(2);
@@ -1437,9 +1441,10 @@ export function Captacao() {
                                 <>
                                   <TableCell className="font-medium flex items-center gap-2">
                                     {item.incompl || "—"}
-                                    {item.incompl?.toUpperCase().includes('BOX') && (
-                                      <span title="Unidades do tipo Box costumam ter o mesmo proprietário do apartamento. Desmarcadas por padrão para economizar créditos." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                                        <span className="text-xs">🅿️</span> Box
+                                    {ehUnidadeAcessoria(item.incompl) && (
+                                      <span title="Unidades acessórias (box, garagem, vaga, escaninho) costumam ter o mesmo proprietário do apartamento. Desmarcadas por padrão para economizar créditos." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                        <span className="text-xs">🅿️</span>{" "}
+                                        {obterTipoUnidadeAcessoria(item.incompl)}
                                       </span>
                                     )}
                                   </TableCell>
@@ -1515,7 +1520,7 @@ export function Captacao() {
                                       {item.nrlote || "—"}
                                     </span>
                                     {tipoAcessoria && (
-                                      <span title="Unidade acessória, desmarcada por padrão para evitar consultas e créditos duplicados." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                      <span title="Unidades acessórias (box, garagem, vaga, escaninho) costumam ter o mesmo proprietário do apartamento. Desmarcadas por padrão para economizar créditos." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
                                         <span className="text-xs">🅿️</span>{" "}
                                         {tipoAcessoria}
                                       </span>
@@ -1535,7 +1540,7 @@ export function Captacao() {
                                       {item.incompl || "—"}
                                     </span>
                                     {tipoAcessoria && (
-                                      <span title="Unidade acessória, desmarcada por padrão para evitar consultas e créditos duplicados." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                      <span title="Unidades acessórias (box, garagem, vaga, escaninho) costumam ter o mesmo proprietário do apartamento. Desmarcadas por padrão para economizar créditos." className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
                                         <span className="text-xs">🅿️</span>{" "}
                                         {tipoAcessoria}
                                       </span>
