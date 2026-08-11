@@ -83,7 +83,12 @@ describe('autenticação por API key (M2M)', () => {
     ['GET', '/api/mineracao/casas/789'],
     ['GET', '/api/mineracao/endereco'],
     ['POST', '/api/mineracao/proprietarios-base'],
-    ['POST', '/api/mineracao/fotos-empreendimentos']
+    ['POST', '/api/mineracao/fotos-empreendimentos'],
+    // Unidades por job: o unico caminho que lista casas de condominio
+    // horizontal. Le so o banco local, sem scraping e sem consumo de credito.
+    ['POST', '/api/mineracao/unidades/jobs/iniciar'],
+    ['GET', '/api/mineracao/unidades/jobs/1786407750873-38ajjm/status'],
+    ['GET', '/api/mineracao/unidades/jobs/1786407750873-38ajjm/resultado']
   ])('escopo mineracao:read cobre %s %s', async (metodo, caminho) => {
     findUnique.mockResolvedValue(chaveValida());
     const agente = request(criarApp());
@@ -123,7 +128,17 @@ describe('autenticação por API key (M2M)', () => {
     ['GET', '/api/auth/perfil'],
     ['POST', '/api/mineracao/identificar-proprietarios'],
     ['GET', '/api/mineracao/jobs/123'],
+    // A fronteira que mais importa: `/mineracao/jobs/*` (sem `unidades/`)
+    // consome credito e devolve proprietarios com CPF. Congelado aqui para
+    // nao depender de leitura de diff.
+    ['POST', '/api/mineracao/jobs/iniciar'],
+    ['GET', '/api/mineracao/jobs/123/resultado'],
+    // Vizinhas das liberadas acima: a fronteira e por rota exata (metodo +
+    // caminho), nao por prefixo.
+    ['POST', '/api/mineracao/unidades/jobs/123/resultado'],
+    ['GET', '/api/mineracao/unidades/jobs/iniciar'],
     ['GET', '/api/mineracao/unidades/jobs/123'],
+    ['GET', '/api/mineracao/unidades/jobs/123/resultado/extra'],
     ['POST', '/api/mineracao/confirmar-leads'],
     ['GET', '/api/clientes']
   ])('rota fora do escopo recebe 403: %s %s', async (metodo, caminho) => {

@@ -22,7 +22,10 @@ interface RotaPermitida {
 
 // Allowlist fechada por escopo (mesmo espírito de ROTAS_PUBLICAS do default-deny):
 // toda rota nasce FORA de todo escopo. Inclusões aqui exigem revisão de segurança.
-// Regex exatos de propósito — `/unidades/\d+` NÃO casa `/unidades/jobs/...`.
+// Regex exatos de propósito: a fronteira é por método + caminho completo, nunca
+// por prefixo. `/unidades/\d+` não casa `/unidades/jobs/...`, e as três rotas de
+// job liberadas abaixo não abrem as vizinhas (`/jobs/:id` cru, sufixo extra,
+// outro método) — há teste para cada uma dessas fronteiras.
 const ROTAS_POR_ESCOPO: Readonly<Record<string, readonly RotaPermitida[]>> = Object.freeze({
   'mineracao:read': Object.freeze([
     { metodo: 'GET', caminho: /^\/api\/mineracao\/bairros$/ },
@@ -34,7 +37,19 @@ const ROTAS_POR_ESCOPO: Readonly<Record<string, readonly RotaPermitida[]>> = Obj
     { metodo: 'GET', caminho: /^\/api\/mineracao\/endereco$/ },
     { metodo: 'GET', caminho: /^\/api\/mineracao\/unidades-lote$/ },
     { metodo: 'POST', caminho: /^\/api\/mineracao\/proprietarios-base$/ },
-    { metodo: 'POST', caminho: /^\/api\/mineracao\/fotos-empreendimentos$/ }
+    { metodo: 'POST', caminho: /^\/api\/mineracao\/fotos-empreendimentos$/ },
+    // Unidades por job. E o unico caminho que lista casas de condominio
+    // horizontal: `/casas/:cdbairro` devolve zero em producao.
+    // Sem credito e sem tenant (as rotas nao tocam req.tenantId nem cobranca —
+    // o que cobra e devolve CPF e `/api/mineracao/jobs/*`, que segue negada).
+    // Le o banco local; com `MINERACAO_LOCAL_ONLY=false` o ramo tipo:'edificio'
+    // tem fallback para a API da Prefeitura — mesma superficie ja alcancavel
+    // por `GET /unidades/:cd`, que tambem esta liberada.
+    // O job tem teto de unidades (job-unidades.ts) para o cruzamento por nome
+    // nao virar varredura de tabela.
+    { metodo: 'POST', caminho: /^\/api\/mineracao\/unidades\/jobs\/iniciar$/ },
+    { metodo: 'GET', caminho: /^\/api\/mineracao\/unidades\/jobs\/[\w-]+\/status$/ },
+    { metodo: 'GET', caminho: /^\/api\/mineracao\/unidades\/jobs\/[\w-]+\/resultado$/ }
   ])
 });
 
