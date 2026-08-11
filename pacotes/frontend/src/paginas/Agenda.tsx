@@ -106,8 +106,10 @@ export function Agenda() {
         leadNome: string;
         source: 'EVENTO' | 'PENDENCIA';
     } | null>(null);
-    const commandRequestIds = useRef(new Map<string, string>());
-    const requestIdFor = (key: string) => {
+    // O tipo do randomUUID é mais estreito que `string`, e é o que
+    // executarComandoAgenda exige — guardar como `string` perdia essa garantia.
+    const commandRequestIds = useRef(new Map<string, ReturnType<typeof crypto.randomUUID>>());
+    const requestIdFor = (key: string): ReturnType<typeof crypto.randomUUID> => {
         const existing = commandRequestIds.current.get(key);
         if (existing) return existing;
         const created = crypto.randomUUID();

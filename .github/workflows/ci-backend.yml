@@ -82,6 +82,11 @@ jobs:
       - name: Instalar dependencias
         run: npm ci --no-audit --no-fund
 
+      - name: Type check
+        # `vite build` so transpila, nao valida tipos: um simbolo usado sem
+        # import passou pelo CI e quebrou a tela de captacao em producao (#122).
+        run: npm run typecheck --workspace @elyon/frontend
+
       - name: Testes de autenticacao e fronteiras
         run: npm run test:unit --workspace @elyon/frontend
 
